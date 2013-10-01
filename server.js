@@ -1743,7 +1743,7 @@ function sendCurrentOrderBook(orgclientkey, symbol, topic, conn) {
       conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
     }
 
-    var interval = setInterval(function() {
+    /*var interval = setInterval(function() {
       orderbook.pricelevels = [];
 
       // 3 levels
@@ -1767,7 +1767,7 @@ function sendCurrentOrderBook(orgclientkey, symbol, topic, conn) {
       orderbook.pricelevels.push(pricelevel6);
 
       conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-    }, 9000);
+    }, 9000);*/
   });
 }
 

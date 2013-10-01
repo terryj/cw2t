@@ -1208,7 +1208,7 @@
 
                 if (symbol in obdisplay) {
                     alert(symbol + " already in Watch List");
-                    stockboxinput.focus();
+                    event.stopPropagation();
                 } else {
                     sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
                     stocklist.style.visibility = "hidden";
@@ -1223,18 +1223,13 @@
             main.appendChild(stockbox);
 
             main.onclick = function(e) {
+                if (!e) var e = window.event;
+
                 if (e.target.id == "stocklist" || e.target.id == "stockboxinput") {
                     return;
                 }
 
                 stocklist.style.visibility = "hidden";
-
-                //console.log(e.target.id);
-                /*if (e.target.id == ) {
-                    return true;
-                } else {
-                    $('#bbb').hide();
-                }*/
             }
         }
 
