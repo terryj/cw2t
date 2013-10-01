@@ -1562,8 +1562,15 @@ function replySignIn(reply, conn) {
 
 function initDb() {
   // clear any connected clients
-  db.smembers("connections", function(err, connection) {
-    db.srem("connections", connection);
+  db.smembers("connections", function(err, connections) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    connections.forEach(function(connection, i) {
+      db.srem("connections", connection);
+    });
   });
 
   registerScripts();
