@@ -19,8 +19,9 @@ var events = require('events');
 //var host = "Cw2t Proquote Simulator";
 
 // ptp test
-var pqhost = '195.26.26.67';
+//var pqhost = '195.26.26.67';
 //var pqhost = '195.26.26.177';
+var pqhost = '82.44.127.21';
 var host = "Proquote UAT";
 var pqport = 50143;
 
