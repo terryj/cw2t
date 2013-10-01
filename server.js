@@ -6,14 +6,16 @@
 * September 2012
 ****************/
 
-// external libraries
+// node libraries
 var http = require('http');
 var net = require('net');
+
+// external libraries
 var sockjs = require('sockjs');
 var node_static = require('node-static');
 var redis = require('redis');
 
-// internal libraries
+// cw2t libraries
 //var winnclient = require('./winnclient.js'); // Winner API connection
 var ptpclient = require('./ptpclient.js'); // Proquote API connection
 
@@ -23,8 +25,6 @@ var static_directory = new node_static.Server(__dirname); // static files server
 var cw2tport = 8080; // client connection port
 var outofhours = false; // in or out of market hours - todo: replace with markettype?
 var ordertypes = {};
-var pqport = '50143';
-var proquotelive = false; // live or delayed prices - todo: may need to be per client
 var orgid = "1"; // todo: via logon
 
 // redis

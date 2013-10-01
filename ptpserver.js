@@ -10,7 +10,7 @@ var net = require('net');
 var redis = require('redis');
 
 var fixver = 'FIX.4.2';
-var pqport = '50143';
+var pqport = 50143;
 var sendercompid = 'PTPUAT1';
 var targetcompid = 'CWTTUAT1';
 var SOH = String.fromCharCode(1);

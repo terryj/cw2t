@@ -1213,6 +1213,7 @@
                     sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
                     stocklist.style.visibility = "hidden";
                     stockboxinput.value = "";
+                    stockboxinput.focus();
                 }
             }
 
@@ -1220,6 +1221,21 @@
             stockbox.appendChild(stocklist);
 
             main.appendChild(stockbox);
+
+            main.onclick = function(e) {
+                if (e.target.id == "stocklist" || e.target.id == "stockboxinput") {
+                    return;
+                }
+
+                stocklist.style.visibility = "hidden";
+
+                //console.log(e.target.id);
+                /*if (e.target.id == ) {
+                    return true;
+                } else {
+                    $('#bbb').hide();
+                }*/
+            }
         }
 
         function displayTrades() {
