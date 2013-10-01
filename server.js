@@ -20,7 +20,7 @@ var ptpclient = require('./ptpclient.js'); // Proquote API connection
 // globals
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
-var cw2tport = 9999; // client connection port
+var cw2tport = 8080; // client connection port
 var outofhours = false; // in or out of market hours - todo: replace with markettype?
 var ordertypes = {};
 var pqport = '50143';
