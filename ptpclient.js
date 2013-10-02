@@ -22,7 +22,7 @@ var events = require('events');
 var pqhost = '195.26.26.67';
 //var pqhost = '195.26.26.177';
 var host = "Proquote UAT";
-var pqport = 50143;
+var pqport = 50144;
 
 var fixver = 'FIX.4.2';
 var sendercompid = 'CWTTUAT1'; // cw2t id
