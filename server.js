@@ -226,6 +226,8 @@ function listen() {
       } else if (msg.substr(2, 22) == "positionhistoryrequest") {
         obj = JSON.parse(msg);
         positionHistory(clientid, obj.positionhistoryrequest, conn);
+      } else if (msg.substr(0, 4) == "ping") {
+        conn.write("pong");
       } else {
         console.log("unknown msg received:" + msg);
       }

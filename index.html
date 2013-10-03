@@ -561,7 +561,7 @@
 
     <script>
         var sockjs_url = '/echo';
-        var sockjs = new SockJS(sockjs_url);
+        var sockjs;
         var selectedmenu = -1;
         var selectedlistelement = 0;
         var placeneworder = false;
@@ -587,10 +587,9 @@
         var monthtext = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sept','Oct','Nov','Dec'];
         var pricetimer;
         var priceflash = {};
-
-        var print = function(m, p) {
-            p = (p === undefined) ? '' : JSON.stringify(p);
-        };
+        var heartbeattimer = null;
+        var inconnectiontest = false;
+        var restarttimer;
 
         var datain = function(msg) {
             var obj = {};
@@ -672,6 +671,9 @@
             } else if (msg.substr(2,6) == "status") {
                 obj = JSON.parse(msg);
                 statusMsg(obj.status);
+            } else if (msg.substr(0, 4) == "pong") {
+                console.log("received pong");
+                inconnectiontest = false;
             } else {
                 console.log("Unknown message:" + msg);
             }
@@ -783,25 +785,77 @@
             }
         }
 
-        sockjs.onopen = function()  {
-            print('[*] open', sockjs.protocol);
+        function startHeartbeatTimer() {
+            stopHeartbeatTimer();
+            heartbeattimer = setTimeout(connectionTest, 30000);            
+        }
+
+        function stopHeartbeatTimer() {
+            clearTimeout(heartbeattimer);
+        }
+
+        function startPriceTimer() {
             pricetimer = setInterval(flashText, 1000);
-        };
+        }
 
-        sockjs.onmessage = function(e) {
-            datain(e.data);
-        };
-
-        sockjs.onclose = function()  {
-            print('[*] close');
+        function stopPriceTimer() {
             clearInterval(pricetimer);
-            signedin = false;
-        };
+        }
 
-        initialise();
+        function startRestartTimer() {
+            // attempt restart after 1-10 seconds
+            var randomonetoten = Math.floor((Math.random()*10)+1);
+            console.log("attempt restart after " + randomonetoten + " seconds");
+            restarttimer = setTimeout(newconn, randomonetoten * 1000);
+        }
 
-        function initialise() {
-            displayFormSignin();
+        function stopRestartTimer() {
+            clearTimeout(restarttimer);
+        }
+
+        function connectionTest() {
+            if (inconnectiontest) {
+                console.log("need to reconnect");
+                return;
+            }
+
+            console.log("sending ping");
+            sockjs.send("ping");
+            startHeartbeatTimer();
+            inconnectiontest = true;
+        }
+
+        newconn();
+
+        function newconn() {
+            console.log("new conn");
+            sockjs = new SockJS(sockjs_url);
+
+            sockjs.onopen = function()  {
+                console.log("connection open");
+                stopRestartTimer();
+                startPriceTimer();
+                startHeartbeatTimer();
+                displayFormSignin();
+            };
+
+            sockjs.onmessage = function(e) {
+                datain(e.data);
+            };
+
+            sockjs.onclose = function()  {
+                console.log("connection closed");
+                stopRestartTimer();
+                stopPriceTimer();
+                stopHeartbeatTimer();
+                startRestartTimer();
+                signedin = false;
+            };
+
+            sockjs.onheartbeat = function() {
+                console.log("heartbeat");
+                startHeartbeatTimer();
+            };
         }
 
         function flashText() {
@@ -1632,12 +1686,11 @@
         function requestPositionHistory(event) {
             var element = ((window.event)?(event.srcElement):(event.target));
             var poskey = element.value;
-            console.log(poskey);
+
             sockjs.send("{\"positionhistoryrequest\":\"" + poskey + "\"}");
         }
 
         function positionHistory(trades) {
-            console.log("poshist rec'd");
         }
 
         function updateElement(msg, list, index) {
@@ -3158,6 +3211,8 @@
             var btn;
             var newline1;
             var newline2;
+
+            clearScreen();
 
             frm = document.createElement("form");
             frm.id = "frmsignin";
