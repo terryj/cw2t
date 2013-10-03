@@ -929,6 +929,16 @@
             }
         }
 
+        function clearMenu() {
+            var menu = document.getElementById("menu");
+            if (menu != null) {
+                for (var i = 0; i < menu.childNodes.length; ++i) {
+                    menu.removeChild(menu.childNodes[i]);
+                }
+                heading.removeChild(menu);
+            }
+        }
+
         function clearHeadings() {
             for (var i = 0; i < main.childNodes.length; ++i) {
                 if (main.childNodes[i].nodeType == 3) {
@@ -1018,13 +1028,6 @@
             }
         }
 
-        /*function clearDisplay() {
-            for (var i in obdisplay) {
-                delete obdisplay[i];
-            }
-            lastsymbol = null;
-        }*/
-
         function clearScreen() {
             clearHeadings();
             clearOrderBookHeadings();
@@ -1033,7 +1036,6 @@
             clearStrips();
             clearSelectStockDivs();
             clearAllSymbolDivs();
-            //clearDisplay();
         }
 
         function clearLists() {
@@ -1108,7 +1110,7 @@
             var msg;
             var listelement;
 
-            displayHeadings();
+            displayOrderHeadings();
 
             for (var x in orders) {
                 if (orders[x].status == "0") { // new
@@ -1175,7 +1177,7 @@
             }
         }
 
-        function displayHeadings() {
+        function displayOrderHeadings() {
             addHeading("New", list1);
             addHeading("Part-filled", list2);
             addHeading("Filled", list3);
@@ -2004,8 +2006,6 @@
                 }
             }
 
-            // todo: may need reinstating for ooh
-            //orderbooks[orderbook.symbol] = orderbook.pricelevels;
             if (selectedmenu == 0) {
                 displayOrderBook(orderbook.symbol);
             }
@@ -3212,6 +3212,7 @@
             var newline1;
             var newline2;
 
+            clearMenu();
             clearScreen();
 
             frm = document.createElement("form");
@@ -3324,6 +3325,7 @@
 
             menu = document.createElement('ul');
             menu.className = "menu";
+            menu.id = "menu";
 
             // build the main menu
             menuarr = ["Watch List", "Quotes", "Orders", "Fills", "Positions", "Cash/Margin", "History", "Settings"];

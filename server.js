@@ -173,6 +173,13 @@ function connectToTrading() {
 var sockjs_opts = {sockjs_url: "http://cdn.sockjs.org/sockjs-0.3.min.js"};
 var sockjs_svr = sockjs.createServer(sockjs_opts);
 
+// ssl
+/*var options = {
+  key: fs.readFileSync('ssl.key'),
+  cert: fs.readFileSync('ssl.crt')
+};
+var server = http.createServer();*/
+
 // http server
 function listen() {
   var server = http.createServer();
