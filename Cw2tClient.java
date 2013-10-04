@@ -58,7 +58,7 @@ class Cw2tSubscriber extends JedisPubSub {
     }
     
     public void onMessage(String channel, String message) {
-        System.out.println("Received message:" + message);
+        System.out.println("Received message: " + message);
         
         if (message.equals("exit")) {
             unsubscribe();
