@@ -1776,8 +1776,8 @@ function sendCurrentOrderBook(orgclientkey, symbol, topic, conn) {
       orderbook.pricelevels.push(pricelevel6);
 
       conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-    }, 9000);
-  });*/
+    }, 9000);*/
+  });
 }
 
 function orderBookRemoveRequest(orgclientkey, symbol, conn) {
