@@ -1215,9 +1215,6 @@
             var stockboxinput;
             var stocklist;
             var searchtext;
-            var firstspace;
-            var symbol;
-            var element;
 
             stockbox = document.createElement("div");
             stockbox.id = "stockbox";
@@ -1227,7 +1224,6 @@
             stockboxinput.className = "stockboxinput";
             stockboxinput.id = "stockboxinput";
             stockboxinput.placeholder = "Enter Stock";
-            stockboxinput.autofocus = "autofocus";
 
             stockboxinput.onkeyup = function() {
                 clearList(stocklist);
@@ -1257,14 +1253,20 @@
             stocklist.className = "stocklist";
             stocklist.style.visibility = "hidden";
 
-            stocklist.onclick = function() {
-                element = ((window.event)?(event.srcElement):(event.target));
+            stocklist.onclick = function(e) {
+                var firstspace;
+                var symbol;
+                var element;
+                
+                if (!e) e = window.event;
+                element = e.target || e.srcElement;
+
                 firstspace = element.innerHTML.indexOf(' ');
                 symbol = element.innerHTML.substr(0, firstspace);
 
                 if (symbol in obdisplay) {
                     alert(symbol + " already in Watch List");
-                    event.stopPropagation();
+                    e.stopPropagation();
                 } else {
                     sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
                     stocklist.style.visibility = "hidden";
@@ -1279,14 +1281,19 @@
             main.appendChild(stockbox);
 
             main.onclick = function(e) {
-                if (!e) var e = window.event;
+                var elem;
 
-                if (e.target.id == "stocklist" || e.target.id == "stockboxinput") {
+                if (!e) e = window.event;
+                elem = e.target || e.srcElement;
+
+                if (elem.id == "stocklist" || elem.id == "stockboxinput") {
                     return;
                 }
 
                 stocklist.style.visibility = "hidden";
             }
+
+            stockboxinput.focus();
         }
 
         function displayTrades() {
@@ -1302,8 +1309,12 @@
             if (firsttrade) {
                 addElement("No fills this session", list1, 0);                
             } else {
-                 list1.onclick = function() {
-                    var element = ((window.event)?(event.srcElement):(event.target));
+                 list1.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
                     viewTrade(element.value);
                 }
             }
@@ -1322,8 +1333,12 @@
             if (firstquote) {
                 addElement("No quotes this session", list1, 0);                
             } else {
-                list1.onclick = function() {
-                    var element = ((window.event)?(event.srcElement):(event.target));
+                list1.onclick = function(e) {
+                    var element;
+
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
                     viewQuote(element.value);
                 }
             }
@@ -2050,14 +2065,10 @@
                     clearOrderBookHeadings();
                 }
 
-                stockboxfocus();
-            }
-        }
-
-        function stockboxfocus() {
-            stockboxinput = document.getElementById("stockboxinput");
-            if (stockboxinput != null) {
-                stockboxinput.focus();
+                stockboxinput = document.getElementById("stockboxinput");
+                if (stockboxinput != null) {
+                    stockboxinput.focus();
+                }
             }
         }
 
@@ -2456,7 +2467,6 @@
             quotereqqty = document.createElement("input");
             quotereqqty.id = "quotereqquantity" + symbol;
             quotereqqty.className = "quotereqquantity";
-            quotereqqty.autofocus = "autofocus";
             quotereqqty.placeholder = getQuantityDesc(qtyascashorshares);
 
             quotereqqty.onkeypress = function(event) {
@@ -2537,6 +2547,8 @@
                 quotereqqty.disabled = true;
                 quotereqqty.onkeypress = null;
             }
+
+            quotereqqty.focus();
         }
 
         function getQuantityDesc(qtyval) {
@@ -2816,7 +2828,6 @@
             quantityinput = document.createElement("input");
             quantityinput.id = "orderquantity:" + symbol;
             quantityinput.className = "orderquantity";
-            quantityinput.autofocus = "autofocus";
             quantityinput.placeholder = "Quantity";
 
             if (quantity != 0) {
@@ -3068,6 +3079,8 @@
                     }
                 }*/
             }
+
+            quantityinput.focus();
         }
 
         function sendOrder(symbol, side, quantity, price, ordertype, settlcurrency, settdate, quoteid, timeinforce, expiredate, expiretime) {
@@ -3231,7 +3244,6 @@
 
             email = document.createElement("input");
             email.className = "formsignininput";
-            email.autofocus = "autofocus";
             email.onkeypress = function(event) {
                 if (event.keyCode == 13) {
                     disable();
@@ -3287,6 +3299,8 @@
 
                 sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");
             }
+
+            email.focus();
         }
 
         function replySignIn(reply) {
@@ -3331,7 +3345,7 @@
             menuarr = ["Watch List", "Quotes", "Orders", "Fills", "Positions", "Cash/Margin", "History", "Settings"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
-                menuitem.id = i;
+                menuitem.value = i;
                 menuitem.innerHTML = menuarr[i];
 
                 if (i == 0) {
@@ -3343,19 +3357,20 @@
 
             heading.appendChild(menu);
 
-            menu.onclick = function(event) {
+            menu.onclick = function(e) {
                 var element;
+
+                if (!e) e = window.event;
+                element = e.target || e.srcElement;
 
                 clearScreen();
 
-                element = ((window.event)?(event.srcElement):(event.target));
                 element.className = "menuitemselected";
-
                 if (lastElement != null) {
                     lastElement.className = "menu";
                 }
                 lastElement = element;
-                selectedmenu = parseInt(element.id);
+                selectedmenu = element.value;
 
                 switch (selectedmenu) {
                 case 0:
