@@ -21,6 +21,7 @@ var resendrequesttimer = null;
 var kludge = true;
 var heartbeattimer = null;
 
+// set-up a redis client
 db = redis.createClient(6379, "127.0.0.1");
 db.on("connect", function(err) {
     if (err) {

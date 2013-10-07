@@ -61,7 +61,7 @@ var scriptquoteack;
 var scriptrejectorder;
 var scriptgetinst;
 
-// redis server
+// set-up a redis client
 db = redis.createClient(redisport, redishost);
 if (redisauth) {
   db.auth(redispassword, function(err) {
@@ -2618,13 +2618,16 @@ function registerScripts() {
   scriptneworder = creditcheck + getproquotesymbol + '\
   local orderid = redis.call("incr", "orderid") \
   if not orderid then return 1005 end \
-  redis.call("hmset", "order:" .. orderid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "side", KEYS[4], "quantity", KEYS[5], "price", KEYS[6], "ordertype", KEYS[7], "remquantity", KEYS[5], "status", "0", "reason", "", "markettype", KEYS[8], "futsettdate", KEYS[9], "partfill", KEYS[10], "quoteid", KEYS[11], "currency", KEYS[12], "timestamp", KEYS[13], "margin", "0", "timeinforce", KEYS[14], "expiredate", KEYS[15], "expiretime", KEYS[16], "settlcurrency", KEYS[17], "text", "", "orderid", orderid) \
+  redis.call("hmset", "order:" .. orderid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "side", KEYS[4], "quantity", KEYS[5], "price", KEYS[6], "ordertype", KEYS[7], "remquantity", KEYS[5], "status", "0", "reason", "", "markettype", KEYS[8], "futsettdate", KEYS[9], "partfill", KEYS[10], "quoteid", KEYS[11], "currency", KEYS[12], "timestamp", KEYS[13], "margin", "0", "timeinforce", KEYS[14], "expiredate", KEYS[15], "expiretime", KEYS[16], "settlcurrency", KEYS[17], "text", "", "orderid", orderid, "ackid", "", "currencyindtoorg", 0, currencyratetoorg", 1) \
   local orgclientkey = KEYS[1] .. ":" .. KEYS[2] \
+  --[[ add to set of orders for this client ]] \
   redis.call("sadd", orgclientkey .. ":orders", orderid) \
+  --[[ add to set of orders for back-office ]] \
+  redis.call("sadd", "orders", orderid) \
   local pqquoteid = "" \
   local qbroker = "" \
-  --[[ add order id to associated quote, if there is one, & get quote values required by proquote ]] \
   if KEYS[11] ~= "" then \
+    --[[ add order id to associated quote, if there is one, & get quote values required by proquote ]] \
     local quotekey = "quote:" .. KEYS[11] \
     redis.call("hset", quotekey, "orderid", orderid) \
     --[[ ids & broker depend on buy/sell ]] \
