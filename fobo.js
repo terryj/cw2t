@@ -120,43 +120,57 @@ userid=33
 */
 
 function sendOrder(order) {
-  var str = "/focalls/orderadd.aspx?"
-          + "msgid=125" + "&"
-          + "orgid=" + order.orgid + "&"
-          + "clientid=" + order.clientid + "&"
-          + "symbol=" + order.symbol + "&"
-          + "side=" + order.side + "&"
-          + "quantity=" + order.quantity + "&"
-          + "price=" + order.price + "&"
-          + "ordertype=" + order.ordertype + "&"
-          + "remquantity=" + order.remquantity + "&"
-          + "status=" + order.status + "&"
-          + "reason=" + order.reason + "&"
-          + "markettype=" + order.markettype + "&"
-          + "futsettdate=" + order.futsettdate + "&"
-          + "partfill=" + order.partfill + "&"
-          + "quoteid=" + order.quoteid + "&"
-          + "currency=" + order.currency + "&"
-          + "timestamp=" + order.timestamp + "&"
-          + "margin=" + order.margin + "&"
-          + "timeinforce=" + order.timeinforce + "&"
-          + "expiredate=" + order.expiredate + "&"
-          + "expiretime=" + order.expiretime + "&"
-          + "settlcurrency=" + order.settlcurrency + "&"
-          + "text=" + order.text + "&"
-          + "orderid=" + order.orderid + "&";
-          + "ackid=" + order.ackid + "&"
-          + "currencyindtoorg=" + order.currencyindtoorg + "&"
-          + "currencyratetoorg=" + order.currencyratetoorg;
+  // get the symbol
+  db.hget("symbol:" + order.symbol, "isin", function(err, isin) {
+    if (err) {
+      console.log(err);
+      return;
+    }
 
-  console.log(str);
+    if (!isin) {
+      console.log("Symbol not found: " + order.symbol);
+      return;
+    }
 
-  // make the request
-  options.path = str;
+    var str = "/focalls/orderadd.aspx?"
+            + "msgid=125" + "&"
+            + "orgid=" + order.orgid + "&"
+            + "clientid=" + order.clientid + "&"
+            + "isin=" + isin + "&"
+            + "side=" + order.side + "&"
+            + "quantity=" + order.quantity + "&"
+            + "price=" + order.price + "&"
+            + "ordertype=" + order.ordertype + "&"
+            + "remquantity=" + order.remquantity + "&"
+            + "status=" + order.status + "&"
+            + "reason=" + order.reason + "&"
+            + "markettype=" + order.markettype + "&"
+            + "futsettdate=" + order.futsettdate + "&"
+            + "partfill=" + order.partfill + "&"
+            + "quoteid=" + order.quoteid + "&"
+            + "currency=" + order.currency + "&"
+            + "timestamp=" + order.timestamp + "&"
+            + "margin=" + order.margin + "&"
+            + "timeinforce=" + order.timeinforce + "&"
+            + "expiredate=" + order.expiredate + "&"
+            + "expiretime=" + order.expiretime + "&"
+            + "settlcurrency=" + order.settlcurrency + "&"
+            + "text='" + order.text + "'&"
+            + "orderid=" + order.orderid + "&"
+            + "ackid=" + order.ackid + "&" // todo: replace with execid
+            + "externalorderid=" + order.externalorderid + "&"
+            + "currencyindtoorg=" + order.currencyindtoorg + "&"
+            + "currencyratetoorg=" + order.currencyratetoorg;
 
-  http.request(options, function(res) {
-    callback(res);
-  }).on('error', function(e) {
-    console.log(e);
-  }).end();
+    console.log(str);
+
+    // make the request
+    options.path = str;
+
+    http.request(options, function(res) {
+      callback(res);
+    }).on('error', function(e) {
+      console.log(e);
+    }).end();
+  });
 }

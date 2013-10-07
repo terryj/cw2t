@@ -1938,7 +1938,7 @@ ptp.on("orderAck", function(exereport) {
     text = exereport.text;
   }
 
-  db.eval(scriptorderack, 4, exereport.clordid, exereport.ordstatus, exereport.execid, text, function(err, ret) {
+  db.eval(scriptorderack, 5, exereport.clordid, exereport.orderid, exereport.ordstatus, exereport.execid, text, function(err, ret) {
     if (err) throw err;
 
     // ok, so send confirmation
@@ -2618,7 +2618,7 @@ function registerScripts() {
   scriptneworder = creditcheck + getproquotesymbol + '\
   local orderid = redis.call("incr", "orderid") \
   if not orderid then return 1005 end \
-  redis.call("hmset", "order:" .. orderid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "side", KEYS[4], "quantity", KEYS[5], "price", KEYS[6], "ordertype", KEYS[7], "remquantity", KEYS[5], "status", "0", "reason", "", "markettype", KEYS[8], "futsettdate", KEYS[9], "partfill", KEYS[10], "quoteid", KEYS[11], "currency", KEYS[12], "timestamp", KEYS[13], "margin", "0", "timeinforce", KEYS[14], "expiredate", KEYS[15], "expiretime", KEYS[16], "settlcurrency", KEYS[17], "text", "", "orderid", orderid, "ackid", "", "currencyindtoorg", 0, currencyratetoorg", 1) \
+  redis.call("hmset", "order:" .. orderid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "side", KEYS[4], "quantity", KEYS[5], "price", KEYS[6], "ordertype", KEYS[7], "remquantity", KEYS[5], "status", "0", "reason", "", "markettype", KEYS[8], "futsettdate", KEYS[9], "partfill", KEYS[10], "quoteid", KEYS[11], "currency", KEYS[12], "timestamp", KEYS[13], "margin", "0", "timeinforce", KEYS[14], "expiredate", KEYS[15], "expiretime", KEYS[16], "settlcurrency", KEYS[17], "text", "", "orderid", orderid, "externalorderid", "", "execid", "", "currencyindtoorg", 0, "currencyratetoorg", 1) \
   local orgclientkey = KEYS[1] .. ":" .. KEYS[2] \
   --[[ add to set of orders for this client ]] \
   redis.call("sadd", orgclientkey .. ":orders", orderid) \
@@ -2817,7 +2817,7 @@ function registerScripts() {
 
   scriptorderack = '\
   --[[ update external limit reference ]] \
-  redis.call("hmset", "order:" .. KEYS[1], "status", KEYS[2], "ackid", KEYS[3], "text", KEYS[4]) \
+  redis.call("hmset", "order:" .. KEYS[1], "externalorderid", KEYS[2], "status", KEYS[3], "execid", KEYS[4], "text", KEYS[5]) \
   return \
   ';
 
