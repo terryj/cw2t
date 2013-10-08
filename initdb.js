@@ -49,6 +49,7 @@ function initdb() {
   db.set("clientid", 7);
   //db.set("wffixseqnumout", 0); // used by winterflood test server
   db.set("ordercancelreqid", 0);
+  db.set("fobomsgid", 0);
 
   // charges
   db.set("commissionpercent", 1);

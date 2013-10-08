@@ -21,6 +21,12 @@ var options = {
 };
 var bointerval;
 
+// scripts
+var scriptfoboorder;
+var scriptfobotrade;
+var scriptfobook;
+var scriptfoboerror;
+
 // redis
 var redishost = "127.0.0.1";
 var redisport = 6379;
@@ -35,6 +41,7 @@ db.on("connect", function(err) {
 
   console.log("Connected to Redis at " + redishost + " port " + redisport);
 
+  registerScripts();
   startBOInterval();
 });
 
@@ -44,20 +51,8 @@ db.on("error", function(err) {
 
 // run every time interval to download transactions to the back-ofice
 function startBOInterval() {
-  bointerval = setInterval(bodump, 10000);
+  bointerval = setInterval(bodump, 5000); // todo: make 10
   console.log("Interval timer started");
-}
-
-callback = function(res) {
-  var str = '';
-
-  res.on('data', function(chunk) {
-    str += chunk;
-  });
-
-  res.on('end', function() {
-    console.log(str);
-  });
 }
 
 function bodump() {
@@ -66,7 +61,7 @@ function bodump() {
   // get all the orders waiting to be sent to the back-office
   db.smembers("orders", function(err, orderids) {
     if (err) {
-      console.log("Error in unsubscribeTopics:" + err);
+      console.log("Error in bodump: " + err);
       return;
     }
 
@@ -87,56 +82,73 @@ function bodump() {
       });
     });
   });
+
+  // & all the trades
+  db.smembers("trades", function(err, tradeids) {
+    if (err) {
+      console.log("Error in bodump: " + err);
+      return;
+    }
+
+    // send each one
+    tradeids.forEach(function(tradeid, i) {
+      db.hgetall("trade:" + tradeid, function(err, trade) {
+        if (err) {
+          console.log(err);
+          return;
+        }
+
+        if (trade == null) {
+          console.log("Trade #" + tradeid + " not found");
+          return;
+        }
+
+        sendTrade(trade);
+      });
+    });
+  });
 }
 
-/* http://ec2-54-235-66-162.compute-1.amazonaws.com/focalls/orderadd.aspx?
-msgid=123&
-ackid=LM125635115526208600752&
-clientid=1765&currency=GBP&
-currencyindtoorg=*&
-currencyratetoorg=1.2345&
-expiredate=20130808&
-expiretime=08:51:26&
-externalorderid=8aDnmVca9YI7lLkQhTpHfVKxdoQx2z&
-futsettdate=20130802&
-isin=GB00B1XZS820&
-margin=12.34&
-markettype=1&
-orderid=62&
-ordertype=D&
-orgid=1&
-partfill=1&
-price=3.388&
-quantity=295&
-quoteid=38&
-reason=1001&
-reasontext=hgfdsa&
-remquantity=0&
-side=1&
-status=B&
-timeinforce=0&
-timestamp=20130808-08:51:26&
-userid=33
-*/
+//
+// function called on response to the http request
+//
+callback = function(res) {
+  var str = '';
+
+  res.on('data', function(chunk) {
+    str += chunk;
+  });
+
+  res.on('end', function() {
+    var reply;
+
+    console.log(str);
+
+    if (str.charAt(0) == "{") {
+      reply = JSON.parse(str);
+      if (reply.result) {
+        db.eval(scriptfobook, 1, reply.msgid, function(err, ret) {
+          if (err) throw err;
+        });
+      } else {
+        db.eval(scriptfoboerror, 2, reply.msgid, reply.error, function(err, ret) {
+          if (err) throw err;
+        });
+      }
+    }
+  });
+}
 
 function sendOrder(order) {
-  // get the symbol
-  db.hget("symbol:" + order.symbol, "isin", function(err, isin) {
-    if (err) {
-      console.log(err);
-      return;
-    }
+  // call script to get msgid
+  db.eval(scriptfoboorder, 2, order.orderid, order.symbol, function(err, ret) {
+    if (err) throw err;
 
-    if (!isin) {
-      console.log("Symbol not found: " + order.symbol);
-      return;
-    }
-
-    var str = "/focalls/orderadd.aspx?"
-            + "msgid=125" + "&"
+    options.path = "/focalls/orderadd.aspx?"
+            + "msgid=" + ret[0] + "&"
             + "orgid=" + order.orgid + "&"
             + "clientid=" + order.clientid + "&"
-            + "isin=" + isin + "&"
+            + "isin=" + ret[1] + "&"
             + "side=" + order.side + "&"
             + "quantity=" + order.quantity + "&"
             + "price=" + order.price + "&"
@@ -155,22 +167,112 @@ function sendOrder(order) {
             + "expiredate=" + order.expiredate + "&"
             + "expiretime=" + order.expiretime + "&"
             + "settlcurrency=" + order.settlcurrency + "&"
-            + "text='" + order.text + "'&"
+            + "text=" + order.text + "&"
             + "orderid=" + order.orderid + "&"
-            + "ackid=" + order.ackid + "&" // todo: replace with execid
+            + "execid=" + order.execid + "&"
             + "externalorderid=" + order.externalorderid + "&"
             + "currencyindtoorg=" + order.currencyindtoorg + "&"
             + "currencyratetoorg=" + order.currencyratetoorg;
 
-    console.log(str);
+    console.log(options.path);
 
     // make the request
-    options.path = str;
-
     http.request(options, function(res) {
       callback(res);
     }).on('error', function(e) {
       console.log(e);
     }).end();
   });
+}
+
+function sendTrade(trade) {
+  // call script to get msgid
+  db.eval(scriptfobotrade, 2, trade.tradeid, trade.symbol, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    options.path = "/focalls/tradeadd.aspx?"
+            + "msgid=" + ret[0] + "&"
+            + "orgid=" + order.orgid + "&"
+            + "clientid=" + order.clientid + "&"
+            + "isin=" + ret[1] + "&"
+            + "side=" + order.side + "&"
+            + "quantity=" + order.quantity + "&"
+            + "price=" + order.price + "&"
+            + "ordertype=" + order.ordertype + "&"
+            + "remquantity=" + order.remquantity + "&"
+            + "status=" + order.status + "&"
+            + "reason=" + order.reason + "&"
+            + "markettype=" + order.markettype + "&"
+            + "futsettdate=" + order.futsettdate + "&"
+            + "partfill=" + order.partfill + "&"
+            + "quoteid=" + order.quoteid + "&"
+            + "currency=" + order.currency + "&"
+            + "timestamp=" + order.timestamp + "&"
+            + "margin=" + order.margin + "&"
+            + "timeinforce=" + order.timeinforce + "&"
+            + "expiredate=" + order.expiredate + "&"
+            + "expiretime=" + order.expiretime + "&"
+            + "settlcurrency=" + order.settlcurrency + "&"
+            + "text=" + order.text + "&"
+            + "orderid=" + order.orderid + "&"
+            + "execid=" + order.execid + "&"
+            + "externalorderid=" + order.externalorderid + "&"
+            + "currencyindtoorg=" + order.currencyindtoorg + "&"
+            + "currencyratetoorg=" + order.currencyratetoorg;
+
+    console.log(options.path);
+
+    // make the request
+    http.request(options, function(res) {
+      callback(res);
+    }).on('error', function(e) {
+      console.log(e);
+    }).end();
+  });
+}
+
+function registerScripts() {
+  scriptfoboorder = '\
+  local fobomsgid = redis.call("incr", "fobomsgid") \
+  redis.call("hmset", "fobo:" .. fobomsgid, "msgtype", 1, "orderid", KEYS[1], "status", 0) \
+  local isin = redis.call("hget", "symbol:" .. KEYS[2], "isin") \
+  return {fobomsgid, isin} \
+  ';
+
+  scriptfobotrade = '\
+  local fobomsgid = redis.call("incr", "fobomsgid") \
+  redis.call("hmset", "fobo:" .. fobomsgid, "msgtype", 2, "tradeid", KEYS[1], "status", 0) \
+  local isin = redis.call("hget", "symbol:" .. KEYS[2], "isin") \
+  return {fobomsgid, isin} \
+  ';
+
+  // update message status & remove order/trade from their set
+  scriptfobook = '\
+  redis.call("hmset", "fobo:" .. KEYS[1], "status", 1) \
+  local msgtype = redis.call("hget", "fobo:" .. KEYS[1], "msgtype") \
+  if msgtype == 1 then \
+    local orderid = redis.call("hget", "fobo:" .. KEYS[1], "orderid") \
+    redis.call("sdel", "orders", orderid) \
+  else \
+    local tradeid = redis.call("hget", "fobo:" .. KEYS[1], "tradeid") \
+    redis.call("sdel", "trades", tradeid) \
+  end \
+  return \
+  ';
+
+  // update message error, add message to errors set & remove order/trade from their set
+  scriptfoboerror = '\
+  redis.call("hmset", "fobo:" .. KEYS[1], "error", KEYS[2]) \
+  redis.call("sadd", "errors", KEYS[1]) \
+  local msgtype = redis.call("hget", "fobo:" .. KEYS[1], "msgtype") \
+  if msgtype == 1 then \
+    local orderid = redis.call("hget", "fobo:" .. KEYS[1], "orderid") \
+    redis.call("srem", "orders", orderid) \
+  else \
+    local tradeid = redis.call("hget", "fobo:" .. KEYS[1], "tradeid") \
+    redis.call("srem", "trades", tradeid) \
+  end \
+  return \
+  ';
 }

@@ -2572,12 +2572,15 @@ function registerScripts() {
   end \
   ';
 
+  // todo: better?
+  //redis.call("rpush", "trades", tradeid) \
+
   newtrade = updateposition + updatecash + '\
   local newtrade = function(orgid, clientid, orderid, symbol, side, quantity, price, currency, costs, counterpartyorgid, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate) \
     local tradeid = redis.call("incr", "tradeid") \
     if not tradeid then return 0 end \
     redis.call("hmset", "trade:" .. tradeid, "orgid", orgid, "clientid", clientid, "orderid", orderid, "symbol", symbol, "side", side, "quantity", quantity, "price", price, "currency", currency, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyorgid", counterpartyorgid, "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrency", settlcurrency, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate) \
-    redis.call("rpush", "trades", tradeid) \
+    redis.call("sadd", "trades", tradeid) \
     local orgclientkey = orgid .. ":" .. clientid \
     redis.call("sadd", orgclientkey .. ":trades", tradeid) \
     redis.call("sadd", "order:" .. orderid .. ":trades", tradeid) \
