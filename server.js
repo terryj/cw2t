@@ -2574,7 +2574,6 @@ function registerScripts() {
 
   // todo: better?
   //redis.call("rpush", "trades", tradeid) \
-
   newtrade = updateposition + updatecash + '\
   local newtrade = function(orgid, clientid, orderid, symbol, side, quantity, price, currency, costs, counterpartyorgid, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate) \
     local tradeid = redis.call("incr", "tradeid") \

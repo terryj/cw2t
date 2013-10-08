@@ -14,10 +14,7 @@ var redis = require('redis');
 
 // globals
 var options = {
-  host: 'ec2-54-235-66-162.compute-1.amazonaws.com',
-  //port: 80,
-  //path: '',///focalls',
-  //method: 'GET'
+  host: 'ec2-54-235-66-162.compute-1.amazonaws.com'
 };
 var bointerval;
 
@@ -110,32 +107,38 @@ function bodump() {
 }
 
 //
-// function called on response to the http request
+// make an http request
 //
-callback = function(res) {
-  var str = '';
+function httpGet() {
+  http.get(options, function(res) {
+    var str = '';
 
-  res.on('data', function(chunk) {
-    str += chunk;
-  });
+    console.log("Response: " + res.statusCode);
 
-  res.on('end', function() {
-    var reply;
+    res.on('data', function(chunk) {
+      str += chunk;
+    });
 
-    console.log(str);
+    res.on('end', function() {
+      var reply;
 
-    if (str.charAt(0) == "{") {
-      reply = JSON.parse(str);
-      if (reply.result) {
-        db.eval(scriptfobook, 1, reply.msgid, function(err, ret) {
-          if (err) throw err;
-        });
-      } else {
-        db.eval(scriptfoboerror, 2, reply.msgid, reply.error, function(err, ret) {
-          if (err) throw err;
-        });
+      console.log(str);
+
+      if (str.charAt(0) == "{") {
+        reply = JSON.parse(str);
+        if (reply.result) {
+          db.eval(scriptfobook, 1, reply.msgid, function(err, ret) {
+            if (err) throw err;
+          });
+        } else {
+          db.eval(scriptfoboerror, 2, reply.msgid, reply.error, function(err, ret) {
+            if (err) throw err;
+          });
+        }
       }
-    }
+    });
+  }).on('error', function(e) {
+    console.log(e.message);
   });
 }
 
@@ -167,7 +170,7 @@ function sendOrder(order) {
             + "expiredate=" + order.expiredate + "&"
             + "expiretime=" + order.expiretime + "&"
             + "settlcurrency=" + order.settlcurrency + "&"
-            + "text=" + order.text + "&"
+            + "text='" + order.text + "'&"
             + "orderid=" + order.orderid + "&"
             + "execid=" + order.execid + "&"
             + "externalorderid=" + order.externalorderid + "&"
@@ -176,12 +179,7 @@ function sendOrder(order) {
 
     console.log(options.path);
 
-    // make the request
-    http.request(options, function(res) {
-      callback(res);
-    }).on('error', function(e) {
-      console.log(e);
-    }).end();
+    httpGet();
   });
 }
 
@@ -193,42 +191,34 @@ function sendTrade(trade) {
 
     options.path = "/focalls/tradeadd.aspx?"
             + "msgid=" + ret[0] + "&"
-            + "orgid=" + order.orgid + "&"
-            + "clientid=" + order.clientid + "&"
+            + "orgid=" + trade.orgid + "&"
+            + "clientid=" + trade.clientid + "&"
             + "isin=" + ret[1] + "&"
-            + "side=" + order.side + "&"
-            + "quantity=" + order.quantity + "&"
-            + "price=" + order.price + "&"
-            + "ordertype=" + order.ordertype + "&"
-            + "remquantity=" + order.remquantity + "&"
-            + "status=" + order.status + "&"
-            + "reason=" + order.reason + "&"
-            + "markettype=" + order.markettype + "&"
-            + "futsettdate=" + order.futsettdate + "&"
-            + "partfill=" + order.partfill + "&"
-            + "quoteid=" + order.quoteid + "&"
-            + "currency=" + order.currency + "&"
-            + "timestamp=" + order.timestamp + "&"
-            + "margin=" + order.margin + "&"
-            + "timeinforce=" + order.timeinforce + "&"
-            + "expiredate=" + order.expiredate + "&"
-            + "expiretime=" + order.expiretime + "&"
-            + "settlcurrency=" + order.settlcurrency + "&"
-            + "text=" + order.text + "&"
-            + "orderid=" + order.orderid + "&"
-            + "execid=" + order.execid + "&"
-            + "externalorderid=" + order.externalorderid + "&"
-            + "currencyindtoorg=" + order.currencyindtoorg + "&"
-            + "currencyratetoorg=" + order.currencyratetoorg;
+            + "side=" + trade.side + "&"
+            + "quantity=" + trade.quantity + "&"
+            + "price=" + trade.price + "&"
+            + "commission=" + trade.commission + "&"
+            + "ptmlevy=" + trade.ptmlevy + "&"
+            + "stampduty=" + trade.stampduty + "&"
+            + "contractcharge=" + trade.contractcharge + "&"
+            + "cpartyorgid=" + trade.counterpartyorgid + "&"
+            + "cpartyid=" + trade.counterpartyid + "&"
+            + "futsettdate=" + trade.futsettdate + "&"
+            + "currency=" + trade.currency + "&"
+            + "settlcurrency=" + trade.settlcurrency + "&"
+            + "markettype=" + trade.markettype + "&"
+            + "lastmkt=" + trade.lastmkt + "&"
+            + "timestamp=" + trade.timestamp + "&"
+            + "orderid=" + trade.orderid + "&"
+            + "tradeid=" + trade.tradeid + "&"
+            + "externaltradeid=" + trade.externaltradeid + "&"
+            + "externalorderid=" + trade.externalorderid + "&"
+            + "currencyindtoorg=" + "0" + "&" //trade.currencyindtoorg + "&"
+            + "currencyratetoorg=" + "1";//trade.currencyratetoorg;
 
     console.log(options.path);
 
-    // make the request
-    http.request(options, function(res) {
-      callback(res);
-    }).on('error', function(e) {
-      console.log(e);
-    }).end();
+    httpGet();
   });
 }
 
