@@ -665,9 +665,9 @@
             } else if (msg.substr(2, 11) == "signinreply") {
                 obj = JSON.parse(msg);
                 replySignIn(obj.signinreply);
-            } else if (msg.substr(2, 8) == "indexUKX") {
+            } else if (msg.substr(2, 5) == "index") {
                 obj = JSON.parse(msg);
-                indices["UKX"] = obj.indexUKX;
+                loadIndex(obj.index);
             } else if (msg.substr(2,6) == "status") {
                 obj = JSON.parse(msg);
                 statusMsg(obj.status);
@@ -677,7 +677,14 @@
             } else {
                 console.log("Unknown message:" + msg);
             }
-         };
+        };
+
+        function loadIndex(index) {
+            console.log(index);
+            indices[index.name] = index.symbols;
+            console.log(indices);
+            displayIndex(index.name);
+        }
 
         function loadOrderBooks(orderbookarr) {
             for (var i = 0; i < orderbookarr.length; ++i) {
@@ -757,12 +764,13 @@
          }
 
          function displayIndex(index) {
-            if (!(index in indices)) {return};
-            var len = indices[index].symbols.length;
             var s;
             var sym;
-            for (var i = 0; i < len; ++i) {
-                sym = indices[index].symbols[i].symbol;
+
+            if (!(index in indices)) {return};
+
+            for (var i = 0; i < indices[index].length; ++i) {
+                sym = indices[index][i].symbol;
                 if (sym in instruments) {
                     s = instruments[sym].symbol + ' ' + instruments[sym].description;
                     addElement(s, list1, sym);
@@ -776,12 +784,16 @@
             }                                    
         }
 
+        function start() {
+            clearScreen();
+            displayMenu();
+            selectedmenu = 0;
+            displayOrderBooks();
+        }
+
         function statusMsg(status) {
             if (status == "readytotrade") {
-                clearScreen();
-                displayMenu();
-                selectedmenu = 0;
-                displayOrderBooks();
+                start();
             }
         }
 
@@ -1215,6 +1227,8 @@
             var stockboxinput;
             var stocklist;
             var searchtext;
+            var ftselink;
+            var ftse = false;
 
             stockbox = document.createElement("div");
             stockbox.id = "stockbox";
@@ -1275,7 +1289,16 @@
                 }
             }
 
+            ftselink = document.createElement('a');
+            ftselink.innerHTML = "ftse 100";
+            ftselink.href = "javascript:void(0);";
+            ftselink.onclick = function() {
+                sockjs.send("{\"index\":\"UKX\"}");
+                ftse = true;
+            }
+
             stockbox.appendChild(stockboxinput);
+            stockbox.appendChild(ftselink);
             stockbox.appendChild(stocklist);
 
             main.appendChild(stockbox);

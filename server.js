@@ -1,6 +1,6 @@
 /****************
 * server.js
-* Front-office server
+* Front-office trading server
 * Cantwaittotrade Limited
 * Terry Johnston
 * September 2012
@@ -233,6 +233,9 @@ function listen() {
       } else if (msg.substr(2, 22) == "positionhistoryrequest") {
         obj = JSON.parse(msg);
         positionHistory(clientid, obj.positionhistoryrequest, conn);
+      } else if (msg.substr(2, 5) == "index") {
+        obj = JSON.parse(msg);
+        sendIndex(orgclientkey, obj.index, conn);   
       } else if (msg.substr(0, 4) == "ping") {
         conn.write("pong");
       } else {
@@ -910,9 +913,12 @@ function sendOrderTypes(conn) {
   });
 }
 
-function sendIndex(index, conn) {
+function sendIndex(orgclientkey, index, conn) {
   var i = {symbols: []};
   var count;
+
+  // todo: remove this stuff?
+  i.name = index;
 
   db.smembers("index:" + index, function(err, replies) {
     if (err) {
@@ -922,7 +928,7 @@ function sendIndex(index, conn) {
 
     count = replies.length;
     if (count == 0) {
-      console.log("Error: index " + index + " not found");
+      console.log("Index: " + index + " not found");
       return;
     }
 
@@ -941,16 +947,16 @@ function sendIndex(index, conn) {
         }
 
         instrument.symbol = symbol;
-        //instrument.description = inst.description;
 
         // add the order to the array
         i.symbols.push(instrument);
 
         // send array if we have added the last item
-        count--;
-        if (count <= 0) {
-          conn.write("{\"index" + index + "\":" + JSON.stringify(i) + "}");
-        }
+        //count--;
+        //if (count <= 0) {
+          //conn.write("{\"index\":" + JSON.stringify(i) + "}");
+          orderBookOut(orgclientkey, symbol, conn);
+        //}
       });
     });
   });
@@ -1272,7 +1278,6 @@ function sendOrderBook(symbol, level1arr, send, conn) {
 // send all the orderbooks for a single client
 //
 function sendOrderBooksClient(orgclientkey, conn) {
-  console.log("sendOrderBooksClient");
   // get all the instruments in the order book for this client
   db.smembers(orgclientkey + ":orderbooks", function(err, instruments) {
     if (err) {
@@ -1624,7 +1629,7 @@ function orderBookRequest(orgclientkey, symbol, conn) {
   // add the client to the order book set for this instrument
   db.sadd("orderbook:" + symbol, orgclientkey);
 
-  // & add the instrument to the order book set for this client
+  // & add the instrument to the watchlist for this client
   db.sadd(orgclientkey + ":orderbooks", symbol);
 
   orderBookOut(orgclientkey, symbol, conn);

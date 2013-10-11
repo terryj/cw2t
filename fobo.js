@@ -187,7 +187,6 @@ function sendTrade(trade) {
   // call script to get msgid
   db.eval(scriptfobotrade, 2, trade.tradeid, trade.symbol, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
 
     options.path = "/focalls/tradeadd.aspx?"
             + "msgid=" + ret[0] + "&"
@@ -206,6 +205,7 @@ function sendTrade(trade) {
             + "futsettdate=" + trade.futsettdate + "&"
             + "currency=" + trade.currency + "&"
             + "settlcurrency=" + trade.settlcurrency + "&"
+            + "settlcurramt=" + trade.settlcurramt + "&"
             + "markettype=" + trade.markettype + "&"
             + "lastmkt=" + trade.lastmkt + "&"
             + "timestamp=" + trade.timestamp + "&"

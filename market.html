@@ -1,0 +1,1581 @@
+<!doctype html>
+<html><head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <title>Cantwaittotrade Market Information v0.9</title/>
+    <script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
+    <style>
+        .list {
+            display: block;
+            font-size: 24px;
+            color: #666666;
+            white-space: nowrap;
+        }
+        .list li:hover {
+            background-color: #ddd;
+            color: #666666;
+            cursor: pointer;
+        }
+        .menu li {
+            display: inline;
+            margin: 0 10px;
+            font-size: 21px;
+            color: #C0C0C0;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .menu li:hover {
+            color: #666666;
+        }
+        .menu .menuitemselected {
+            color: #666666;
+        }
+        .cw2t {
+            width: 740px;
+            font-size: 33px;
+            color: #C0C0C0;
+            white-space: nowrap;
+            /*background-color: #F8F8F8;*/
+        }
+        .yellowstrip {
+            background-color: yellow;
+            width: 740px;
+            white-space: nowrap;
+            margin: 3px;
+        }
+        a {
+            font-size: 18px;
+            margin: 10px;
+            color: #666666;
+        }
+        a:link {
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .depthstrip {
+            width: 740px;
+            white-space: nowrap;
+            margin: 3px;
+        }
+        .headingstrip {
+            width: 740px;
+            white-space: nowrap;
+            margin: 3px;
+        }
+        .bidquantity {
+            display: inline-block;
+            width: 80px;
+            font-size: 21px;
+            text-align: right;
+            color: gray;
+            cursor: pointer;
+        }
+        .offerquantity {
+            display: inline-block;
+            width: 80px;
+            font-size: 21px;
+            color: gray;
+            cursor: pointer;
+        }
+        .mybidquantity {
+            display: inline-block;
+            width: 60px;
+            font-size: 21px;
+            text-align: right;
+            color: gray;
+            cursor: pointer;
+        }
+        .myofferquantity {
+            display: inline-block;
+            width: 60px;
+            font-size: 21px;
+            color: gray;
+            cursor: pointer;
+        }
+        .bidquantityheading {
+            display: inline-block;
+            width: 80px;
+            font-size: 12px;
+            text-align: right;
+            color: gray;
+        }
+        .offerquantityheading {
+            display: inline-block;
+            width: 80px;
+            font-size: 12px;
+            color: gray;
+        }
+        .mybidquantityheading {
+            display: inline-block;
+            width: 60px;
+            font-size: 12px;
+            text-align: right;
+            color: gray;
+        }
+        .myofferquantityheading {
+            display: inline-block;
+            width: 60px;
+            font-size: 12px;
+            color: gray;
+        }
+        .yellowstripbidflashup {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;    
+            background-color: blue;
+            color: yellow;        
+            cursor: pointer;
+        }
+        .yellowstripbidflashdn {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;    
+            background-color: red;
+            color: yellow;        
+            cursor: pointer;
+        }
+        .yellowstripbidflashnochange {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;    
+            background-color: green;
+            color: yellow;        
+            cursor: pointer;
+        }
+        .bidflashup {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;    
+            color: white;
+            background-color: blue;
+            cursor: pointer;
+        }
+        .bidflashdn {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;    
+            color: white;
+            background-color: red;
+            cursor: pointer;
+        }
+        .bidflashnochange {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;    
+            background-color: green;
+            color: white;
+            cursor: pointer;
+        }
+        .yellowstripofferflashup {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;    
+            background-color: blue;
+            color: yellow;        
+            cursor: pointer;
+        }
+        .yellowstripofferflashdn {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;    
+            background-color: red;
+            color: yellow;        
+            cursor: pointer;
+        }
+        .yellowstripofferflashnochange {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;    
+            background-color: green;
+            color: yellow;        
+            cursor: pointer;
+        }
+        .offerflashup {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;    
+            color: white;
+            background-color: blue;
+            cursor: pointer;
+        }
+        .offerflashdn {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;    
+            color: white;
+            background-color: red;
+            cursor: pointer;
+        }
+        .offerflashnochange {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;    
+            color: white;
+            background-color: green;
+            cursor: pointer;
+        }
+        .yellowstripbidup {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;
+            color: blue;
+            background-color: yellow;
+            cursor: pointer;
+        }
+        .yellowstripbiddn {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;
+            color: red;
+            background-color: yellow;
+            cursor: pointer;
+        }
+        .yellowstripbidnochange {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;    
+            color: green;        
+            background-color: yellow;
+            cursor: pointer;
+        }
+        .bidup {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;
+            color: blue;
+            background-color: white;
+            cursor: pointer;
+        }
+        .biddn {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;
+            color: red;
+            background-color: white;
+            cursor: pointer;
+        }
+        .bidnochange {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;    
+            color: green;        
+            background-color: white;
+            cursor: pointer;
+        }
+       .yellowstripofferup {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;
+            color: blue;
+            background-color: yellow;
+            cursor: pointer;
+        }
+        .yellowstripofferdn {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;
+            color: red;
+            background-color: yellow;
+            cursor: pointer;
+        }
+        .yellowstripoffernochange {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;    
+            color: green;        
+            background-color: yellow;
+            cursor: pointer;
+        }
+       .offerup {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;
+            color: blue;
+            background-color: white;
+            cursor: pointer;
+        }
+        .offerdn {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;
+            color: red;
+            background-color: white;
+            cursor: pointer;
+        }
+        .offernochange {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;    
+            color: green;        
+            background-color: white;
+            cursor: pointer;
+        }
+        .bidheading {
+            display: inline-block;
+            width: 120px;
+            font-size: 12px;
+            text-align: right;    
+            color: gray;        
+        }
+        .offerheading {
+            display: inline-block;
+            width: 120px;
+            font-size: 12px;
+            text-align: left;    
+            color: gray;        
+        }
+        .bid {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: right;
+            color: green;
+            cursor: pointer;
+        }
+        .offer {
+            display: inline-block;
+            width: 120px;
+            font-size: 33px;
+            text-align: left;
+            color: green;
+            cursor: pointer;
+        }
+        .stock {
+            display: inline-block;
+            width: 162px;
+            font-size: 27px;
+            color: gray;
+            cursor: pointer;
+        }
+        .stockheading {
+            display: inline-block;
+            width: 162px;
+            font-size: 12px;
+            color: gray;
+        }
+        .slash {
+            display: inline-block;
+            width: 20px;
+            font-size: 24px;
+            color: green;
+            text-align: center;
+        }
+        .slashheading {
+            display: inline-block;
+            width: 20px;
+            font-size: 12px;
+            color: gray;
+            text-align: center;
+        }
+        .level2 {
+            display: inline-block;
+            width: 19px;
+            font-size: 33px;
+            color: gray;
+            cursor: pointer;
+        }
+        .removestock {
+            display: inline-block;
+            width: 19px;
+            font-size: 21px;
+            color: gray;
+            cursor: pointer;
+        }
+        .level2heading {
+            display: inline-block;
+            width: 19px;
+            font-size: 12px;
+        }
+        .forminstrument {
+            width: 740px;
+            white-space: nowrap;            
+        }
+        .orderquantity {
+            width: 90px;
+            font-size: 18px;
+            margin-left: 3px;
+        }
+        .orderstock {
+            color: gray;
+            display: inline-block;
+            width: 120px;
+            font-size: 21px;
+            margin-left: 3px;
+            text-align: center;
+        }
+        .orderprice {
+            width: 90px;
+            font-size: 18px;
+        }
+        .orderbuttonbuy {
+            font-size: 21px;
+            border-style: none;
+            background-color: blue;
+            color: white;
+            cursor: pointer;
+        }
+        .orderbuttonsell {
+            font-size: 21px;
+            border-style: none;
+            background-color: red;
+            color: white;
+            cursor: pointer;
+        }
+        .ordermsg {
+            color: #ccc;
+            font-size: 18px;            
+        }
+        .forminstbutton {
+            border-style: none;
+            background-color: #ddd;
+            cursor: pointer;
+        }
+        .formsigninlabel {
+            display: inline-block;
+            width: 95px;
+            font-size: 21px;
+            color: #C0C0C0;
+        }
+        .formsignininput {
+            display: inline-block;
+            width: 270px;
+            line-height: 21px;
+            font-size: 15px;
+            color: gray;
+        }
+        .formsigninbutton {
+            border-style: none;
+            background-color: #C0C0C0;
+            font-size: 15px;
+            cursor: pointer;
+            height: 24px;
+            width: 80px;
+        }
+        .quotebuybutton {
+            font-size: 21px;
+            background-color: #ddd;
+            color: blue;
+            cursor: pointer;
+        }
+        .quotesellbutton {
+            font-size: 21px;
+            background-color: #ddd;
+            color: red;
+            cursor: pointer;
+        }
+        .quotereqquantity {
+            font-size: 21px;
+            margin-left: 3px;
+            width: 99px;
+            color: #C0C0C0;
+        }
+        .quotereqbutton {
+            font-size: 21px;
+            background-color: #ddd;
+            color: gray;
+            cursor: pointer;
+        }
+        .settlabel {
+            /*font-size: 21px;*/
+            color: gray;
+        }
+        .timerlabel {
+            display: inline-block;
+            width: 200px;
+            font-size: 21px;
+            text-align: center;
+            color: #C0C0C0;
+        }
+        .ordertype {
+            margin-left: 6px;
+        }
+        .stockbox {
+            position: relative;
+        }
+        .stockboxinput {
+            width: 120px;
+            height: 20px;
+        }
+        .stocklist {
+            position: absolute;
+            border: 1px solid grey;
+            /*list-style: none;*/
+            width: 600px;
+            height: 300px;
+            overflow: scroll;
+            background-color: white;
+        }
+        .stocklist li:hover {
+            background-color: #eee;
+            color: #666666;
+            cursor: pointer;
+        }
+        .getquotebutton {
+            background-color: #ddd;
+            width: 120px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body lang="en">
+    <div id="heading">
+        <div id="cw2t" class="cw2t">Cantwaittotrade Market Information</div>
+    </div>
+    <div id="main">
+    <ul id="list1" class="list">
+    </ul>
+    <ul id="list2" class="list">
+    </ul>
+    <ul id="list3" class="list">
+    </ul>
+    <ul id="list4" class="list">
+    </ul>
+    <ul id="list5" class="list">
+    </ul>
+    </div>
+
+    <script>
+        var sockjs_url = '/echo';
+        var sockjs;
+        var selectedmenu = -1;
+        var selectedlistelement = 0;
+        var placeneworder = false;
+        var signedin = false;
+        var orders = {};
+        var orderbooks = {};
+        var positions = {};
+        var reserves = {};
+        var cash = {};
+        var margins = {};
+        var trades = {};
+        var instruments = {};
+        var obdisplay = {};
+        var ordervol = {};
+        var ordertypes = {};
+        var quotes = {};
+        var indices = {};
+        var timeinforces = {};
+        var lastElement = null;
+        var lastsymbol = null;
+        var extendedsettlement = false;
+        var defaultsettlcurrency = "GBP";
+        var monthtext = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sept','Oct','Nov','Dec'];
+        var pricetimer;
+        var priceflash = {};
+        var heartbeattimer = null;
+        var inconnectiontest = false;
+        var restarttimer;
+
+        var datain = function(msg) {
+            var obj = {};
+
+            if (msg.substr(2, 9) == "orderbook") {
+                obj = JSON.parse(msg);
+                updateOrderBook(obj.orderbook);
+            } else if (msg.substr(2, 11) == "instruments") {
+                obj = JSON.parse(msg);
+                loadInstruments(obj.instruments);
+            } else if (msg.substr(2, 10) == "instrument") {
+                obj = JSON.parse(msg);
+                loadInstrument(obj.instrument);
+            } else if (msg.substr(2, 11) == "signinreply") {
+                obj = JSON.parse(msg);
+                replySignIn(obj.signinreply);
+            } else if (msg.substr(2, 5) == "index") {
+                obj = JSON.parse(msg);
+                loadIndex(obj.index);
+            } else if (msg.substr(2,6) == "status") {
+                obj = JSON.parse(msg);
+                statusMsg(obj.status);
+            } else if (msg.substr(0, 4) == "pong") {
+                console.log("received pong");
+                inconnectiontest = false;
+            } else {
+                console.log("Unknown message:" + msg);
+            }
+        };
+
+        function loadIndex(index) {
+            console.log(index);
+            indices[index.name] = index.symbols;
+            console.log(indices);
+            displayIndex(index.name);
+        }
+
+        function loadOrderBooks(orderbookarr) {
+            for (var i = 0; i < orderbookarr.length; ++i) {
+                orderbooks[orderbookarr[i].symbol] = orderbookarr[i];
+            }
+
+            if (selectedmenu == 0) {
+                displayOrderBooks();
+            }
+        }
+
+        function loadInstruments(instrumentarr) {
+            for (var i = 0; i < instrumentarr.length; ++i) {
+                instruments[instrumentarr[i].symbol] = instrumentarr[i];
+            }
+        }
+
+        function loadInstrument(instrument) {
+            instruments[instrument.symbol] = instrument;
+        }
+
+         function displayIndex(index) {
+            var s;
+            var sym;
+
+            if (!(index in indices)) {return};
+
+            for (var i = 0; i < indices[index].length; ++i) {
+                sym = indices[index][i].symbol;
+                if (sym in instruments) {
+                    s = instruments[sym].symbol + ' ' + instruments[sym].description;
+                    addElement(s, list1, sym);
+                }
+            }
+         }
+
+        function start() {
+            clearScreen();
+            displayMenu();
+            selectedmenu = 0;
+            displayIndex("UKX");
+        }
+
+        function statusMsg(status) {
+            if (status == "readytotrade") {
+                start();
+            }
+        }
+
+        function startHeartbeatTimer() {
+            stopHeartbeatTimer();
+            heartbeattimer = setTimeout(connectionTest, 30000);            
+        }
+
+        function stopHeartbeatTimer() {
+            clearTimeout(heartbeattimer);
+        }
+
+        function startPriceTimer() {
+            pricetimer = setInterval(flashText, 1000);
+        }
+
+        function stopPriceTimer() {
+            clearInterval(pricetimer);
+        }
+
+        function startRestartTimer() {
+            // attempt restart after 1-10 seconds
+            var randomonetoten = Math.floor((Math.random()*10)+1);
+            console.log("attempt restart after " + randomonetoten + " seconds");
+            restarttimer = setTimeout(newconn, randomonetoten * 1000);
+        }
+
+        function stopRestartTimer() {
+            clearTimeout(restarttimer);
+        }
+
+        function connectionTest() {
+            if (inconnectiontest) {
+                console.log("need to reconnect");
+                return;
+            }
+
+            console.log("sending ping");
+            sockjs.send("ping");
+            startHeartbeatTimer();
+            inconnectiontest = true;
+        }
+
+        newconn();
+
+        function newconn() {
+            console.log("new conn");
+            sockjs = new SockJS(sockjs_url);
+
+            sockjs.onopen = function()  {
+                console.log("connection open");
+                stopRestartTimer();
+                startPriceTimer();
+                startHeartbeatTimer();
+                displayFormSignin();
+            };
+
+            sockjs.onmessage = function(e) {
+                datain(e.data);
+            };
+
+            sockjs.onclose = function()  {
+                console.log("connection closed");
+                stopRestartTimer();
+                stopPriceTimer();
+                stopHeartbeatTimer();
+                startRestartTimer();
+                signedin = false;
+            };
+
+            sockjs.onheartbeat = function() {
+                console.log("heartbeat");
+                startHeartbeatTimer();
+            };
+        }
+
+        function flashText() {
+            var bidprice;
+            var offerprice;
+            var removesymbol;
+
+            for (var symbol in priceflash) {
+                removesymbol = true;
+
+                for (i = 0; i < orderbooks[symbol].length; i++) {
+                    // bid prices
+                    orderbooks[symbol][i].bidflash--;
+                    if (orderbooks[symbol][i].bidflash == 0) {
+                        bidprice = document.getElementById("bidprice:" + symbol + ":" + i);
+                        if (bidprice != null) {
+                            if (i == 0) {
+                                if (orderbooks[symbol][i].lastbidchange == 1) {
+                                    bidprice.className = "yellowstripbidup";
+                                } else if (orderbooks[symbol][i].lastbidchange == 2) {
+                                    bidprice.className = "yellowstripbiddn";
+                                } else {
+                                    bidprice.className = "yellowstripbidnochange";
+                                }
+                            } else {
+                                if (orderbooks[symbol][i].lastbidchange == 1) {
+                                    bidprice.className = "bidup";
+                                } else if (orderbooks[symbol][i].lastbidchange == 2) {
+                                    bidprice.className = "biddn";
+                                } else {
+                                    bidprice.className = "bidnochange";
+                                }
+                            }
+                        }
+                    }
+
+                    // offer prices
+                    orderbooks[symbol][i].offerflash--;
+                    if (orderbooks[symbol][i].offerflash == 0) {
+                        offerprice = document.getElementById("offerprice:" + symbol + ":" + i);
+                        if (offerprice != null) {
+                            if (i == 0) {
+                                if (orderbooks[symbol][i].lastofferchange == 1) {
+                                    offerprice.className = "yellowstripofferup";
+                                } else if (orderbooks[symbol][i].lastofferchange == 2) {
+                                    offerprice.className = "yellowstripofferdn";
+                                } else {
+                                    offerprice.className = "yellowstripoffernochange";           
+                                }
+                            } else {
+                                if (orderbooks[symbol][i].lastofferchange == 1) {
+                                    offerprice.className = "offerup";
+                                } else if (orderbooks[symbol][i].lastofferchange == 2) {
+                                    offerprice.className = "offerdn";
+                                } else {
+                                    offerprice.className = "offernochange";
+                                }
+                            }
+                        }
+                    }
+
+                    // keep track of whether we can remove this symbol
+                    if (orderbooks[symbol][i].bidflash > 0 || orderbooks[symbol][i].offerflash > 0) {
+                        removesymbol = false;
+                    }
+                }
+
+                if (removesymbol) {
+                    delete priceflash[symbol];
+                }
+            }
+        }
+
+        function clearMenu() {
+            var menu = document.getElementById("menu");
+            if (menu != null) {
+                for (var i = 0; i < menu.childNodes.length; ++i) {
+                    menu.removeChild(menu.childNodes[i]);
+                }
+                heading.removeChild(menu);
+            }
+        }
+
+        function clearHeadings() {
+            for (var i = 0; i < main.childNodes.length; ++i) {
+                if (main.childNodes[i].nodeType == 3) {
+                    main.removeChild(main.childNodes[i]);
+                }
+            }
+        }
+
+        function clearOrderBookHeadings() {
+            var headingstrip = document.getElementById("headingstrip");
+            if (headingstrip != null) {
+                while(headingstrip.hasChildNodes()){
+                    headingstrip.removeChild(headingstrip.childNodes[0]);
+                }
+                main.removeChild(headingstrip);
+            }
+        }
+
+        function clearList(list) {
+            while(list.hasChildNodes()){
+                list.removeChild(list.childNodes[0])
+            }
+        }
+
+        function clearForm(formid, remove) {
+            var frm = document.getElementById(formid);
+            if (frm != null) {
+                while(frm.hasChildNodes()){
+                    frm.removeChild(frm.childNodes[0]);
+                }
+                if (remove) {
+                    main.removeChild(frm);
+                }
+            }
+        }
+
+        function clearSymbolDiv(symbol) {
+            clearDiv("orderdiv:" + symbol);
+        }
+
+        function clearAllSymbolDivs() {
+            for (var symbol in orderbooks) {
+                clearSymbolDiv(symbol);
+            }
+        }
+
+        function clearSelectStockDivs() {
+            clearDiv("stockbox");
+        }
+
+        function clearStrip(stripid) {
+            var strip = document.getElementById(stripid);
+            if (strip != null) {
+                while(strip.hasChildNodes()){
+                    strip.removeChild(strip.childNodes[0]);
+                }
+                main.removeChild(strip);
+            }            
+        }
+
+        function clearStrips() {
+            clearStrip("headingstrip");
+
+            for (var symbol in orderbooks) {
+                for (var i = 0; i < orderbooks[symbol].length; ++i) {
+                    clearStrip("strip:" + symbol + ":" + i);
+                    if (symbol in obdisplay) {
+                        if (!(obdisplay[symbol].level2)) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        function clearAllStrips(symbol) {
+            var depth;
+
+            if (obdisplay[symbol].level2) {
+                depth = orderbooks[symbol].length;
+            } else {
+                depth = 1;
+            }
+
+            for (var i = 0; i < depth; ++i) {
+                clearStrip("strip:" + symbol + ":" + i);
+            }
+        }
+
+        function clearScreen() {
+            clearHeadings();
+            clearOrderBookHeadings();
+            clearLists();
+            clearForms();
+            clearStrips();
+            clearSelectStockDivs();
+            clearAllSymbolDivs();
+        }
+
+        function clearLists() {
+            clearList(list1);
+            clearList(list2);
+            clearList(list3);
+            clearList(list4);
+            clearList(list5);
+        }
+
+        function clearForms() {
+            clearForm("frmsignin", true);
+            clearForm("frminstrument", true);
+        }
+
+        function addElement(msg, list, index) {
+            var listelem;
+
+            listelem = document.createElement("li");
+            listelem.setAttribute('value', index);
+            listelem.innerHTML = msg;
+
+            list.appendChild(listelem);
+
+            return listelem;
+        }
+
+        function displayOrderBooks() {
+            displayOrderBookHeadings();
+
+            for (var symbol in orderbooks) {
+                displayOrderBook(symbol);
+            }
+        }
+
+        function updateElement(msg, list, index) {
+            var listelement = null;
+
+            for (var i = 0; i < list.childNodes.length; ++i) {
+                if (list.childNodes[i].value == index) {
+                    listelement = list.childNodes[i];
+                    listelement.innerHTML = msg;
+                    break;
+                }
+            }
+
+            return listelement;
+        }
+
+        function addHeading(text, list) {
+            var newtext = document.createTextNode(text);
+            main.insertBefore(newtext, list);
+        }
+
+        function removeHeading(text) {
+            for (var i = 0; i < main.childNodes.length; ++i) {
+                if (main.childNodes[i].nodeType == 3 && main.childNodes[i].nodeValue == text) {
+                    main.removeChild(main.childNodes[i]);
+                    break;
+                }
+            }
+        }
+
+        function removeElementFromList(index, list) {
+            for (var i = 0; i < list.childNodes.length; ++i) {
+                if (list.childNodes[i].value == index) {
+                    list.removeChild(list.childNodes[i]);
+                    break;
+                }
+            }
+        }
+
+        function updateOrderBook(orderbook) {
+            var level;
+
+            // create an entry in the orderbooks array for this symbol
+            if (!(orderbook.symbol in orderbooks)) {
+                // 6 levels
+                orderbooks[orderbook.symbol] = [{bid:0, offer:0},{bid:0, offer:0},{bid:0, offer:0},{bid:0, offer:0},{bid:0, offer:0},{bid:0, offer:0}];
+            }
+
+            // update the prices
+            for (var i = 0; i < orderbook.pricelevels.length; ++i) {
+                level = orderbook.pricelevels[i].level - 1;
+
+                if ("bid" in orderbook.pricelevels[i]) {
+                    if (orderbook.pricelevels[i].bid > orderbooks[orderbook.symbol][level].bid) {
+                        orderbooks[orderbook.symbol][level].lastbidchange = 1;
+                    } else if (orderbook.pricelevels[i].bid < orderbooks[orderbook.symbol][level].bid) {
+                        orderbooks[orderbook.symbol][level].lastbidchange = 2;
+                    } else {
+                        orderbooks[orderbook.symbol][level].lastbidchange = 0;                        
+                    }
+                    orderbooks[orderbook.symbol][level].bid = orderbook.pricelevels[i].bid;
+                    orderbooks[orderbook.symbol][level].bidflash = 3;
+                    priceflash[orderbook.symbol] = true;
+                }
+                if ("offer" in orderbook.pricelevels[i]) {
+                    if (orderbook.pricelevels[i].offer > orderbooks[orderbook.symbol][level].offer) {
+                        orderbooks[orderbook.symbol][level].lastofferchange = 1;
+                    } else if (orderbook.pricelevels[i].offer < orderbooks[orderbook.symbol][level].offer) {
+                        orderbooks[orderbook.symbol][level].lastofferchange = 2;
+                    } else {
+                        orderbooks[orderbook.symbol][level].lastofferchange = 0;                        
+                    }
+                    orderbooks[orderbook.symbol][level].offer = orderbook.pricelevels[i].offer;
+                    orderbooks[orderbook.symbol][level].offerflash = 3;
+                    priceflash[orderbook.symbol] = true;
+                }
+            }
+
+            if (selectedmenu == 0) {
+                displayOrderBook(orderbook.symbol);
+            }
+        }
+
+        function removeOrderBook(symbol) {
+            var stockboxinput;
+
+            if (symbol in orderbooks) {
+                clearSymbolDiv(symbol);
+                clearAllStrips(symbol);
+
+                if (obdisplay[symbol].previoussymbol != null) {
+                    if (obdisplay[symbol].insertbefore != null) {
+                        obdisplay[obdisplay[symbol].previoussymbol].insertbefore = obdisplay[symbol].insertbefore;
+                    } else {
+                        obdisplay[obdisplay[symbol].previoussymbol].insertbefore = null;                        
+                    }
+                }
+
+                if (obdisplay[symbol].insertbefore != null) {
+                    if (obdisplay[symbol].previoussymbol != null) {
+                        obdisplay[obdisplay[symbol].insertbefore].previoussymbol = obdisplay[symbol].previoussymbol;
+                    } else {
+                        obdisplay[obdisplay[symbol].insertbefore].previoussymbol = null;
+                    }
+                }
+
+                if (symbol == lastsymbol) {
+                    if (obdisplay[symbol].previoussymbol != null) {
+                        lastsymbol = obdisplay[symbol].previoussymbol;
+                    } else {
+                        lastsymbol = null;
+                    }
+                }
+
+                delete obdisplay[symbol];
+                delete orderbooks[symbol];
+                delete priceflash[symbol];
+
+                if (Object.keys(orderbooks).length == 0) {
+                    clearOrderBookHeadings();
+                }
+
+                stockboxinput = document.getElementById("stockboxinput");
+                if (stockboxinput != null) {
+                    stockboxinput.focus();
+                }
+            }
+        }
+
+        function displayOrderBook(symbol) {
+            var strip;
+            var display = {};
+            var bidprice;
+            var offerprice;
+            var stock;
+            var slash;
+            var y;
+            var orderdiv;
+            var nextsymbol;
+            var links;
+            var reqquotelnk;
+            var placebuyorderlnk;
+            var placesellorderlnk;
+
+            if (!(symbol in orderbooks)) {
+                return;
+            }
+
+            if (!(symbol in obdisplay)) {
+                display.insertbefore = null;
+                display.previoussymbol = null;
+                obdisplay[symbol] = display;
+
+                if (lastsymbol != null) {
+                    obdisplay[lastsymbol].insertbefore = symbol;
+                    obdisplay[symbol].previoussymbol = lastsymbol;
+                }
+                lastsymbol = symbol;
+            }
+
+            // y always 0
+            for (y = 0; y < orderbooks[symbol].length; ++y) {
+                strip = document.getElementById("strip:" + symbol + ":" + y);
+                if (strip != null) {
+                    bidprice = document.getElementById("bidprice:" + symbol + ":" + y);
+                    offerprice = document.getElementById("offerprice:" + symbol + ":" + y);
+                } else {
+                    // first time through, so create elements
+                    strip = document.createElement('div');
+                    strip.id = "strip:" + symbol + ":" + y;
+                    strip.onmouseover = function() {
+                        links.style.visibility = "visible";
+                     }
+                    strip.onmouseout = function() {
+                        links.style.visibility = "hidden";
+                    }
+                    stock = document.createElement('span');
+                    stock.className = "stock";
+                    bidprice = document.createElement('span');
+                    bidprice.id = "bidprice:" + symbol + ":" + y;
+                    bidprice.title = "Place a new sell order";
+                    bidprice.onclick = function() {setOrderPrice(this, "2", symbol);}
+                    offerprice = document.createElement('span');
+                    offerprice.id = "offerprice:" + symbol + ":" + y;
+                    offerprice.title = "Place a new buy order";
+                    offerprice.onclick = function() {setOrderPrice(this, "1", symbol);}
+                    slash = document.createElement('span');
+                    slash.className = "slash";
+                    slash.innerHTML = "/";
+
+                    if (y == 0) {
+                        strip.className = "yellowstrip";
+
+                        reqquotelnk = document.createElement('a');
+                        reqquotelnk.innerHTML = "Request Quote";
+                        reqquotelnk.href = "javascript:void(0);";
+                        reqquotelnk.onclick = function() {requestQuote(symbol);}
+
+                        placebuyorderlnk = document.createElement('a');
+                        placebuyorderlnk.innerHTML = "Buy Order";
+                        placebuyorderlnk.href = "javascript:void(0);";
+                        placebuyorderlnk.onclick = function() {placeOrder(symbol, '1', 0, 0);}
+
+                        placesellorderlnk = document.createElement('a');
+                        placesellorderlnk.innerHTML = "Sell order";
+                        placesellorderlnk.href = "javascript:void(0);";
+                        placesellorderlnk.onclick = function() {placeOrder(symbol, '2', 0, 0);}
+
+                        links = document.createElement('div');
+                        links.style.visibility = "hidden";
+                        links.appendChild(reqquotelnk);
+                        links.appendChild(placebuyorderlnk);
+                        links.appendChild(placesellorderlnk);
+
+                        stock.innerHTML = symbol;
+                    }
+
+                    strip.appendChild(stock);
+                    strip.appendChild(bidprice);
+                    strip.appendChild(slash);
+                    strip.appendChild(offerprice);
+
+                    if (y == 0) {
+                        strip.appendChild(links);
+                    }
+
+                    orderdiv = document.getElementById("orderdiv:" + symbol);
+
+                    if (orderdiv != null) {
+                        main.insertBefore(strip, orderdiv);
+                    } else if (obdisplay[symbol].insertbefore == null) {
+                        main.appendChild(strip);
+                    } else {
+                        nextsymbol = document.getElementById("strip:" + obdisplay[symbol].insertbefore + ":0");
+                        main.insertBefore(strip, nextsymbol);
+                    }
+                }
+
+                priceChange(symbol, y, bidprice, offerprice);
+
+                bidprice.innerHTML = orderbooks[symbol][y].bid;
+                offerprice.innerHTML = orderbooks[symbol][y].offer;                    
+
+                break;
+            }
+        }
+
+        function priceChange(symbol, y, bidprice, offerprice) {
+            if (y == 0) {
+                // bid
+                if (orderbooks[symbol][y].bidflash > 0) {
+                    if (orderbooks[symbol][y].lastbidchange == 1) {
+                        bidprice.className = "yellowstripbidflashup";
+                    } else if (orderbooks[symbol][y].lastbidchange == 2) {
+                        bidprice.className = "yellowstripbidflashdn";
+                    } else {
+                        bidprice.className = "yellowstripbidflashnochange";
+                    }
+                } else {
+                    if (orderbooks[symbol][y].lastbidchange == 1) {
+                        bidprice.className = "yellowstripbidup";
+                    } else if (orderbooks[symbol][y].lastbidchange == 2) {
+                        bidprice.className = "yellowstripbiddn";
+                    } else {
+                        bidprice.className = "yellowstripbidnochange";
+                    }                            
+                }
+
+                // offer
+                if (orderbooks[symbol][y].offerflash > 0) {
+                    if (orderbooks[symbol][y].lastofferchange == 1) {
+                        offerprice.className = "yellowstripofferflashup";
+                    } else if (orderbooks[symbol][y].lastofferchange == 2) {
+                        offerprice.className = "yellowstripofferflashdn";
+                    } else {
+                        offerprice.className = "yellowstripofferflashnochange";
+                    }
+                } else {
+                    if (orderbooks[symbol][y].lastofferchange == 1) {
+                        offerprice.className = "yellowstripofferup";
+                    } else if (orderbooks[symbol][y].lastofferchange == 2) {
+                        offerprice.className = "yellowstripofferdn";
+                    } else {
+                        offerprice.className = "yellowstripoffernochange";
+                    }                            
+                }
+            } else {
+                // bid
+                if (orderbooks[symbol][y].bidflash > 0) {
+                    if (orderbooks[symbol][y].lastbidchange == 1) {
+                        bidprice.className = "bidflashup";
+                    } else if (orderbooks[symbol][y].lastbidchange == 2) {
+                        bidprice.className = "bidflashdn";
+                    } else {
+                        bidprice.className = "bidflashnochange";
+                    }
+                } else {
+                    if (orderbooks[symbol][y].lastbidchange == 1) {
+                        bidprice.className = "bidup";
+                    } else if (orderbooks[symbol][y].lastbidchange == 2) {
+                        bidprice.className = "biddn";
+                    } else {
+                        bidprice.className = "bidnochange";
+                    }                            
+                }
+
+                // offer
+                if (orderbooks[symbol][y].offerflash > 0) {
+                    if (orderbooks[symbol][y].lastofferchange == 1) {
+                        offerprice.className = "offerflashup";
+                    } else if (orderbooks[symbol][y].lastofferchange == 2) {
+                        offerprice.className = "offerflashdn";
+                    } else {
+                        offerprice.className = "offerflashnochange";
+                    }
+                } else {
+                    if (orderbooks[symbol][y].lastofferchange == 1) {
+                        offerprice.className = "offerup";
+                    } else if (orderbooks[symbol][y].lastofferchange == 2) {
+                        offerprice.className = "offerdn";
+                    } else {
+                        offerprice.className = "offernochange";
+                    }                            
+                }
+            }
+        }
+
+        function displayOrderBookHeadings() {
+            var headingstrip;
+            var headinglevel2;
+            var headingstock;
+            var headingbidquantity;
+            var headingmybidquantity;
+            var headingbidprice;
+            var headingofferprice;
+            var headingofferquantity;
+            var headingmyofferquantity;
+            var headingslash;
+
+            headingstrip = document.getElementById("headingstrip");
+            if (headingstrip != null) {
+                return;
+            }
+
+            headingstrip = document.createElement('div');
+            headingstrip.id = "headingstrip";
+            headingstrip.className = "headingstrip";
+            headinglevel2 = document.createElement('span');
+            headinglevel2.className = "level2heading";
+            headingstock = document.createElement('span');
+            headingstock.innerHTML = "Stock";
+            headingstock.className = "stockheading";
+            headingbidquantity = document.createElement('span');
+            headingbidquantity.innerHTML = "Bid Vol";
+            headingbidquantity.className = "bidquantityheading";
+            headingmybidquantity = document.createElement('span');
+            headingmybidquantity.innerHTML = "My Vol";
+            headingmybidquantity.className = "mybidquantityheading"
+            headingbidprice = document.createElement('span');
+            headingbidprice.innerHTML = "Bid Price";
+            headingbidprice.className = "bidheading";
+            headingofferprice = document.createElement('span');
+            headingofferprice.innerHTML = "Offer Price";
+            headingofferprice.className = "offerheading";
+            headingofferquantity = document.createElement('span');
+            headingofferquantity.innerHTML = "Offer Vol";
+            headingofferquantity.className = "offerquantityheading"
+            headingmyofferquantity = document.createElement('span');
+            headingmyofferquantity.innerHTML = "My Vol";
+            headingmyofferquantity.className = "myofferquantityheading";
+            headingslash = document.createElement('span');
+            headingslash.innerHTML = "/";
+            headingslash.className = "slashheading";
+
+            headingstrip.appendChild(headinglevel2);
+            headingstrip.appendChild(headingstock);
+            headingstrip.appendChild(headingmybidquantity);
+            headingstrip.appendChild(headingbidquantity);
+            headingstrip.appendChild(headingbidprice);
+            headingstrip.appendChild(headingslash);
+            headingstrip.appendChild(headingofferprice);
+            headingstrip.appendChild(headingofferquantity);
+            headingstrip.appendChild(headingmyofferquantity);
+
+            main.appendChild(headingstrip);
+        }
+
+        function createDiv(divid, symbol) {
+            var div = document.getElementById(divid);
+
+            if (div == null) {
+                div = document.createElement("div");
+                div.id = divid;
+                displayElement(div, symbol);
+            }
+
+            return div;
+        }
+
+        function displayElement(element, symbol) {
+            var nextsymbol;
+
+            if (obdisplay[symbol].insertbefore == null) {
+                main.appendChild(element);
+            } else {
+                nextsymbol = document.getElementById("strip:" + obdisplay[symbol].insertbefore + ":0");
+                main.insertBefore(element, nextsymbol);
+            }
+        }
+
+        function clearElementById(element) {
+            var elem = document.getElementById(element);
+            if (elem != null) {
+                elem.parentNode.removeChild(elem);
+            }
+        }
+
+        function clearDiv(divid) {
+            var div = document.getElementById(divid);
+            if (div != null) {
+                while(div.hasChildNodes()){
+                    div.removeChild(div.childNodes[0]);
+                }
+                main.removeChild(div);
+            }
+        }
+
+        function addMessageToDiv(msg, divid, symbol) {
+            var div;
+            var msglabel;
+
+            div = document.getElementById(divid);
+            if (div == null) {
+                div = createDiv(divid, symbol);
+            }
+
+            msglabel = document.createElement("label");
+            msglabel.innerHTML = "<br>" + msg;
+
+            div.appendChild(msglabel);
+        }
+
+        function displayFormSignin() {
+            var frm;
+            var emaillabel;
+            var passwordlabel;
+            var dummylabel;
+            var email;
+            var password;
+            var btn;
+            var newline1;
+            var newline2;
+
+            clearMenu();
+            clearScreen();
+
+            frm = document.createElement("form");
+            frm.id = "frmsignin";
+
+            emaillabel = document.createElement("label");
+            emaillabel.innerHTML = "Email ";
+            emaillabel.className = "formsigninlabel";
+
+            passwordlabel = document.createElement("label");
+            passwordlabel.innerHTML = "Password ";
+            passwordlabel.className = "formsigninlabel";
+
+            dummylabel = document.createElement("label");
+            dummylabel.className = "formsigninlabel";
+
+            email = document.createElement("input");
+            email.className = "formsignininput";
+            email.onkeypress = function(event) {
+                if (event.keyCode == 13) {
+                    disable();
+                    signin();
+                }
+            }
+
+            password = document.createElement("input");
+            password.className = "formsignininput";
+            password.onkeypress = function(event) {
+                if (event.keyCode == 13) {
+                    disable();
+                    signin();
+                }
+            }
+
+            btn = document.createElement("input");
+            btn.type = "button";
+            btn.value = "Sign In";
+            btn.className = "formsigninbutton";
+            btn.onclick = function() {
+                disable();
+                signin();
+            }
+
+            newline1 = document.createElement("label");
+            newline1.innerHTML = "<br>";
+            newline2 = document.createElement("label");
+            newline2.innerHTML = "<br><br>";
+
+            frm.appendChild(emaillabel);
+            frm.appendChild(email);
+            frm.appendChild(newline1);
+            frm.appendChild(passwordlabel);
+            frm.appendChild(password);
+            frm.appendChild(newline2);
+            frm.appendChild(dummylabel);
+            frm.appendChild(btn);
+
+            main.appendChild(frm);
+
+            function disable() {
+                btn.disable = true;
+                email.onkeypress = null;
+                password.onkeypress = null;
+            }
+
+            function signin() {
+                var signin = {};
+
+                signin.email = email.value;
+                signin.password = password.value;
+
+                sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");
+            }
+
+            email.focus();
+        }
+
+        function replySignIn(reply) {
+            var frm;
+            var lblreason;
+            var cw2theading;
+
+            frm = document.getElementById("frmsignin");
+            if (frm != null) {
+                if (!reply.success) {
+                    lblreason = document.getElementById("lblReason");
+                    if (lblreason == null) {
+                        lblreason = document.createElement("label");
+                        lblreason.id = "lblReason";
+                        frm.appendChild(lblreason);
+                    }
+
+                    lblreason.innerHTML = " " + reply.reason;
+                } else {
+                    // clear the screen
+                    clearForm("frmsignin", true);
+
+                    cw2theading = document.getElementById('cw2t');
+                    cw2theading.innerHTML = cw2theading.innerHTML + " - " + reply.email;
+
+                    signedin = true;
+                    displayWaitMsg();
+                }
+            }
+        }
+
+        function displayMenu() {
+            var menu;
+            var menuarr;
+            var menuitem;
+
+            menu = document.createElement('ul');
+            menu.className = "menu";
+            menu.id = "menu";
+
+            // build the main menu
+            menuarr = ["FTSE 100", "FTSE 250", "FTSE 350"];
+            for (var i = 0; i < menuarr.length; ++i) {
+                menuitem = document.createElement("li");
+                menuitem.value = i;
+                menuitem.innerHTML = menuarr[i];
+
+                if (i == 0) {
+                    menuitem.className = "menuitemselected";
+                    lastElement = menuitem;
+                }
+                menu.appendChild(menuitem);
+            }
+
+            heading.appendChild(menu);
+
+            menu.onclick = function(e) {
+                var element;
+
+                if (!e) e = window.event;
+                element = e.target || e.srcElement;
+
+                clearScreen();
+
+                element.className = "menuitemselected";
+                if (lastElement != null) {
+                    lastElement.className = "menu";
+                }
+                lastElement = element;
+                selectedmenu = element.value;
+
+                switch (selectedmenu) {
+                case 0:
+                    displayIndex("UKX");
+                    break;
+                case 1:
+                    displayIndex("UK250");
+                    break;
+                case 2:
+                    displayIndex("UK350");
+                    break;
+                }
+            }
+        }
+
+        function displayWaitMsg() {
+            addElement("Loading, please wait...", list1, "");
+        }
+
+    </script>
+</body></html>
