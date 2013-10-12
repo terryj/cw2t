@@ -540,6 +540,12 @@
             width: 120px;
             cursor: pointer;
         }
+        .table {
+            background-color: black;
+        }
+        .rowcol {
+            color: green;        
+        }
     </style>
 </head>
 <body lang="en">
@@ -590,6 +596,9 @@
         var heartbeattimer = null;
         var inconnectiontest = false;
         var restarttimer;
+        var tableindex = {};
+        var numinindex = 0;
+        var numorderbooks = 0;
 
         var datain = function(msg) {
             var obj = {};
@@ -1000,11 +1009,20 @@
 
         function updateOrderBook(orderbook) {
             var level;
+            var row;
+            var col;
+            var elem = {};
 
             // create an entry in the orderbooks array for this symbol
             if (!(orderbook.symbol in orderbooks)) {
                 // 6 levels
                 orderbooks[orderbook.symbol] = [{bid:0, offer:0},{bid:0, offer:0},{bid:0, offer:0},{bid:0, offer:0},{bid:0, offer:0},{bid:0, offer:0}];
+
+                elem.row = numorderbooks % 20;
+                elem.col = parseInt(numorderbooks / 20);
+                console.log(numorderbooks++);
+
+                tableindex[orderbook.symbol] = elem;
             }
 
             // update the prices
@@ -1088,7 +1106,7 @@
             }
         }
 
-        function displayOrderBook(symbol) {
+        /*function displayOrderBook(symbol) {
             var strip;
             var display = {};
             var bidprice;
@@ -1119,7 +1137,7 @@
                 lastsymbol = symbol;
             }
 
-            // y always 0
+            // y always=0
             for (y = 0; y < orderbooks[symbol].length; ++y) {
                 strip = document.getElementById("strip:" + symbol + ":" + y);
                 if (strip != null) {
@@ -1204,6 +1222,44 @@
 
                 break;
             }
+        }*/
+
+        function displayOrderBook(symbol) {
+            var table;
+            var tblbody;
+            var row;
+            var rowcol;
+
+            tblbody = document.getElementById("tblbody");                
+            if (tblbody == null) {
+                table = document.createElement("table");
+                table.setAttribute("border", "2");
+                table.className = "table";
+                tblbody = document.createElement("tbody");
+                tblbody.id = "tblbody";
+                table.appendChild(tblbody);
+                main.appendChild(table);
+            }
+            console.log("tblrow="+tableindex[symbol].row);
+            console.log("tblcol="+tableindex[symbol].col);
+
+
+            row = document.getElementById("row:" + tableindex[symbol].row);
+            if (row == null) {
+                row = document.createElement("tr");
+                row.id = "row:" + tableindex[symbol].row;
+                tblbody.appendChild(row);
+            }
+
+            rowcol = document.getElementById("row:" + tableindex[symbol].row + "col:" + tableindex[symbol].col);
+            if (rowcol == null) {
+                rowcol = document.createElement("td");
+                rowcol.id = "row:" + tableindex[symbol].row + "col:" + tableindex[symbol].col;
+                row.appendChild(rowcol);
+            }
+
+            rowcol.innerHTML = symbol + " " + orderbooks[symbol][0].bid + " / " + orderbooks[symbol][0].offer;
+            rowcol.className = "rowcol";
         }
 
         function priceChange(symbol, y, bidprice, offerprice) {
