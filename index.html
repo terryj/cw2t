@@ -880,8 +880,8 @@
 
                 for (i = 0; i < orderbooks[symbol].length; i++) {
                     // bid prices
-                    orderbooks[symbol][i].bidflash--;
-                    if (orderbooks[symbol][i].bidflash == 0) {
+                    orderbooks[symbol][i].bidflashcount--;
+                    if (orderbooks[symbol][i].bidflashcount == 0) {
                         bidprice = document.getElementById("bidprice:" + symbol + ":" + i);
                         if (bidprice != null) {
                             if (i == 0) {
@@ -905,8 +905,8 @@
                     }
 
                     // offer prices
-                    orderbooks[symbol][i].offerflash--;
-                    if (orderbooks[symbol][i].offerflash == 0) {
+                    orderbooks[symbol][i].offerflashcount--;
+                    if (orderbooks[symbol][i].offerflashcount == 0) {
                         offerprice = document.getElementById("offerprice:" + symbol + ":" + i);
                         if (offerprice != null) {
                             if (i == 0) {
@@ -930,7 +930,7 @@
                     }
 
                     // keep track of whether we can remove this symbol
-                    if (orderbooks[symbol][i].bidflash > 0 || orderbooks[symbol][i].offerflash > 0) {
+                    if (orderbooks[symbol][i].bidflashcount > 0 || orderbooks[symbol][i].offerflashcount > 0) {
                         removesymbol = false;
                     }
                 }
@@ -2027,7 +2027,7 @@
                         orderbooks[orderbook.symbol][level].lastbidchange = 0;                        
                     }
                     orderbooks[orderbook.symbol][level].bid = orderbook.pricelevels[i].bid;
-                    orderbooks[orderbook.symbol][level].bidflash = 3;
+                    orderbooks[orderbook.symbol][level].bidflashcount = 3;
                     priceflash[orderbook.symbol] = true;
                 }
                 if ("offer" in orderbook.pricelevels[i]) {
@@ -2039,7 +2039,7 @@
                         orderbooks[orderbook.symbol][level].lastofferchange = 0;                        
                     }
                     orderbooks[orderbook.symbol][level].offer = orderbook.pricelevels[i].offer;
-                    orderbooks[orderbook.symbol][level].offerflash = 3;
+                    orderbooks[orderbook.symbol][level].offerflashcount = 3;
                     priceflash[orderbook.symbol] = true;
                 }
             }
@@ -2310,7 +2310,7 @@
         function priceChange(symbol, y, bidprice, offerprice) {
             if (y == 0) {
                 // bid
-                if (orderbooks[symbol][y].bidflash > 0) {
+                if (orderbooks[symbol][y].bidflashcount > 0) {
                     if (orderbooks[symbol][y].lastbidchange == 1) {
                         bidprice.className = "yellowstripbidflashup";
                     } else if (orderbooks[symbol][y].lastbidchange == 2) {
@@ -2329,7 +2329,7 @@
                 }
 
                 // offer
-                if (orderbooks[symbol][y].offerflash > 0) {
+                if (orderbooks[symbol][y].offerflashcount > 0) {
                     if (orderbooks[symbol][y].lastofferchange == 1) {
                         offerprice.className = "yellowstripofferflashup";
                     } else if (orderbooks[symbol][y].lastofferchange == 2) {
@@ -2348,7 +2348,7 @@
                 }
             } else {
                 // bid
-                if (orderbooks[symbol][y].bidflash > 0) {
+                if (orderbooks[symbol][y].bidflashcount > 0) {
                     if (orderbooks[symbol][y].lastbidchange == 1) {
                         bidprice.className = "bidflashup";
                     } else if (orderbooks[symbol][y].lastbidchange == 2) {
@@ -2367,7 +2367,7 @@
                 }
 
                 // offer
-                if (orderbooks[symbol][y].offerflash > 0) {
+                if (orderbooks[symbol][y].offerflashcount > 0) {
                     if (orderbooks[symbol][y].lastofferchange == 1) {
                         offerprice.className = "offerflashup";
                     } else if (orderbooks[symbol][y].lastofferchange == 2) {

@@ -164,18 +164,20 @@ function sendOrder(order) {
             + "partfill=" + order.partfill + "&"
             + "quoteid=" + order.quoteid + "&"
             + "currency=" + order.currency + "&"
+            + "currencyratetoorg=" + order.currencyratetoorg + "&"
+            + "currencyindtoorg=" + order.currencyindtoorg + "&"
             + "timestamp=" + order.timestamp + "&"
             + "margin=" + order.margin + "&"
             + "timeinforce=" + order.timeinforce + "&"
             + "expiredate=" + order.expiredate + "&"
             + "expiretime=" + order.expiretime + "&"
             + "settlcurrency=" + order.settlcurrency + "&"
+            + "settlcurrfxrate=" + order.settlcurrfxrate + "&"
+            + "settlcurrfxratecalc=" + order.settlcurrfxratecalc + "&"
             + "text='" + order.text + "'&"
             + "orderid=" + order.orderid + "&"
             + "execid=" + order.execid + "&"
-            + "externalorderid=" + order.externalorderid + "&"
-            + "currencyindtoorg=" + order.currencyindtoorg + "&"
-            + "currencyratetoorg=" + order.currencyratetoorg;
+            + "externalorderid=" + order.externalorderid;
 
     console.log(options.path);
 
@@ -204,17 +206,19 @@ function sendTrade(trade) {
             + "cpartyid=" + trade.counterpartyid + "&"
             + "futsettdate=" + trade.futsettdate + "&"
             + "currency=" + trade.currency + "&"
+            + "currencyindtoorg=" + trade.currencyindtoorg + "&"
+            + "currencyratetoorg=" + trade.currencyratetoorg + "&"
             + "settlcurrency=" + trade.settlcurrency + "&"
             + "settlcurramt=" + trade.settlcurramt + "&"
+            + "settlcurrfxrate=" + trade.settlcurrfxrate + "&"
+            + "settlcurrfxratecalc=" + trade.settlcurrfxratecalc + "&"
             + "markettype=" + trade.markettype + "&"
             + "lastmkt=" + trade.lastmkt + "&"
             + "timestamp=" + trade.timestamp + "&"
             + "orderid=" + trade.orderid + "&"
             + "tradeid=" + trade.tradeid + "&"
-            + "externaltradeid=" + trade.externaltradeid + "&"
             + "externalorderid=" + trade.externalorderid + "&"
-            + "currencyindtoorg=" + "0" + "&" //trade.currencyindtoorg + "&"
-            + "currencyratetoorg=" + "1";//trade.currencyratetoorg;
+            + "externaltradeid=" + trade.externaltradeid;
 
     console.log(options.path);
 
@@ -243,21 +247,6 @@ function registerScripts() {
   local msgtype = redis.call("hget", "fobo:" .. KEYS[1], "msgtype") \
   if msgtype == 1 then \
     local orderid = redis.call("hget", "fobo:" .. KEYS[1], "orderid") \
-    redis.call("sdel", "orders", orderid) \
-  else \
-    local tradeid = redis.call("hget", "fobo:" .. KEYS[1], "tradeid") \
-    redis.call("sdel", "trades", tradeid) \
-  end \
-  return \
-  ';
-
-  // update message error, add message to errors set & remove order/trade from their set
-  scriptfoboerror = '\
-  redis.call("hmset", "fobo:" .. KEYS[1], "error", KEYS[2]) \
-  redis.call("sadd", "errors", KEYS[1]) \
-  local msgtype = redis.call("hget", "fobo:" .. KEYS[1], "msgtype") \
-  if msgtype == 1 then \
-    local orderid = redis.call("hget", "fobo:" .. KEYS[1], "orderid") \
     redis.call("srem", "orders", orderid) \
   else \
     local tradeid = redis.call("hget", "fobo:" .. KEYS[1], "tradeid") \
@@ -265,4 +254,21 @@ function registerScripts() {
   end \
   return \
   ';
+
+  // update message error, add message to errors set
+  // keep trying, so don't remove
+  scriptfoboerror = '\
+  redis.call("hmset", "fobo:" .. KEYS[1], "error", KEYS[2]) \
+  redis.call("sadd", "errors", KEYS[1]) \
+  ';
+
+  /*local msgtype = redis.call("hget", "fobo:" .. KEYS[1], "msgtype") \
+  if msgtype == 1 then \
+    local orderid = redis.call("hget", "fobo:" .. KEYS[1], "orderid") \
+    redis.call("srem", "orders", orderid) \
+  else \
+    local tradeid = redis.call("hget", "fobo:" .. KEYS[1], "tradeid") \
+    redis.call("srem", "trades", tradeid) \
+  end \
+  return \*/
 }
