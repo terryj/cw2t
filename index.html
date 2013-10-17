@@ -1227,8 +1227,6 @@
             var stockboxinput;
             var stocklist;
             var searchtext;
-            var ftselink;
-            var ftse = false;
 
             stockbox = document.createElement("div");
             stockbox.id = "stockbox";
@@ -1289,16 +1287,7 @@
                 }
             }
 
-            ftselink = document.createElement('a');
-            ftselink.innerHTML = "ftse 100";
-            ftselink.href = "javascript:void(0);";
-            ftselink.onclick = function() {
-                sockjs.send("{\"index\":\"UKX\"}");
-                ftse = true;
-            }
-
             stockbox.appendChild(stockboxinput);
-            stockbox.appendChild(ftselink);
             stockbox.appendChild(stocklist);
 
             main.appendChild(stockbox);
@@ -1425,7 +1414,9 @@
             orders[order.orderid] = order;
 
             // add to quote
-            if (order.quoteid != "") {
+            if (order.quoteid != "0") {
+                console.log("order.orderid="+order.orderid);
+                console.log(order);
                 var quote = quotes[order.quoteid];
                 quote.orderid = order.orderid;
             }
@@ -1433,7 +1424,7 @@
             if (selectedmenu == 0) {
                 if (order.status == "0") {
                     msg = "Order acknowledged, id: " + order.orderid;
-                    if (order.text != "") {
+                    if ('text' in order && order.text != "") {
                         msg += ", " + order.text;
                     }
                 } else if (order.status == "1") {
@@ -1441,13 +1432,11 @@
                 } else if (order.status == "2") {
                     msg = "Order filled, order id: " + order.orderid;
                 } else if (order.status == "8") {
-                    msg = "Order rejected, reason:";
-                    if (order.reason != "") {
-                        msg += " " + getReasonDesc(order.reason);
-                    }
-                    if ('text' in order && order.text != "") {
+                    msg = "Order rejected, reason: " + getReasonDesc(order.reason);
+                    if (order.text != "") {
                         msg += " " + order.text;
                     }
+                    msg += ", order id: " + order.orderid;
                 } else if (order.status == "4") {
                     msg = "Order cancelled";
                 }
@@ -1667,7 +1656,7 @@
                 desc = "Done for day";
                 break;
             case '4':
-                desc = "Canceled";
+                desc = "Cancelled";
                 break;
             case '5':
                 desc = "Replaced";
@@ -1817,11 +1806,8 @@
                 msg += " @ " + order.price;
             }
 
-            msg +=  " " + getOrdertypeDesc(order.ordertype) + ", rejected, reason:";
+            msg +=  " " + getOrdertypeDesc(order.ordertype) + ", rejected, reason: " + getReasonDesc(order.reason);
 
-            if (order.reason != "") {
-                msg += " " + getReasonDesc(order.reason);
-            }
             if (order.text != "") {
                 msg += " " + order.text;
             }
@@ -2399,6 +2385,10 @@
             var headingmyofferquantity;
             var headingslash;
 
+            if (Object.keys(orderbooks).length == 0) {
+                return;
+            }
+
             headingstrip = document.getElementById("headingstrip");
             if (headingstrip != null) {
                 return;
@@ -2713,7 +2703,7 @@
 
         function quoteAck(quoteack) {
             msg = " Quote request rejected, reason: " + quoteack.quoterejectreasondesc;
-            if ('text' in quoteack) {
+            if ('text' in quoteack && quoteack.text != "") {
                 msg += ", " + quoteack.text;
             }
             addMessageToDiv(msg, "orderdiv:" + quoteack.symbol, quoteack.symbol);

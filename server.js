@@ -415,8 +415,8 @@ function newOrder(clientid, order, conn) {
 
   // todo: tie this in with in/out of hours
   order.timestamp = getUTCTimeStamp();
-  order.markettype = "0"; // "0" = main market, "1" = ooh - todo: "0" = any?
-  order.partfill = "1"; // accept part-fill
+  order.markettype = 0; // 0 = main market, 1 = ooh
+  order.partfill = 1; // accept part-fill
 
   // always put a price in the order
   if (!("price" in order)) {
@@ -425,7 +425,7 @@ function newOrder(clientid, order, conn) {
 
   // and always have a quote id
   if (!("quoteid" in order)) {
-    order.quoteid = "";
+    order.quoteid = "0";
   }
 
   // store the order, get an id & credit check it
@@ -440,7 +440,7 @@ function newOrder(clientid, order, conn) {
     order.orderid = ret[1];
 
     // use the returned instrument values required by proquote
-    if (order.markettype == "0") {
+    if (order.markettype == 0) {
       order.isin = ret[2];
       order.proquotesymbol = ret[3];
       order.exchange = ret[4];
@@ -537,6 +537,7 @@ function matchOrder(orderid) {
 
 function getSendOrder(orderid, sendmarginreserve, sendcashposition) {
   var orgclientkey;
+  console.log("sending order:" + orderid);
 
   db.hgetall("order:" + orderid, function(err, order) {
     if (err) {
@@ -748,7 +749,7 @@ function orderCancelReject(orgclientkey, ocr, reason) {
 
 function processOrder(order, conn) {
   // either forward to Proquote or attempt to match the order, depending on whether the market is open
-  if (order.markettype == "1") {
+  if (order.markettype == 1) {
     matchOrder(order.orderid, conn);
   } else {
     ptp.newOrder(order);
@@ -1905,8 +1906,8 @@ function getUTCTimeStamp() {
 }
 
 ptp.on("orderReject", function(exereport) {
-  var ordrejreason = "";
   var text = "";
+  var ordrejreason = "";
   console.log(exereport);
 
   console.log("order rejected, id:" + exereport.clordid);
@@ -1962,16 +1963,16 @@ ptp.on("orderCancel", function(exereport) {
   db.eval(scriptordercancel, 1, exereport.clordid, function(err, ret) {
     if (err) throw err;
 
-    if (ret != 0) {
+    if (ret[0] != 0) {
       // todo: send to client
-      console.log("Error in scriptordercancel, reason:" + getReasonDesc(ret));
+      console.log("Error in scriptordercancel, reason:" + getReasonDesc(ret[0]));
       return;
     }
 
     //var orgclientkey = ret[1][1] + ":" + ret[1][3];
 
     // send confirmation
-    getSendOrder(exereport.clordid, true, false);
+    getSendOrder(ret[1], true, false);
 
     // send margin & reserve
     // todo: wrap these in send order?
@@ -2640,7 +2641,7 @@ function registerScripts() {
   scriptneworder = creditcheck + getproquotesymbol + '\
   local orderid = redis.call("incr", "orderid") \
   if not orderid then return 1005 end \
-  redis.call("hmset", "order:" .. orderid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "side", KEYS[4], "quantity", KEYS[5], "price", KEYS[6], "ordertype", KEYS[7], "remquantity", KEYS[5], "status", "0", "reason", "", "markettype", KEYS[8], "futsettdate", KEYS[9], "partfill", KEYS[10], "quoteid", KEYS[11], "currency", KEYS[12], "currencyratetoorg", KEYS[13], "currencyindtoorg", KEYS[14], "timestamp", KEYS[15], "margin", "0", "timeinforce", KEYS[16], "expiredate", KEYS[17], "expiretime", KEYS[18], "settlcurrency", KEYS[19], "settlcurrfxrate", KEYS[20], "settlcurrfxratecalc", KEYS[21], "text", "", "orderid", orderid, "externalorderid", "", "execid", "") \
+  redis.call("hmset", "order:" .. orderid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "side", KEYS[4], "quantity", KEYS[5], "price", KEYS[6], "ordertype", KEYS[7], "remquantity", KEYS[5], "status", "0", "markettype", KEYS[8], "futsettdate", KEYS[9], "partfill", KEYS[10], "quoteid", KEYS[11], "currency", KEYS[12], "currencyratetoorg", KEYS[13], "currencyindtoorg", KEYS[14], "timestamp", KEYS[15], "margin", "0", "timeinforce", KEYS[16], "expiredate", KEYS[17], "expiretime", KEYS[18], "settlcurrency", KEYS[19], "settlcurrfxrate", KEYS[20], "settlcurrfxratecalc", KEYS[21], "orderid", orderid, "externalorderid", "", "execid", "") \
   local orgclientkey = KEYS[1] .. ":" .. KEYS[2] \
   --[[ add to set of orders for this client ]] \
   redis.call("sadd", orgclientkey .. ":orders", orderid) \
@@ -2834,7 +2835,7 @@ function registerScripts() {
       redis.call("hset", "order:" .. orderid, "ordercancelrequestid", KEYS[1]) \
     end \
   end \
-  return errorcode \
+  return {errorcode, orderid} \
   ';
 
   scriptorderack = '\

@@ -127,6 +127,7 @@ function httpGet() {
       if (str.charAt(0) == "{") {
         reply = JSON.parse(str);
         if (reply.result) {
+          console.log("scriptfobook");
           db.eval(scriptfobook, 1, reply.msgid, function(err, ret) {
             if (err) throw err;
           });
@@ -147,6 +148,11 @@ function sendOrder(order) {
   db.eval(scriptfoboorder, 2, order.orderid, order.symbol, function(err, ret) {
     if (err) throw err;
 
+    // handle GBX from proquote
+    if (order.currency == "GBX") {
+      order.currency = "GBP";
+    }
+
     options.path = "/focalls/orderadd.aspx?"
             + "msgid=" + ret[0] + "&"
             + "orgid=" + order.orgid + "&"
@@ -158,11 +164,9 @@ function sendOrder(order) {
             + "ordertype=" + order.ordertype + "&"
             + "remquantity=" + order.remquantity + "&"
             + "status=" + order.status + "&"
-            + "reason=" + order.reason + "&"
             + "markettype=" + order.markettype + "&"
             + "futsettdate=" + order.futsettdate + "&"
             + "partfill=" + order.partfill + "&"
-            + "quoteid=" + order.quoteid + "&"
             + "currency=" + order.currency + "&"
             + "currencyratetoorg=" + order.currencyratetoorg + "&"
             + "currencyindtoorg=" + order.currencyindtoorg + "&"
@@ -174,10 +178,18 @@ function sendOrder(order) {
             + "settlcurrency=" + order.settlcurrency + "&"
             + "settlcurrfxrate=" + order.settlcurrfxrate + "&"
             + "settlcurrfxratecalc=" + order.settlcurrfxratecalc + "&"
-            + "text='" + order.text + "'&"
             + "orderid=" + order.orderid + "&"
             + "execid=" + order.execid + "&"
-            + "externalorderid=" + order.externalorderid;
+            + "externalorderid=" + order.externalorderid + "&"
+            + "quoteid=" + "0";//order.quoteid; todo: reinstate
+
+    if ('reason' in order) {
+      options.path += "&" + "reason=" + order.reason;
+    }
+    if ('text' in order && order.text != "") {
+      order.text = encodeURIComponent(order.text);
+      options.path += "&" + "text=" + order.text;
+    }
 
     console.log(options.path);
 
@@ -189,6 +201,11 @@ function sendTrade(trade) {
   // call script to get msgid
   db.eval(scriptfobotrade, 2, trade.tradeid, trade.symbol, function(err, ret) {
     if (err) throw err;
+
+    // handle GBX from proquote
+    if (trade.currency == "GBX") {
+      trade.currency = "GBP";
+    }
 
     options.path = "/focalls/tradeadd.aspx?"
             + "msgid=" + ret[0] + "&"
@@ -245,7 +262,7 @@ function registerScripts() {
   scriptfobook = '\
   redis.call("hmset", "fobo:" .. KEYS[1], "status", 1) \
   local msgtype = redis.call("hget", "fobo:" .. KEYS[1], "msgtype") \
-  if msgtype == 1 then \
+  if msgtype == "1" then \
     local orderid = redis.call("hget", "fobo:" .. KEYS[1], "orderid") \
     redis.call("srem", "orders", orderid) \
   else \
@@ -263,7 +280,7 @@ function registerScripts() {
   ';
 
   /*local msgtype = redis.call("hget", "fobo:" .. KEYS[1], "msgtype") \
-  if msgtype == 1 then \
+  if msgtype == "1" then \
     local orderid = redis.call("hget", "fobo:" .. KEYS[1], "orderid") \
     redis.call("srem", "orders", orderid) \
   else \

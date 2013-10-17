@@ -61,12 +61,14 @@ function initdb() {
   db.set("stampdutypercent", 0.5);
   db.set("contractcharge", 2);
 
-  db.sadd("clients", "1:1")
-  db.sadd("clients", "1:2")
-  db.sadd("clients", "1:3")
-  db.sadd("clients", "1:4")
-  db.sadd("clients", "1:5")
-  db.sadd("clients", "1:6")
+  // set of clients
+  db.sadd("clients", "1:1");
+  db.sadd("clients", "1:2");
+  db.sadd("clients", "1:3");
+  db.sadd("clients", "1:4");
+  db.sadd("clients", "1:5");
+  db.sadd("clients", "1:6");
+  db.sadd("clients", "1:1765");
 
   // clients - hash for each
   db.hmset("client:1:1", "username", "terry@cw2t.com", "password", "terry", "orgid", 1, "clientid", 1, "marketext", "LD", "name", "Terry Johnston");
@@ -75,6 +77,7 @@ function initdb() {
   db.hmset("client:1:4", "username", "alex@cw2t.com", "password", "alex", "orgid", 1, "clientid", 4, "marketext", "LD", "name", "Alex Fordham");
   db.hmset("client:1:5", "username", "dave@cw2t.com", "password", "dave", "orgid", 1, "clientid", 5, "marketext", "LD", "name", "Dave Shann");
   db.hmset("client:1:6", "username", "cw2t@cw2t.com","password", "cw2t", "orgid", 1, "clientid", 6, "marketext", "LD", "name", "Cw2t test");
+  db.hmset("client:1:1765", "username", "terrytest@cw2t.com", "password", "terrytest", "orgid", 1, "clientid", 1765, "marketext", "LD", "name", "Terry Johnston");
 
   // link between client email & id
   db.set("terry@cw2t.com", "1:1");
@@ -83,21 +86,9 @@ function initdb() {
   db.set("alex@cw2t.com", "1:4");
   db.set("dave@cw2t.com", "1:5");
   db.set("cw2t@cw2t.com", "1:6");
+  db.set("terrytest@cw2t.com", "1:1765");
 
-  // users
-  db.hmset("user:1:1", "username", "terry@cw2t.com", "password", "terry", "orgid", 1, "userid", 1);
-  db.hmset("user:1:2", "username", "paul@cw2t.com", "password", "paul", "orgid", 1, "userid", 2);
-  db.hmset("user:1:3", "username", "grant@cw2t.com", "password", "grant", "orgid", 1, "userid", 3);
-
-  // link between user email & id
-  db.set("terry@cw2t.com", "1:1");
-  db.set("paul@cw2t.com", "1:2");
-  db.set("grant@cw2t.com", "1:3");
-
-  // valid user ip addresses
-  db.sadd("ipaddress", "127.0.0.1");
-
-  // stocks - set of all stocks & hash of each individual stock
+  // stocks - add international stocks to set of stocks & hash
   db.hset("symbol:AMZN", "currency", "USD");
   db.hset("symbol:AMZN", "description", "Amazon.com, Inc");
   db.hset("symbol:AMZN", "proquotesymbol", "AMZN");
@@ -115,7 +106,7 @@ function initdb() {
   db.set("proquotesymbol:BARC", "BARC.L");
   db.sadd("instruments", "BARC.L");
 
-  // cash - set of cash for each user & string of amount
+  // cash - set of cash for each client & string of amount
   db.sadd("1:1:cash", "USD");
   db.set("1:1:cash:USD", 100000);
   db.sadd("1:1:cash", "GBP");
@@ -140,8 +131,12 @@ function initdb() {
   db.set("1:6:cash:USD", 10000);
   db.sadd("1:6:cash", "GBP");
   db.set("1:6:cash:GBP", 10000);
+  db.sadd("1:1765:cash", "USD");
+  db.set("1:1765:cash:USD", 100000);
+  db.sadd("1:1765:cash", "GBP");
+  db.set("1:1765:cash:GBP", 10000);
 
-  // positions - set of positions for each user & hash for each position
+  // positions - set of positions for each client & hash for each position
   /*db.sadd("1:1:positions", "AMZN:GBP");
   db.hset("1:1:position:AMZN:GBP", "symbol", "AMZN");
   db.hset("1:1:position:AMZN:GBP", "quantity", 300);
