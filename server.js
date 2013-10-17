@@ -537,7 +537,6 @@ function matchOrder(orderid) {
 
 function getSendOrder(orderid, sendmarginreserve, sendcashposition) {
   var orgclientkey;
-  console.log("sending order:" + orderid);
 
   db.hgetall("order:" + orderid, function(err, order) {
     if (err) {

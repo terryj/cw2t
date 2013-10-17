@@ -2821,6 +2821,9 @@
             var settlcurrency;
             var currencysel;
             var qtyascashorshares = 1;
+            var expireday;
+            var expiremonth;
+            var expireyear;
 
             clearSymbolDiv(symbol);
                              
@@ -2893,9 +2896,9 @@
                 if (i == 0) {
                     timeinforce = "0";
                 } else if (i == 1) {
-                    timeinforce = "1";
-                } else if (i == 2) {                  
                     timeinforce = "6";
+                } else if (i == 2) {                  
+                    timeinforce = "1";
                 }
                 option.setAttribute('value', timeinforce);
                 option.innerHTML = timeinforces[i];
@@ -2908,7 +2911,7 @@
             }
 
             function expiredatedisplay() {
-                if (timeinforce == '1') {
+                if (timeinforce == "6") {
                     expireday = document.getElementById("expireday:" + symbol);
                     if (expireday == null) {
                         expireday = document.createElement("select");
@@ -2917,22 +2920,22 @@
                         expiremonth.id = "expiremonth:" + symbol;
                         expireyear = document.createElement("select");
                         expireyear.id = "expireyear:" + symbol;
-                        expirehour = document.createElement("select");
+                        /*expirehour = document.createElement("select");
                         expirehour.id = "expirehour:" + symbol;
                         expireminute = document.createElement("select");
                         expireminute.id = "expireminute:" + symbol;
                         expiresecond = document.createElement("select");
-                        expiresecond.id = "expiresecond:" + symbol;
+                        expiresecond.id = "expiresecond:" + symbol;*/
 
                         populateDate(expireday, expiremonth, expireyear, new Date());
-                        populateTime(expirehour, expireminute, expiresecond);
+                        //populateTime(expirehour, expireminute, expiresecond);
 
                         orderdiv.insertBefore(expireday, settlabel);
                         orderdiv.insertBefore(expiremonth, settlabel);
                         orderdiv.insertBefore(expireyear, settlabel);
-                        orderdiv.insertBefore(expirehour, settlabel);
-                        orderdiv.insertBefore(expireminute, settlabel);
-                        orderdiv.insertBefore(expiresecond, settlabel);
+                        //orderdiv.insertBefore(expirehour, settlabel);
+                        //orderdiv.insertBefore(expireminute, settlabel);
+                        //orderdiv.insertBefore(expiresecond, settlabel);
                     }
                 } else {
                     expireday = document.getElementById("expireday:" + symbol);
@@ -2947,7 +2950,7 @@
                     if (expireyear != null) {
                         orderdiv.removeChild(expireyear);
                     }
-                    expirehour = document.getElementById("expirehour:" + symbol);
+                    /*expirehour = document.getElementById("expirehour:" + symbol);
                     if (expirehour != null) {
                         orderdiv.removeChild(expirehour);
                     }
@@ -2958,7 +2961,7 @@
                     expiresecond = document.getElementById("expiresecond:" + symbol);
                     if (expiresecond != null) {
                         orderdiv.removeChild(expiresecond);
-                    }
+                    }*/
                 }                
             }
 
@@ -3064,9 +3067,9 @@
                 // todo: validate sett date & timeinforce
  
                 timeinforce = timeinforcesel[timeinforcesel.selectedIndex].value;
-                if (timeinforce == "1") {
+                if (timeinforce == "6") {
                     expiredate = formatToUTCDate(expireday.value, expiremonth.value, expireyear.value);
-                    expiretime = formatToUTCTime(expirehour.value, expireminute.value, expiresecond.value);
+                    expiretime = "00:00:00";//formatToUTCTime(expirehour.value, expireminute.value, expiresecond.value);
                 }
 
                 settdate = formatToUTCDate(settday[settday.selectedIndex].value, settmonth[settmonth.selectedIndex].value, settyear[settyear.selectedIndex].value);
@@ -3476,6 +3479,9 @@
         }
 
         function populateTime(hour, minute, second) {
+            hour[0] = new Option("00", "00", true, true);
+            minute[0] = new Option("00", "00", true, true);
+            second[0] = new Option("00", "00", true, true);
         }
 
         function getDefaultSettleDate() {
@@ -3502,6 +3508,10 @@
 
         function getReasonDesc(reason) {
             var desc;
+
+            if (reason == "") {
+                return "";
+            }
 
             switch (parseInt(reason)) {
             case 1001:
@@ -3551,6 +3561,9 @@
                 break;
             case 1016:
                 desc = "Proquote symbol not found";
+                break;
+            case 0:
+                desc = "000";
                 break;
             default:
                 desc = "Unknown reason";

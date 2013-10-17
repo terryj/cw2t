@@ -304,10 +304,10 @@ Ptp.prototype.newOrder = function(order) {
 		msg += '44=' + order.price + SOH;
 	}
 
-	// add timeinforce
-	if (order.timeinforce == '1') {
-		msg += '432=' + order.expiredate + SOH
-			+ '126' + order.expiretime = SOH;
+	// add date & time if timeinforce = "GTD"
+	if (order.timeinforce == '6') {
+		msg += '432=' + order.expiredate + SOH;
+			//+ '126=' + order.expiretime + SOH;
 	}
 
 	sendMessage('D', onbehalfofcompid, delivertocompid, msg, false, null, null);
