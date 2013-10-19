@@ -2923,7 +2923,7 @@ function registerScripts() {
   local inst = {} \
   for index = 1, #instruments do \
     vals = redis.call("hmget", "symbol:" .. instruments[index], unpack(fields)) \
-    if vals[1] == "DE" then \
+    if vals[1] == "DE" or vals[1] == "CFD" or vals[1] == "SPB" then \
       table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3]}) \
     end \
   end \
