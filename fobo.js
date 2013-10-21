@@ -181,7 +181,7 @@ function sendOrder(order) {
             + "orderid=" + order.orderid + "&"
             + "execid=" + order.execid + "&"
             + "externalorderid=" + order.externalorderid + "&"
-            + "quoteid=" + "0";//order.quoteid; todo: reinstate
+            + "quoteid=" + order.quoteid;
 
     if ('reason' in order) {
       options.path += "&" + "reason=" + order.reason;
