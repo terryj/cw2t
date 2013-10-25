@@ -322,14 +322,16 @@ function quoteRequest(clientid, quoterequest) {
 
   quoterequest.timestamp = getUTCTimeStamp();
 
+  // get settlement date from T+n no. of days
+  quoterequest.futsettdate = getUTCDateString(getSettDate(quoterequest.nosettdays));
+
   // store the quote request & get an id
-  db.eval(scriptquoterequest, 9, orgid, clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.futsettdate, quoterequest.timestamp, function(err, ret) {
+  db.eval(scriptquoterequest, 10, orgid, clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, function(err, ret) {
     if (err) throw err;
   
     if (ret[0] != 0) {
-      // todo: send error to client
+      // todo: send a quote ack to client
 
-      // send a quote ack
       console.log("Error in scriptquoterequest:" + getReasonDesc(ret[0]));
       return;
     }
@@ -346,6 +348,27 @@ function quoteRequest(clientid, quoterequest) {
     // forward the request to Proquote
     ptp.quoteRequest(quoterequest);
   });
+}
+
+// roll date forwards by T+n number of days
+function getSettDate(nosettdays) {
+  var today = new Date();
+
+  for (i = 0; i < nosettdays; i++) {
+    today.setDate(today.getDate() + 1);
+
+    // ignore weekends
+    if (today.getDay() == 6) {
+      today.setDate(today.getDate() + 2);
+    } else if (today.getDay() == 0) {
+      today.setDate(today.getDate() + 1);
+    }
+
+    // todo: add holidays
+  }
+  console.log(today);
+
+  return today;
 }
 
 /*
@@ -411,7 +434,7 @@ function newOrder(clientid, order, conn) {
   var settlcurrfxrate = 1; // settlement currency to product currency rate
   var settlcurrfxratecalc = 1;
 
-  console.log("new order");
+  console.log(order);
 
   // todo: tie this in with in/out of hours
   order.timestamp = getUTCTimeStamp();
@@ -429,7 +452,7 @@ function newOrder(clientid, order, conn) {
   }
 
   // store the order, get an id & credit check it
-  db.eval(scriptneworder, 21, orgid, clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, function(err, ret) {
+  db.eval(scriptneworder, 22, orgid, clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] == 0) {
@@ -1904,6 +1927,20 @@ function getUTCTimeStamp() {
     return ts;
 }
 
+function getUTCDateString(date) {
+    var year = date.getUTCFullYear();
+    var month = date.getUTCMonth() + 1; // flip 0-11 -> 1-12
+    var day = date.getUTCDate();
+
+    if (month < 10) {month = '0' + month;}
+
+    if (day < 10) {day = '0' + day;}
+
+    var utcdate = "" + year + month + day;
+
+    return utcdate;
+}
+
 ptp.on("orderReject", function(exereport) {
   var text = "";
   var ordrejreason = "";
@@ -2005,7 +2042,6 @@ ptp.on("orderFill", function(exereport) {
   var currencyindtoorg = 1;
 
   console.log(exereport);
-  console.log("order executed, id:" + exereport.clordid);
 
   // default fx rate - todo: review
   /*if (exereport.currency == exereport.settlcurrency) {
@@ -2139,6 +2175,8 @@ ptp.on("quote", function(quote, header) {
         return;
       }
 
+      console.log(storedquote);
+
       // get the number of seconds the quote is valid for
       storedquote.noseconds = getSeconds(storedquote.transacttime, storedquote.validuntiltime);
 
@@ -2167,6 +2205,11 @@ ptp.on("quoteack", function(quoteack) {
   db.eval(scriptquoteack, 4, quoteack.quotereqid, quoteack.quotestatus, quoteack.quoterejectreason, quoteack.text, function(err, ret) {
     if (err) {
       console.log(err);
+      return;
+    }
+
+    if (ret == 1) {
+      console.log("already received rejection for this quote request, ignoring");
       return;
     }
 
@@ -2595,10 +2638,10 @@ function registerScripts() {
   // todo: better?
   //redis.call("rpush", "trades", tradeid) \
   newtrade = updateposition + updatecash + '\
-  local newtrade = function(orgid, clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyorgid, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc) \
+  local newtrade = function(orgid, clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyorgid, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays) \
     local tradeid = redis.call("incr", "tradeid") \
     if not tradeid then return 0 end \
-    redis.call("hmset", "trade:" .. tradeid, "orgid", orgid, "clientid", clientid, "orderid", orderid, "symbol", symbol, "side", side, "quantity", quantity, "price", price, "currency", currency, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyorgid", counterpartyorgid, "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrency", settlcurrency, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc) \
+    redis.call("hmset", "trade:" .. tradeid, "orgid", orgid, "clientid", clientid, "orderid", orderid, "symbol", symbol, "side", side, "quantity", quantity, "price", price, "currency", currency, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyorgid", counterpartyorgid, "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrency", settlcurrency, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays) \
     redis.call("sadd", "trades", tradeid) \
     local orgclientkey = orgid .. ":" .. clientid \
     redis.call("sadd", orgclientkey .. ":trades", tradeid) \
@@ -2640,7 +2683,7 @@ function registerScripts() {
   scriptneworder = creditcheck + getproquotesymbol + '\
   local orderid = redis.call("incr", "orderid") \
   if not orderid then return 1005 end \
-  redis.call("hmset", "order:" .. orderid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "side", KEYS[4], "quantity", KEYS[5], "price", KEYS[6], "ordertype", KEYS[7], "remquantity", KEYS[5], "status", "0", "markettype", KEYS[8], "futsettdate", KEYS[9], "partfill", KEYS[10], "quoteid", KEYS[11], "currency", KEYS[12], "currencyratetoorg", KEYS[13], "currencyindtoorg", KEYS[14], "timestamp", KEYS[15], "margin", "0", "timeinforce", KEYS[16], "expiredate", KEYS[17], "expiretime", KEYS[18], "settlcurrency", KEYS[19], "settlcurrfxrate", KEYS[20], "settlcurrfxratecalc", KEYS[21], "orderid", orderid, "externalorderid", "", "execid", "") \
+  redis.call("hmset", "order:" .. orderid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "side", KEYS[4], "quantity", KEYS[5], "price", KEYS[6], "ordertype", KEYS[7], "remquantity", KEYS[5], "status", "0", "markettype", KEYS[8], "futsettdate", KEYS[9], "partfill", KEYS[10], "quoteid", KEYS[11], "currency", KEYS[12], "currencyratetoorg", KEYS[13], "currencyindtoorg", KEYS[14], "timestamp", KEYS[15], "margin", "0", "timeinforce", KEYS[16], "expiredate", KEYS[17], "expiretime", KEYS[18], "settlcurrency", KEYS[19], "settlcurrfxrate", KEYS[20], "settlcurrfxratecalc", KEYS[21], "orderid", orderid, "externalorderid", "", "execid", "", "nosettdays", KEYS[22]) \
   local orgclientkey = KEYS[1] .. ":" .. KEYS[2] \
   --[[ add to set of orders for this client ]] \
   redis.call("sadd", orgclientkey .. ":orders", orderid) \
@@ -2763,12 +2806,12 @@ function registerScripts() {
   // External fill
   //
   scriptnewtrade = newtrade + getcosts + adjustmarginreserve + '\
-  local fields = {"orgid", "clientid", "symbol", "side", "quantity", "price", "currency", "margin", "remquantity"} \
+  local fields = {"orgid", "clientid", "symbol", "side", "quantity", "price", "currency", "margin", "remquantity", "nosettdays"} \
   local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
   local quantity = tonumber(KEYS[4]) \
   local price = tonumber(KEYS[5]) \
   local costs = getcosts(KEYS[3], tonumber(KEYS[18]), KEYS[17]) \
-  local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, "1", KEYS[9], "0", KEYS[10], KEYS[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20]) \
+  local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, "1", KEYS[9], "0", KEYS[10], KEYS[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[10]) \
   --[[ adjust margin/reserve ]] \
   adjustmarginreserve(KEYS[1], vals[1] .. ":" .. vals[2], vals[3], vals[4], vals[6], vals[8], KEYS[17], vals[9], KEYS[15]) \
   --[[ adjust order ]] \
@@ -2852,21 +2895,12 @@ function registerScripts() {
   local quotereqid = redis.call("incr", "quotereqid") \
   if not quotereqid then return 1005 end \
   --[[ store the quote request ]] \
-  redis.call("hmset", "quoterequest:" .. quotereqid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "quantity", KEYS[4], "cashorderqty", KEYS[5], "currency", KEYS[6], "settlcurrency", KEYS[7], "futsettdate", KEYS[8], "quotestatus", "", "timestamp", KEYS[9], "quoteid", "", "quoterejectreason", "", "quotereqid", quotereqid) \
+  redis.call("hmset", "quoterequest:" .. quotereqid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "quantity", KEYS[4], "cashorderqty", KEYS[5], "currency", KEYS[6], "settlcurrency", KEYS[7], "nosettdays", KEYS[8], "futsettdate", KEYS[9], "quotestatus", "", "timestamp", KEYS[10], "quoteid", "", "quoterejectreason", "", "quotereqid", quotereqid) \
   redis.call("sadd", KEYS[1] .. ":" .. KEYS[2] .. ":quoterequests", quotereqid) \
   --[[ get required instrument values for proquote ]] \
   local proquotesymbol = getproquotesymbol(KEYS[3]) \
   return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3]} \
   ';
-
-  /*
-    --[[ get our symbol from the proquote symbol ]] \
-  local symbol = redis.call("get", "proquotesymbol:" .. KEYS[4]) \
-  if not symbol then \
-    errorcode = 1016 \
-    return {errorcode, sides, quoteid} \
-  end \
-  */
 
   // todo: check proquotsymbol against quote request symbol?
   scriptquote = '\
@@ -2874,7 +2908,7 @@ function registerScripts() {
   local sides = 0 \
   local quoteid = "" \
   --[[ get the quote request ]] \
-  local fields = {"orgid", "clientid", "quoteid", "symbol", "quantity", "cashorderqty"} \
+  local fields = {"orgid", "clientid", "quoteid", "symbol", "quantity", "cashorderqty", "nosettdays"} \
   local vals = redis.call("hmget", "quoterequest:" .. KEYS[1], unpack(fields)) \
   if not vals[1] then \
     errorcode = 1014 \
@@ -2882,10 +2916,19 @@ function registerScripts() {
   end \
   --[[ quotes for bid/offer arrive separately, so see if this is the first by checking for a quote id ]] \
   if vals[3] == "" then \
+    --[[ get touch prices - using delayed - todo: may need to look up delayed/live ]] \
+    local bestbid = "" \
+    local bestoffer = "" \
+    local pricefields = {"bid1", "offer1"} \
+    local pricevals = redis.call("hmget", "topic:TIT." .. KEYS[4] .. ".LD", unpack(pricefields)) \
+    if pricevals[1] then \
+      bestbid = pricevals[1] \
+      bestoffer = pricevals[2] \
+    end \
     --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
     quoteid = redis.call("incr", "quoteid") \
     --[[ store the quote, use quantity from quote request ]] \
-    redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "orgid", vals[1], "clientid", vals[2], "quoteid", quoteid, "bidquoteid", KEYS[2], "offerquoteid", KEYS[3], "symbol", vals[4], "quantity", vals[5], "cashorderqty", vals[6], "bidpx", KEYS[5], "offerpx", KEYS[6], "bidsize", KEYS[7], "offersize", KEYS[8], "validuntiltime", KEYS[9], "transacttime", KEYS[10], "currency", KEYS[11], "settlcurrency", KEYS[12], "bidqbroker", KEYS[13], "offerqbroker", KEYS[14], "futsettdate", KEYS[15]) \
+    redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "orgid", vals[1], "clientid", vals[2], "quoteid", quoteid, "bidquoteid", KEYS[2], "offerquoteid", KEYS[3], "symbol", vals[4], "quantity", vals[5], "cashorderqty", vals[6], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", KEYS[5], "offerpx", KEYS[6], "bidsize", KEYS[7], "offersize", KEYS[8], "validuntiltime", KEYS[9], "transacttime", KEYS[10], "currency", KEYS[11], "settlcurrency", KEYS[12], "bidqbroker", KEYS[13], "offerqbroker", KEYS[14], "nosettdays", vals[7], "futsettdate", KEYS[15]) \
     --[[ quoterequest status - 0=new, 1=quoted, 2=rejected ]] \
     local status \
     --[[ bid or offer size needs to be non-zero ]] \
@@ -2913,7 +2956,13 @@ function registerScripts() {
   ';
 
   scriptquoteack = '\
+  --[[ see if the quote request has already been rejected - this can happen as there may be a rejection message for bid & offer ]] \
+  local quotestatus = redis.call("hget", "quoterequest:" .. KEYS[1], "quotestatus") \
+  if quotestatus ~= "" then \
+    return 1 \
+  end \
   redis.call("hmset", "quoterequest:" .. KEYS[1], "quotestatus", KEYS[2], "quoterejectreason", KEYS[3], "text", KEYS[4]) \
+  return 0 \
   ';
 
   scriptgetinst = '\
@@ -2924,7 +2973,7 @@ function registerScripts() {
   for index = 1, #instruments do \
     vals = redis.call("hmget", "symbol:" .. instruments[index], unpack(fields)) \
     if vals[1] == "DE" or vals[1] == "CFD" or vals[1] == "SPB" then \
-      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3]}) \
+      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1]}) \
     end \
   end \
   return cjson.encode(inst) \

@@ -1418,8 +1418,6 @@
 
             // add to quote
             if (order.quoteid != "0") {
-                console.log("order.orderid="+order.orderid);
-                console.log(order);
                 var quote = quotes[order.quoteid];
                 quote.orderid = order.orderid;
             }
@@ -1835,10 +1833,20 @@
         function tradeMsg(trade) {
             var msg;
 
-            msg = getSideDescTrade(trade.side) + " " + trade.quantity + " " + trade.symbol + " @ " + trade.price;
+            msg = getSideDescTrade(trade.side) + " " + trade.quantity + " " + trade.symbol;
+
+            if (instruments[trade.symbol].instrumenttype == "DE") {
+                if (trade.nosettdays != 3) {
+                    msg += " T+" + trade.nosettdays;
+                }
+            }
+
+            msg += " @ " + trade.price;
+
             if (trade.settlcurrency != "GBP" || trade.settlcurrency != trade.currency) {
                 msg += " (" + trade.settlcurrency + ")"
             }
+
             msg += ", trade id: " + trade.tradeid + ", order id: " + trade.orderid + ", executed " + formatUTCDateTime(trade.timestamp);
 
             return msg;
@@ -2445,16 +2453,14 @@
             var quotereqqty;
             var stocklabel;
             var settlabel;
-            var settday;
-            var settmonth;
-            var settyear;
             var orderdiv;
             var quantity;
             var cashorderqty;
             var settlcurrency;
-            var settdate;
             var currencysel;
             var qtyascashorshares = 1; // 1=shares, 2=cash
+            var settlperiod;
+            var nosettdays = 3; // default T+3 used to request quote
 
             clearSymbolDiv(symbol);
 
@@ -2471,6 +2477,7 @@
             quantitycashsel = document.createElement("select");
             quantitycashsel.id = "quantitycashsel" + symbol;
             quantitycashsel.className = "quantitycashsel";
+
             quantitycashsel[0] = new Option("Number of shares", 1, true, true);
             quantitycashsel[1] = new Option("Cash amount", 2, false, false);
 
@@ -2496,8 +2503,13 @@
             stocklabel.innerHTML = symbol;
 
             settlabel = document.createElement("label");
-            settlabel.innerHTML = " for settlement ";
             settlabel.className = "quotereqlabel";
+
+            if (instruments[symbol].instrumenttype == "DE") {
+                settlabel.innerHTML = " for settlement ";
+            } else {
+                settlabel.innerHTML = " for rolling settlement";                
+            }
 
             settlcurrency = defaultsettlcurrency;
 
@@ -2515,14 +2527,12 @@
                 }
             }
 
-            settday = document.createElement("select");
-            settday.id = "quotesettday" + symbol;
-            settmonth = document.createElement("select");
-            settmonth.id = "quotesettmonth" + symbol;
-            settyear = document.createElement("select");
-            settyear.id = "quotesettyear" + symbol;
+            if (instruments[symbol].instrumenttype == "DE") {
+                settlperiod = document.createElement("select");
+                settlperiod.id = "settlperiod:" + symbol;
 
-            populateDate(settday, settmonth, settyear, getDefaultSettleDate());
+                populateSettlPeriod(settlperiod, 3);
+            }
 
             orderdiv = createDiv("orderdiv:" + symbol, symbol);
 
@@ -2534,9 +2544,9 @@
             if (instruments[symbol].currency != defaultsettlcurrency) {
                 orderdiv.appendChild(currencysel);
             }
-            orderdiv.appendChild(settday);
-            orderdiv.appendChild(settmonth);
-            orderdiv.appendChild(settyear);
+            if (instruments[symbol].instrumenttype == "DE") {
+                orderdiv.appendChild(settlperiod);
+            }
 
             function sendIt() {
                 if (validateNumeric(quotereqqty, getQuantityDesc(qtyascashorshares))) {
@@ -2548,10 +2558,11 @@
                         quantity = "";                        
                     }
 
-                    // todo: validate sett.date
-                    settdate = formatToUTCDate(settday[settday.selectedIndex].value, settmonth[settmonth.selectedIndex].value, settyear[settyear.selectedIndex].value);
+                    if (instruments[symbol].instrumenttype == "DE") {
+                        nosettdays = settlperiod[settlperiod.selectedIndex].value;
+                    }
 
-                    sendRequestQuote(symbol, quantity, cashorderqty, instruments[symbol].currency, settlcurrency, settdate);
+                    sendRequestQuote(symbol, quantity, cashorderqty, instruments[symbol].currency, settlcurrency, nosettdays);
                     disable();
                 } else {
                     quotereqqty.focus();
@@ -2633,7 +2644,7 @@
             }
         }
 
-        function sendRequestQuote(symbol, quantity, cashorderqty, currency, settlcurrency, settdate) {
+        function sendRequestQuote(symbol, quantity, cashorderqty, currency, settlcurrency, nosettdays) {
             var quotereq = {};
             var msg;
 
@@ -2642,7 +2653,8 @@
             quotereq.symbol = symbol;
             quotereq.currency = currency;
             quotereq.settlcurrency = settlcurrency;
-            quotereq.futsettdate = settdate;
+            //quotereq.futsettdate = settdate;
+            quotereq.nosettdays = nosettdays;
 
             sockjs.send("{\"quoterequest\":" + JSON.stringify(quotereq) + "}");
 
@@ -2650,10 +2662,18 @@
             if (quantity != "") {
                 msg += quantity;
             } else {
-                // todo - replace GBP with chosen currency
-                msg += cashorderqty + " GBP worth of";
+                msg += cashorderqty + " " + settlcurrency + " of";
             }
-            msg += " " + symbol + " for settlement in " + settlcurrency + " on " + formatUTCDate(settdate);
+
+            if (instruments[symbol].instrumenttype == "DE") {
+                msg += " " + symbol + " for settlement T+" + nosettdays;
+            } else {
+                msg += " " + symbol + " for rolling settlement";                
+            }
+
+            if (settlcurrency != instruments[symbol].currency) {
+                msg += " in " + settlcurrency;
+            }
 
             msglabel = document.createElement("label");
             msglabel.innerHTML = msg;
@@ -2742,8 +2762,17 @@
                 sellmsg += " " + bidqty;
                 buymsg += " " + offerqty;
             }
-            sellmsg += " shares " + quote.symbol + " @ " + quote.bidpx;
-            buymsg += " shares " + quote.symbol + " @ " + quote.offerpx;
+
+            sellmsg += " " + quote.symbol;
+            buymsg += " " + quote.symbol;
+
+            if (quote.nosettdays != "3") {
+                sellmsg += " " + "T+" + quote.nosettdays;
+                buymsg += " " + "T+" + quote.nosettdays;                
+            }
+
+            sellmsg += " @ " + quote.bidpx;
+            buymsg += " @ " + quote.offerpx;
 
             if (quote.settlcurrency != "GBP" || quote.settlcurrency != instruments[quote.symbol].currency) {
                 sellmsg += " (" + quote.settlcurrency + ")";
@@ -2756,7 +2785,7 @@
             sellbutton.value = sellmsg;
 
             sellbutton.onclick = function() {
-                sendOrder(quote.symbol, '2', bidqty, quote.bidpx, 'D', quote.settlcurrency, quote.futsettdate, quote.quoteid, "4", "", "");
+                sendOrder(quote.symbol, '2', bidqty, quote.bidpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
                 disable();
             }
 
@@ -2766,7 +2795,7 @@
             buybutton.value = buymsg;
 
             buybutton.onclick = function() {
-                sendOrder(quote.symbol, '1', offerqty, quote.offerpx, 'D', quote.settlcurrency, quote.futsettdate, quote.quoteid, "4", "", "");
+                sendOrder(quote.symbol, '1', offerqty, quote.offerpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
                 disable();
             }
 
@@ -2812,9 +2841,6 @@
             var orderdiv;
             var ordertype = '2';
             var settlabel;
-            var settday;
-            var settmonth;
-            var settyear;
             var timeinforce;
             var expiredate = "";
             var expiretime = "";
@@ -2827,6 +2853,8 @@
             var expireday;
             var expiremonth;
             var expireyear;
+            var settlperiod;
+            var nosettdays;
 
             clearSymbolDiv(symbol);
                              
@@ -2988,14 +3016,21 @@
                 }
             }
 
-            settday = document.createElement("select");
+            /*settday = document.createElement("select");
             settday.id = "ordersettday:" + symbol;
             settmonth = document.createElement("select");
             settmonth.id = "ordersettmonth:" + symbol;
             settyear = document.createElement("select");
             settyear.id = "ordersettyear:" + symbol;
 
-            populateDate(settday, settmonth, settyear, getDefaultSettleDate());
+            populateDate(settday, settmonth, settyear, getDefaultSettleDate());*/
+
+            settlperiod = document.createElement("select");
+            settlperiod.id = "settlperiod:" + symbol;
+
+            //settlperiod[0] = new Option("GBP", defaultsettlcurrency, true, true);
+
+            populateSettlPeriod(settlperiod, 3);
 
             orderdiv = createDiv("orderdiv:" + symbol, symbol);
 
@@ -3009,9 +3044,10 @@
             if (instruments[symbol].currency != defaultsettlcurrency) {
                 orderdiv.appendChild(currencysel);
             }
-            orderdiv.appendChild(settday);
-            orderdiv.appendChild(settmonth);
-            orderdiv.appendChild(settyear);
+            //orderdiv.appendChild(settday);
+            //orderdiv.appendChild(settmonth);
+            //orderdiv.appendChild(settyear);
+            orderdiv.appendChild(settlperiod);
 
             //pricedisplay();
 
@@ -3077,7 +3113,7 @@
 
                 settdate = formatToUTCDate(settday[settday.selectedIndex].value, settmonth[settmonth.selectedIndex].value, settyear[settyear.selectedIndex].value);
 
-                sendOrder(symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, settlcurrency, settdate, null, timeinforce, expiredate, expiretime);
+                sendOrder(symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, nosettdays, settlcurrency, settdate, null, timeinforce, expiredate, expiretime);
 
                 disable();
                 //pricedisable();
@@ -3102,7 +3138,19 @@
             quantityinput.focus();
         }
 
-        function sendOrder(symbol, side, quantity, price, ordertype, settlcurrency, settdate, quoteid, timeinforce, expiredate, expiretime) {
+        function populateSettlPeriod(settlperiod, defaultperiod) {
+            for (var i = 0; i < 50; i++) {
+                var s = i + 1;
+                console.log(i);
+                if (s == defaultperiod) {
+                    settlperiod[i] = new Option("T+" + s, s, true, true);
+                } else {
+                    settlperiod[i] = new Option("T+" + s, s, false, false);
+                }
+            }
+        }
+
+        function sendOrder(symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
             var neworder = {};
             var msg;
 
@@ -3115,6 +3163,7 @@
             }
             neworder.ordertype = ordertype;
             neworder.settlcurrency = settlcurrency;
+            neworder.nosettdays = nosettdays;
             neworder.futsettdate = settdate;
             if (quoteid != null) {
                 neworder.quoteid = quoteid;
@@ -3130,11 +3179,17 @@
                 msg += " @ " + price;
             }
             msg += ", " + getOrdertypeDesc(ordertype);
-            msg += ", for settlement";
+
+            if (instruments[symbol].instrumenttype == "DE") {
+                msg += ", for settlement T+" + nosettdays + " (" + formatUTCDate(settdate) + ")";
+            } else {
+                msg += ", for rolling settlement";
+            }
+
             if (neworder.settlcurrency != "GBP" || neworder.settlcurrency != neworder.currency) {
                 msg += " in " + neworder.settlcurrency;
             }
-            msg += " " + formatUTCDate(settdate);
+
             if (quoteid != null) {
                 msg += ", quote id " + quoteid;
             }
