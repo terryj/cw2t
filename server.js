@@ -26,6 +26,7 @@ var cw2tport = 8080; // client listen port
 var outofhours = false; // in or out of market hours - todo: replace with markettype?
 var ordertypes = {};
 var orgid = "1"; // todo: via logon
+var companyclientid = 999999;
 
 // redis
 var redishost;
@@ -461,6 +462,7 @@ function newOrder(clientid, order, conn) {
     }
 
     order.orderid = ret[1];
+    order.instrumenttype = ret[7];
 
     // use the returned instrument values required by proquote
     if (order.markettype == 0) {
@@ -770,60 +772,47 @@ function orderCancelReject(orgclientkey, ocr, reason) {
 }
 
 function processOrder(order, conn) {
-  // either forward to Proquote or attempt to match the order, depending on whether the market is open
+  // either forward to Proquote or trade immediately or attempt to match the order, depending on the type of instrument & whether the market is open
   if (order.markettype == 1) {
     matchOrder(order.orderid, conn);
   } else {
-    ptp.newOrder(order);
-  }
+    // forward to 
+    if (order.instrumenttype == "DE") {
+      ptp.newOrder(order);
+    } else {
+      // product currency to org currency
+      order.currencyratetoorg = 1;
+      order.currencyindtoorg = 1;
 
-    /*order.orderid = orderid;
+      order.settlcurramt = parseInt(order.quantity) * parseFloat(order.price);
 
-    // get the instrument, as we need the proquote symbol & isin
-    db.hgetall("symbol:" + order.symbol, function(err, inst) {
-      if (err) {
+      // settlement currency to product currency
+      order.settlcurrfxrate = 1;
+      order.settlcurrfxratecalc = 1;
+
+      db.eval(scriptnewtrade, 21, order.orderid, order.symbol, order.side, order.quantity, order.price, order.currency, order.currencyratetoorg, order.currencyindtoorg, orgid, companyclientid, "", order.futsettdate, order.timestamp, 2, "", 0, "", order.settlcurrency, order.settlcurramt, order.settlcurrfxrate, order.settlcurrfxratecalc, function(err, ret) {
+        if (err) {
           console.log(err);
-          return;
-      }
+          return
+        }
 
-      if (inst == null) {
-        console.log("instrument not found, symbol:" + order.symbol);
-        return;
-      }
+        // send the order & trade
+        getSendOrder(order.orderid, true, true);
+        getSendTrade(ret);
 
-      // add instrument details to order
-      order.proquotesymbol = inst.proquotesymbol;
-      order.isin = inst.isin;
-
-      // if there is an associated quote, we need the proquote quote id
-      if (order.quoteid != "") {
-        db.hgetall("quote:" + order.quoteid, function(err, quote) {
-          if (err) {
-            console.log(err);
-            return;
-          }
-
-          if (quote == null) {
-            console.log("quote not found, id:" + order.quoteid);
-            return;
-          }
-
-          // add the proquote quote id, different for bid/offer
-          if (order.side == "1") {
-            order.qbroker = quote.offerqbroker;
-            order.proquotequoteid = quote.offerquoteid;
-          } else {
-            order.qbroker = quote.bidqbroker;
-            order.proquotequoteid = quote.bidquoteid;
-          }
-
-          ptp.newOrder(order);
-        });
-      } else {
-        ptp.newOrder(order);
-      }
-    });
-  }*/
+        // send cash & position
+        //   todo: send as part of getsendorder?
+        //getSendCash(orgclientkey, ret[0][31]); // orgclientkey, currency
+        //getSendPosition(orgclientkey, ret[0][5]); // orgclientkey, symbol
+  
+        // send margin & reserve for limit orders
+        /*if (ret[1][13] == "2") {
+          getSendMargin(orgclientkey, ret[0][31]); // orgclientkey, currency
+          getSendReserve(orgclientkey, ret[0][5]); // orgclientkey, symbol
+        }*/
+      });
+    }
+  }
 }
 
 function displayOrderBook(symbol, lowerbound, upperbound) {
@@ -2040,14 +2029,10 @@ ptp.on("orderExpired", function(exereport) {
 ptp.on("orderFill", function(exereport) {
   var currencyratetoorg = 1; // product currency rate back to org 
   var currencyindtoorg = 1;
+  var counterpartyorgid = ""; // external, so no counterparty orgid, just counterparty id
 
   console.log(exereport);
 
-  // default fx rate - todo: review
-  /*if (exereport.currency == exereport.settlcurrency) {
-    exereport.settlcurrfxrate = 1;
-    exereport.settlcurrfxratecalc = 1;
-  }*/
   if (!('settlcurrfxrate' in exereport)) {
     exereport.settlcurrfxrate = 1;
   }
@@ -2055,7 +2040,7 @@ ptp.on("orderFill", function(exereport) {
   // we don't get this from proquote - todo: set based on currency pair
   exereport.settlcurrfxratecalc = 1;    
 
-  db.eval(scriptnewtrade, 20, exereport.clordid, exereport.symbol, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currency, currencyratetoorg, currencyindtoorg, exereport.execbroker, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.ordstatus, exereport.lastmkt, exereport.leavesqty, exereport.orderid, exereport.settlcurrency, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, function(err, ret) {
+  db.eval(scriptnewtrade, 21, exereport.clordid, exereport.symbol, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currency, currencyratetoorg, currencyindtoorg, counterpartyorgid, exereport.execbroker, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.ordstatus, exereport.lastmkt, exereport.leavesqty, exereport.orderid, exereport.settlcurrency, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, function(err, ret) {
     if (err) {
       console.log(err);
       return
@@ -2360,15 +2345,15 @@ function registerScripts() {
   ';
 
   getcosts = round + '\
-  local getcosts = function(side, consid, currency) \
-    local commission  = 0 \
+  local getcosts = function(instrumenttype, side, consid, currency) \
+    local commission = 0 \
     local ptmlevy = 0 \
     local stampduty = 0 \
     local contractcharge = 0 \
     local commpercent = redis.call("get", "commissionpercent") \
     local commmin = redis.call("get", "commissionmin:" .. currency) \
     if commpercent then \
-       commission = round(consid * tonumber(commpercent) / 100, 2) \
+      commission = round(consid * tonumber(commpercent) / 100, 2) \
     end \
     if commmin then \
       if commission < tonumber(commmin) then \
@@ -2376,22 +2361,21 @@ function registerScripts() {
       end \
     end \
     if currency == "GBP" then \
-      local ptmlevylimit = redis.call("get", "ptmlevylimit") \
-      if ptmlevylimit then \
-        if consid > tonumber(ptmlevylimit) then \
-          local ptmlevyamt = redis.call("get", "ptmlevy") \
-          if ptmlevyamt then \
-            ptmlevy = tonumber(ptmlevyamt) \
+      if instrumenttype == "DE" then \
+        local ptmlevylimit = redis.call("get", "ptmlevylimit") \
+        if ptmlevylimit then \
+          if consid > tonumber(ptmlevylimit) then \
+            ptmlevy = tonumber(redis.call("get", "ptmlevy")) \
           end \
         end \
-      end \
-      if side == "1" then \
-        local stampdutylimit = redis.call("get", "stampdutylimit") \
-        if stampdutylimit then \
-          if consid > tonumber(stampdutylimit) then \
-            local stampdutypercent = redis.call("get", "stampdutypercent") \
-            if stampdutypercent then \
-              stampduty = round(consid * tonumber(stampdutypercent) / 100, 2) \
+        if side == "1" then \
+          local stampdutylimit = redis.call("get", "stampdutylimit") \
+          if stampdutylimit then \
+            if consid > tonumber(stampdutylimit) then \
+              local stampdutypercent = redis.call("get", "stampdutypercent") \
+              if stampdutypercent then \
+                stampduty = round(consid * tonumber(stampdutypercent) / 100, 2) \
+              end \
             end \
           end \
         end \
@@ -2406,9 +2390,9 @@ function registerScripts() {
   ';
 
   gettotalcost = getcosts + '\
-  local gettotalcost = function(side, quantity, price, currency) \
+  local gettotalcost = function(instrumenttype, side, quantity, price, currency) \
     local consid = tonumber(quantity) * tonumber(price) \
-    local costs =  getcosts(side, consid, currency) \
+    local costs =  getcosts(instrumenttype, side, consid, currency) \
     return consid + costs[1] + costs[2] + costs[3] + costs[4] \
   end \
   ';
@@ -2520,18 +2504,22 @@ function registerScripts() {
 
   adjustmarginreserve = gettotalcost + updatemargin + updatereserve + '\
   local adjustmarginreserve = function(orderid, orgclientkey, symbol, side, price, ordmargin, currency, remquantity, newremquantity) \
-    if side == "1" then \
-      if tonumber(newremquantity) ~= tonumber(remquantity) then \
-        local newordmargin = 0 \
-        if tonumber(newremquantity) ~= 0 then \
-          newordmargin = gettotalcost("1", tonumber(newremquantity), tonumber(price), currency) \
+    local instrumenttype = redis.call("hget", "symbol:" .. symbol, "instrumenttype") \
+    if instrumenttype == "DE" then \
+      if side == "1" then \
+        if tonumber(newremquantity) ~= tonumber(remquantity) then \
+          local newordmargin = 0 \
+          if tonumber(newremquantity) ~= 0 then \
+            newordmargin = gettotalcost(instrumenttype, "1", tonumber(newremquantity), tonumber(price), currency) \
+          end \
+          updatemargin(orderid, orgclientkey, ordmargin, currency, newordmargin) \
         end \
-        updatemargin(orderid, orgclientkey, ordmargin, currency, newordmargin) \
+      else \
+        if tonumber(newremquantity) ~= tonumber(remquantity) then \
+          updatereserve(orgclientkey, symbol, currency, -tonumber(remquantity) + tonumber(newremquantity)) \
+        end \
       end \
     else \
-      if tonumber(newremquantity) ~= tonumber(remquantity) then \
-        updatereserve(orgclientkey, symbol, currency, -tonumber(remquantity) + tonumber(newremquantity)) \
-      end \
     end \
   end \
   ';
@@ -2544,25 +2532,36 @@ function registerScripts() {
 
   //
   // note the currency should be the settlement currency
+  // todo: is order margin required?
   //
   creditcheck = rejectorder + gettotalcost + updatemargin + updatereserve + '\
-  local creditcheck = function(orderid, orgclientkey, symbol, side, quantity, price, currency, margin) \
-    --[[ buy/sell ]] \
+  local creditcheck = function(orderid, orgclientkey, symbol, side, quantity, price, currency, ordermargin, instrumenttype) \
     if side == "1" then \
+      --[[ calculate initial margin ]] \
+      local marginpercent = redis.call("hget", "symbol:" .. symbol, "marginpercent") \
+      if not marginpercent then marginpercent = 100 end \
+      local initialmargin = tonumber(quantity) * tonumber(price) * tonumber(marginpercent) / 100 \
+      --[[ get existing margin ]] \
+      local margin = redis.call("get", orgclientkey .. ":margin:" .. currency) \
+      if not margin then margin = 0 end \
+      --[[ get costs ]] \
+      local totalcost = gettotalcost(instrumenttype, side, quantity, price, currency) \
+      --[[ get cash ]] \
       local cash = redis.call("get", orgclientkey .. ":cash:" .. currency) \
       if not cash then \
         rejectorder(orderid, 1001, "") \
         return 0 \
       end \
-      local margin = redis.call("get", orgclientkey .. ":margin:" .. currency) \
-      if not margin then margin = "0" end \
-      local totalcost = gettotalcost(side, quantity, price, currency) \
-      if tonumber(cash) - tonumber(margin) < totalcost then \
+      --[[ check there is enough cash to cover total margin ]] \
+      if tonumber(cash) - tonumber(margin) - initialmargin < totalcost then \
         rejectorder(orderid, 1002, "") \
         return 0 \
       end \
+      --[[ todo: remove ]] \
+      redis.call("hmset", orderid .. "marg", "cash", cash, "margin", margin, "initialmargin", initialmargin, "totalcost", totalcost) \
       updatemargin(orderid, orgclientkey, margin, currency, totalcost) \
     else \
+      --[[ sell, so check there is a large enough position in this symbol/currency ]] \
       local poskey = symbol .. ":" .. currency \
       local position = redis.call("hget", orgclientkey .. ":position:" .. poskey, "quantity") \
       if not position then \
@@ -2635,8 +2634,6 @@ function registerScripts() {
   end \
   ';
 
-  // todo: better?
-  //redis.call("rpush", "trades", tradeid) \
   newtrade = updateposition + updatecash + '\
   local newtrade = function(orgid, clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyorgid, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays) \
     local tradeid = redis.call("incr", "tradeid") \
@@ -2676,7 +2673,8 @@ function registerScripts() {
   scriptcreditcheck = creditcheck + '\
   local fields = {"orgid", "clientid", "symbol", "side", "quantity", "price", "currency", "margin"} \
   local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
-  local ret = creditcheck(KEYS[1], vals[1] .. ":" .. vals[2], vals[3], vals[4], vals[5], vals[6], vals[7], vals[8]) \
+  local instrumenttype = redis.call("hget", "symbol:" .. vals[3], "instrumenttype") \
+  local ret = creditcheck(KEYS[1], vals[1] .. ":" .. vals[2], vals[3], vals[4], vals[5], vals[6], vals[7], vals[8], instrumenttype) \
   return ret \
   ';
 
@@ -2704,13 +2702,14 @@ function registerScripts() {
       qbroker = redis.call("hget", quotekey, "bidqbroker") \
     end \
   end \
-  local ret = creditcheck(orderid, orgclientkey, KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[19], 0) \
+  local instrumenttype = redis.call("hget", "symbol:" .. KEYS[3], "instrumenttype") \
+  local ret = creditcheck(orderid, orgclientkey, KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[19], 0, instrumenttype) \
+  --[[ get required proquote values if order is external ]] \
   local proquotesymbol = {"", "", ""} \
-  --[[ get required instrument values for proquote if order is external ]] \
   if ret == 1 and KEYS[8] == "0" then \
     proquotesymbol = getproquotesymbol(KEYS[3]) \
   end \
-  return {ret, orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], pqquoteid, qbroker} \
+  return {ret, orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], pqquoteid, qbroker, instrumenttype} \
   ';
 
   // todo: add lastmkt
@@ -2722,6 +2721,7 @@ function registerScripts() {
   local orgclientkey = vals[1] .. ":" .. vals[2] \
   local remquantity = tonumber(vals[9]) \
   if remquantity <= 0 then return "1010" end \
+  local instrumenttype = redis.call("hget", "symbol:" .. vals[3], "instrumenttype") \
   local lowerbound \
   local upperbound \
   local matchside \
@@ -2770,9 +2770,9 @@ function registerScripts() {
       --[[ trade gets done at passive order price ]] \
       local tradeprice = tonumber(matchvals[6]) \
       local consid = tradequantity * tradeprice \
-      local matchcosts = getcosts(matchside, consid, matchvals[7]) \
       --[[ create trades for active & passive orders ]] \
-      local costs = getcosts(vals[4], consid, vals[7]) \
+      local costs = getcosts(instrumenttype, vals[4], consid, vals[7]) \
+      local matchcosts = getcosts(instrumenttype, matchside, consid, matchvals[7]) \
       local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], vals[4], tradequantity, tradeprice, vals[7], costs, matchorder[2], matchorder[4], "1", "", vals[10], vals[11], "", "", vals[7], "", "") \
       local matchtradeid = newtrade(matchvals[2], matchvals[4], matchorders[i], matchvals[3], matchside, tradequantity, tradeprice, matchvals[7], matchcosts, order[2], order[4], "1", "", matchvals[10], matchvals[11], "", "", vals[7], "", "") \
       --[[ update return values ]] \
@@ -2803,19 +2803,30 @@ function registerScripts() {
   ';
 
   //
-  // External fill
+  // fill
   //
   scriptnewtrade = newtrade + getcosts + adjustmarginreserve + '\
   local fields = {"orgid", "clientid", "symbol", "side", "quantity", "price", "currency", "margin", "remquantity", "nosettdays"} \
   local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
   local quantity = tonumber(KEYS[4]) \
   local price = tonumber(KEYS[5]) \
-  local costs = getcosts(KEYS[3], tonumber(KEYS[18]), KEYS[17]) \
-  local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, "1", KEYS[9], "0", KEYS[10], KEYS[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[10]) \
+  local instrumenttype = redis.call("hget", "symbol:" .. vals[3], "instrumenttype") \
+  local costs = getcosts(instrumenttype, KEYS[3], tonumber(KEYS[19]), KEYS[18]) \
+  local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], KEYS[10], "0", KEYS[11], KEYS[12], KEYS[13], KEYS[15], KEYS[17], KEYS[18], KEYS[19], KEYS[20], KEYS[21], vals[10]) \
+  --[[ add other side of the trade if internal ]] \
+  if instrumenttype == "CFD" or instrumenttype == "SPB" then \
+    local reverseside \
+    if KEYS[4] == 1 then \
+      reverseside = 2 \
+    else \
+      reverseside = 1 \
+    end \
+    newtrade(KEYS[9], KEYS[10], KEYS[1], vals[3], reverseside, quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, vals[1], vals[2], "0", KEYS[11], KEYS[12], KEYS[13], KEYS[15], KEYS[17], KEYS[18], KEYS[19], KEYS[20], KEYS[21], vals[10]) \
+  end \
   --[[ adjust margin/reserve ]] \
-  adjustmarginreserve(KEYS[1], vals[1] .. ":" .. vals[2], vals[3], vals[4], vals[6], vals[8], KEYS[17], vals[9], KEYS[15]) \
+  adjustmarginreserve(KEYS[1], vals[1] .. ":" .. vals[2], vals[3], vals[4], vals[6], vals[8], KEYS[18], vals[9], KEYS[16]) \
   --[[ adjust order ]] \
-  redis.call("hmset", "order:" .. KEYS[1], "remquantity", KEYS[15], "status", KEYS[13]) \
+  redis.call("hmset", "order:" .. KEYS[1], "remquantity", KEYS[16], "status", KEYS[14]) \
   return tradeid \
   ';
 
@@ -2965,15 +2976,24 @@ function registerScripts() {
   return 0 \
   ';
 
+  //
+  // get alpha sorted list of instruments
+  //
   scriptgetinst = '\
   local instruments = redis.call("sort", "instruments", "ALPHA") \
-  local fields = {"instrumenttype", "description", "currency"} \
+  local fields = {"instrumenttype", "description", "currency", "marginpercent"} \
   local vals \
   local inst = {} \
+  local marginpc \
   for index = 1, #instruments do \
     vals = redis.call("hmget", "symbol:" .. instruments[index], unpack(fields)) \
     if vals[1] == "DE" or vals[1] == "CFD" or vals[1] == "SPB" then \
-      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1]}) \
+      if vals[4] then \
+        marginpc = vals[4] \
+      else \
+        marginpc = 100 \
+      end \
+      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc}) \
     end \
   end \
   return cjson.encode(inst) \

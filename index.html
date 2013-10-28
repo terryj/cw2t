@@ -2460,7 +2460,7 @@
             var currencysel;
             var qtyascashorshares = 1; // 1=shares, 2=cash
             var settlperiod;
-            var nosettdays = 3; // default T+3 used to request quote
+            var nosettdays;
 
             clearSymbolDiv(symbol);
 
@@ -2560,6 +2560,8 @@
 
                     if (instruments[symbol].instrumenttype == "DE") {
                         nosettdays = settlperiod[settlperiod.selectedIndex].value;
+                    } else {
+                        nosettdays = 3; // default T+3 used to request quote
                     }
 
                     sendRequestQuote(symbol, quantity, cashorderqty, instruments[symbol].currency, settlcurrency, nosettdays);

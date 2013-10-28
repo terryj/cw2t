@@ -12,7 +12,7 @@ var redis = require("redis");
 db = redis.createClient();
 db.on("connect", function (err) {
   console.log("Connected to redis");
-  cfdspb("UKX");
+  cfdspb("UKX", 10);
 });
 
 db.on("error", function (err) {
@@ -24,7 +24,7 @@ dbpub.on("error", function (err) {
   console.error(err);
 });
 
-function cfdspb(index) {
+function cfdspb(index, marginpercent) {
   var cfd;
   var spb;
 
@@ -52,11 +52,11 @@ function cfdspb(index) {
         spb = symbol + ".SPB";
 
         // create cfd
-        db.hmset("symbol:" + cfd, "currency", inst.currency, "description", inst.description + " CFD", "proquotesymbol", inst.proquotesymbol, "isin", inst.isin, "exchange", inst.exchange, "topic", inst.topic, "market", inst.market, "sedol", inst.sedol, "longname", inst.longname, "instrumenttype", "CFD", "category", inst.category, "sector", inst.sector);
+        db.hmset("symbol:" + cfd, "currency", inst.currency, "description", inst.description + " CFD", "proquotesymbol", inst.proquotesymbol, "isin", inst.isin, "exchange", inst.exchange, "topic", inst.topic, "market", inst.market, "sedol", inst.sedol, "longname", inst.longname, "instrumenttype", "CFD", "category", inst.category, "sector", inst.sector, "marginpercent", marginpercent);
         db.sadd("instruments", cfd);
 
         // spreadbet
-        db.hmset("symbol:" + spb, "currency", inst.currency, "description", inst.description + " Spreadbet", "proquotesymbol", inst.proquotesymbol, "isin", inst.isin, "exchange", inst.exchange, "topic", inst.topic, "market", inst.market, "sedol", inst.sedol, "longname", inst.longname, "instrumenttype", "SPB", "category", inst.category, "sector", inst.sector);
+        db.hmset("symbol:" + spb, "currency", inst.currency, "description", inst.description + " Spreadbet", "proquotesymbol", inst.proquotesymbol, "isin", inst.isin, "exchange", inst.exchange, "topic", inst.topic, "market", inst.market, "sedol", inst.sedol, "longname", inst.longname, "instrumenttype", "SPB", "category", inst.category, "sector", inst.sector, "marginpercent", marginpercent);
         db.sadd("instruments", spb);
 
         console.log("cfd & spreadbet added for symbol:" + symbol);

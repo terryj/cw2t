@@ -14,16 +14,15 @@ var util = require('util');
 var net = require('net');
 var events = require('events');
 
-// test
-//var pqhost = '127.0.0.1';
-//var host = "Cw2t Proquote Simulator";
+// connect to local test server
+var pqhost = '127.0.0.1';
+var host = "Cw2t Proquote Simulator";
 
-// ptp test
-var pqhost = '195.26.26.67';
-//var pqhost = '195.26.26.177';
-var host = "Proquote UAT";
+// OR connect to proquote PTP UAT system
+//var pqhost = '195.26.26.67';
+//var host = "Proquote UAT";
+
 var pqport = 50143;
-
 var fixver = 'FIX.4.2';
 var sendercompid = 'CWTTUAT1'; // cw2t id
 var targetcompid = 'PTPUAT1'; // proquote id

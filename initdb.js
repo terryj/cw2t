@@ -55,8 +55,8 @@ function initdb() {
   db.set("commissionpercent", 1);
   db.set("commissionmin:GBP", 10);
   db.set("commissionmin:USD", 15);
-  db.set("ptmlevylimit", 30);
-  db.set("ptmlevy", 3);
+  db.set("ptmlevylimit", 10000);
+  db.set("ptmlevy", 1);
   db.set("stampdutylimit", 100);
   db.set("stampdutypercent", 0.5);
   db.set("contractcharge", 2);
@@ -68,7 +68,7 @@ function initdb() {
   db.sadd("clients", "1:4");
   db.sadd("clients", "1:5");
   db.sadd("clients", "1:6");
-  db.sadd("clients", "1:1765");
+  db.sadd("clients", "1:999999");
 
   // clients - hash for each
   db.hmset("client:1:1", "username", "terry@cw2t.com", "password", "terry", "orgid", 1, "clientid", 1, "marketext", "LD", "name", "Terry Johnston");
@@ -77,7 +77,7 @@ function initdb() {
   db.hmset("client:1:4", "username", "alex@cw2t.com", "password", "alex", "orgid", 1, "clientid", 4, "marketext", "LD", "name", "Alex Fordham");
   db.hmset("client:1:5", "username", "dave@cw2t.com", "password", "dave", "orgid", 1, "clientid", 5, "marketext", "LD", "name", "Dave Shann");
   db.hmset("client:1:6", "username", "cw2t@cw2t.com","password", "cw2t", "orgid", 1, "clientid", 6, "marketext", "LD", "name", "Cw2t test");
-  db.hmset("client:1:1765", "username", "terrytest@cw2t.com", "password", "terrytest", "orgid", 1, "clientid", 1765, "marketext", "LD", "name", "Terry Johnston");
+  db.hmset("client:1:999999", "username", "tg@tg.com", "password", "tg", "orgid", 1, "clientid", 999999, "marketext", "LD", "name", "Thomas Grant & Co");
 
   // link between client email & id
   db.set("terry@cw2t.com", "1:1");
@@ -86,7 +86,7 @@ function initdb() {
   db.set("alex@cw2t.com", "1:4");
   db.set("dave@cw2t.com", "1:5");
   db.set("cw2t@cw2t.com", "1:6");
-  db.set("terrytest@cw2t.com", "1:1765");
+  db.set("tg@tg.com", "1:999999");
 
   // stocks - add international stocks to set of stocks & hash
   db.hset("symbol:AMZN", "currency", "USD");
@@ -131,10 +131,6 @@ function initdb() {
   db.set("1:6:cash:USD", 10000);
   db.sadd("1:6:cash", "GBP");
   db.set("1:6:cash:GBP", 10000);
-  db.sadd("1:1765:cash", "USD");
-  db.set("1:1765:cash:USD", 100000);
-  db.sadd("1:1765:cash", "GBP");
-  db.set("1:1765:cash:GBP", 10000);
 
   // positions - set of positions for each client & hash for each position
   /*db.sadd("1:1:positions", "AMZN:GBP");
