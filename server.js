@@ -51,7 +51,6 @@ if (redislocal) {
 // redis scripts
 var scriptquoterequest;
 var scriptneworder;
-//var scriptcreditcheck;
 var scriptmatchorder;
 var scriptordercancelrequest;
 var scriptordercancel;
@@ -453,7 +452,7 @@ function newOrder(clientid, order, conn) {
   }
 
   // store the order, get an id & credit check it
-  db.eval(scriptneworder, 22, orgid, clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, function(err, ret) {
+  db.eval(scriptneworder, 24, orgid, clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.positionopenclose, order.positionid, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] == 0) {
@@ -790,7 +789,7 @@ function processOrder(order, conn) {
       order.settlcurrfxrate = 1;
       order.settlcurrfxratecalc = 1;
 
-      db.eval(scriptnewtrade, 21, order.orderid, order.symbol, order.side, order.quantity, order.price, order.currency, order.currencyratetoorg, order.currencyindtoorg, orgid, companyclientid, "", order.futsettdate, order.timestamp, 2, "", 0, "", order.settlcurrency, order.settlcurramt, order.settlcurrfxrate, order.settlcurrfxratecalc, function(err, ret) {
+      db.eval(scriptnewtrade, 23, order.orderid, order.symbol, order.side, order.quantity, order.price, order.currency, order.currencyratetoorg, order.currencyindtoorg, orgid, companyclientid, "", order.futsettdate, order.timestamp, 2, "", 0, "", order.settlcurrency, order.settlcurramt, order.settlcurrfxrate, order.settlcurrfxratecalc, order.positionopenclose, order.positionid, function(err, ret) {
         if (err) {
           console.log(err);
           return
@@ -2324,7 +2323,7 @@ string luaScript = "local tDecoded = redis.call('GET', KEYS[1]);\n"
 function registerScripts() {
   var updateposition;
   var updatecash;
-  var updatemargin;
+  var updateordermargin;
   var updatereserve;
   var removefromorderbook;
   var cancelorder;
@@ -2337,6 +2336,7 @@ function registerScripts() {
   var creditcheck;
   var getproquotesymbol;
   var getinitialmargin;
+  var updatetrademargin;
 
   round = '\
   local round = function(num, dp) \
@@ -2413,8 +2413,8 @@ function registerScripts() {
   end \
   ';
 
-  updatemargin = '\
-  local updatemargin = function(orderid, orgclientkey, ordmargin, currency, newordmargin) \
+  updateordermargin = '\
+  local updateordermargin = function(orderid, orgclientkey, ordmargin, currency, newordmargin) \
     if newordmargin == ordmargin then return end \
     local marginkey = orgclientkey .. ":margin:" .. currency \
     local marginskey = orgclientkey .. ":margins" \
@@ -2432,6 +2432,27 @@ function registerScripts() {
       end \
     end \
     redis.call("hset", "order:" .. orderid, "margin", newordmargin) \
+  end \
+  ';
+
+  updatetrademargin = '\
+  local updatetrademargin = function(tradeid, orgclientkey, currency, initialmargin) \
+    local marginkey = orgclientkey .. ":margin:" .. currency \
+    local marginskey = orgclientkey .. ":margins" \
+    local margin = redis.call("get", marginkey) \
+    if not margin then \
+      redis.call("set", marginkey, margin) \
+      redis.call("sadd", marginskey, currency) \
+    else \
+      local adjmargin = tonumber(margin) + tonumber(initialmargin) \
+      if adjmargin == 0 then \
+        redis.call("del", marginkey) \
+        redis.call("srem", marginskey, currency) \
+      else \
+        redis.call("set", marginkey, adjmargin) \
+      end \
+    end \
+    redis.call("hset", "trade:" .. tradeid, "margin", initialmargin) \
   end \
   ';
 
@@ -2480,45 +2501,76 @@ function registerScripts() {
   // tradecost & currency should be in settlement currency
   //
   updateposition = '\
-  local updateposition = function(orgclientkey, symbol, side, tradequantity, tradecost, currency, initialmargin) \
-    local symbolcurrency = symbol .. ":" .. currency \
+  local updateposition = function(orgclientkey, symbol, side, tradequantity, tradeprice, tradecost, currency, initialmargin, positionopenclose, positioncloseid) \
+    local positionskey = orgclientkey .. ":positions" \
+    if tonumber(positionopenclose) == 1 then \
+      --[[ opening position, so get a new id ]] \
+      positionid = redis.call("incr", "positionid") \
+      --[[ create the position ]] \
+      redis.call("hmset", "position:" .. positionid, "orgclientkey", orgclientkey, "symbol", symbol, "longshort", side, "quantity", tradequantity, "cost", tradecost, "currency", currency, "initialmargin", initialmargin) \
+      redis.call("sadd", positionskey, positionid) \
+    else \
+      --[[ closing, so get the position ]] \
+      positionid = positioncloseid \
+      local fields = {"quantity", "cost", "initialmargin"} \
+      local vals = redis.call("hmget", "position:" .. positionid, unpack(fields)) \
+      local posqty = tonumber(vals[1]) \
+      local poscost = tonumber(vals[2]) \
+      local posinitialmargin = tonumber(vals[3]) \
+      posqty = posqty - tradequantity \
+    end \
+    return positionid \
+  end \
+  ';
+
+    /*local symbolcurrency = symbol .. ":" .. currency \
     local positionkey = orgclientkey .. ":position:" .. symbolcurrency \
     local positionskey = orgclientkey .. ":positions" \
-    local posqty = redis.call("hget", positionkey, "quantity") \
-    local poscost = redis.call("hget", positionkey, "cost") \
+    local posqty = 0 \
+    local poscost = 0 \
+    local posinitialmargin = 0 \
+    local fields = {"quantity", "cost", "initialmargin"} \
+    local vals = redis.call("hmget", positionkey, unpack(fields)) \
+    if vals[1] then \
+      posqty = vals[1] \
+      poscost = vals[2] \
+      posinitialmargin = vals[3] \
+    end \
     if side == "1" then \
-      if posqty then \
+      if posqty ~= 0 then \
         local adjqty = tonumber(posqty) + tonumber(tradequantity) \
         local adjcost = tonumber(poscost) + tonumber(tradecost) \
+        local adjinitialmargin = tonumber(posinitialmargin) + tonumber(initialmargin) \
         if adjqty == 0 then \
-          redis.call("hdel", positionkey, "symbol", "quantity", "cost", "currency") \
+          redis.call("hdel", positionkey, "symbol", "quantity", "cost", "currency", "initialmargin") \
           redis.call("srem", positionskey, symbolcurrency) \
         else \
-          redis.call("hmset", positionkey, "quantity", adjqty, "cost", adjcost) \
+          redis.call("hmset", positionkey, "quantity", adjqty, "price", tradeprice, "cost", adjcost, "initialmargin", adjinitialmargin) \
         end \
       else \
         redis.call("hmset", positionkey, "symbol", symbol, "quantity", tradequantity, "cost", tradecost, "currency", currency, "initialmargin", initialmargin) \
         redis.call("sadd", positionskey, symbolcurrency) \
       end \
     else \
-      if posqty then \
+      if posqty ~= 0 then \
         local adjqty = tonumber(posqty) - tradequantity \
         local adjcost = tonumber(poscost) - tradecost \
+        local adjinitialmargin = tonumber(posinitialmargin) - tonumber(initialmargin) \
         if adjqty == 0 then \
-          redis.call("hdel", positionkey, "symbol", "quantity", "cost", "currency") \
+          redis.call("hdel", positionkey, "symbol", "quantity", "cost", "currency", "initialmargin") \
           redis.call("srem", positionskey, symbolcurrency) \
         else \
-          redis.call("hmset", positionkey, "quantity", adjqty, "cost", adjcost) \
+          redis.call("hmset", positionkey, "quantity", adjqty, "cost", adjcost, "initialmargin", adjinitialmargin) \
         end \
       else \
-        redis.call("hmset", positionkey, "symbol", symbol, "quantity", -tradequantity, "cost", -tradecost, "currency", currency) \
+        redis.call("hmset", positionkey, "symbol", symbol, "quantity", -tradequantity, "cost", -tradecost, "currency", currency, "initialmargin", initialmargin) \
         redis.call("sadd", positionskey, symbolcurrency) \
       end \
     end \
   end \
-  ';
+  ';*/
 
-  adjustmarginreserve = getinitialmargin + updatemargin + updatereserve + '\
+  adjustmarginreserve = getinitialmargin + updateordermargin + updatereserve + '\
   local adjustmarginreserve = function(orderid, orgclientkey, symbol, side, price, ordmargin, currency, remquantity, newremquantity) \
     local instrumenttype = redis.call("hget", "symbol:" .. symbol, "instrumenttype") \
     if side == "1" then \
@@ -2527,7 +2579,7 @@ function registerScripts() {
         if tonumber(newremquantity) ~= 0 then \
           newordmargin = getinitialmargin(symbol, instrumenttype, newremquantity, price, currency) \
         end \
-        updatemargin(orderid, orgclientkey, ordmargin, currency, newordmargin) \
+        updateordermargin(orderid, orgclientkey, ordmargin, currency, newordmargin) \
       end \
     else \
       if tonumber(newremquantity) ~= tonumber(remquantity) then \
@@ -2545,7 +2597,7 @@ function registerScripts() {
 
   //redis.call("hmset", "marg:" .. orderid, "cash", cash, "margin", margin, "initialmargin", initialmargin) \
 
-  creditcheck =  getinitialmargin + updatemargin + getinitialmargin + updatereserve + '\
+  creditcheck =  getinitialmargin + updateordermargin + getinitialmargin + updatereserve + '\
   local creditcheck = function(orderid, orgclientkey, symbol, side, quantity, price, currency, instrumenttype) \
     if side == "1" then \
       --[[ calculate initial margin ]] \
@@ -2564,7 +2616,7 @@ function registerScripts() {
         rejectorder(orderid, 1002, "") \
         return 0 \
       end \
-      updatemargin(orderid, orgclientkey, 0, currency, initialmargin) \
+      updateordermargin(orderid, orgclientkey, 0, currency, initialmargin) \
     else \
       --[[ sell, so check there is a large enough position in this symbol/currency ]] \
       local poskey = symbol .. ":" .. currency \
@@ -2640,10 +2692,10 @@ function registerScripts() {
   ';
 
   newtrade = updateposition + updatecash + '\
-  local newtrade = function(orgid, clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyorgid, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin) \
+  local newtrade = function(orgid, clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyorgid, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, positionopenclose, positionid) \
     local tradeid = redis.call("incr", "tradeid") \
     if not tradeid then return 0 end \
-    redis.call("hmset", "trade:" .. tradeid, "orgid", orgid, "clientid", clientid, "orderid", orderid, "symbol", symbol, "side", side, "quantity", quantity, "price", price, "currency", currency, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyorgid", counterpartyorgid, "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrency", settlcurrency, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays) \
+    redis.call("hmset", "trade:" .. tradeid, "orgid", orgid, "clientid", clientid, "orderid", orderid, "symbol", symbol, "side", side, "quantity", quantity, "price", price, "currency", currency, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyorgid", counterpartyorgid, "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrency", settlcurrency, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "positionopenclose", positionopenclose, "positionid", positionid) \
     redis.call("sadd", "trades", tradeid) \
     local orgclientkey = orgid .. ":" .. clientid \
     redis.call("sadd", orgclientkey .. ":trades", tradeid) \
@@ -2657,7 +2709,7 @@ function registerScripts() {
       tradecost = settlcurramt - totalcost \
       updatecash(orgclientkey, settlcurrency, tradecost) \
     end \
-    updateposition(orgclientkey, symbol, side, quantity, tradecost, settlcurrency, initialmargin) \
+    local positionid = updateposition(orgclientkey, symbol, side, quantity, price, tradecost, settlcurrency, initialmargin, positionopenclose, positionid) \
     return tradeid \
   end \
   ';
@@ -2674,19 +2726,10 @@ function registerScripts() {
   return 0 \
   ';
 
-// todo: may need to use indicative price if there isn't one in the order
-  /*scriptcreditcheck = creditcheck + '\
-  local fields = {"orgid", "clientid", "symbol", "side", "quantity", "price", "currency", "margin"} \
-  local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
-  local instrumenttype = redis.call("hget", "symbol:" .. vals[3], "instrumenttype") \
-  local ret = creditcheck(KEYS[1], vals[1] .. ":" .. vals[2], vals[3], vals[4], vals[5], vals[6], vals[7], vals[8], instrumenttype) \
-  return ret \
-  ';*/
-
   scriptneworder = creditcheck + getproquotesymbol + '\
   local orderid = redis.call("incr", "orderid") \
   if not orderid then return 1005 end \
-  redis.call("hmset", "order:" .. orderid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "side", KEYS[4], "quantity", KEYS[5], "price", KEYS[6], "ordertype", KEYS[7], "remquantity", KEYS[5], "status", "0", "markettype", KEYS[8], "futsettdate", KEYS[9], "partfill", KEYS[10], "quoteid", KEYS[11], "currency", KEYS[12], "currencyratetoorg", KEYS[13], "currencyindtoorg", KEYS[14], "timestamp", KEYS[15], "margin", "0", "timeinforce", KEYS[16], "expiredate", KEYS[17], "expiretime", KEYS[18], "settlcurrency", KEYS[19], "settlcurrfxrate", KEYS[20], "settlcurrfxratecalc", KEYS[21], "orderid", orderid, "externalorderid", "", "execid", "", "nosettdays", KEYS[22]) \
+  redis.call("hmset", "order:" .. orderid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "side", KEYS[4], "quantity", KEYS[5], "price", KEYS[6], "ordertype", KEYS[7], "remquantity", KEYS[5], "status", "0", "markettype", KEYS[8], "futsettdate", KEYS[9], "partfill", KEYS[10], "quoteid", KEYS[11], "currency", KEYS[12], "currencyratetoorg", KEYS[13], "currencyindtoorg", KEYS[14], "timestamp", KEYS[15], "margin", "0", "timeinforce", KEYS[16], "expiredate", KEYS[17], "expiretime", KEYS[18], "settlcurrency", KEYS[19], "settlcurrfxrate", KEYS[20], "settlcurrfxratecalc", KEYS[21], "orderid", orderid, "externalorderid", "", "execid", "", "nosettdays", KEYS[22], "positionopenclose", KEYS[23], "positionid", KEYS[24]) \
   local orgclientkey = KEYS[1] .. ":" .. KEYS[2] \
   --[[ add to set of orders for this client ]] \
   redis.call("sadd", orgclientkey .. ":orders", orderid) \
@@ -2810,15 +2853,17 @@ function registerScripts() {
   //
   // fill
   //
-  scriptnewtrade = newtrade + getcosts + adjustmarginreserve + '\
-  local fields = {"orgid", "clientid", "symbol", "side", "quantity", "price", "currency", "margin", "remquantity", "nosettdays"} \
+  // todo: should currency be settlcurrency?
+  scriptnewtrade = newtrade + getcosts + adjustmarginreserve + updatetrademargin + '\
+  local fields = {"orgid", "clientid", "symbol", "side", "quantity", "price", "margin", "remquantity", "nosettdays"} \
   local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
   local quantity = tonumber(KEYS[4]) \
   local price = tonumber(KEYS[5]) \
+  local orgclientkey = vals[1] .. ":" .. vals[2] \
   local instrumenttype = redis.call("hget", "symbol:" .. vals[3], "instrumenttype") \
-  local initialmargin = getinitialmargin(symbol, instrumenttype, quantity, price, currency) \
+  local initialmargin = getinitialmargin(vals[3], instrumenttype, quantity, price, KEYS[18]) \
   local costs = getcosts(instrumenttype, KEYS[3], tonumber(KEYS[19]), KEYS[18]) \
-  local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], KEYS[10], "0", KEYS[11], KEYS[12], KEYS[13], KEYS[15], KEYS[17], KEYS[18], KEYS[19], KEYS[20], KEYS[21], vals[10], initialmargin) \
+  local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], KEYS[10], "0", KEYS[11], KEYS[12], KEYS[13], KEYS[15], KEYS[17], KEYS[18], KEYS[19], KEYS[20], KEYS[21], vals[9], initialmargin, KEYS[22], KEYS[23]) \
   --[[ add other side of the trade if internal ]] \
   if instrumenttype == "CFD" or instrumenttype == "SPB" then \
     local reverseside \
@@ -2827,12 +2872,14 @@ function registerScripts() {
     else \
       reverseside = 1 \
     end \
-    newtrade(KEYS[9], KEYS[10], KEYS[1], vals[3], reverseside, quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, vals[1], vals[2], "0", KEYS[11], KEYS[12], KEYS[13], KEYS[15], KEYS[17], KEYS[18], KEYS[19], KEYS[20], KEYS[21], vals[10], 0) \
+    newtrade(KEYS[9], KEYS[10], KEYS[1], vals[3], reverseside, quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, vals[1], vals[2], "0", KEYS[11], KEYS[12], KEYS[13], KEYS[15], KEYS[17], KEYS[18], KEYS[19], KEYS[20], KEYS[21], vals[9], 0, KEYS[22], KEYS[23]) \
   end \
-  --[[ adjust margin/reserve ]] \
-  adjustmarginreserve(KEYS[1], vals[1] .. ":" .. vals[2], vals[3], vals[4], vals[6], vals[8], KEYS[18], vals[9], KEYS[16]) \
+  --[[ adjust order related margin/reserve ]] \
+  adjustmarginreserve(KEYS[1], orgclientkey, vals[3], vals[4], vals[6], vals[7], KEYS[18], vals[8], KEYS[16]) \
   --[[ adjust order ]] \
   redis.call("hmset", "order:" .. KEYS[1], "remquantity", KEYS[16], "status", KEYS[14]) \
+  --[[ adjust trade related margin ]] \
+  updatetrademargin(tradeid, orgclientkey, KEYS[18], initialmargin) \
   return tradeid \
   ';
 

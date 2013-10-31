@@ -2748,6 +2748,8 @@
             var buymsg = "Buy";
             var bidqty;
             var offerqty;
+            var positionopenclose = 1;
+            var positioncloseid = "";
 
             quotes[quote.quoteid] = quote;
 
@@ -2787,7 +2789,7 @@
             sellbutton.value = sellmsg;
 
             sellbutton.onclick = function() {
-                sendOrder(quote.symbol, '2', bidqty, quote.bidpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
+                sendOrder(quote.symbol, '2', bidqty, quote.bidpx, 'D', positionopenclose, quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", positioncloseid);
                 disable();
             }
 
@@ -2797,7 +2799,7 @@
             buybutton.value = buymsg;
 
             buybutton.onclick = function() {
-                sendOrder(quote.symbol, '1', offerqty, quote.offerpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
+                sendOrder(quote.symbol, '1', offerqty, quote.offerpx, 'D', positionopenclose, quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", positioncloseid);
                 disable();
             }
 
@@ -3100,6 +3102,9 @@
 
             function sendIt() {
                 var settdate;
+                // todo: client to choose
+                var positionopenclose = 1;
+                var positioncloseid = "";
 
                 if ((!validateNumeric(quantityinput, getQuantityDesc(qtyascashorshares))) || (!validateNumeric(priceinput, pricedesc))) {
                     return;
@@ -3115,7 +3120,7 @@
 
                 settdate = formatToUTCDate(settday[settday.selectedIndex].value, settmonth[settmonth.selectedIndex].value, settyear[settyear.selectedIndex].value);
 
-                sendOrder(symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, nosettdays, settlcurrency, settdate, null, timeinforce, expiredate, expiretime);
+                sendOrder(symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, positionopenclose, nosettdays, settlcurrency, settdate, null, timeinforce, expiredate, expiretime, positioncloseid);
 
                 disable();
                 //pricedisable();
@@ -3152,7 +3157,7 @@
             }
         }
 
-        function sendOrder(symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
+        function sendOrder(symbol, side, quantity, price, ordertype, positionopenclose, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime, positioncloseid) {
             var neworder = {};
             var msg;
 
@@ -3164,6 +3169,7 @@
                 neworder.price = price;
             }
             neworder.ordertype = ordertype;
+            neworder.positionopenclose = positionopenclose;
             neworder.settlcurrency = settlcurrency;
             neworder.nosettdays = nosettdays;
             neworder.futsettdate = settdate;
@@ -3173,6 +3179,7 @@
             neworder.timeinforce = timeinforce;
             neworder.expiredate = expiredate;
             neworder.expiretime = expiretime;
+            neworder.positioncloseid = positioncloseid;
 
             sockjs.send("{\"order\":" + JSON.stringify(neworder) + "}");
 
