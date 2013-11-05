@@ -52,11 +52,11 @@ function cfdspb(index, marginpercent) {
         spb = symbol + ".SPB";
 
         // create cfd
-        db.hmset("symbol:" + cfd, "currency", inst.currency, "description", inst.description + " CFD", "proquotesymbol", inst.proquotesymbol, "isin", inst.isin, "exchange", inst.exchange, "topic", inst.topic, "market", inst.market, "sedol", inst.sedol, "longname", inst.longname, "instrumenttype", "CFD", "category", inst.category, "sector", inst.sector, "marginpercent", marginpercent);
+        db.hmset("symbol:" + cfd, "currency", inst.currency, "description", inst.description + " CFD", "proquotesymbol", inst.proquotesymbol, "isin", inst.isin, "exchange", inst.exchange, "topic", inst.topic, "market", inst.market, "sedol", inst.sedol, "longname", inst.longname, "instrumenttype", "CFD", "category", inst.category, "sector", inst.sector, "marginpercent", marginpercent, "hedgesymbol", symbol);
         db.sadd("instruments", cfd);
 
         // spreadbet
-        db.hmset("symbol:" + spb, "currency", inst.currency, "description", inst.description + " Spreadbet", "proquotesymbol", inst.proquotesymbol, "isin", inst.isin, "exchange", inst.exchange, "topic", inst.topic, "market", inst.market, "sedol", inst.sedol, "longname", inst.longname, "instrumenttype", "SPB", "category", inst.category, "sector", inst.sector, "marginpercent", marginpercent);
+        db.hmset("symbol:" + spb, "currency", inst.currency, "description", inst.description + " Spreadbet", "proquotesymbol", inst.proquotesymbol, "isin", inst.isin, "exchange", inst.exchange, "topic", inst.topic, "market", inst.market, "sedol", inst.sedol, "longname", inst.longname, "instrumenttype", "SPB", "category", inst.category, "sector", inst.sector, "marginpercent", marginpercent, "hedgesymbol", symbol);
         db.sadd("instruments", spb);
 
         console.log("cfd & spreadbet added for symbol:" + symbol);

@@ -15,12 +15,11 @@ var net = require('net');
 var events = require('events');
 
 // connect to local test server
-var pqhost = '127.0.0.1';
-var host = "Cw2t Proquote Simulator";
-
+//var pqhost = '127.0.0.1';
+//var host = "Cw2t Proquote Simulator";
 // OR connect to proquote PTP UAT system
-//var pqhost = '195.26.26.67';
-//var host = "Proquote UAT";
+var pqhost = '195.26.26.67';
+var host = "Proquote UAT";
 
 var pqport = 50143;
 var fixver = 'FIX.4.2';
@@ -266,7 +265,7 @@ Ptp.prototype.newOrder = function(order) {
 	var msg;
 	var delivertocompid = "";
 
-	console.log("sending new order single");
+	console.log("sending new order single, id:" + order.orderid);
 
 	msg = '11=' + order.orderid + SOH
 		+ '21=' + handinst + SOH
@@ -492,8 +491,6 @@ function stopHeartBeatIn() {
 function completeMessage(tagvalarr, self) {
 	var header = {};
 	var body = {};
-
-	console.log("complete message");
 
 	// build the header & body
 	header = getHeader(tagvalarr);
