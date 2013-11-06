@@ -2504,12 +2504,7 @@
 
             settlabel = document.createElement("label");
             settlabel.className = "quotereqlabel";
-
-            if (instruments[symbol].instrumenttype == "DE") {
-                settlabel.innerHTML = " for settlement ";
-            } else {
-                settlabel.innerHTML = " for rolling settlement";                
-            }
+            settlabel.innerHTML = " for settlement ";
 
             settlcurrency = defaultsettlcurrency;
 
@@ -2527,12 +2522,10 @@
                 }
             }
 
-            if (instruments[symbol].instrumenttype == "DE") {
-                settlperiod = document.createElement("select");
-                settlperiod.id = "settlperiod:" + symbol;
+            settlperiod = document.createElement("select");
+            settlperiod.id = "settlperiod:" + symbol;
 
-                populateSettlPeriod(settlperiod, 3);
-            }
+            populateSettlPeriod(settlperiod, instruments[symbol].instrumenttype);
 
             orderdiv = createDiv("orderdiv:" + symbol, symbol);
 
@@ -2544,9 +2537,7 @@
             if (instruments[symbol].currency != defaultsettlcurrency) {
                 orderdiv.appendChild(currencysel);
             }
-            if (instruments[symbol].instrumenttype == "DE") {
-                orderdiv.appendChild(settlperiod);
-            }
+            orderdiv.appendChild(settlperiod);
 
             function sendIt() {
                 if (validateNumeric(quotereqqty, getQuantityDesc(qtyascashorshares))) {
@@ -2558,11 +2549,7 @@
                         quantity = "";                        
                     }
 
-                    if (instruments[symbol].instrumenttype == "DE") {
-                        nosettdays = settlperiod[settlperiod.selectedIndex].value;
-                    } else {
-                        nosettdays = 3; // default T+3 used to request quote
-                    }
+                    nosettdays = settlperiod[settlperiod.selectedIndex].value;
 
                     sendRequestQuote(symbol, quantity, cashorderqty, instruments[symbol].currency, settlcurrency, nosettdays);
                     disable();
@@ -3145,14 +3132,20 @@
             quantityinput.focus();
         }
 
-        function populateSettlPeriod(settlperiod, defaultperiod) {
-            for (var i = 0; i < 50; i++) {
-                var s = i + 1;
-                console.log(i);
-                if (s == defaultperiod) {
-                    settlperiod[i] = new Option("T+" + s, s, true, true);
-                } else {
-                    settlperiod[i] = new Option("T+" + s, s, false, false);
+        function populateSettlPeriod(settlperiod, instrumenttype) {
+            if (instrumenttype != "DE") {
+                settlperiod[0] = new Option("T+0 (Rolling)", 0, true, true);
+                settlperiod[1] = new Option("T+10", 10, false, false);
+                settlperiod[2] = new Option("T+20", 20, false, false);
+                settlperiod[3] = new Option("T+50", 50, false, false);
+            } else {
+                for (var i = 0; i < 50; i++) {
+                    var s = i + 1;
+                    if (s == 3) {
+                        settlperiod[i] = new Option("T+" + s, s, true, true);
+                    } else {
+                        settlperiod[i] = new Option("T+" + s, s, false, false);
+                    }
                 }
             }
         }

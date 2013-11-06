@@ -27,6 +27,7 @@ var outofhours = false; // in or out of market hours - todo: replace with market
 var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var companyclientid = 999999;
+var defaultnosettdays = 3;
 
 // redis
 var redishost;
@@ -362,9 +363,14 @@ function quoteRequest(clientid, quoterequest) {
     quoterequest.proquotesymbol = ret[3];
     quoterequest.exchange = ret[4];
 
-    // specify broker - todo: remove
-    //quoterequest.qbroker = "WNTSGB2LBIC";
- 
+    // for derivatives, make the quote request for the default settlement date
+    if (ret[5] != "DE") {
+      if (quoterequest.nosettdays != defaultnosettdays) {
+        quoterequest.futsettdate = getUTCDateString(getSettDate(defaultnosettdays));
+        quoterequest.nosettdays = defaultnosettdays;
+      }
+    }
+
     // forward the request to Proquote
     ptp.quoteRequest(quoterequest);
   });
@@ -2341,6 +2347,7 @@ function registerScripts() {
   var getproquotesymbol;
   var getinitialmargin;
   var updatetrademargin;
+  var calcfinance;
 
   round = '\
   local round = function(num, dp) \
@@ -2742,6 +2749,18 @@ function registerScripts() {
   end \
   ';
 
+  calcfinance = round + '\
+  local calcfinance = function(consid, currency, longshort, nosettdays) \
+    local finance = 0 \
+    local financerate = redis.call("get", "financerate:" .. currency .. ":" .. longshort) \
+    if financerate then \
+      if tonumber(nosettdays) == 0 then nosettdays = 1 end \
+      finance = round(consid * tonumber(nosettdays) / 365 * tonumber(financerate) / 100, 2) \
+   end \
+    return finance \
+  end \
+  ';
+
   scriptrejectorder = rejectorder + adjustmarginreserve + '\
   rejectorder(KEYS[1], KEYS[2], KEYS[3]) \
   local fields = {"orgid", "clientid", "symbol", "side", "price", "margin", "settlcurrency", "remquantity"} \
@@ -3010,21 +3029,25 @@ function registerScripts() {
   redis.call("sadd", KEYS[1] .. ":" .. KEYS[2] .. ":quoterequests", quotereqid) \
   --[[ get required instrument values for proquote ]] \
   local proquotesymbol = getproquotesymbol(KEYS[3]) \
-  return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3]} \
+  local instrumenttype = redis.call("hget", "symbol:" .. KEYS[3], "instrumenttype") \
+  return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], instrumenttype} \
   ';
 
   // todo: check proquotsymbol against quote request symbol?
-  scriptquote = '\
+  scriptquote = calcfinance + '\
   local errorcode = 0 \
   local sides = 0 \
   local quoteid = "" \
   --[[ get the quote request ]] \
-  local fields = {"orgid", "clientid", "quoteid", "symbol", "quantity", "cashorderqty", "nosettdays"} \
+  local fields = {"orgid", "clientid", "quoteid", "symbol", "quantity", "cashorderqty", "nosettdays", "settlcurrency"} \
   local vals = redis.call("hmget", "quoterequest:" .. KEYS[1], unpack(fields)) \
   if not vals[1] then \
     errorcode = 1014 \
     return {errorcode, sides, quoteid, ""} \
   end \
+  local instrumenttype = redis.call("hget", "symbol:" .. vals[4], "instrumenttype") \
+  local bidfinance = 0 \
+  local offerfinance = 0 \
   --[[ quotes for bid/offer arrive separately, so see if this is the first by checking for a quote id ]] \
   if vals[3] == "" then \
     --[[ get touch prices - using delayed - todo: may need to look up delayed/live ]] \
@@ -3036,10 +3059,18 @@ function registerScripts() {
       bestbid = pricevals[1] \
       bestoffer = pricevals[2] \
     end \
+    if instrumenttype == "CFD" or instrumenttype == "SPB" then \
+      --[[ calculate any finance charge based on whether we are buying or selling ]] \
+      if KEYS[2] == "" then \
+        offerfinance = calcfinance(tonumber(vals[5]) * tonumber(KEYS[6]), vals[8], 1, vals[7]) \
+      else \
+        bidfinance = calcfinance(tonumber(vals[5]) * tonumber(KEYS[5]), vals[8], 2, vals[7]) \
+      end \
+    end \
     --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
     quoteid = redis.call("incr", "quoteid") \
     --[[ store the quote, use quantity from quote request ]] \
-    redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "orgid", vals[1], "clientid", vals[2], "quoteid", quoteid, "bidquoteid", KEYS[2], "offerquoteid", KEYS[3], "symbol", vals[4], "quantity", vals[5], "cashorderqty", vals[6], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", KEYS[5], "offerpx", KEYS[6], "bidsize", KEYS[7], "offersize", KEYS[8], "validuntiltime", KEYS[9], "transacttime", KEYS[10], "currency", KEYS[11], "settlcurrency", KEYS[12], "bidqbroker", KEYS[13], "offerqbroker", KEYS[14], "nosettdays", vals[7], "futsettdate", KEYS[15]) \
+    redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "orgid", vals[1], "clientid", vals[2], "quoteid", quoteid, "bidquoteid", KEYS[2], "offerquoteid", KEYS[3], "symbol", vals[4], "quantity", vals[5], "cashorderqty", vals[6], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", KEYS[5], "offerpx", KEYS[6], "bidsize", KEYS[7], "offersize", KEYS[8], "validuntiltime", KEYS[9], "transacttime", KEYS[10], "currency", KEYS[11], "settlcurrency", KEYS[12], "bidqbroker", KEYS[13], "offerqbroker", KEYS[14], "nosettdays", vals[7], "futsettdate", KEYS[15], "bidfinance", bidfinance, "offerfinance", offerfinance) \
     --[[ quoterequest status - 0=new, 1=quoted, 2=rejected ]] \
     local status \
     --[[ bid or offer size needs to be non-zero ]] \
@@ -3054,12 +3085,17 @@ function registerScripts() {
     sides = 1 \
   else \
     quoteid = vals[3] \
-    local quotekey = "quote:" .. quoteid \
     --[[ update quote, either bid or offer price/size/quote id ]] \
     if KEYS[2] == "" then \
-      redis.call("hmset", quotekey, "offerquoteid", KEYS[3], "offerpx", KEYS[6], "offersize", KEYS[8], "offerqbroker", KEYS[14]) \
+      if instrumenttype == "CFD" or instrumenttype == "SPB" then \
+        offerfinance = calcfinance(tonumber(vals[5]) * tonumber(KEYS[6]), vals[8], 1, vals[7]) \
+      end \
+      redis.call("hmset", "quote:" .. quoteid, "offerquoteid", KEYS[3], "offerpx", KEYS[6], "offersize", KEYS[8], "offerqbroker", KEYS[14], "offerfinance", offerfinance) \
     else \
-      redis.call("hmset", quotekey, "bidquoteid", KEYS[2], "bidpx", KEYS[5], "bidsize", KEYS[7], "bidqbroker", KEYS[13]) \
+      if instrumenttype == "CFD" or instrumenttype == "SPB" then \
+        bidfinance = calcfinance(tonumber(vals[5]) * tonumber(KEYS[5]), vals[8], 2, vals[7]) \
+      end \
+      redis.call("hmset", "quote:" .. quoteid, "bidquoteid", KEYS[2], "bidpx", KEYS[5], "bidsize", KEYS[7], "bidqbroker", KEYS[13], "bidfinance", bidfinance) \
     end \
     sides = 2 \
   end \
