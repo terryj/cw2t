@@ -2731,10 +2731,8 @@
             var timertext = "Seconds Remaining";
             var orderdiv;
             var msg;
-            var sellmsg = "Sell";
-            var buymsg = "Buy";
-            var bidqty;
-            var offerqty;
+            var sellmsg;
+            var buymsg;
             var positionopenclose = 1;
             var positioncloseid = "";
 
@@ -2742,22 +2740,10 @@
 
             clearSymbolDiv(quote.symbol);
 
-            if (quote.quantity != '') {
-                sellmsg += " " + quote.quantity;
-                buymsg += " " + quote.quantity;
-                bidqty = quote.quantity;
-                offerqty = quote.quantity;
-            } else {
-                bidqty = parseInt(parseInt(quote.cashorderqty) / parseFloat(quote.bidpx));
-                offerqty = parseInt(parseInt(quote.cashorderqty) / parseFloat(quote.offerpx));
-                sellmsg += " " + bidqty;
-                buymsg += " " + offerqty;
-            }
+            sellmsg = "Sell " + quote.bidquantity + " " + quote.symbol;
+            buymsg = "Buy " + quote.offerquantity + " " + quote.symbol;
 
-            sellmsg += " " + quote.symbol;
-            buymsg += " " + quote.symbol;
-
-            if (quote.nosettdays != "3") {
+            if (quote.nosettdays != "3" && quote.nosettdays != "0") {
                 sellmsg += " " + "T+" + quote.nosettdays;
                 buymsg += " " + "T+" + quote.nosettdays;                
             }
@@ -2765,9 +2751,22 @@
             sellmsg += " @ " + quote.bidpx;
             buymsg += " @ " + quote.offerpx;
 
+            if (parseFloat(quote.bidfinance) != 0) {
+                sellmsg += ", finance " + quote.bidfinance;
+                if (quote.nosettdays == "0") {
+                    sellmsg += " per day";
+                }
+            }
+            if (parseFloat(quote.offerfinance) != 0) {
+                buymsg += ", finance " + quote.offerfinance;
+                if (quote.nosettdays == "0") {
+                    buymsg += " per day";
+                }
+            }
+
             if (quote.settlcurrency != "GBP" || quote.settlcurrency != instruments[quote.symbol].currency) {
-                sellmsg += " (" + quote.settlcurrency + ")";
-                buymsg += " (" + quote.settlcurrency + ")";
+                sellmsg += " " + quote.settlcurrency;
+                buymsg += " " + quote.settlcurrency;
             }
 
             sellbutton = document.createElement("input");
@@ -2776,7 +2775,7 @@
             sellbutton.value = sellmsg;
 
             sellbutton.onclick = function() {
-                sendOrder(quote.symbol, '2', bidqty, quote.bidpx, 'D', positionopenclose, quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", positioncloseid);
+                sendOrder(quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', positionopenclose, quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", positioncloseid);
                 disable();
             }
 
@@ -2786,7 +2785,7 @@
             buybutton.value = buymsg;
 
             buybutton.onclick = function() {
-                sendOrder(quote.symbol, '1', offerqty, quote.offerpx, 'D', positionopenclose, quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", positioncloseid);
+                sendOrder(quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', positionopenclose, quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", positioncloseid);
                 disable();
             }
 
