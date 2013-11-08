@@ -708,9 +708,11 @@
 
         function loadPositions(positionarr) {
             var poskey;
+            console.log(positionarr);
 
             for (var i = 0; i < positionarr.length; ++i) {
-                poskey = positionarr[i].symbol + ":" + positionarr[i].currency;
+                poskey = positionarr[i].positionid;
+                //poskey = positionarr[i].symbol + ":" + positionarr[i].currency;
                 positions[poskey] = positionarr[i];
             }            
         }
@@ -1212,7 +1214,8 @@
                 }
 
                 msg = positionMsg(positions[x]);
-                poskey = positions[x].symbol + ":" + positions[x].currency;
+                //poskey = positions[x].symbol + ":" + positions[x].currency;
+                poskey = positions[x].positionid;
                 addElement(msg, list1, poskey);
             }
 
@@ -1907,7 +1910,8 @@
 
         function updatePosition(position) {
             var msg;
-            var poskey = position.symbol + ":" + position.currency;
+            //var poskey = position.symbol + ":" + position.currency;
+            var poskey = position.positionid;
 
             if (position.quantity == 0) {
                 delete positions[poskey];

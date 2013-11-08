@@ -552,9 +552,8 @@ function matchOrder(orderid) {
         getSendTrade(ret[1][i]);
       }
 
-      // send cash/positions
+      // send cash
       if (ret[1].length > 0) {
-        getSendPosition(orgclientkey, order.symbol, order.settlcurrency);
         getSendCash(orgclientkey, order.settlcurrency);
       }
 
@@ -567,7 +566,7 @@ function matchOrder(orderid) {
 
       // send any matched orders
       for (var i = 0; i < ret[0].length; ++i) {
-        // todo: send margin/reserve/cash/position?
+        // todo: send margin/reserve/cash
         getSendOrder(ret[0][i], false, false);
       }
 
@@ -578,7 +577,6 @@ function matchOrder(orderid) {
 
       // send cash/position/margin/reserve for matched clients
       for (var i = 0; i < ret[3].length; ++i) {
-        getSendPosition(ret[3][i], order.symbol, order.settlcurrency);
         getSendCash(ret[3][i], order.settlcurrency);
         getSendMargin(ret[3][i], order.settlcurrency);
         getSendReserve(ret[3][i], order.symbol, order.settlcurrency);
@@ -587,7 +585,7 @@ function matchOrder(orderid) {
   });
 }
 
-function getSendOrder(orderid, sendmarginreserve, sendcashposition) {
+function getSendOrder(orderid, sendmarginreserve, sendcash) {
   var orgclientkey;
 
   db.hgetall("order:" + orderid, function(err, order) {
@@ -614,9 +612,8 @@ function getSendOrder(orderid, sendmarginreserve, sendcashposition) {
       getSendReserve(orgclientkey, order.symbol, order.settlcurrency);
     }
 
-    if (sendcashposition) {
+    if (sendcash) {
       getSendCash(orgclientkey, order.settlcurrency);
-      getSendPosition(orgclientkey, order.symbol, order.settlcurrency);
     }
   });
 }
@@ -639,24 +636,29 @@ function getSendTrade(tradeid) {
     if (orgclientkey in connections) {
       sendTrade(trade, connections[orgclientkey]);
     }
+
+    if ("positionid" in trade) {
+      getSendPosition(trade.positionid);
+    }
   });
 }
 
-function getSendPosition(orgclientid, symbol, currency) {
+function getSendPosition(positionid) {
   var position = {};
 
-  db.hgetall(orgclientid + ":position:" + symbol + ":" + currency, function(err, pos) {
+  db.hgetall("position:" + positionid, function(err, pos) {
     if (err) {
       console.log(err);
       return;
     }
 
-    // send anyway, even if no position, as may need to clear f/e
+    // send anyway, even if no position, as may need to clear f/e - todo: review
     if (pos == null) {
+      position.positionid = positionid;
       position.quantity = "0";
       position.cost = "0";
-      position.symbol = symbol;
-      position.currency = currency;
+      //position.symbol = symbol;
+      //position.currency = currency;
     } else {
       position = pos;
     }
@@ -1081,8 +1083,8 @@ function sendPositions(orgclientkey, conn) {
       return;
     }
 
-    replies.forEach(function (poskey, i) {
-      db.hgetall(orgclientkey + ":position:" + poskey, function(err, position) {
+    replies.forEach(function(poskey, i) {
+      db.hgetall("position:" + poskey, function(err, position) {
         if (err) {
           console.log(err);
           return;
@@ -1092,6 +1094,7 @@ function sendPositions(orgclientkey, conn) {
 
         // send array if we have added the last item
         count--;
+        console.log(count);
         if (count <= 0) {
           conn.write(JSON.stringify(posarray));
         }
@@ -1582,7 +1585,6 @@ function start(orgclientkey, conn) {
   sendOrderTypes(conn);
   sendPositions(orgclientkey, conn);
   sendOrders(orgclientkey, conn);
-  //sendTrades(orgclientkey, conn);
   sendCash(orgclientkey, conn);
   sendMargins(orgclientkey, conn);
   sendReserves(orgclientkey, conn);
@@ -2057,17 +2059,6 @@ ptp.on("orderFill", function(exereport) {
     // send the order & trade
     getSendOrder(exereport.clordid, true, true);
     getSendTrade(ret);
-
-    // send cash & position
-    // todo: send as part of getsendorder?
-    //getSendCash(orgclientkey, ret[0][31]); // orgclientkey, currency
-    //getSendPosition(orgclientkey, ret[0][5]); // orgclientkey, symbol
-  
-    // send margin & reserve for limit orders
-    /*if (ret[1][13] == "2") {
-      getSendMargin(orgclientkey, ret[0][31]); // orgclientkey, currency
-      getSendReserve(orgclientkey, ret[0][5]); // orgclientkey, symbol
-    }*/
   });
 });
 
@@ -2727,7 +2718,8 @@ function registerScripts() {
   local newtrade = function(orgid, clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyorgid, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, positionopenclose, positioncloseid) \
     local tradeid = redis.call("incr", "tradeid") \
     if not tradeid then return 0 end \
-    redis.call("hmset", "trade:" .. tradeid, "orgid", orgid, "clientid", clientid, "orderid", orderid, "symbol", symbol, "side", side, "quantity", quantity, "price", price, "currency", currency, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyorgid", counterpartyorgid, "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrency", settlcurrency, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "positionopenclose", positionopenclose, "positioncloseid", positioncloseid) \
+    local tradekey = "trade:" .. tradeid \
+    redis.call("hmset", tradekey, "orgid", orgid, "clientid", clientid, "orderid", orderid, "symbol", symbol, "side", side, "quantity", quantity, "price", price, "currency", currency, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyorgid", counterpartyorgid, "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrency", settlcurrency, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "positionopenclose", positionopenclose, "positioncloseid", positioncloseid) \
     redis.call("sadd", "trades", tradeid) \
     local orgclientkey = orgid .. ":" .. clientid \
     redis.call("sadd", orgclientkey .. ":trades", tradeid) \
@@ -2742,6 +2734,7 @@ function registerScripts() {
       updatecash(orgclientkey, settlcurrency, tradecost) \
     end \
     local positionid = updateposition(orgclientkey, symbol, side, quantity, price, tradecost, settlcurrency, initialmargin, positionopenclose, positioncloseid) \
+    redis.call("hset", tradekey, "positionid", positionid) \
     return tradeid \
   end \
   ';
