@@ -638,12 +638,12 @@ function getSendTrade(tradeid) {
     }
 
     if ("positionid" in trade) {
-      getSendPosition(trade.positionid);
+      getSendPosition(trade.positionid, orgclientkey);
     }
   });
 }
 
-function getSendPosition(positionid) {
+function getSendPosition(positionid, orgclientid) {
   var position = {};
 
   db.hgetall("position:" + positionid, function(err, pos) {
