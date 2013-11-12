@@ -45,6 +45,7 @@ if (redislocal) {
 }
 
 // redis scripts
+var scriptgetclients;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -136,7 +137,10 @@ function listen() {
         positionHistory(clientid, obj.positionhistoryrequest, conn);
       } else if (msg.substr(2, 5) == "index") {
         obj = JSON.parse(msg);
-        sendIndex(orgclientkey, obj.index, conn);   
+        sendIndex(orgclientkey, obj.index, conn);        
+      } else if (msg.substr(2, 13) == "clientupdate") {
+        obj = JSON.parse(msg);
+        clientUpdate(obj.clientupdate, conn);
       } else if (msg.substr(0, 4) == "ping") {
         conn.write("pong");
       } else {
@@ -150,12 +154,12 @@ function listen() {
       userid = "0";
     });
 
-    // client sign on
+    // user sign in
     function signIn(signin) {
       var reply = {};
       reply.success = false;
 
-      db.get(signin.email, function(err, orguserid) {
+      db.get("user:" + signin.email, function(err, orguserid) {
         if (err) {
           console.log("Error in signIn:" + err);
           return;
@@ -175,7 +179,7 @@ function listen() {
             return;
           }
 
-          if (!user || signin.email != user.username || signin.password != user.password) {
+          if (!user || signin.email != user.email || signin.password != user.password) {
             reply.reason = "Email or password incorrect. Please try again.";
             replySignIn(reply, conn);
             return;
@@ -194,10 +198,26 @@ function listen() {
           console.log("user " + orguserkey + " logged on");
 
           // send the data
-          start(orguserkey, conn);
+          start(user.orgid, conn);
         });
       });
     }
+  });
+}
+
+function clientUpdate(clientid, conn) {
+  db.hgetall("client:" + clientid, function(err, client) {
+    if (err) {
+      console.log("Error in signIn:" + err);
+      return;
+    }
+
+    if (client == null) {
+      console.log("Client not found, id:" + clientid);
+      return;
+    }
+
+    conn.write("{\"client\":" + JSON.stringify(client) + "}");
   });
 }
 
@@ -1375,16 +1395,17 @@ function getReasonDesc(reason) {
   return desc;
 }
 
-function start(orguserkey, conn) {
-  sendInstruments(conn);
+function start(orgid, conn) {
+  //sendInstruments(conn);
   sendOrderTypes(conn);
+  sendClients(orgid, conn);
 
   // may not be last, but...
-  sendReadyToTrade(conn);
+  sendReadyToManage(conn);
 }
 
-function sendReadyToTrade(conn) {
-  conn.write("{\"status\":\"readytotrade\"}");
+function sendReadyToManage(conn) {
+  conn.write("{\"status\":\"readytomanage\"}");
 }
 
 function replySignIn(reply, conn) {
@@ -1497,41 +1518,29 @@ function getDateString(utcdatetime) {
     return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
 }
 
-/*
-local results = redis.call("HGETALL", KEYS[1]);
-if results ~= 0 then
-    for key, value in ipairs(results) do
-        -- do something here
-    end
-end
-
-local data = redis.call('GET', key);
-local json;
-
-if not data then
-    json = {};
-else
-    json = cjson.decode(data);
-end
-
-json[name] = value;
-redis.call('SET', key, cjson.encode(json));
-return cjson.encode(json);
-
-string luaScript = "local tDecoded = redis.call('GET', KEYS[1]);\n"
-                    + "local tFinal = {};\n"
-                    + "for iIndex, tValue in ipairs(tDecoded) do\n"
-                    + "     if tonumber( tValue.Value ) < 20 then\n"
-                    + "        table.insert(tFinal, { ID = tValue.ID, Value = tValue.Value});\n"
-                    + "     else\n"
-                    + "         table.insert(tFinal, { ID = 999, Value = 0});\n"
-                    + "     end\n"
-                    + "end\n"
-                    + "return cjson.encode(tFinal);";
-
-                var test = redisClient.ExecLuaAsString(luaScript, "Meds25");
-
-*/
+function sendClients(orgid, conn) {
+  // get sorted set of clients for specified organisation
+  db.eval(scriptgetclients, 1, orgid, function(err, ret) {
+    conn.write("{\"clients\":" + ret + "}");
+  });
+}
 
 function registerScripts() {
+  //
+  // get alpha sorted list of clients for a specified organisation
+  //
+  scriptgetclients = '\
+  local clients = redis.call("sort", "clients", "ALPHA") \
+  local fields = {"orgid", "clientid", "email", "name", "address", "mobile"} \
+  local vals \
+  local client = {} \
+  local marginpc \
+  for index = 1, #clients do \
+    vals = redis.call("hmget", "client:" .. clients[index], unpack(fields)) \
+    if KEYS[1] == vals[1] then \
+      table.insert(client, {orgid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6]}) \
+    end \
+  end \
+  return cjson.encode(client) \
+  ';
 }

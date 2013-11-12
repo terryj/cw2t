@@ -286,7 +286,7 @@ function listen() {
       var reply = {};
       reply.success = false;
 
-      db.get(signin.email, function(err, orgclientid) {
+      db.get("client:" + signin.email, function(err, orgclientid) {
         if (err) {
           console.log("Error in signIn:" + err);
           return;
@@ -306,7 +306,7 @@ function listen() {
             return;
           }
 
-          if (!client || signin.email != client.username || signin.password != client.password) {
+          if (!client || signin.email != client.email || signin.password != client.password) {
             reply.reason = "Email or password incorrect. Please try again.";
             replySignIn(reply, conn);
             return;

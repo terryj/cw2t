@@ -845,7 +845,6 @@
         newconn();
 
         function newconn() {
-            console.log("new conn");
             sockjs = new SockJS(sockjs_url);
 
             sockjs.onopen = function()  {

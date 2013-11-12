@@ -72,22 +72,46 @@ function initdb() {
   db.sadd("clients", "1:999999");
 
   // clients - hash for each
-  db.hmset("client:1:1", "username", "terry@cw2t.com", "password", "terry", "orgid", 1, "clientid", 1, "marketext", "LD", "name", "Terry Johnston");
-  db.hmset("client:1:2", "username", "paul@cw2t.com", "password", "paul", "orgid", 1, "clientid", 2, "marketext", "LD", "name", "Paul Weighell");
-  db.hmset("client:1:3", "username", "grant@cw2t.com", "password", "grant", "orgid", 1, "clientid", 3, "marketext", "LD", "name", "Grant Oliver");
-  db.hmset("client:1:4", "username", "alex@cw2t.com", "password", "alex", "orgid", 1, "clientid", 4, "marketext", "LD", "name", "Alex Fordham");
-  db.hmset("client:1:5", "username", "dave@cw2t.com", "password", "dave", "orgid", 1, "clientid", 5, "marketext", "LD", "name", "Dave Shann");
-  db.hmset("client:1:6", "username", "cw2t@cw2t.com","password", "cw2t", "orgid", 1, "clientid", 6, "marketext", "LD", "name", "Cw2t test");
-  db.hmset("client:1:999999", "username", "tg@tg.com", "password", "tg", "orgid", 1, "clientid", 999999, "marketext", "LD", "name", "Thomas Grant & Co");
+  db.hmset("client:1:1", "email", "terry@cw2t.com", "password", "terry", "orgid", 1, "clientid", 1, "marketext", "LD", "name", "Terry Johnston", "address", "128 Richmond Hill", "mobile", "07429 093314");
+  db.hmset("client:1:2", "email", "grant@cw2t.com", "password", "grant", "orgid", 1, "clientid", 2, "marketext", "LD", "name", "Grant Oliver", "address", "", "mobile", "");
+  db.hmset("client:1:3", "email", "alex@cw2t.com", "password", "alex", "orgid", 1, "clientid", 3, "marketext", "LD", "name", "Alex Fordham", "address", "", "mobile", "");
+  db.hmset("client:1:4", "email", "dave@cw2t.com", "password", "dave", "orgid", 1, "clientid", 4, "marketext", "LD", "name", "Dave Shann", "address", "", "mobile", "");
+  db.hmset("client:1:5", "email", "cw2t@cw2t.com","password", "cw2t", "orgid", 1, "clientid", 5, "marketext", "LD", "name", "Cw2t test", "address", "", "mobile", "");
+  db.hmset("client:1:6", "email", "tina@cw2t.com", "password", "tina", "orgid", 1, "clientid", 6, "marketext", "LD", "name", "Tina Tyers", "address", "", "mobile", "");
+  db.hmset("client:1:999999", "email", "tg@tg.com", "password", "tg", "orgid", 1, "clientid", 999999, "marketext", "LD", "name", "Thomas Grant & Co", "address", "", "mobile", "");
 
   // link between client email & id
-  db.set("terry@cw2t.com", "1:1");
-  db.set("paul@cw2t.com", "1:2");
-  db.set("grant@cw2t.com", "1:3");
-  db.set("alex@cw2t.com", "1:4");
-  db.set("dave@cw2t.com", "1:5");
-  db.set("cw2t@cw2t.com", "1:6");
-  db.set("tg@tg.com", "1:999999");
+  db.set("client:terry@cw2t.com", "1:1");
+  db.set("client:grant@cw2t.com", "1:2");
+  db.set("client:alex@cw2t.com", "1:3");
+  db.set("client:dave@cw2t.com", "1:4");
+  db.set("client:cw2t@cw2t.com", "1:5");
+  db.set("client:tina@cw2t.com", "1:6");
+  db.set("client:tg@tg.com", "1:999999");
+
+  // set of users
+  db.sadd("users", "1:1");
+  db.sadd("users", "1:2");
+  db.sadd("users", "1:3");
+  db.sadd("users", "1:4");
+  db.sadd("users", "1:5");
+  db.sadd("users", "1:6");
+
+  // user hash
+  db.hmset("user:1:1", "email", "terry@cw2t.com", "password", "terry", "orgid", 1, "userid", 1, "name", "Terry Johnston");
+  db.hmset("user:1:2", "email", "grant@cw2t.com", "password", "grant", "orgid", 1, "userid", 2, "name", "Grant Oliver");
+  db.hmset("user:1:3", "email", "tina@cw2t.com", "password", "tina", "orgid", 1, "userid", 3, "name", "Tina Tyers");
+  db.hmset("user:1:4", "email", "patrick@cw2t.com", "password", "patrick", "orgid", 1, "userid", 4, "name", "Patrick Waldron");
+  db.hmset("user:1:5", "email", "sheila@cw2t.com", "password", "sheila", "orgid", 1, "userid", 5, "name", "Sheila");
+  db.hmset("user:1:6", "email", "kevin@cw2t.com", "password", "kevin", "orgid", 1, "userid", 6, "name", "Kevin");
+
+  // link between user email & id
+  db.set("user:terry@cw2t.com", "1:1");
+  db.set("user:grant@cw2t.com", "1:2");
+  db.set("user:alex@cw2t.com", "1:3");
+  db.set("user:dave@cw2t.com", "1:4");
+  db.set("user:cw2t@cw2t.com", "1:5");
+  db.set("user:tina@cw2t.com", "1:6");
 
   // stocks - add international stocks to set of stocks & hash
   db.hset("symbol:AMZN", "currency", "USD");
