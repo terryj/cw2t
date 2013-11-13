@@ -138,9 +138,9 @@ function listen() {
       } else if (msg.substr(2, 5) == "index") {
         obj = JSON.parse(msg);
         sendIndex(orgclientkey, obj.index, conn);        
-      } else if (msg.substr(2, 13) == "clientupdate") {
+      } else if (msg.substr(2, 9) == "newclient") {
         obj = JSON.parse(msg);
-        clientUpdate(obj.clientupdate, conn);
+        newClient(obj.newclient, conn);
       } else if (msg.substr(0, 4) == "ping") {
         conn.write("pong");
       } else {
@@ -187,13 +187,13 @@ function listen() {
 
           // validated, so set user id
           userid = user.userid;
+          orguserkey = orguserid;
+          connections[orguserkey] = conn;
 
           // send a successful logon reply
           reply.success = true;
           reply.email = signin.email;
           replySignIn(reply, conn);
-
-          orguserkey = orguserid;
 
           console.log("user " + orguserkey + " logged on");
 
@@ -205,19 +205,35 @@ function listen() {
   });
 }
 
-function clientUpdate(clientid, conn) {
-  db.hgetall("client:" + clientid, function(err, client) {
+function newClient(client, conn) {
+  console.log("new client");
+  var orgclientkey = client.orgid + ":" + client.clientid;
+
+  db.hmset("client:" + orgclientkey, client);
+
+  sendClientAllUsers(orgclientkey);
+}
+
+function sendClientAllUsers(orgclientkey) {
+  for (var user in connections) {
+    getSendClient(orgclientkey, user);
+  }
+}
+
+function getSendClient(orgclientkey, user) {
+  db.hgetall("client:" + orgclientkey, function(err, client) {
     if (err) {
-      console.log("Error in signIn:" + err);
+      console.log(err);
       return;
     }
 
+    // send anyway, even if no position, as may need to clear f/e - todo: review
     if (client == null) {
-      console.log("Client not found, id:" + clientid);
+      console.log("Client not found, id:" + orgclientkey);
       return;
     }
 
-    conn.write("{\"client\":" + JSON.stringify(client) + "}");
+    connections[user].write("{\"client\":" + JSON.stringify(client) + "}");
   });
 }
 

@@ -828,7 +828,29 @@
         }
 
         function updateClient(client) {
-            clients(client.clientid) = client;
+            var lblclientconf;
+            var frmclient;
+            var inporgid;
+            var inpclientid;
+
+            clients[client.clientid] = client;
+
+            frmclient = document.getElementById("frmclient");
+            if (frmclient != null) {
+                inporgid = document.getElementById("inporgid");
+                inpclientid = document.getElementById("inpclientid");
+                if (inporgid != null && inpclientid != null) {
+                    if (client.orgid == inporgid.value && client.clientid == inpclientid.value) {
+                        lblclientconf = document.getElementById("lblclientconf");
+                        if (lblclientconf == null) {
+                            lblclientconf = document.createElement("label");
+                            lblclientconf.id = "lblclientconf";
+                            frmclient.appendChild(lblclientconf);
+                        }
+                        lblclientconf.innerHTML = client.name + " updated";
+                    }
+                }
+            }
         }
 
         function start() {
@@ -3608,43 +3630,144 @@
 
         function displayClient(client) {
             var frmclient;
+            var lblname;
+            var lblmobile;
+            var lblorgid;
             var lblclientid;
+            var lbladdress;
+            var lblemail;
+            var inpname;
+            var inpmobile;
+            var inporgid;
+            var inpclientid;
+            var inpaddress;
+            var inpemail;
             var btnupdate;
+            var newline1;
+            var newline2;
+            var newline3;
+            var newline4;
+            var newline5;
+            var newline6;
+            var lblclientconf;
 
-            frmclient = document.createElement("form");
+            frmclient = document.getElementById("frmclient");
+            if (frmclient == null) {
+                frmclient = document.createElement("form");
+                frmclient.id = "frmclient";
 
-            for (var fields in client) {
-                var label = document.createElement("label");
-                label.innerHTML = fields + ":";
-                label.className = "formlabel";
+                lblname = document.createElement("label");
+                lblname.className = "formlabel";
+                lblname.innerHTML = "Name:";
+                lblmobile = document.createElement("label");
+                lblmobile.className = "formlabel";
+                lblmobile.innerHTML = "Mobile:";
+                lblorgid = document.createElement("label");
+                lblorgid.className = "formlabel";
+                lblorgid.innerHTML = "Org Id:";
+                lblclientid = document.createElement("label");
+                lblclientid.className = "formlabel";
+                lblclientid.innerHTML = "Client Id:";
+                lbladdress = document.createElement("label");
+                lbladdress.className = "formlabel";
+                lbladdress.innerHTML = "Address:";
+                lblemail = document.createElement("label");
+                lblemail.className = "formlabel";
+                lblemail.innerHTML = "Email:";
 
-                var input = document.createElement("input");
-                input.value = client[fields];
-                input.className = "forminput";
+                inpname = document.createElement("input");
+                inpname.id = "inpname";
+                inpname.className = "forminput";
+                inpmobile = document.createElement("input");
+                inpmobile.id = "inpmobile";
+                inpmobile.className = "forminput";
+                inporgid = document.createElement("input");
+                inporgid.id = "inporgid";
+                inporgid.className = "forminput";
+                inpclientid = document.createElement("input");
+                inpclientid.id = "inpclientid";
+                inpclientid.className = "forminput";
+                inpaddress = document.createElement("input");
+                inpaddress.id = "inpaddress";
+                inpaddress.className = "forminput";
+                inpemail = document.createElement("input");
+                inpemail.id = "inpemail";
+                inpemail.className = "forminput";
 
-                if (fields == "orgid" || fields == "clientid") {
-                    input.disabled = true;
+                inporgid.disabled = true;
+                inpclientid.disabled = true;
+
+                newline1 = document.createElement("label");
+                newline1.innerHTML = "<br>";
+                newline2 = document.createElement("label");
+                newline2.innerHTML = "<br>";
+                newline3 = document.createElement("label");
+                newline3.innerHTML = "<br>";
+                newline4 = document.createElement("label");
+                newline4.innerHTML = "<br>";
+                newline5 = document.createElement("label");
+                newline5.innerHTML = "<br>";
+                newline6 = document.createElement("label");
+                newline6.innerHTML = "<br>";
+
+                btnupdate = document.createElement("input");
+                btnupdate.type = "button";
+                btnupdate.value = "Update";
+                btnupdate.className = "formsigninbutton";
+
+                btnupdate.onclick = function() {
+                    var newclient = {};
+
+                    newclient.name = inpname.value;
+                    newclient.mobile = inpmobile.value;
+                    newclient.orgid = inporgid.value;
+                    newclient.clientid = inpclientid.value;
+                    newclient.address = inpaddress.value;
+                    newclient.email = inpemail.value;
+
+                    sockjs.send("{\"newclient\":" + JSON.stringify(newclient) + "}");
                 }
 
-                var newline = document.createElement("label");
-                newline.innerHTML = "<br>";
+                frmclient.appendChild(lblname);
+                frmclient.appendChild(inpname);
+                frmclient.appendChild(newline1);
+                frmclient.appendChild(lblmobile);
+                frmclient.appendChild(inpmobile);
+                frmclient.appendChild(newline2);
+                frmclient.appendChild(lblorgid);
+                frmclient.appendChild(inporgid);
+                frmclient.appendChild(newline3);
+                frmclient.appendChild(lblclientid);
+                frmclient.appendChild(inpclientid);
+                frmclient.appendChild(newline4);
+                frmclient.appendChild(lbladdress);
+                frmclient.appendChild(inpaddress);
+                frmclient.appendChild(newline5);
+                frmclient.appendChild(lblemail);
+                frmclient.appendChild(inpemail);
+                frmclient.appendChild(newline6);
+                frmclient.appendChild(btnupdate);
+                main.appendChild(frmclient);
+            } else {
+                inpname = document.getElementById("inpname");
+                inpmobile = document.getElementById("inpmobile");
+                inporgid = document.getElementById("inporgid");
+                inpclientid = document.getElementById("inpclientid");
+                inpaddress = document.getElementById("inpaddress");
+                inpemail = document.getElementById("inpemail");
 
-                frmclient.appendChild(label);
-                frmclient.appendChild(input);
-                frmclient.appendChild(newline);
+                lblclientconf = document.getElementById("lblclientconf");
+                if (lblclientconf != null) {
+                    lblclientconf.innerHTML = "";
+                }
             }
 
-            btnupdate = document.createElement("input");
-            btnupdate.type = "button";
-            btnupdate.value = "Update";
-            btnupdate.className = "formsigninbutton";
-
-            btnupdate.onclick = function() {
-            }
-
-            frmclient.appendChild(btnupdate);
-
-            main.appendChild(frmclient);
+            inpname.value = client.name;
+            inpmobile.value = client.mobile;
+            inporgid.value = client.orgid;
+            inpclientid.value = client.clientid;
+            inpaddress.value = client.address;
+            inpemail.value = client.email;
         }
 
         function requestHistory() {

@@ -315,7 +315,6 @@ function listen() {
           // validated, so set client id & add client to list of connections
           clientid = client.clientid;
           orgclientkey = orgclientid;
-          console.log("adding " + orgclientkey + " to connections");
           connections[orgclientkey] = conn;
 
           // keep a record
