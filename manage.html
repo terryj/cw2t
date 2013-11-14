@@ -609,6 +609,7 @@
         var indices = {};
         var timeinforces = {};
         var clients = {};
+        var organisations = {};
         var lastElement = null;
         var lastsymbol = null;
         var extendedsettlement = false;
@@ -703,6 +704,9 @@
             } else if (msg.substr(2, 6) == "client") {
                 obj = JSON.parse(msg);
                 updateClient(obj.client);
+            } else if (msg.substr(2, 13) == "organisations") {
+                obj = JSON.parse(msg);
+                loadOrganisations(obj.organisations);
             } else if (msg.substr(2,6) == "status") {
                 obj = JSON.parse(msg);
                 statusMsg(obj.status);
@@ -827,27 +831,39 @@
             }                                    
         }
 
+        function loadOrganisations(orgarr) {
+            console.log("loadOrganisations");
+            console.log(orgarr);
+            for (var i = 0; i < orgarr.length; ++i) {
+                organisations[orgarr[i].orgid] = orgarr[i];
+            }                                                
+        }
+
         function updateClient(client) {
             var lblclientconf;
             var frmclient;
-            var inporgid;
+            var inporg;
             var inpclientid;
 
             clients[client.clientid] = client;
 
+            if (selectedmenu != 0) {return};
+
             frmclient = document.getElementById("frmclient");
             if (frmclient != null) {
-                inporgid = document.getElementById("inporgid");
+                inporg = document.getElementById("inporg");
                 inpclientid = document.getElementById("inpclientid");
-                if (inporgid != null && inpclientid != null) {
-                    if (client.orgid == inporgid.value && client.clientid == inpclientid.value) {
-                        lblclientconf = document.getElementById("lblclientconf");
-                        if (lblclientconf == null) {
-                            lblclientconf = document.createElement("label");
-                            lblclientconf.id = "lblclientconf";
-                            frmclient.appendChild(lblclientconf);
+
+                if (inporg != null && inpclientid != null) {
+                    lblclientconf = document.getElementById("lblclientconf");
+                    if (lblclientconf != null) {
+                        if (client.orgid == inporg.value && client.clientid == inpclientid.value) {
+                            lblclientconf.innerHTML = client.name + " updated";
+                        } else if (client.orgid == inporg.value && inpclientid.value == "") {
+                            lblclientconf.innerHTML = client.name + " added";
                         }
-                        lblclientconf.innerHTML = client.name + " updated";
+
+                        displayClient(null);
                     }
                 }
             }
@@ -3485,7 +3501,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Clients", "Hedging"];
+            menuarr = ["Clients", "IFA's", "Hedging"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -3520,10 +3536,10 @@
                     maintainClients();
                     break;
                 case 1:
-                    maintainHedging();
+                    maintainIFAS();
                     break;
                 case 2:
-                    displayOrders();
+                    maintainHedging();
                     break;
                 case 3:
                     displayTrades();
@@ -3546,7 +3562,7 @@
             }
         }
 
-        function maintainClients() {
+        function selectClient() {
             var clientbox;
             var clientboxinput;
             var clientlist;
@@ -3628,7 +3644,7 @@
             clientboxinput.focus();            
         }
 
-        function displayClient(client) {
+        function maintainClients() {
             var frmclient;
             var lblname;
             var lblmobile;
@@ -3638,7 +3654,7 @@
             var lblemail;
             var inpname;
             var inpmobile;
-            var inporgid;
+            var inporg;
             var inpclientid;
             var inpaddress;
             var inpemail;
@@ -3653,6 +3669,8 @@
 
             frmclient = document.getElementById("frmclient");
             if (frmclient == null) {
+                selectClient();
+
                 frmclient = document.createElement("form");
                 frmclient.id = "frmclient";
 
@@ -3664,7 +3682,7 @@
                 lblmobile.innerHTML = "Mobile:";
                 lblorgid = document.createElement("label");
                 lblorgid.className = "formlabel";
-                lblorgid.innerHTML = "Org Id:";
+                lblorgid.innerHTML = "Organisation:";
                 lblclientid = document.createElement("label");
                 lblclientid.className = "formlabel";
                 lblclientid.innerHTML = "Client Id:";
@@ -3681,9 +3699,12 @@
                 inpmobile = document.createElement("input");
                 inpmobile.id = "inpmobile";
                 inpmobile.className = "forminput";
-                inporgid = document.createElement("input");
-                inporgid.id = "inporgid";
-                inporgid.className = "forminput";
+                inporg = document.createElement("select");
+                inporg.id = "inporg";
+                inporg.className = "formselect";
+
+                populateOrgs(inporg);
+
                 inpclientid = document.createElement("input");
                 inpclientid.id = "inpclientid";
                 inpclientid.className = "forminput";
@@ -3694,8 +3715,9 @@
                 inpemail.id = "inpemail";
                 inpemail.className = "forminput";
 
-                inporgid.disabled = true;
                 inpclientid.disabled = true;
+
+                inpname.focus();
 
                 newline1 = document.createElement("label");
                 newline1.innerHTML = "<br>";
@@ -3712,62 +3734,105 @@
 
                 btnupdate = document.createElement("input");
                 btnupdate.type = "button";
-                btnupdate.value = "Update";
+                btnupdate.value = "Add";
                 btnupdate.className = "formsigninbutton";
 
                 btnupdate.onclick = function() {
-                    var newclient = {};
+                    var client = {};
+                    if (inpname.value == "") {
+                        alert("Please enter a name");
+                        inpname.focus();
+                        return;
+                    }
 
-                    newclient.name = inpname.value;
-                    newclient.mobile = inpmobile.value;
-                    newclient.orgid = inporgid.value;
-                    newclient.clientid = inpclientid.value;
-                    newclient.address = inpaddress.value;
-                    newclient.email = inpemail.value;
+                    if (inpemail.value == "") {
+                        alert("Please enter an email address");
+                        inpemail.focus();
+                        return;                        
+                    }
 
-                    sockjs.send("{\"newclient\":" + JSON.stringify(newclient) + "}");
+                    client.name = inpname.value;
+                    client.mobile = inpmobile.value;
+                    client.orgid = inporg.value;
+                    client.clientid = inpclientid.value;
+                    client.address = inpaddress.value;
+                    client.email = inpemail.value;
+
+                    sockjs.send("{\"newclient\":" + JSON.stringify(client) + "}");
                 }
+
+                lblclientconf = document.createElement("label");
+                lblclientconf.id = "lblclientconf";
 
                 frmclient.appendChild(lblname);
                 frmclient.appendChild(inpname);
                 frmclient.appendChild(newline1);
+                frmclient.appendChild(lblemail);
+                frmclient.appendChild(inpemail);
+                frmclient.appendChild(newline6);
                 frmclient.appendChild(lblmobile);
                 frmclient.appendChild(inpmobile);
                 frmclient.appendChild(newline2);
+                frmclient.appendChild(lbladdress);
+                frmclient.appendChild(inpaddress);
+                frmclient.appendChild(newline5);
                 frmclient.appendChild(lblorgid);
-                frmclient.appendChild(inporgid);
+                frmclient.appendChild(inporg);
                 frmclient.appendChild(newline3);
                 frmclient.appendChild(lblclientid);
                 frmclient.appendChild(inpclientid);
                 frmclient.appendChild(newline4);
-                frmclient.appendChild(lbladdress);
-                frmclient.appendChild(inpaddress);
-                frmclient.appendChild(newline5);
-                frmclient.appendChild(lblemail);
-                frmclient.appendChild(inpemail);
-                frmclient.appendChild(newline6);
                 frmclient.appendChild(btnupdate);
+                frmclient.appendChild(lblclientconf);
                 main.appendChild(frmclient);
-            } else {
-                inpname = document.getElementById("inpname");
-                inpmobile = document.getElementById("inpmobile");
-                inporgid = document.getElementById("inporgid");
-                inpclientid = document.getElementById("inpclientid");
-                inpaddress = document.getElementById("inpaddress");
-                inpemail = document.getElementById("inpemail");
-
-                lblclientconf = document.getElementById("lblclientconf");
-                if (lblclientconf != null) {
-                    lblclientconf.innerHTML = "";
-                }
             }
 
-            inpname.value = client.name;
-            inpmobile.value = client.mobile;
-            inporgid.value = client.orgid;
-            inpclientid.value = client.clientid;
-            inpaddress.value = client.address;
-            inpemail.value = client.email;
+            displayClient(null);
+        }
+
+        function displayClient(client) {
+            var inpname = document.getElementById("inpname");
+            var inpmobile = document.getElementById("inpmobile");
+            var inporg = document.getElementById("inporg");
+            var inpclientid = document.getElementById("inpclientid");
+            var inpaddress = document.getElementById("inpaddress");
+            var inpemail = document.getElementById("inpemail");
+
+            // create an empty client
+            if (client == null) {
+                client = {
+                    name:  '',
+                    mobile:    '',
+                    orgid:  1,
+                    clientid: '',
+                    address: '',
+                    email: ''
+                };
+            }
+
+            if (inpname != null) {
+                inpname.value = client.name;
+                inpmobile.value = client.mobile;
+                inporg.value = client.orgid;
+                inpclientid.value = client.clientid;
+                inpaddress.value = client.address;
+                inpemail.value = client.email;
+                lblclientconf.innerHTML = "";
+            }
+        }
+
+        function populateOrgs(orgselect) {
+            var i = 0;
+console.log("populateOrgs");
+            for (var j in organisations) {
+                //console.log(org);
+                if (i == 0) {
+                    orgselect[i] = new Option(organisations[j].name, organisations[j].orgid, true, true);
+                } else {
+                    orgselect[i] = new Option(organisations[j].name, organisations[j].orgid, false, false);                    
+                }
+                i++;
+            }
         }
 
         function requestHistory() {

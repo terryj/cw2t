@@ -52,6 +52,10 @@ function initdb() {
   db.set("fobomsgid", 0);
   db.set("positionid", 0);
 
+  // organisations
+  db.hmset("organisation:1", "orgid", 1, "name", "Thomas Grant & Company");
+  db.sadd("organisations", 1);
+
   // charges
   db.set("commissionpercent", 1);
   db.set("commissionmin:GBP", 10);

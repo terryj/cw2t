@@ -46,6 +46,8 @@ if (redislocal) {
 
 // redis scripts
 var scriptgetclients;
+var scriptnewclient;
+var scriptgetorgs;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -206,12 +208,31 @@ function listen() {
 }
 
 function newClient(client, conn) {
+  var orgclientkey;
+
   console.log("new client");
-  var orgclientkey = client.orgid + ":" + client.clientid;
 
-  db.hmset("client:" + orgclientkey, client);
+  // maybe a new client or an updated client
+  if (client.clientid == "") {
+    db.eval(scriptnewclient, 5, client.orgid, client.name, client.email, client.mobile, client.address, function(err, ret) {
+      if (err) throw err;
 
-  sendClientAllUsers(orgclientkey);
+      if (ret[0] != 0) {
+        console.log("Error in scriptnewclient:" + getReasonDesc(ret[0]));
+        return;
+      }
+
+      orgclientkey = client.orgid + ":" + ret[1];
+
+      sendClientAllUsers(orgclientkey);
+    });
+  } else {
+    orgclientkey = client.orgid + ":" + client.clientid;
+
+    db.hmset("client:" + orgclientkey, client);
+
+    sendClientAllUsers(orgclientkey);
+  }
 }
 
 function sendClientAllUsers(orgclientkey) {
@@ -1413,11 +1434,11 @@ function getReasonDesc(reason) {
 
 function start(orgid, conn) {
   //sendInstruments(conn);
+  sendOrganisations(conn);
   sendOrderTypes(conn);
-  sendClients(orgid, conn);
 
-  // may not be last, but...
-  sendReadyToManage(conn);
+  // make this the last one, as sends ready status to f/e
+  sendClients(orgid, conn);
 }
 
 function sendReadyToManage(conn) {
@@ -1538,6 +1559,16 @@ function sendClients(orgid, conn) {
   // get sorted set of clients for specified organisation
   db.eval(scriptgetclients, 1, orgid, function(err, ret) {
     conn.write("{\"clients\":" + ret + "}");
+
+    sendReadyToManage(conn);
+  });
+}
+
+function sendOrganisations(conn) {
+  // get sorted set of orgs
+  db.eval(scriptgetorgs, 0, function(err, ret) {
+    console.log(ret);
+    conn.write("{\"organisations\":" + ret + "}");
   });
 }
 
@@ -1550,7 +1581,6 @@ function registerScripts() {
   local fields = {"orgid", "clientid", "email", "name", "address", "mobile"} \
   local vals \
   local client = {} \
-  local marginpc \
   for index = 1, #clients do \
     vals = redis.call("hmget", "client:" .. clients[index], unpack(fields)) \
     if KEYS[1] == vals[1] then \
@@ -1558,5 +1588,30 @@ function registerScripts() {
     end \
   end \
   return cjson.encode(client) \
+  ';
+
+  scriptnewclient = '\
+  local clientid = redis.call("incr", "clientid") \
+  if not clientid then return {1005} end \
+  local orgclientkey = KEYS[1] .. ":" .. clientid \
+  --[[ store the client ]] \
+  redis.call("hmset", "client:" .. orgclientkey, "orgid", KEYS[1], "clientid", clientid, "name", KEYS[2], "email", KEYS[3], "mobile", KEYS[4], "address", KEYS[5]) \
+  --[[ add to set of clients ]] \
+  redis.call("sadd", "clients", orgclientkey) \
+  --[[ add route to find client from email ]] \
+  redis.call("set", "client:" .. KEYS[3], orgclientkey) \
+  return {0, clientid} \
+  ';
+
+  scriptgetorgs = '\
+  local orgs = redis.call("sort", "organisations", "ALPHA") \
+  local fields = {"orgid", "name"} \
+  local vals \
+  local org = {} \
+  for index = 1, #orgs do \
+    vals = redis.call("hmget", "organisation:" .. orgs[index], unpack(fields)) \
+    table.insert(org, {orgid = vals[1], name = vals[2]}) \
+  end \
+  return cjson.encode(org) \
   ';
 }
