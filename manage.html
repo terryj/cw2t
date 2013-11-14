@@ -3660,12 +3660,6 @@
             var inpaddress;
             var inpemail;
             var btnupdate;
-            var newline1;
-            var newline2;
-            var newline3;
-            var newline4;
-            var newline5;
-            var newline6;
             var lblclientconf;
 
             frmclient = document.getElementById("frmclient");
@@ -3719,19 +3713,6 @@
                 selifa.id = "selorg";
                 selifa.className = "formselect";
 
-                newline1 = document.createElement("label");
-                newline1.innerHTML = "<br>";
-                newline2 = document.createElement("label");
-                newline2.innerHTML = "<br>";
-                newline3 = document.createElement("label");
-                newline3.innerHTML = "<br>";
-                newline4 = document.createElement("label");
-                newline4.innerHTML = "<br>";
-                newline5 = document.createElement("label");
-                newline5.innerHTML = "<br>";
-                newline6 = document.createElement("label");
-                newline6.innerHTML = "<br>";
-
                 btnupdate = document.createElement("input");
                 btnupdate.type = "button";
                 btnupdate.value = "Add";
@@ -3772,28 +3753,37 @@
 
                 frmclient.appendChild(lblname);
                 frmclient.appendChild(inpname);
-                frmclient.appendChild(newline1);
+                addNewLine(frmclient);
                 frmclient.appendChild(lblemail);
                 frmclient.appendChild(inpemail);
-                frmclient.appendChild(newline6);
+                addNewLine(frmclient);
                 frmclient.appendChild(lblmobile);
                 frmclient.appendChild(inpmobile);
-                frmclient.appendChild(newline2);
+                addNewLine(frmclient);
                 frmclient.appendChild(lbladdress);
                 frmclient.appendChild(inpaddress);
-                frmclient.appendChild(newline5);
+                addNewLine(frmclient);
                 frmclient.appendChild(lblorg);
                 frmclient.appendChild(selorg);
-                frmclient.appendChild(newline3);
+                addNewLine(frmclient);
+                frmclient.appendChild(lblifa);
+                frmclient.appendChild(selifa);
+                addNewLine(frmclient);
                 frmclient.appendChild(lblclientid);
                 frmclient.appendChild(inpclientid);
-                frmclient.appendChild(newline4);
+                addNewLine(frmclient);
                 frmclient.appendChild(btnupdate);
                 frmclient.appendChild(lblclientconf);
                 main.appendChild(frmclient);
             }
 
             displayClient(null, "");
+        }
+
+        function addNewLine(frmclient) {
+            var newline = document.createElement("label");
+            newline.innerHTML = "<br>";
+            frmclient.appendChild(newline);
         }
 
         function displayClient(client, msg) {
