@@ -566,7 +566,7 @@
         }
         .formlabel {
             display: inline-block;
-            width: 90px;
+            width: 120px;
             font-size: 21px;
             text-align: right;
         }
@@ -578,6 +578,11 @@
             width: 450px;
             margin: 2px 0 20px 10px;
         }​
+        .formselect {
+            display: inline-block;
+            font-size: 21px;            
+            margin: 2px 0 20px 10px;
+        }
     </style>
 </head>
 <body lang="en">
@@ -610,6 +615,7 @@
         var timeinforces = {};
         var clients = {};
         var organisations = {};
+        var ifas = {};
         var lastElement = null;
         var lastsymbol = null;
         var extendedsettlement = false;
@@ -832,18 +838,15 @@
         }
 
         function loadOrganisations(orgarr) {
-            console.log("loadOrganisations");
-            console.log(orgarr);
             for (var i = 0; i < orgarr.length; ++i) {
                 organisations[orgarr[i].orgid] = orgarr[i];
             }                                                
         }
 
         function updateClient(client) {
-            var lblclientconf;
             var frmclient;
-            var inporg;
             var inpclientid;
+            var msg;
 
             clients[client.clientid] = client;
 
@@ -851,20 +854,16 @@
 
             frmclient = document.getElementById("frmclient");
             if (frmclient != null) {
-                inporg = document.getElementById("inporg");
                 inpclientid = document.getElementById("inpclientid");
 
-                if (inporg != null && inpclientid != null) {
-                    lblclientconf = document.getElementById("lblclientconf");
-                    if (lblclientconf != null) {
-                        if (client.orgid == inporg.value && client.clientid == inpclientid.value) {
-                            lblclientconf.innerHTML = client.name + " updated";
-                        } else if (client.orgid == inporg.value && inpclientid.value == "") {
-                            lblclientconf.innerHTML = client.name + " added";
-                        }
-
-                        displayClient(null);
+                if (inpclientid != null) {
+                    if (client.clientid == inpclientid.value) {
+                        msg = client.name + " updated";
+                    } else if (client.orgid == selorg.value && inpclientid.value == "") {
+                        msg = client.name + " added";
                     }
+
+                    displayClient(null, msg);
                 }
             }
         }
@@ -3620,7 +3619,7 @@
                 clientboxinput.value = "";
                 clientboxinput.focus();
 
-                displayClient(clients[element.value]);
+                displayClient(clients[element.value], "");
             }
 
             clientbox.appendChild(clientboxinput);
@@ -3648,13 +3647,15 @@
             var frmclient;
             var lblname;
             var lblmobile;
-            var lblorgid;
+            var lblorg;
             var lblclientid;
             var lbladdress;
             var lblemail;
+            var lblifa;
             var inpname;
             var inpmobile;
-            var inporg;
+            var selorg;
+            var selifa;
             var inpclientid;
             var inpaddress;
             var inpemail;
@@ -3680,9 +3681,9 @@
                 lblmobile = document.createElement("label");
                 lblmobile.className = "formlabel";
                 lblmobile.innerHTML = "Mobile:";
-                lblorgid = document.createElement("label");
-                lblorgid.className = "formlabel";
-                lblorgid.innerHTML = "Organisation:";
+                lblorg = document.createElement("label");
+                lblorg.className = "formlabel";
+                lblorg.innerHTML = "Organisation:";
                 lblclientid = document.createElement("label");
                 lblclientid.className = "formlabel";
                 lblclientid.innerHTML = "Client Id:";
@@ -3692,6 +3693,9 @@
                 lblemail = document.createElement("label");
                 lblemail.className = "formlabel";
                 lblemail.innerHTML = "Email:";
+                lblifa = document.createElement("label");
+                lblifa.className = "formlabel";
+                lblifa.innerHTML = "IFA:";
 
                 inpname = document.createElement("input");
                 inpname.id = "inpname";
@@ -3699,12 +3703,9 @@
                 inpmobile = document.createElement("input");
                 inpmobile.id = "inpmobile";
                 inpmobile.className = "forminput";
-                inporg = document.createElement("select");
-                inporg.id = "inporg";
-                inporg.className = "formselect";
-
-                populateOrgs(inporg);
-
+                selorg = document.createElement("select");
+                selorg.id = "selorg";
+                selorg.className = "formselect";
                 inpclientid = document.createElement("input");
                 inpclientid.id = "inpclientid";
                 inpclientid.className = "forminput";
@@ -3714,10 +3715,9 @@
                 inpemail = document.createElement("input");
                 inpemail.id = "inpemail";
                 inpemail.className = "forminput";
-
-                inpclientid.disabled = true;
-
-                inpname.focus();
+                selifa = document.createElement("select");
+                selifa.id = "selorg";
+                selifa.className = "formselect";
 
                 newline1 = document.createElement("label");
                 newline1.innerHTML = "<br>";
@@ -3753,7 +3753,7 @@
 
                     client.name = inpname.value;
                     client.mobile = inpmobile.value;
-                    client.orgid = inporg.value;
+                    client.orgid = selorg[selorg.selectedIndex].value;
                     client.clientid = inpclientid.value;
                     client.address = inpaddress.value;
                     client.email = inpemail.value;
@@ -3763,6 +3763,12 @@
 
                 lblclientconf = document.createElement("label");
                 lblclientconf.id = "lblclientconf";
+
+                populateOrgs(selorg, 1);
+                populateIFAs(selifa, 1);
+
+                inpclientid.disabled = true;
+                inpname.focus();
 
                 frmclient.appendChild(lblname);
                 frmclient.appendChild(inpname);
@@ -3776,8 +3782,8 @@
                 frmclient.appendChild(lbladdress);
                 frmclient.appendChild(inpaddress);
                 frmclient.appendChild(newline5);
-                frmclient.appendChild(lblorgid);
-                frmclient.appendChild(inporg);
+                frmclient.appendChild(lblorg);
+                frmclient.appendChild(selorg);
                 frmclient.appendChild(newline3);
                 frmclient.appendChild(lblclientid);
                 frmclient.appendChild(inpclientid);
@@ -3787,16 +3793,17 @@
                 main.appendChild(frmclient);
             }
 
-            displayClient(null);
+            displayClient(null, "");
         }
 
-        function displayClient(client) {
+        function displayClient(client, msg) {
             var inpname = document.getElementById("inpname");
             var inpmobile = document.getElementById("inpmobile");
-            var inporg = document.getElementById("inporg");
+            var selorg = document.getElementById("selorg");
             var inpclientid = document.getElementById("inpclientid");
             var inpaddress = document.getElementById("inpaddress");
             var inpemail = document.getElementById("inpemail");
+            var lblclientconf = document.getElementById("lblclientconf");
 
             // create an empty client
             if (client == null) {
@@ -3813,25 +3820,36 @@
             if (inpname != null) {
                 inpname.value = client.name;
                 inpmobile.value = client.mobile;
-                inporg.value = client.orgid;
+                populateOrgs(selorg, client.orgid);
                 inpclientid.value = client.clientid;
                 inpaddress.value = client.address;
                 inpemail.value = client.email;
-                lblclientconf.innerHTML = "";
             }
+
+            lblclientconf.innerHTML = msg;
         }
 
-        function populateOrgs(orgselect) {
+        function populateOrgs(orgselect, orgid) {
             var i = 0;
-console.log("populateOrgs");
+
             for (var j in organisations) {
-                //console.log(org);
-                if (i == 0) {
+                if (organisations[j].orgid == orgid) {
                     orgselect[i] = new Option(organisations[j].name, organisations[j].orgid, true, true);
                 } else {
                     orgselect[i] = new Option(organisations[j].name, organisations[j].orgid, false, false);                    
                 }
-                i++;
+            }
+        }
+
+        function populateIFAs(ifaselect, ifaid) {
+            var i = 0;
+
+            for (var j in ifas) {
+                if (ifas[j].ifaid == ifaid) {
+                    ifaselect[i] = new Option(ifas[j].name, ifas[j].orgid, true, true);
+                } else {
+                    ifaselect[i] = new Option(ifas[j].name, ifas[j].orgid, false, false);                    
+                }
             }
         }
 

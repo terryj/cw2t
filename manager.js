@@ -224,24 +224,18 @@ function newClient(client, conn) {
 
       orgclientkey = client.orgid + ":" + ret[1];
 
-      sendClientAllUsers(orgclientkey);
+      getSendClient(orgclientkey, conn);
     });
   } else {
     orgclientkey = client.orgid + ":" + client.clientid;
 
     db.hmset("client:" + orgclientkey, client);
 
-    sendClientAllUsers(orgclientkey);
+    getSendClient(orgclientkey, conn);
   }
 }
 
-function sendClientAllUsers(orgclientkey) {
-  for (var user in connections) {
-    getSendClient(orgclientkey, user);
-  }
-}
-
-function getSendClient(orgclientkey, user) {
+function getSendClient(orgclientkey, conn) {
   db.hgetall("client:" + orgclientkey, function(err, client) {
     if (err) {
       console.log(err);
@@ -254,7 +248,7 @@ function getSendClient(orgclientkey, user) {
       return;
     }
 
-    connections[user].write("{\"client\":" + JSON.stringify(client) + "}");
+    conn.write("{\"client\":" + JSON.stringify(client) + "}");
   });
 }
 
