@@ -581,6 +581,7 @@
         .formselect {
             display: inline-block;
             font-size: 21px;            
+            padding: 4px 2px;
             margin: 2px 0 20px 10px;
         }
     </style>
@@ -616,6 +617,7 @@
         var clients = {};
         var organisations = {};
         var ifas = {};
+        var instrumenttypes = {};
         var lastElement = null;
         var lastsymbol = null;
         var extendedsettlement = false;
@@ -680,6 +682,9 @@
             } else if (msg.substr(2, 4) == "cash") {
                 obj = JSON.parse(msg);
                 loadCash(obj.cash);
+            } else if (msg.substr(2, 15) == "instrumenttypes") {
+                obj = JSON.parse(msg);
+                loadInstrumenttypes(obj.instrumenttypes);
             } else if (msg.substr(2, 11) == "instruments") {
                 obj = JSON.parse(msg);
                 loadInstruments(obj.instruments);
@@ -713,6 +718,9 @@
             } else if (msg.substr(2, 13) == "organisations") {
                 obj = JSON.parse(msg);
                 loadOrganisations(obj.organisations);
+            } else if (msg.substr(2, 4) == "ifas") {
+                obj = JSON.parse(msg);
+                loadIFAs(obj.ifas);
             } else if (msg.substr(2,6) == "status") {
                 obj = JSON.parse(msg);
                 statusMsg(obj.status);
@@ -843,6 +851,18 @@
             }                                                
         }
 
+        function loadIFAs(ifaarr) {
+            for (var i = 0; i < ifaarr.length; ++i) {
+                ifas[ifaarr[i].ifaid] = ifaarr[i];
+            }                                                
+        }
+
+        function loadInstrumenttypes(insttypearr) {
+            for (var i = 0; i < insttypearr.length; ++i) {
+                instrumenttypes[insttypearr[i].instrumenttypeid] = insttypearr[i];
+            }                                                
+        }
+
         function updateClient(client) {
             var frmclient;
             var inpclientid;
@@ -859,7 +879,7 @@
                 if (inpclientid != null) {
                     if (client.clientid == inpclientid.value) {
                         msg = client.name + " updated";
-                    } else if (client.orgid == selorg.value && inpclientid.value == "") {
+                    } else {
                         msg = client.name + " added";
                     }
 
@@ -3500,7 +3520,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Clients", "IFA's", "Hedging"];
+            menuarr = ["Clients", "Cash", "IFA's", "Hedging"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -3535,13 +3555,13 @@
                     maintainClients();
                     break;
                 case 1:
-                    maintainIFAS();
+                    maintainCash();
                     break;
                 case 2:
                     maintainHedging();
                     break;
                 case 3:
-                    displayTrades();
+                    maintainIFAs();
                     break;
                 case 4:
                     displayPositions();
@@ -3652,6 +3672,7 @@
             var lbladdress;
             var lblemail;
             var lblifa;
+            var lblcantrade;
             var inpname;
             var inpmobile;
             var selorg;
@@ -3690,6 +3711,9 @@
                 lblifa = document.createElement("label");
                 lblifa.className = "formlabel";
                 lblifa.innerHTML = "IFA:";
+                lblcantrade = document.createElement("label");
+                lblcantrade.className = "formlabel";
+                lblcantrade.innerHTML = "Can Trade:";
 
                 inpname = document.createElement("input");
                 inpname.id = "inpname";
@@ -3720,6 +3744,9 @@
 
                 btnupdate.onclick = function() {
                     var client = {};
+                    var insttypes = [];
+                    var chkinsttype;
+
                     if (inpname.value == "") {
                         alert("Please enter a name");
                         inpname.focus();
@@ -3738,6 +3765,17 @@
                     client.clientid = inpclientid.value;
                     client.address = inpaddress.value;
                     client.email = inpemail.value;
+                    client.ifaid = selifa[selifa.selectedIndex].value;
+
+                    for (var i in instrumenttypes) {
+                        chkinsttype = document.getElementById("checkbox:" + instrumenttypes[i].instrumenttypeid);
+
+                        if (chkinsttype.checked) {
+                            insttypes.push(instrumenttypes[i].instrumenttypeid);
+                        }
+
+                        client.insttypes = insttypes;
+                    }
 
                     sockjs.send("{\"newclient\":" + JSON.stringify(client) + "}");
                 }
@@ -3768,6 +3806,19 @@
                 addNewLine(frmclient);
                 frmclient.appendChild(lblifa);
                 frmclient.appendChild(selifa);
+                addNewLine(frmclient);
+                frmclient.appendChild(lblcantrade);
+
+                for (var i in instrumenttypes) {
+                    var chkinsttype = document.createElement("input");
+                    chkinsttype.type = "checkbox";
+                    chkinsttype.id = "checkbox:" + instrumenttypes[i].instrumenttypeid;
+                    var textinsttype = document.createTextNode(instrumenttypes[i].description);
+
+                    frmclient.appendChild(chkinsttype);
+                    frmclient.appendChild(textinsttype);
+                }
+
                 addNewLine(frmclient);
                 frmclient.appendChild(lblclientid);
                 frmclient.appendChild(inpclientid);
@@ -3836,9 +3887,9 @@
 
             for (var j in ifas) {
                 if (ifas[j].ifaid == ifaid) {
-                    ifaselect[i] = new Option(ifas[j].name, ifas[j].orgid, true, true);
+                    ifaselect[i] = new Option(ifas[j].name, ifas[j].ifaid, true, true);
                 } else {
-                    ifaselect[i] = new Option(ifas[j].name, ifas[j].orgid, false, false);                    
+                    ifaselect[i] = new Option(ifas[j].name, ifas[j].ifaid, false, false);                    
                 }
             }
         }

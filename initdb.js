@@ -56,6 +56,10 @@ function initdb() {
   db.hmset("organisation:1", "orgid", 1, "name", "Thomas Grant & Company");
   db.sadd("organisations", 1);
 
+  // ifas
+  db.hmset("ifa:1", "ifaid", 1, "name", "Test IFA");
+  db.sadd("ifas", 1);  
+
   // charges
   db.set("commissionpercent", 1);
   db.set("commissionmin:GBP", 10);
@@ -134,6 +138,17 @@ function initdb() {
   db.hset("symbol:BARC.L", "topic", "TIT.BARC");
   db.set("proquotesymbol:BARC", "BARC.L");
   db.sadd("instruments", "BARC.L");
+
+  // instrument types
+  db.sadd("instrumenttypes", "DE");
+  db.sadd("instrumenttypes", "IE");
+  db.sadd("instrumenttypes", "CFD");
+  db.sadd("instrumenttypes", "SPB");
+
+  db.set("instrumenttype:DE", "UK Equities");
+  db.set("instrumenttype:IE", "International Equities");
+  db.set("instrumenttype:CFD", "CFD");
+  db.set("instrumenttype:SPB", "Spreadbet");
 
   // cash - set of cash for each client & string of amount
   db.sadd("1:1:cash", "USD");

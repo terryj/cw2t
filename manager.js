@@ -48,6 +48,8 @@ if (redislocal) {
 var scriptgetclients;
 var scriptnewclient;
 var scriptgetorgs;
+var scriptgetifas;
+var scriptgetinstrumenttypes;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -211,10 +213,11 @@ function newClient(client, conn) {
   var orgclientkey;
 
   console.log("new client");
+  console.log(client);
 
   // maybe a new client or an updated client
   if (client.clientid == "") {
-    db.eval(scriptnewclient, 5, client.orgid, client.name, client.email, client.mobile, client.address, function(err, ret) {
+    db.eval(scriptnewclient, 7, client.orgid, client.name, client.email, client.mobile, client.address, client.ifaid, client.insttypes, function(err, ret) {
       if (err) throw err;
 
       if (ret[0] != 0) {
@@ -248,7 +251,17 @@ function getSendClient(orgclientkey, conn) {
       return;
     }
 
-    conn.write("{\"client\":" + JSON.stringify(client) + "}");
+    // add instrument types this client can trade
+    db.smembers(orgclientkey + ":instrumenttypes", function(err, insttypes) {
+      if (err) {
+        console.log("Error in getSendClient:" + err);
+        return;
+      }
+
+      client.insttypes = insttypes;
+
+      conn.write("{\"client\":" + JSON.stringify(client) + "}");
+    });
   });
 }
 
@@ -1429,6 +1442,8 @@ function getReasonDesc(reason) {
 function start(orgid, conn) {
   //sendInstruments(conn);
   sendOrganisations(conn);
+  sendIFAs(conn);
+  sendInstrumentTypes(conn);
   sendOrderTypes(conn);
 
   // make this the last one, as sends ready status to f/e
@@ -1561,12 +1576,54 @@ function sendClients(orgid, conn) {
 function sendOrganisations(conn) {
   // get sorted set of orgs
   db.eval(scriptgetorgs, 0, function(err, ret) {
-    console.log(ret);
     conn.write("{\"organisations\":" + ret + "}");
   });
 }
 
+function sendIFAs(conn) {
+  // get sorted set of ifas
+  db.eval(scriptgetifas, 0, function(err, ret) {
+    conn.write("{\"ifas\":" + ret + "}");
+  });
+}
+
+function sendInstrumentTypes(conn) {
+  db.eval(scriptgetinstrumenttypes, 0, function(err, ret) {
+    conn.write("{\"instrumenttypes\":" + ret + "}");
+  });
+}
+
 function registerScripts() {
+  var addremoveinstrumenttypes;
+  var stringsplit;
+
+  stringsplit = '\
+  local stringsplit = function(str, inSplitPattern) \
+    local outResults = {} \
+    local theStart = 1 \
+    local theSplitStart, theSplitEnd = string.find(str, inSplitPattern, theStart) \
+    while theSplitStart do \
+      table.insert(outResults, string.sub(str, theStart, theSplitStart-1)) \
+      theStart = theSplitEnd + 1 \
+      theSplitStart, theSplitEnd = string.find(str, inSplitPattern, theStart) \
+    end \
+    table.insert(outResults, string.sub(str, theStart)) \
+    return outResults \
+  end \
+  ';
+
+  addremoveinstrumenttypes = '\
+  local addremoveinstrumenttypes = function(orgclientkey, insttypes) \
+    for key, value in pairs(insttypes) do \
+      if value == "true" then \
+        redis.call("sadd", orgclientkey .. ":instrumenttypes", key) \
+      else \
+        redis.call("srem", orgclientkey .. ":instrumenttypes", key) \
+      end \
+    end \
+  end \
+  ';
+
   //
   // get alpha sorted list of clients for a specified organisation
   //
@@ -1584,16 +1641,21 @@ function registerScripts() {
   return cjson.encode(client) \
   ';
 
-  scriptnewclient = '\
+  scriptnewclient = stringsplit + '\
   local clientid = redis.call("incr", "clientid") \
   if not clientid then return {1005} end \
   local orgclientkey = KEYS[1] .. ":" .. clientid \
   --[[ store the client ]] \
-  redis.call("hmset", "client:" .. orgclientkey, "orgid", KEYS[1], "clientid", clientid, "name", KEYS[2], "email", KEYS[3], "mobile", KEYS[4], "address", KEYS[5]) \
+  redis.call("hmset", "client:" .. orgclientkey, "orgid", KEYS[1], "clientid", clientid, "name", KEYS[2], "email", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifa", KEYS[6]) \
   --[[ add to set of clients ]] \
   redis.call("sadd", "clients", orgclientkey) \
   --[[ add route to find client from email ]] \
   redis.call("set", "client:" .. KEYS[3], orgclientkey) \
+  --[[ add tradeable instrument types ]] \
+  local insttypes = stringsplit(KEYS[7], ",") \
+  for i = 1, #insttypes do \
+    redis.call("sadd", orgclientkey .. ":instrumenttypes", insttypes[i]) \
+  end \
   return {0, clientid} \
   ';
 
@@ -1607,5 +1669,30 @@ function registerScripts() {
     table.insert(org, {orgid = vals[1], name = vals[2]}) \
   end \
   return cjson.encode(org) \
+  ';
+//local postId, author, comment, time = unpack(ARGV);
+//local data = redis.call('zrange', leftSetId, 0, -1, 'WITHSCORES')
+//for k, v in pairs(data) do 
+  scriptgetifas = '\
+  local ifas = redis.call("sort", "ifas", "ALPHA") \
+  local fields = {"ifaid", "name"} \
+  local vals \
+  local ifa = {} \
+  for index = 1, #ifas do \
+    vals = redis.call("hmget", "ifa:" .. ifas[index], unpack(fields)) \
+    table.insert(ifa, {ifaid = vals[1], name = vals[2]}) \
+  end \
+  return cjson.encode(ifa) \
+  ';
+
+  scriptgetinstrumenttypes = '\
+  local instrumenttypes = redis.call("sort", "instrumenttypes", "ALPHA") \
+  local instrumenttype = {} \
+  local val \
+  for index = 1, #instrumenttypes do \
+    val = redis.call("get", "instrumenttype:" .. instrumenttypes[index]) \
+    table.insert(instrumenttype, {instrumenttypeid = instrumenttypes[index], description = val}) \
+  end \
+  return cjson.encode(instrumenttype) \
   ';
 }
