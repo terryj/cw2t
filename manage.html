@@ -576,8 +576,20 @@
             padding: 4px 2px;
             border: solid 1px #aacfe4;
             width: 450px;
-            margin: 2px 0 20px 10px;
+            margin: 2px 0 20px 10px;            
         }​
+        .formtextarea {
+            /*display: inline-block;
+            font-size: 21px;
+            border: 1px solid red;*/
+            font-size: 21px;
+    width: 600px;
+    height: 120px;
+    border: 1px solid #cccccc;
+    padding: 5px;
+    background-position: bottom right;
+    background-repeat: no-repeat;
+        }
         .formselect {
             display: inline-block;
             font-size: 21px;            
@@ -3552,7 +3564,8 @@
 
                 switch (selectedmenu) {
                 case 0:
-                    maintainClients();
+                    //maintainClients();
+                    maintainCash();
                     break;
                 case 1:
                     maintainCash();
@@ -3727,9 +3740,16 @@
                 inpclientid = document.createElement("input");
                 inpclientid.id = "inpclientid";
                 inpclientid.className = "forminput";
-                inpaddress = document.createElement("input");
+                //inpaddress = document.createElement("input");
+                //inpaddress.id = "inpaddress";
+                //inpaddress.className = "forminput";
+                inpaddress = document.createElement("textarea");
                 inpaddress.id = "inpaddress";
-                inpaddress.className = "forminput";
+                //inpaddress.rows = 6;
+                //inpaddress.cols = 80;
+                //inpaddress.cols = 5;
+                inpaddress.className = "formtextarea";
+
                 inpemail = document.createElement("input");
                 inpemail.id = "inpemail";
                 inpemail.className = "forminput";
@@ -3789,6 +3809,7 @@
                 inpclientid.disabled = true;
                 inpname.focus();
 
+                addNewLine(frmclient);
                 frmclient.appendChild(lblname);
                 frmclient.appendChild(inpname);
                 addNewLine(frmclient);

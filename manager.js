@@ -1597,6 +1597,11 @@ function registerScripts() {
   var addremoveinstrumenttypes;
   var stringsplit;
 
+  //
+  // function to split a string into an array of substrings, based on a character
+  // parameters are the string & character
+  // i.e. stringsplit("abc,def,hgi", ",") = ["abc", "def", "hgi"]
+  //
   stringsplit = '\
   local stringsplit = function(str, inSplitPattern) \
     local outResults = {} \
@@ -1652,9 +1657,11 @@ function registerScripts() {
   --[[ add route to find client from email ]] \
   redis.call("set", "client:" .. KEYS[3], orgclientkey) \
   --[[ add tradeable instrument types ]] \
-  local insttypes = stringsplit(KEYS[7], ",") \
-  for i = 1, #insttypes do \
-    redis.call("sadd", orgclientkey .. ":instrumenttypes", insttypes[i]) \
+  if KEYS[7] ~= "" then \
+    local insttypes = stringsplit(KEYS[7], ",") \
+    for i = 1, #insttypes do \
+      redis.call("sadd", orgclientkey .. ":instrumenttypes", insttypes[i]) \
+    end \
   end \
   return {0, clientid} \
   ';
@@ -1670,9 +1677,7 @@ function registerScripts() {
   end \
   return cjson.encode(org) \
   ';
-//local postId, author, comment, time = unpack(ARGV);
-//local data = redis.call('zrange', leftSetId, 0, -1, 'WITHSCORES')
-//for k, v in pairs(data) do 
+
   scriptgetifas = '\
   local ifas = redis.call("sort", "ifas", "ALPHA") \
   local fields = {"ifaid", "name"} \
