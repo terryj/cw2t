@@ -52,6 +52,7 @@ var scriptgetifas;
 var scriptgetinstrumenttypes;
 var scriptgetcashtranstypes;
 var scriptgetcurrencies;
+var scriptcashtrans;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -245,9 +246,13 @@ function newClient(client, conn) {
   }
 }
 
-function cashTrans(cashtrans, orgclientkey, conn) {
+function cashTrans(cashtrans, orguserkey, conn) {
   console.log("cashtrans");
   console.log(cashtrans);
+
+  db.eval(scriptcashtrans, 6, cashtrans.orgclientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.desc, orguserkey, function(err, ret) {
+    getSendCash();
+  });
 }
 
 function getSendClient(orgclientkey, conn) {
@@ -1623,6 +1628,7 @@ function sendCurrencies(conn) {
 function registerScripts() {
   var addremoveinstrumenttypes;
   var stringsplit;
+  var updatecash;
 
   //
   // function to split a string into an array of substrings, based on a character
@@ -1651,6 +1657,29 @@ function registerScripts() {
         redis.call("sadd", orgclientkey .. ":instrumenttypes", key) \
       else \
         redis.call("srem", orgclientkey .. ":instrumenttypes", key) \
+      end \
+    end \
+  end \
+  ';
+
+  //
+  // todo: tie in with server
+  //
+  updatecash = '\
+  local updatecash = function(orgclientkey, currency, amount) \
+    local cashkey = orgclientkey .. ":cash:" .. currency \
+    local cashskey = orgclientkey .. ":cash" \
+    local cash = redis.call("get", cashkey) \
+    if not cash then \
+      redis.call("set", cashkey, amount) \
+      redis.call("sadd", cashskey, currency) \
+    else \
+      local adjamount = tonumber(cash) + tonumber(amount) \
+      if adjamount == 0 then \
+        redis.call("del", cashkey) \
+        redis.call("srem", cashskey, currency) \
+      else \
+        redis.call("set", cashkey, adjamount) \
       end \
     end \
   end \
@@ -1691,6 +1720,13 @@ function registerScripts() {
     end \
   end \
   return {0, clientid} \
+  ';
+
+  scriptcashtrans = updatecash + '\
+  local cashtransid = redis.call("incr", "cashtransid") \
+  if not cashtransid then return {1005} end \
+  redis.call("hmset", "cashtrans:" .. cashtransid, "orgclientid", KEYS[1], "currency", KEYS[2], "transtype", KEYS[3], "amount", KEYS[4], "desc", KEYS[5], "orguserid", KEYS[6]) \
+  updatecash(KEYS[1], KEYS[2], KEYS[4]);
   ';
 
   scriptgetorgs = '\

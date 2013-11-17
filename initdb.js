@@ -51,6 +51,7 @@ function initdb() {
   db.set("ordercancelreqid", 0);
   db.set("fobomsgid", 0);
   db.set("positionid", 0);
+  db.set("cashtransid", 0);
 
   // organisations
   db.hmset("organisation:1", "orgid", 1, "name", "Thomas Grant & Company");
