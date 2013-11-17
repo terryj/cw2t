@@ -738,6 +738,9 @@
             } else if (msg.substr(2, 4) == "ifas") {
                 obj = JSON.parse(msg);
                 loadIFAs(obj.ifas);
+            } else if (msg.substr(2, 10) == "currencies") {
+                obj = JSON.parse(msg);
+                loadCurrencies(obj.currencies);
             } else if (msg.substr(2,6) == "status") {
                 obj = JSON.parse(msg);
                 statusMsg(obj.status);
@@ -871,6 +874,12 @@
             }                                                            
         }
 
+        function loadCurrencies(currencyarr) {
+            for (var i = 0; i < currencyarr.length; ++i) {
+                currencies[currencyarr[i]] = currencyarr[i];
+            }                                                                        
+        }
+
         function displayIndex(index) {
             var s;
             var sym;
@@ -906,7 +915,7 @@
                         msg = client.name + " added";
                     }
 
-                    displayClient(null, msg);
+                    displayClient(null, "frmclient");
                 }
             }
         }
@@ -3605,7 +3614,7 @@
             }
         }
 
-        function selectClient() {
+        function selectClient(frm) {
             var clientbox;
             var clientboxinput;
             var clientlist;
@@ -3663,7 +3672,7 @@
                 clientboxinput.value = "";
                 clientboxinput.focus();
 
-                displayClient(clients[element.value], "");
+                displayClient(clients[element.value], frm);
             }
 
             clientbox.appendChild(clientboxinput);
@@ -3712,7 +3721,7 @@
                 return;
             }
              
-            selectClient();
+            selectClient("frmclient");
 
             frmclient = document.createElement("form");
             frmclient.id = "frmclient";
@@ -3857,7 +3866,7 @@
 
             main.appendChild(frmclient);
 
-            displayClient(null, "");
+            displayClient(null, "frmclient");
         }
 
         function addNewLine(frmclient) {
@@ -3866,62 +3875,88 @@
             frmclient.appendChild(newline);
         }
 
-        function displayClient(client, msg) {
-            var inpname = document.getElementById("inpname");
-            var inpmobile = document.getElementById("inpmobile");
-            var selorg = document.getElementById("selorg");
-            var inpclientid = document.getElementById("inpclientid");
-            var inpaddress = document.getElementById("inpaddress");
-            var inpemail = document.getElementById("inpemail");
-            var lblclientconf = document.getElementById("lblclientconf");
+        function displayClient(client, frm) {
+            var inpclient;
+            var inpname;
+            var inpmobile;
+            var selorg;
+            var inpclientid;
+            var inpaddress;
+            var inpemail;
+            var selifa;
 
-            // create an empty client
-            if (client == null) {
-                client = {
-                    name:  '',
-                    mobile:    '',
-                    orgid:  1,
-                    clientid: '',
-                    address: '',
-                    email: ''
-                };
+            if (frm == "frmclient") {
+                inpname = document.getElementById("inpname");
+                inpmobile = document.getElementById("inpmobile");
+                selorg = document.getElementById("selorg");
+                inpclientid = document.getElementById("inpclientid");
+                inpaddress = document.getElementById("inpaddress");
+                inpemail = document.getElementById("inpemail");
+                selifa = document.getElementById("selifa");
+
+                // create an empty client
+                if (client == null) {
+                    client = {
+                        name:  '',
+                        mobile:    '',
+                        orgid:  1,
+                        clientid: '',
+                        address: '',
+                        email: '',
+                        ifaid: ''
+                    };
+                }
+
+                if (inpname != null) {
+                    inpname.value = client.name;
+                    inpmobile.value = client.mobile;
+                    populateOrgs(selorg, client.orgid);
+                    inpclientid.value = client.clientid;
+                    inpaddress.value = client.address;
+                    inpemail.value = client.email;
+                    populateIFAs(selifa, client.ifaid);
+                }
+            } else {
+                inpclient = document.getElementById("inpclient");
+                inpclient.value = client.name + " (" + client.email + ")";
+                inpclientid = document.getElementById("inpclientid");
+                inpclientid.value = client.orgid + ":" + client.clientid;
             }
-
-            if (inpname != null) {
-                inpname.value = client.name;
-                inpmobile.value = client.mobile;
-                populateOrgs(selorg, client.orgid);
-                inpclientid.value = client.clientid;
-                inpaddress.value = client.address;
-                inpemail.value = client.email;
-            }
-
-            lblclientconf.innerHTML = msg;
         }
 
         function maintainCash() {
             var frmcash;
+            var lblclient;
             var lblcurrency;
             var lbltranstype;
             var lblamount;
             var lbldesc;
             var selcurrency;
             var seltranstype;
+            var inpclient;
             var inpamount;
             var inpdesc;
             var btnupdate;
             var lblcashconf;
+            var inpclientid;
+            var clientboxinput;
 
             frmcash = document.getElementById("frmcash");
             if (frmcash != null) {
                 return;
             }
 
-            selectClient();
+            selectClient("frmcash");
 
             frmcash = document.createElement("form");
             frmcash.id = "frmcash";
 
+            lblclient = document.createElement("label");
+            lblclient.className = "formlabel";
+            lblclient.innerHTML = "Client:";
+            inpclient = document.createElement("input");
+            inpclient.className = "forminput";
+            inpclient.id = "inpclient";
             lblcurrency = document.createElement("label");
             lblcurrency.className = "formlabel";
             lblcurrency.innerHTML = "Currency:";
@@ -3946,6 +3981,10 @@
             inpdesc = document.createElement("input");
             inpdesc.id = "inpdesc";
             inpdesc.className = "forminput";
+            inpdesc = document.createElement("input");
+            inpclientid = document.createElement("input");
+            inpclientid.type = "hidden";
+            inpclientid.id = "inpclientid";
 
             btnupdate = document.createElement("input");
             btnupdate.type = "button";
@@ -3953,7 +3992,16 @@
             btnupdate.className = "formsigninbutton";
 
             btnupdate.onclick = function() {
-                var cashtrans;
+                var cashtrans = {};
+
+                if (inpclientid.value == "") {
+                    alert("Please select a client");
+                    clientboxinput = document.getElementById("clientboxinput");
+                    if (clientboxinput != null) {
+                        clientboxinput.focus();
+                    }
+                    return;
+                }
 
                 if (inpamount.value == "") {
                     alert("Please enter an amount");
@@ -3961,6 +4009,17 @@
                     return;
                 }
 
+                if (selcurrency.selectedIndex == -1) {
+                    alert("No currency selected. Please contact Support");
+                    return;
+                }
+
+                if (seltranstype.selectedIndex == -1) {
+                    alert("No transaction type selected. Please contact Support");
+                    return;
+                }
+
+                cashtrans.orgclientid = inpclientid.value;
                 cashtrans.currency = selcurrency[selcurrency.selectedIndex].value;
                 cashtrans.transtype = seltranstype[seltranstype.selectedIndex].value;
                 cashtrans.amount = inpamount.value;
@@ -3973,8 +4032,13 @@
             lblcashconf.id = "lblcashconf";
 
             populateCurrencies(selcurrency, "GBP");
-            populateCashtranstypes(selcurrency, "CI");
+            populateCashtranstypes(seltranstype, "CI");
 
+            inpclient.disabled = true;
+
+            addNewLine(frmcash);
+            frmcash.appendChild(lblclient);
+            frmcash.appendChild(inpclient);
             addNewLine(frmcash);
             frmcash.appendChild(lblcurrency);
             frmcash.appendChild(selcurrency);
@@ -3991,6 +4055,7 @@
             frmcash.appendChild(btnupdate);
             addNewLine(frmcash);
             frmcash.appendChild(lblcashconf);
+            frmcash.appendChild(inpclientid);
 
             main.appendChild(frmcash);
         }

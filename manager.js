@@ -51,6 +51,7 @@ var scriptgetorgs;
 var scriptgetifas;
 var scriptgetinstrumenttypes;
 var scriptgetcashtranstypes;
+var scriptgetcurrencies;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -116,6 +117,8 @@ function listen() {
       var obj;
       console.log('recd:' + msg);
 
+      // todo: no orgclientkey
+
       if (msg.substr(2, 18) == "ordercancelrequest") {
         obj = JSON.parse(msg);
         orderCancelRequest(clientid, obj.ordercancelrequest);
@@ -146,6 +149,9 @@ function listen() {
       } else if (msg.substr(2, 9) == "newclient") {
         obj = JSON.parse(msg);
         newClient(obj.newclient, conn);
+      } else if (msg.substr(2, 9) == "cashtrans") {
+        obj = JSON.parse(msg);
+        cashTrans(obj.cashtrans, orguserkey, conn);
       } else if (msg.substr(0, 4) == "ping") {
         conn.write("pong");
       } else {
@@ -237,6 +243,11 @@ function newClient(client, conn) {
 
     getSendClient(orgclientkey, conn);
   }
+}
+
+function cashTrans(cashtrans, orgclientkey, conn) {
+  console.log("cashtrans");
+  console.log(cashtrans);
 }
 
 function getSendClient(orgclientkey, conn) {
@@ -1447,6 +1458,7 @@ function start(orgid, conn) {
   sendInstrumentTypes(conn);
   sendOrderTypes(conn);
   sendCashTransTypes(conn);
+  sendCurrencies(conn);
 
   // make this the last one, as sends ready status to f/e
   sendClients(orgid, conn);
@@ -1601,6 +1613,13 @@ function sendCashTransTypes(conn) {
   });  
 }
 
+function sendCurrencies(conn) {
+  db.eval(scriptgetcurrencies, 0, function(err, ret) {
+    console.log(ret);
+    conn.write("{\"currencies\":" + ret + "}");
+  });  
+}
+
 function registerScripts() {
   var addremoveinstrumenttypes;
   var stringsplit;
@@ -1718,5 +1737,14 @@ function registerScripts() {
     table.insert(cashtranstype, {cashtranstypeid = cashtranstypes[index], description = val}) \
   end \
   return cjson.encode(cashtranstype) \
+  ';
+
+  scriptgetcurrencies = '\
+  local currencies = redis.call("sort", "currencies", "ALPHA") \
+  local currency = {} \
+  for index = 1, #currencies do \
+    table.insert(currency, currencies[index]) \
+  end \
+  return cjson.encode(currency) \
   ';
 }

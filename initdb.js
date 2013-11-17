@@ -161,6 +161,11 @@ function initdb() {
   db.set("cashtranstype:JI", "Journal In");
   db.set("cashtranstype:JO", "Journal Out");
 
+  // currencies
+  db.sadd("currencies", "GBP");
+  db.sadd("currencies", "EUR");
+  db.sadd("currencies", "USD");
+
   // cash - set of cash for each client & string of amount
   db.sadd("1:1:cash", "USD");
   db.set("1:1:cash:USD", 100000);
