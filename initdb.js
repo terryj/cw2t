@@ -150,6 +150,17 @@ function initdb() {
   db.set("instrumenttype:CFD", "CFD");
   db.set("instrumenttype:SPB", "Spreadbet");
 
+  // cash transaction types
+  db.sadd("cashtranstypes", "CI");
+  db.sadd("cashtranstypes", "CO");
+  db.sadd("cashtranstypes", "JI");
+  db.sadd("cashtranstypes", "JO");
+
+  db.set("cashtranstype:CI", "Cash In");
+  db.set("cashtranstype:CO", "Cash Out");
+  db.set("cashtranstype:JI", "Journal In");
+  db.set("cashtranstype:JO", "Journal Out");
+
   // cash - set of cash for each client & string of amount
   db.sadd("1:1:cash", "USD");
   db.set("1:1:cash:USD", 100000);

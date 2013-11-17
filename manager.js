@@ -50,6 +50,7 @@ var scriptnewclient;
 var scriptgetorgs;
 var scriptgetifas;
 var scriptgetinstrumenttypes;
+var scriptgetcashtranstypes;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -1445,6 +1446,7 @@ function start(orgid, conn) {
   sendIFAs(conn);
   sendInstrumentTypes(conn);
   sendOrderTypes(conn);
+  sendCashTransTypes(conn);
 
   // make this the last one, as sends ready status to f/e
   sendClients(orgid, conn);
@@ -1593,6 +1595,12 @@ function sendInstrumentTypes(conn) {
   });
 }
 
+function sendCashTransTypes(conn) {
+  db.eval(scriptgetcashtranstypes, 0, function(err, ret) {
+    conn.write("{\"cashtranstypes\":" + ret + "}");
+  });  
+}
+
 function registerScripts() {
   var addremoveinstrumenttypes;
   var stringsplit;
@@ -1699,5 +1707,16 @@ function registerScripts() {
     table.insert(instrumenttype, {instrumenttypeid = instrumenttypes[index], description = val}) \
   end \
   return cjson.encode(instrumenttype) \
+  ';
+
+  scriptgetcashtranstypes = '\
+  local cashtranstypes = redis.call("sort", "cashtranstypes", "ALPHA") \
+  local cashtranstype = {} \
+  local val \
+  for index = 1, #cashtranstypes do \
+    val = redis.call("get", "cashtranstype:" .. cashtranstypes[index]) \
+    table.insert(cashtranstype, {cashtranstypeid = cashtranstypes[index], description = val}) \
+  end \
+  return cjson.encode(cashtranstype) \
   ';
 }

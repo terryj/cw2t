@@ -630,6 +630,8 @@
         var organisations = {};
         var ifas = {};
         var instrumenttypes = {};
+        var cashtranstypes = {};
+        var currencies = {};
         var lastElement = null;
         var lastsymbol = null;
         var extendedsettlement = false;
@@ -691,6 +693,9 @@
             } else if (msg.substr(2, 8) == "cashitem") {
                 obj = JSON.parse(msg);
                 updateCash(obj.cashitem);
+            } else if (msg.substr(2, 14) == "cashtranstypes") {
+                obj = JSON.parse(msg);
+                loadCashtransTypes(obj.cashtranstypes);
             } else if (msg.substr(2, 4) == "cash") {
                 obj = JSON.parse(msg);
                 loadCash(obj.cash);
@@ -824,26 +829,11 @@
             loadTimeinforces();                     
          }
 
-         function loadTimeinforces() {
+        function loadTimeinforces() {
             timeinforces[0] = "Good For Day";
             timeinforces[1] = "Good Till Date";
             timeinforces[2] = "Good Till Cancelled";
-         }
-
-         function displayIndex(index) {
-            var s;
-            var sym;
-
-            if (!(index in indices)) {return};
-
-            for (var i = 0; i < indices[index].length; ++i) {
-                sym = indices[index][i].symbol;
-                if (sym in instruments) {
-                    s = instruments[sym].symbol + ' ' + instruments[sym].description;
-                    addElement(s, list1, sym);
-                }
-            }
-         }
+        }
 
         function loadQuotes(quotearr) {
             for (var i = 0; i < quotearr.length; ++i) {
@@ -873,6 +863,27 @@
             for (var i = 0; i < insttypearr.length; ++i) {
                 instrumenttypes[insttypearr[i].instrumenttypeid] = insttypearr[i];
             }                                                
+        }
+
+        function loadCashtransTypes(cashtransarr) {
+            for (var i = 0; i < cashtransarr.length; ++i) {
+                cashtranstypes[cashtransarr[i].cashtranstypeid] = cashtransarr[i];
+            }                                                            
+        }
+
+        function displayIndex(index) {
+            var s;
+            var sym;
+
+            if (!(index in indices)) {return};
+
+            for (var i = 0; i < indices[index].length; ++i) {
+                sym = indices[index][i].symbol;
+                if (sym in instruments) {
+                    s = instruments[sym].symbol + ' ' + instruments[sym].description;
+                    addElement(s, list1, sym);
+                }
+            }
         }
 
         function updateClient(client) {
@@ -906,7 +917,8 @@
 
             selectedmenu = 0;
 
-            maintainClients();
+            //maintainClients();
+            maintainCash();
         }
 
         function statusMsg(status) {
@@ -3564,8 +3576,7 @@
 
                 switch (selectedmenu) {
                 case 0:
-                    //maintainClients();
-                    maintainCash();
+                    maintainClients();
                     break;
                 case 1:
                     maintainCash();
@@ -3697,157 +3708,154 @@
             var lblclientconf;
 
             frmclient = document.getElementById("frmclient");
-            if (frmclient == null) {
-                selectClient();
+            if (frmclient != null) {
+                return;
+            }
+             
+            selectClient();
 
-                frmclient = document.createElement("form");
-                frmclient.id = "frmclient";
+            frmclient = document.createElement("form");
+            frmclient.id = "frmclient";
 
-                lblname = document.createElement("label");
-                lblname.className = "formlabel";
-                lblname.innerHTML = "Name:";
-                lblmobile = document.createElement("label");
-                lblmobile.className = "formlabel";
-                lblmobile.innerHTML = "Mobile:";
-                lblorg = document.createElement("label");
-                lblorg.className = "formlabel";
-                lblorg.innerHTML = "Organisation:";
-                lblclientid = document.createElement("label");
-                lblclientid.className = "formlabel";
-                lblclientid.innerHTML = "Client Id:";
-                lbladdress = document.createElement("label");
-                lbladdress.className = "formlabel";
-                lbladdress.innerHTML = "Address:";
-                lblemail = document.createElement("label");
-                lblemail.className = "formlabel";
-                lblemail.innerHTML = "Email:";
-                lblifa = document.createElement("label");
-                lblifa.className = "formlabel";
-                lblifa.innerHTML = "IFA:";
-                lblcantrade = document.createElement("label");
-                lblcantrade.className = "formlabel";
-                lblcantrade.innerHTML = "Can Trade:";
+            lblname = document.createElement("label");
+            lblname.className = "formlabel";
+            lblname.innerHTML = "Name:";
+            lblmobile = document.createElement("label");
+            lblmobile.className = "formlabel";
+            lblmobile.innerHTML = "Mobile:";
+            lblorg = document.createElement("label");
+            lblorg.className = "formlabel";
+            lblorg.innerHTML = "Organisation:";
+            lblclientid = document.createElement("label");
+            lblclientid.className = "formlabel";
+            lblclientid.innerHTML = "Client Id:";
+            lbladdress = document.createElement("label");
+            lbladdress.className = "formlabel";
+            lbladdress.innerHTML = "Address:";
+            lblemail = document.createElement("label");
+            lblemail.className = "formlabel";
+            lblemail.innerHTML = "Email:";
+            lblifa = document.createElement("label");
+            lblifa.className = "formlabel";
+            lblifa.innerHTML = "IFA:";
+            lblcantrade = document.createElement("label");
+            lblcantrade.className = "formlabel";
+            lblcantrade.innerHTML = "Can Trade:";
 
-                inpname = document.createElement("input");
-                inpname.id = "inpname";
-                inpname.className = "forminput";
-                inpmobile = document.createElement("input");
-                inpmobile.id = "inpmobile";
-                inpmobile.className = "forminput";
-                selorg = document.createElement("select");
-                selorg.id = "selorg";
-                selorg.className = "formselect";
-                inpclientid = document.createElement("input");
-                inpclientid.id = "inpclientid";
-                inpclientid.className = "forminput";
-                //inpaddress = document.createElement("input");
-                //inpaddress.id = "inpaddress";
-                //inpaddress.className = "forminput";
-                inpaddress = document.createElement("textarea");
-                inpaddress.id = "inpaddress";
-                //inpaddress.rows = 6;
-                //inpaddress.cols = 80;
-                //inpaddress.cols = 5;
-                inpaddress.className = "formtextarea";
+            inpname = document.createElement("input");
+            inpname.id = "inpname";
+            inpname.className = "forminput";
+            inpmobile = document.createElement("input");
+            inpmobile.id = "inpmobile";
+            inpmobile.className = "forminput";
+            selorg = document.createElement("select");
+            selorg.id = "selorg";
+            selorg.className = "formselect";
+            inpclientid = document.createElement("input");
+            inpclientid.id = "inpclientid";
+            inpclientid.className = "forminput";
+            inpaddress = document.createElement("textarea");
+            inpaddress.id = "inpaddress";
+            inpaddress.className = "formtextarea";
+            inpemail = document.createElement("input");
+            inpemail.id = "inpemail";
+            inpemail.className = "forminput";
+            selifa = document.createElement("select");
+            selifa.id = "selorg";
+            selifa.className = "formselect";
 
-                inpemail = document.createElement("input");
-                inpemail.id = "inpemail";
-                inpemail.className = "forminput";
-                selifa = document.createElement("select");
-                selifa.id = "selorg";
-                selifa.className = "formselect";
+            btnupdate = document.createElement("input");
+            btnupdate.type = "button";
+            btnupdate.value = "Add";
+            btnupdate.className = "formsigninbutton";
 
-                btnupdate = document.createElement("input");
-                btnupdate.type = "button";
-                btnupdate.value = "Add";
-                btnupdate.className = "formsigninbutton";
+            btnupdate.onclick = function() {
+                var client = {};
+                var insttypes = [];
+                var chkinsttype;
 
-                btnupdate.onclick = function() {
-                    var client = {};
-                    var insttypes = [];
-                    var chkinsttype;
-
-                    if (inpname.value == "") {
-                        alert("Please enter a name");
-                        inpname.focus();
-                        return;
-                    }
-
-                    if (inpemail.value == "") {
-                        alert("Please enter an email address");
-                        inpemail.focus();
-                        return;                        
-                    }
-
-                    client.name = inpname.value;
-                    client.mobile = inpmobile.value;
-                    client.orgid = selorg[selorg.selectedIndex].value;
-                    client.clientid = inpclientid.value;
-                    client.address = inpaddress.value;
-                    client.email = inpemail.value;
-                    client.ifaid = selifa[selifa.selectedIndex].value;
-
-                    for (var i in instrumenttypes) {
-                        chkinsttype = document.getElementById("checkbox:" + instrumenttypes[i].instrumenttypeid);
-
-                        if (chkinsttype.checked) {
-                            insttypes.push(instrumenttypes[i].instrumenttypeid);
-                        }
-
-                        client.insttypes = insttypes;
-                    }
-
-                    sockjs.send("{\"newclient\":" + JSON.stringify(client) + "}");
+                if (inpname.value == "") {
+                    alert("Please enter a name");
+                    inpname.focus();
+                    return;
                 }
 
-                lblclientconf = document.createElement("label");
-                lblclientconf.id = "lblclientconf";
+                if (inpemail.value == "") {
+                    alert("Please enter an email address");
+                    inpemail.focus();
+                    return;                        
+                }
 
-                populateOrgs(selorg, 1);
-                populateIFAs(selifa, 1);
-
-                inpclientid.disabled = true;
-                inpname.focus();
-
-                addNewLine(frmclient);
-                frmclient.appendChild(lblname);
-                frmclient.appendChild(inpname);
-                addNewLine(frmclient);
-                frmclient.appendChild(lblemail);
-                frmclient.appendChild(inpemail);
-                addNewLine(frmclient);
-                frmclient.appendChild(lblmobile);
-                frmclient.appendChild(inpmobile);
-                addNewLine(frmclient);
-                frmclient.appendChild(lbladdress);
-                frmclient.appendChild(inpaddress);
-                addNewLine(frmclient);
-                frmclient.appendChild(lblorg);
-                frmclient.appendChild(selorg);
-                addNewLine(frmclient);
-                frmclient.appendChild(lblifa);
-                frmclient.appendChild(selifa);
-                addNewLine(frmclient);
-                frmclient.appendChild(lblcantrade);
+                client.name = inpname.value;
+                client.mobile = inpmobile.value;
+                client.orgid = selorg[selorg.selectedIndex].value;
+                client.clientid = inpclientid.value;
+                client.address = inpaddress.value;
+                client.email = inpemail.value;
+                client.ifaid = selifa[selifa.selectedIndex].value;
 
                 for (var i in instrumenttypes) {
-                    var chkinsttype = document.createElement("input");
-                    chkinsttype.type = "checkbox";
-                    chkinsttype.id = "checkbox:" + instrumenttypes[i].instrumenttypeid;
-                    var textinsttype = document.createTextNode(instrumenttypes[i].description);
+                    chkinsttype = document.getElementById("checkbox:" + instrumenttypes[i].instrumenttypeid);
 
-                    frmclient.appendChild(chkinsttype);
-                    frmclient.appendChild(textinsttype);
+                    if (chkinsttype.checked) {
+                        insttypes.push(instrumenttypes[i].instrumenttypeid);
+                    }
+
+                    client.insttypes = insttypes;
                 }
 
-                addNewLine(frmclient);
-                frmclient.appendChild(lblclientid);
-                frmclient.appendChild(inpclientid);
-                addNewLine(frmclient);
-                frmclient.appendChild(btnupdate);
-                frmclient.appendChild(lblclientconf);
-                main.appendChild(frmclient);
+                sockjs.send("{\"newclient\":" + JSON.stringify(client) + "}");
             }
+
+            lblclientconf = document.createElement("label");
+            lblclientconf.id = "lblclientconf";
+
+            populateOrgs(selorg, 1);
+            populateIFAs(selifa, 1);
+
+            inpclientid.disabled = true;
+            inpname.focus();
+
+            addNewLine(frmclient);
+            frmclient.appendChild(lblname);
+            frmclient.appendChild(inpname);
+            addNewLine(frmclient);
+            frmclient.appendChild(lblemail);
+            frmclient.appendChild(inpemail);
+            addNewLine(frmclient);
+            frmclient.appendChild(lblmobile);
+            frmclient.appendChild(inpmobile);
+            addNewLine(frmclient);
+            frmclient.appendChild(lbladdress);
+            frmclient.appendChild(inpaddress);
+            addNewLine(frmclient);
+            frmclient.appendChild(lblorg);
+            frmclient.appendChild(selorg);
+            addNewLine(frmclient);
+            frmclient.appendChild(lblifa);
+            frmclient.appendChild(selifa);
+            addNewLine(frmclient);
+            frmclient.appendChild(lblcantrade);
+
+            for (var i in instrumenttypes) {
+                var chkinsttype = document.createElement("input");
+                chkinsttype.type = "checkbox";
+                chkinsttype.id = "checkbox:" + instrumenttypes[i].instrumenttypeid;
+                var textinsttype = document.createTextNode(instrumenttypes[i].description);
+
+                frmclient.appendChild(chkinsttype);
+                frmclient.appendChild(textinsttype);
+            }
+
+            addNewLine(frmclient);
+            frmclient.appendChild(lblclientid);
+            frmclient.appendChild(inpclientid);
+            addNewLine(frmclient);
+            frmclient.appendChild(btnupdate);
+            addNewLine(frmclient);
+            frmclient.appendChild(lblclientconf);
+
+            main.appendChild(frmclient);
 
             displayClient(null, "");
         }
@@ -3891,27 +3899,151 @@
             lblclientconf.innerHTML = msg;
         }
 
-        function populateOrgs(orgselect, orgid) {
+        function maintainCash() {
+            var frmcash;
+            var lblcurrency;
+            var lbltranstype;
+            var lblamount;
+            var lbldesc;
+            var selcurrency;
+            var seltranstype;
+            var inpamount;
+            var inpdesc;
+            var btnupdate;
+            var lblcashconf;
+
+            frmcash = document.getElementById("frmcash");
+            if (frmcash != null) {
+                return;
+            }
+
+            selectClient();
+
+            frmcash = document.createElement("form");
+            frmcash.id = "frmcash";
+
+            lblcurrency = document.createElement("label");
+            lblcurrency.className = "formlabel";
+            lblcurrency.innerHTML = "Currency:";
+            selcurrency = document.createElement("select");
+            selcurrency.id = "selcurrency";
+            selcurrency.className = "formselect";
+            lbltranstype = document.createElement("label");
+            lbltranstype.className = "formlabel";
+            lbltranstype.innerHTML = "Type:";
+            seltranstype = document.createElement("select");
+            seltranstype.id = "seltranstype";
+            seltranstype.className = "formselect";
+            lblamount = document.createElement("label");
+            lblamount.className = "formlabel";
+            lblamount.innerHTML = "Amount:";
+            inpamount = document.createElement("input");
+            inpamount.id = "inpamount";
+            inpamount.className = "forminput";
+            lbldesc = document.createElement("label");
+            lbldesc.className = "formlabel";
+            lbldesc.innerHTML = "Description:";
+            inpdesc = document.createElement("input");
+            inpdesc.id = "inpdesc";
+            inpdesc.className = "forminput";
+
+            btnupdate = document.createElement("input");
+            btnupdate.type = "button";
+            btnupdate.value = "Add";
+            btnupdate.className = "formsigninbutton";
+
+            btnupdate.onclick = function() {
+                var cashtrans;
+
+                if (inpamount.value == "") {
+                    alert("Please enter an amount");
+                    inpamount.focus();
+                    return;
+                }
+
+                cashtrans.currency = selcurrency[selcurrency.selectedIndex].value;
+                cashtrans.transtype = seltranstype[seltranstype.selectedIndex].value;
+                cashtrans.amount = inpamount.value;
+                cashtrans.desc = inpdesc.value;
+
+                sockjs.send("{\"cashtrans\":" + JSON.stringify(cashtrans) + "}");
+            }
+
+            lblcashconf = document.createElement("label");
+            lblcashconf.id = "lblcashconf";
+
+            populateCurrencies(selcurrency, "GBP");
+            populateCashtranstypes(selcurrency, "CI");
+
+            addNewLine(frmcash);
+            frmcash.appendChild(lblcurrency);
+            frmcash.appendChild(selcurrency);
+            addNewLine(frmcash);
+            frmcash.appendChild(lbltranstype);
+            frmcash.appendChild(seltranstype);
+            addNewLine(frmcash);
+            frmcash.appendChild(lblamount);
+            frmcash.appendChild(inpamount);
+            addNewLine(frmcash);
+            frmcash.appendChild(lbldesc);
+            frmcash.appendChild(inpdesc);
+            addNewLine(frmcash);
+            frmcash.appendChild(btnupdate);
+            addNewLine(frmcash);
+            frmcash.appendChild(lblcashconf);
+
+            main.appendChild(frmcash);
+        }
+
+        function populateOrgs(orgselect, defaultid) {
             var i = 0;
 
             for (var j in organisations) {
-                if (organisations[j].orgid == orgid) {
+                if (organisations[j].orgid == defaultid) {
                     orgselect[i] = new Option(organisations[j].name, organisations[j].orgid, true, true);
                 } else {
                     orgselect[i] = new Option(organisations[j].name, organisations[j].orgid, false, false);                    
                 }
+                i++;
             }
         }
 
-        function populateIFAs(ifaselect, ifaid) {
+        function populateIFAs(ifaselect, defaultid) {
             var i = 0;
 
             for (var j in ifas) {
-                if (ifas[j].ifaid == ifaid) {
+                if (ifas[j].ifaid == defaultid) {
                     ifaselect[i] = new Option(ifas[j].name, ifas[j].ifaid, true, true);
                 } else {
                     ifaselect[i] = new Option(ifas[j].name, ifas[j].ifaid, false, false);                    
                 }
+                i++;
+            }
+        }
+
+        function populateCurrencies(currselect, defaultid) {
+            var i = 0;
+
+            for (var j in currencies) {
+                if (currencies[j] == defaultid) {
+                    currselect[i] = new Option(currencies[j], currencies[j], true, true);
+                } else {
+                    currselect[i] = new Option(currencies[j], currencies[j], false, false);                    
+                }
+                i++;
+            }
+        }
+
+        function populateCashtranstypes(transtypeselect, defaultid) {
+            var i = 0;
+
+            for (var j in cashtranstypes) {
+                if (cashtranstypes[j].cashtranstypeid == defaultid) {
+                    transtypeselect[i] = new Option(cashtranstypes[j].description, cashtranstypes[j].cashtranstypeid, true, true);
+                } else {
+                    transtypeselect[i] = new Option(cashtranstypes[j].description, cashtranstypes[j].cashtranstypeid, false, false);         
+                }
+                i++;
             }
         }
 
