@@ -251,7 +251,14 @@ function cashTrans(cashtrans, orguserkey, conn) {
   console.log(cashtrans);
 
   db.eval(scriptcashtrans, 6, cashtrans.orgclientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.desc, orguserkey, function(err, ret) {
-    getSendCash();
+    if (err) throw err;
+
+    if (ret != 0) {
+      console.log("Error in scriptcashtrans:" + getReasonDesc(ret));
+      return;
+    }
+
+    //getSendCash();
   });
 }
 
@@ -1724,9 +1731,10 @@ function registerScripts() {
 
   scriptcashtrans = updatecash + '\
   local cashtransid = redis.call("incr", "cashtransid") \
-  if not cashtransid then return {1005} end \
+  if not cashtransid then return 1005 end \
   redis.call("hmset", "cashtrans:" .. cashtransid, "orgclientid", KEYS[1], "currency", KEYS[2], "transtype", KEYS[3], "amount", KEYS[4], "desc", KEYS[5], "orguserid", KEYS[6]) \
-  updatecash(KEYS[1], KEYS[2], KEYS[4]);
+  updatecash(KEYS[1], KEYS[2], KEYS[4]) \
+  return 0 \
   ';
 
   scriptgetorgs = '\
