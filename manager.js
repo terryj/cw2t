@@ -53,6 +53,7 @@ var scriptgetinstrumenttypes;
 var scriptgetcashtranstypes;
 var scriptgetcurrencies;
 var scriptcashtrans;
+var scriptupdateclient;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -218,8 +219,6 @@ function listen() {
 }
 
 function newClient(client, conn) {
-  var orgclientkey;
-
   console.log("new client");
   console.log(client);
 
@@ -233,16 +232,19 @@ function newClient(client, conn) {
         return;
       }
 
-      orgclientkey = client.orgid + ":" + ret[1];
-
-      getSendClient(orgclientkey, conn);
+      getSendClient(ret[1], conn);
     });
   } else {
-    orgclientkey = client.orgid + ":" + client.clientid;
+    db.eval(scriptupdateclient, 8, client.clientid, client.orgid, client.name, client.email, client.mobile, client.address, client.ifaid, client.insttypes, function(err, ret) {
+      if (err) throw err;
 
-    db.hmset("client:" + orgclientkey, client);
+      if (ret != 0) {
+        console.log("Error in scriptupdateclient:" + getReasonDesc(ret));
+        return;
+      }
 
-    getSendClient(orgclientkey, conn);
+      getSendClient(client.clientid, conn);
+    });
   }
 }
 
@@ -250,20 +252,22 @@ function cashTrans(cashtrans, orguserkey, conn) {
   console.log("cashtrans");
   console.log(cashtrans);
 
-  db.eval(scriptcashtrans, 6, cashtrans.orgclientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.desc, orguserkey, function(err, ret) {
+  cashtrans.timestamp = getUTCTimeStamp();
+
+  db.eval(scriptcashtrans, 7, cashtrans.orgclientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.desc, cashtrans.timestamp, "user:" + orguserkey, function(err, ret) {
     if (err) throw err;
 
-    if (ret != 0) {
-      console.log("Error in scriptcashtrans:" + getReasonDesc(ret));
+    if (ret[0] != 0) {
+      console.log("Error in scriptcashtrans:" + getReasonDesc(ret[0]));
       return;
     }
 
-    //getSendCash();
+    getSendCashtrans(ret[1], conn);
   });
 }
 
-function getSendClient(orgclientkey, conn) {
-  db.hgetall("client:" + orgclientkey, function(err, client) {
+function getSendClient(clientid, conn) {
+  db.hgetall("client:" + clientid, function(err, client) {
     if (err) {
       console.log(err);
       return;
@@ -271,21 +275,39 @@ function getSendClient(orgclientkey, conn) {
 
     // send anyway, even if no position, as may need to clear f/e - todo: review
     if (client == null) {
-      console.log("Client not found, id:" + orgclientkey);
+      console.log("Client not found, id:" + clientid);
       return;
     }
 
     // add instrument types this client can trade
-    db.smembers(orgclientkey + ":instrumenttypes", function(err, insttypes) {
+    db.smembers(clientid + ":instrumenttypes", function(err, insttypes) {
       if (err) {
         console.log("Error in getSendClient:" + err);
         return;
       }
 
       client.insttypes = insttypes;
+      console.log(client);
 
       conn.write("{\"client\":" + JSON.stringify(client) + "}");
     });
+  });
+}
+
+function getSendCashtrans(cashtransid, conn) {
+  db.hgetall("cashtrans:" + cashtransid, function(err, cashtrans) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    // send anyway, even if no position, as may need to clear f/e - todo: review
+    if (cashtrans == null) {
+      console.log("Cash transaction not found:" + cashtransid);
+      return;
+    }
+
+    conn.write("{\"cashtrans\":" + JSON.stringify(cashtrans) + "}");
   });
 }
 
@@ -1456,6 +1478,9 @@ function getReasonDesc(reason) {
     case 1016:
       desc = "Proquote symbol not found";
       break;
+    case 1017:
+      desc = "Client not found";
+      break;
     default:
       desc = "Unknown reason";
   }
@@ -1627,7 +1652,6 @@ function sendCashTransTypes(conn) {
 
 function sendCurrencies(conn) {
   db.eval(scriptgetcurrencies, 0, function(err, ret) {
-    console.log(ret);
     conn.write("{\"currencies\":" + ret + "}");
   });  
 }
@@ -1673,10 +1697,17 @@ function registerScripts() {
   // todo: tie in with server
   //
   updatecash = '\
-  local updatecash = function(orgclientkey, currency, amount) \
+  local updatecash = function(orgclientkey, currency, transtype, amount, desc, timestamp, operator) \
+    local cashtransid = redis.call("incr", "cashtransid") \
+    if not cashtransid then return {1005} end \
+    redis.call("hmset", "cashtrans:" .. cashtransid, "orgclientid", orgclientkey, "currency", currency, "transtype", transtype, "amount", amount, "desc", desc, "timestamp", timestamp, "operator", operator) \
     local cashkey = orgclientkey .. ":cash:" .. currency \
     local cashskey = orgclientkey .. ":cash" \
     local cash = redis.call("get", cashkey) \
+    --[[ take account of +/- transaction type ]] \
+    if transtype == "TB" or transtype == "CO" or transtype == "JO" then \
+      amount = -tonumber(amount) \
+    end \
     if not cash then \
       redis.call("set", cashkey, amount) \
       redis.call("sadd", cashskey, currency) \
@@ -1689,6 +1720,7 @@ function registerScripts() {
         redis.call("set", cashkey, adjamount) \
       end \
     end \
+    return {0, cashtransid} \
   end \
   ';
 
@@ -1697,44 +1729,75 @@ function registerScripts() {
   //
   scriptgetclients = '\
   local clients = redis.call("sort", "clients", "ALPHA") \
-  local fields = {"orgid", "clientid", "email", "name", "address", "mobile"} \
+  local fields = {"orgid", "clientid", "email", "name", "address", "mobile", "ifaid"} \
   local vals \
-  local client = {} \
+  local tblclient = {} \
+  local tblinsttype = {} \
   for index = 1, #clients do \
     vals = redis.call("hmget", "client:" .. clients[index], unpack(fields)) \
     if KEYS[1] == vals[1] then \
-      table.insert(client, {orgid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6]}) \
+      tblinsttype = redis.call("smembers", vals[2] .. ":instrumenttypes") \
+      table.insert(tblclient, {orgid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype}) \
     end \
   end \
-  return cjson.encode(client) \
+  return cjson.encode(tblclient) \
   ';
 
   scriptnewclient = stringsplit + '\
   local clientid = redis.call("incr", "clientid") \
   if not clientid then return {1005} end \
-  local orgclientkey = KEYS[1] .. ":" .. clientid \
   --[[ store the client ]] \
-  redis.call("hmset", "client:" .. orgclientkey, "orgid", KEYS[1], "clientid", clientid, "name", KEYS[2], "email", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifa", KEYS[6]) \
+  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "orgid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6]) \
   --[[ add to set of clients ]] \
-  redis.call("sadd", "clients", orgclientkey) \
+  redis.call("sadd", "clients", clientid) \
   --[[ add route to find client from email ]] \
-  redis.call("set", "client:" .. KEYS[3], orgclientkey) \
+  redis.call("set", "client:" .. KEYS[3], clientid) \
   --[[ add tradeable instrument types ]] \
   if KEYS[7] ~= "" then \
     local insttypes = stringsplit(KEYS[7], ",") \
     for i = 1, #insttypes do \
-      redis.call("sadd", orgclientkey .. ":instrumenttypes", insttypes[i]) \
+      redis.call("sadd", clientid .. ":instrumenttypes", insttypes[i]) \
     end \
   end \
   return {0, clientid} \
   ';
 
-  scriptcashtrans = updatecash + '\
-  local cashtransid = redis.call("incr", "cashtransid") \
-  if not cashtransid then return 1005 end \
-  redis.call("hmset", "cashtrans:" .. cashtransid, "orgclientid", KEYS[1], "currency", KEYS[2], "transtype", KEYS[3], "amount", KEYS[4], "desc", KEYS[5], "orguserid", KEYS[6]) \
-  updatecash(KEYS[1], KEYS[2], KEYS[4]) \
+  scriptupdateclient = stringsplit + '\
+  local clientkey = "client:" .. KEYS[1] \
+  --[[ get existing email, in case we need to change email->client link ]] \
+  local email = redis.call("hget", clientkey, "email") \
+  if not email then return 1017 end \
+  --[[ update client ]] \
+  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "orgid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifa", KEYS[7]) \
+  --[[ remove old email link and add new one ]] \
+  if KEYS[4] ~= email then \
+    redis.call("del", "client:" .. email) \
+    redis.call("set", "client:" .. KEYS[4], KEYS[1]) \
+  end \
+  --[[ add/remove tradeable instrument types ]] \
+  if KEYS[8] ~= "" then \
+    local insttypes = redis.call("smembers", "instrumenttypes") \
+    local clientinsttypes = stringsplit(KEYS[8], ",") \
+    for i = 1, #insttypes do \
+      local found = false \
+      for j = 1, #clientinsttypes do \
+        if clientinsttypes[j] == insttypes[i] then \
+          redis.call("sadd", KEYS[1] .. ":instrumenttypes", insttypes[i]) \
+          found = true \
+          break \
+        end \
+      end \
+      if not found then \
+        redis.call("srem", KEYS[1] .. ":instrumenttypes", insttypes[i]) \
+      end \
+    end \
+  end \
   return 0 \
+  ';
+
+  scriptcashtrans = updatecash + '\
+  local ret = updatecash(KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[7]) \
+  return ret \
   ';
 
   scriptgetorgs = '\

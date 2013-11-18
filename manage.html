@@ -696,6 +696,9 @@
             } else if (msg.substr(2, 14) == "cashtranstypes") {
                 obj = JSON.parse(msg);
                 loadCashtransTypes(obj.cashtranstypes);
+            } else if (msg.substr(2, 9) == "cashtrans") {
+                obj = JSON.parse(msg);
+                updateCashtrans(obj.cashtrans);
             } else if (msg.substr(2, 4) == "cash") {
                 obj = JSON.parse(msg);
                 loadCash(obj.cash);
@@ -899,6 +902,9 @@
             var frmclient;
             var inpclientid;
             var msg;
+            var lblclientconf;
+
+            console.log(client);
 
             clients[client.clientid] = client;
 
@@ -907,16 +913,44 @@
             frmclient = document.getElementById("frmclient");
             if (frmclient != null) {
                 inpclientid = document.getElementById("inpclientid");
-
                 if (inpclientid != null) {
-                    if (client.clientid == inpclientid.value) {
-                        msg = client.name + " updated";
-                    } else {
+                    if (inpclientid.value == "") {
                         msg = client.name + " added";
+                    } else {
+                        msg = client.name + " updated";
                     }
 
                     displayClient(null, "frmclient");
                 }
+
+                lblclientconf = document.getElementById("lblclientconf");
+                if (lblclientconf != null) {
+                    lblclientconf.innerHTML = msg;
+                }
+            }
+        }
+
+        function updateCashtrans(cashtrans) {
+            var lblcashconf;
+            var msg = "";
+
+            lblcashconf = document.getElementById("lblcashconf");
+            if (lblcashconf != null) {
+                msg += cashtranstypes(cashtrans.transtype).desc;
+                msg += " of " + cashtrans.amount + " " + cashtrans.currency;
+                msg += " added for " + clients[cashtrans.clientid].name;
+                lblcashconf.value = msg;
+            }
+
+            clearField(inpclient);
+            clearField(inpamount);
+            clearField(inpdesc);
+        }
+
+        function clearField(fldname) {
+            var fld = document.getElementById(fldname);
+            if (fld != null) {
+                fld.value = "";
             }
         }
 
@@ -926,8 +960,8 @@
 
             selectedmenu = 0;
 
-            //maintainClients();
-            maintainCash();
+            maintainClients();
+            //maintainCash();
         }
 
         function statusMsg(status) {
@@ -3770,7 +3804,7 @@
             inpemail.id = "inpemail";
             inpemail.className = "forminput";
             selifa = document.createElement("select");
-            selifa.id = "selorg";
+            selifa.id = "selifa";
             selifa.className = "formselect";
 
             btnupdate = document.createElement("input");
@@ -3818,9 +3852,6 @@
 
             lblclientconf = document.createElement("label");
             lblclientconf.id = "lblclientconf";
-
-            populateOrgs(selorg, 1);
-            populateIFAs(selifa, 1);
 
             inpclientid.disabled = true;
             inpname.focus();
@@ -3884,6 +3915,8 @@
             var inpaddress;
             var inpemail;
             var selifa;
+            var chkinsttype;
+            var found;
 
             if (frm == "frmclient") {
                 inpname = document.getElementById("inpname");
@@ -3903,7 +3936,8 @@
                         clientid: '',
                         address: '',
                         email: '',
-                        ifaid: ''
+                        ifaid: '',
+                        insttypes: []
                     };
                 }
 
@@ -3915,6 +3949,27 @@
                     inpaddress.value = client.address;
                     inpemail.value = client.email;
                     populateIFAs(selifa, client.ifaid);
+
+                    console.log(client);
+
+                    console.log(client.insttypes);
+
+                    for (var i in instrumenttypes) {
+                        chkinsttype = document.getElementById("checkbox:" + instrumenttypes[i].instrumenttypeid);
+                        if (chkinsttype != null) {
+                            found = false;
+                            for (j = 0; j < client.insttypes.length; j++) {
+                                if (client.insttypes[j] == instrumenttypes[i].instrumenttypeid) {
+                                    chkinsttype.checked = true;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                chkinsttype.checked = false;
+                            }
+                        }
+                    }
                 }
             } else {
                 inpclient = document.getElementById("inpclient");
@@ -3981,7 +4036,6 @@
             inpdesc = document.createElement("input");
             inpdesc.id = "inpdesc";
             inpdesc.className = "forminput";
-            inpdesc = document.createElement("input");
             inpclientid = document.createElement("input");
             inpclientid.type = "hidden";
             inpclientid.id = "inpclientid";
@@ -4003,12 +4057,6 @@
                     return;
                 }
 
-                if (inpamount.value == "") {
-                    alert("Please enter an amount");
-                    inpamount.focus();
-                    return;
-                }
-
                 if (selcurrency.selectedIndex == -1) {
                     alert("No currency selected. Please contact Support");
                     return;
@@ -4016,6 +4064,10 @@
 
                 if (seltranstype.selectedIndex == -1) {
                     alert("No transaction type selected. Please contact Support");
+                    return;
+                }
+
+                if (!validateNumeric(inpamount, "Amount")) {
                     return;
                 }
 
