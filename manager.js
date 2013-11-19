@@ -1775,21 +1775,19 @@ function registerScripts() {
     redis.call("set", "client:" .. KEYS[4], KEYS[1]) \
   end \
   --[[ add/remove tradeable instrument types ]] \
-  if KEYS[8] ~= "" then \
-    local insttypes = redis.call("smembers", "instrumenttypes") \
-    local clientinsttypes = stringsplit(KEYS[8], ",") \
-    for i = 1, #insttypes do \
-      local found = false \
-      for j = 1, #clientinsttypes do \
-        if clientinsttypes[j] == insttypes[i] then \
-          redis.call("sadd", KEYS[1] .. ":instrumenttypes", insttypes[i]) \
-          found = true \
-          break \
-        end \
+  local insttypes = redis.call("smembers", "instrumenttypes") \
+  local clientinsttypes = stringsplit(KEYS[8], ",") \
+  for i = 1, #insttypes do \
+    local found = false \
+    for j = 1, #clientinsttypes do \
+      if clientinsttypes[j] == insttypes[i] then \
+        redis.call("sadd", KEYS[1] .. ":instrumenttypes", insttypes[i]) \
+        found = true \
+        break \
       end \
-      if not found then \
-        redis.call("srem", KEYS[1] .. ":instrumenttypes", insttypes[i]) \
-      end \
+    end \
+    if not found then \
+      redis.call("srem", KEYS[1] .. ":instrumenttypes", insttypes[i]) \
     end \
   end \
   return 0 \

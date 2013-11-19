@@ -567,34 +567,37 @@
         .formlabel {
             display: inline-block;
             width: 120px;
-            font-size: 21px;
+            font-size: 18px;
             text-align: right;
         }
         .forminput {
             display: inline-block;
-            font-size: 21px;
-            padding: 4px 2px;
+            font-size: 18px;
+            /*padding: 4px 2px;*/
             border: solid 1px #aacfe4;
             width: 450px;
-            margin: 2px 0 20px 10px;            
+            margin: 2px 0 15px 10px;
         }​
-        .formtextarea {
-            /*display: inline-block;
-            font-size: 21px;
-            border: 1px solid red;*/
-            font-size: 21px;
-    width: 600px;
-    height: 120px;
-    border: 1px solid #cccccc;
-    padding: 5px;
-    background-position: bottom right;
-    background-repeat: no-repeat;
+        div, textarea {
+            display: inline-block;
+            border: 1px solid #aacfe4;
+            font-size: 18px;
+            width: 450px;
+            height: 120px;
+            /*padding: 4px 2px;*/
+            margin: 2px 0 10px 10px;
+            vertical-align: top;
         }
         .formselect {
             display: inline-block;
-            font-size: 21px;            
-            padding: 4px 2px;
-            margin: 2px 0 20px 10px;
+            font-size: 18px;            
+            /*padding: 4px 2px;*/
+            margin: 2px 0 15px 10px;
+        }
+        .formcheckbox {
+            display: inline-block;
+            font-size: 15px;
+            margin: 2px 4px 15px 10px;           
         }
     </style>
 </head>
@@ -756,9 +759,7 @@
         };
 
         function loadIndex(index) {
-            console.log(index);
             indices[index.name] = index.symbols;
-            console.log(indices);
             displayIndex(index.name);
         }
 
@@ -781,7 +782,6 @@
 
         function loadPositions(positionarr) {
             var poskey;
-            console.log(positionarr);
 
             for (var i = 0; i < positionarr.length; ++i) {
                 poskey = positionarr[i].positionid;
@@ -920,12 +920,7 @@
                         msg = client.name + " updated";
                     }
 
-                    displayClient(null, "frmclient");
-                }
-
-                lblclientconf = document.getElementById("lblclientconf");
-                if (lblclientconf != null) {
-                    lblclientconf.innerHTML = msg;
+                    displayClient(null, "frmclient", msg);
                 }
             }
         }
@@ -961,7 +956,6 @@
             selectedmenu = 0;
 
             maintainClients();
-            //maintainCash();
         }
 
         function statusMsg(status) {
@@ -1169,8 +1163,9 @@
             }
         }
 
-        function clearSelectStockDivs() {
+        function clearSelectDivs() {
             clearDiv("stockbox");
+            clearDiv("clientbox");
         }
 
         function clearStrip(stripid) {
@@ -1218,7 +1213,7 @@
             clearLists();
             clearForms();
             clearStrips();
-            clearSelectStockDivs();
+            clearSelectDivs();
             clearAllSymbolDivs();
         }
 
@@ -1233,6 +1228,8 @@
         function clearForms() {
             clearForm("frmsignin", true);
             clearForm("frminstrument", true);
+            clearForm("frmclient", true);
+            clearForm("frmcash", true);
         }
 
         function addElement(msg, list, index) {
@@ -3587,7 +3584,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Clients", "Cash", "IFA's", "Hedging"];
+            menuarr = ["Clients", "Cash", "Hedging", "IFA's"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -3706,7 +3703,7 @@
                 clientboxinput.value = "";
                 clientboxinput.focus();
 
-                displayClient(clients[element.value], frm);
+                displayClient(clients[element.value], frm, "");
             }
 
             clientbox.appendChild(clientboxinput);
@@ -3749,6 +3746,7 @@
             var inpemail;
             var btnupdate;
             var lblclientconf;
+            var divaddress;
 
             frmclient = document.getElementById("frmclient");
             if (frmclient != null) {
@@ -3799,7 +3797,7 @@
             inpclientid.className = "forminput";
             inpaddress = document.createElement("textarea");
             inpaddress.id = "inpaddress";
-            inpaddress.className = "formtextarea";
+
             inpemail = document.createElement("input");
             inpemail.id = "inpemail";
             inpemail.className = "forminput";
@@ -3853,8 +3851,9 @@
             lblclientconf = document.createElement("label");
             lblclientconf.id = "lblclientconf";
 
-            inpclientid.disabled = true;
-            inpname.focus();
+            divaddress = document.createElement("div");
+            divaddress.appendChild(lbladdress);
+            divaddress.appendChild(inpaddress);
 
             addNewLine(frmclient);
             frmclient.appendChild(lblname);
@@ -3866,8 +3865,7 @@
             frmclient.appendChild(lblmobile);
             frmclient.appendChild(inpmobile);
             addNewLine(frmclient);
-            frmclient.appendChild(lbladdress);
-            frmclient.appendChild(inpaddress);
+            frmclient.appendChild(divaddress);
             addNewLine(frmclient);
             frmclient.appendChild(lblorg);
             frmclient.appendChild(selorg);
@@ -3881,6 +3879,7 @@
                 var chkinsttype = document.createElement("input");
                 chkinsttype.type = "checkbox";
                 chkinsttype.id = "checkbox:" + instrumenttypes[i].instrumenttypeid;
+                chkinsttype.className = "formcheckbox";
                 var textinsttype = document.createTextNode(instrumenttypes[i].description);
 
                 frmclient.appendChild(chkinsttype);
@@ -3897,7 +3896,10 @@
 
             main.appendChild(frmclient);
 
-            displayClient(null, "frmclient");
+            inpclientid.disabled = true;
+            inpname.focus();
+
+            displayClient(null, "frmclient", "");
         }
 
         function addNewLine(frmclient) {
@@ -3906,7 +3908,7 @@
             frmclient.appendChild(newline);
         }
 
-        function displayClient(client, frm) {
+        function displayClient(client, frm, msg) {
             var inpclient;
             var inpname;
             var inpmobile;
@@ -3917,6 +3919,7 @@
             var selifa;
             var chkinsttype;
             var found;
+            var lblclientconf;
 
             if (frm == "frmclient") {
                 inpname = document.getElementById("inpname");
@@ -3950,10 +3953,6 @@
                     inpemail.value = client.email;
                     populateIFAs(selifa, client.ifaid);
 
-                    console.log(client);
-
-                    console.log(client.insttypes);
-
                     for (var i in instrumenttypes) {
                         chkinsttype = document.getElementById("checkbox:" + instrumenttypes[i].instrumenttypeid);
                         if (chkinsttype != null) {
@@ -3969,6 +3968,11 @@
                                 chkinsttype.checked = false;
                             }
                         }
+                    }
+
+                    lblclientconf = document.getElementById("lblclientconf");
+                    if (lblclientconf != null) {
+                        lblclientconf.innerHTML = msg;
                     }
                 }
             } else {
