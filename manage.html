@@ -2873,8 +2873,8 @@
                         quantity = "";                        
                     }
 
-                    sendRequestQuote(symbol, quantity, cashorderqty, instruments[symbol].currency, currencysel[currencysel.selectedIndex].value, settlperiod[settlperiod.selectedIndex].value);
-                    
+                    sendRequestQuote(inpclientid.value, inpsymbol.value, quantity, cashorderqty, instruments[symbol].currency, currencysel[currencysel.selectedIndex].value, settlperiod[settlperiod.selectedIndex].value);
+
                     disable();
                 } else {
                     quotereqqty.focus();
@@ -2954,10 +2954,11 @@
             }
         }
 
-        function sendRequestQuote(symbol, quantity, cashorderqty, currency, settlcurrency, nosettdays) {
+        function sendRequestQuote(clientid, symbol, quantity, cashorderqty, currency, settlcurrency, nosettdays) {
             var quotereq = {};
             var msg;
 
+            quotereq.clientid = clientid;
             quotereq.quantity = quantity;
             quotereq.cashorderqty = cashorderqty;
             quotereq.symbol = symbol;
