@@ -567,8 +567,9 @@
         .formlabel {
             display: inline-block;
             width: 120px;
-            font-size: 18px;
+            font-size: 21px;
             text-align: right;
+            color: gray;
         }
         .forminput {
             display: inline-block;
@@ -903,8 +904,6 @@
             var inpclientid;
             var msg;
             var lblclientconf;
-
-            console.log(client);
 
             clients[client.clientid] = client;
 
@@ -1398,10 +1397,6 @@
             var stocklist;
             var searchtext;
 
-            stockbox = document.createElement("div");
-            stockbox.id = "stockbox";
-            stockbox.className = "stockbox";
-
             stockboxinput = document.createElement("input");
             stockboxinput.className = "stockboxinput";
             stockboxinput.id = "stockboxinput";
@@ -1476,6 +1471,143 @@
             }
 
             stockboxinput.focus();
+        }
+
+        function selectClientStock(frm) {
+            var clientstockbox;
+            var stockboxinput;
+            var stocklist;
+            var searchtext;
+            var clientboxinput;
+            var clientlist;
+            var arrnames;
+
+            clientstockbox = document.createElement("div");
+            clientstockbox.id = "clientbox";
+            clientstockbox.className = "clientbox";
+
+            clientboxinput = document.createElement("input");
+            clientboxinput.className = "clientboxinput";
+            clientboxinput.id = "clientboxinput";
+            clientboxinput.placeholder = "Enter Client Name";
+
+            clientboxinput.onkeyup = function() {
+                clearList(clientlist);
+
+                if (clientboxinput.value.length == 0) {
+                    clientlist.style.visibility = "hidden";
+                    return;
+                }
+
+                searchtext = clientboxinput.value.toLowerCase();
+
+                for (var i in clients) {
+                    arrnames = clients[i].name.split(' ');
+
+                    for (var j = 0; j < arrnames.length; j++) {
+                        if (arrnames[j].toLowerCase().indexOf(searchtext) == 0) {
+                            addElement(clients[i].name, clientlist, i);
+                        }
+                    }
+                }
+
+                if (clientlist.getElementsByTagName('li').length > 0) {
+                    clientlist.style.visibility = "visible";
+                } else {
+                    clientlist.style.visibility = "hidden";
+                }
+            }
+
+            clientlist = document.createElement('ul');
+            clientlist.id = "clientlist";
+            clientlist.className = "clientlist";
+            clientlist.style.visibility = "hidden";
+
+            clientlist.onclick = function(e) {
+                var element;
+                
+                if (!e) e = window.event;
+                element = e.target || e.srcElement;
+
+                clientlist.style.visibility = "hidden";
+                clientboxinput.value = "";
+                clientboxinput.focus();
+
+                displayClient(clients[element.value], frm, "");
+            }
+
+            stockboxinput = document.createElement("input");
+            stockboxinput.className = "stockboxinput";
+            stockboxinput.id = "stockboxinput";
+            stockboxinput.placeholder = "Enter Stock";
+
+            stockboxinput.onkeyup = function() {
+                clearList(stocklist);
+
+                if (stockboxinput.value.length == 0) {
+                    stocklist.style.visibility = "hidden";
+                    return;
+                }
+
+                searchtext = stockboxinput.value.toLowerCase();
+
+                for (var i in instruments) {
+                    if (i.toLowerCase().indexOf(searchtext) == 0 || instruments[i].description.toLowerCase().indexOf(searchtext) == 0) {
+                        addElement(i + " " + instruments[i].description, stocklist, i);
+                    }
+                }
+
+                if (stocklist.getElementsByTagName('li').length > 0) {
+                    stocklist.style.visibility = "visible";
+                } else {
+                    stocklist.style.visibility = "hidden";
+                }
+            }
+
+            stocklist = document.createElement('ul');
+            stocklist.id = "stocklist";
+            stocklist.className = "stocklist";
+            stocklist.style.visibility = "hidden";
+
+            stocklist.onclick = function(e) {
+                var firstspace;
+                var symbol;
+                var element;
+                
+                if (!e) e = window.event;
+                element = e.target || e.srcElement;
+
+                firstspace = element.innerHTML.indexOf(' ');
+                symbol = element.innerHTML.substr(0, firstspace);
+
+                stocklist.style.visibility = "hidden";
+                stockboxinput.value = "";
+                stockboxinput.focus();
+
+                displaySymbol(symbol);
+            }
+
+            clientstockbox.appendChild(clientboxinput);
+            clientstockbox.appendChild(clientlist);
+            clientstockbox.appendChild(stockboxinput);
+            clientstockbox.appendChild(stocklist);
+
+            main.appendChild(clientstockbox);
+
+            main.onclick = function(e) {
+                var elem;
+
+                if (!e) e = window.event;
+                elem = e.target || e.srcElement;
+
+                if (elem.id == "clientlist" || elem.id == "clientboxinput" || elem.id == "stocklist" || elem.id == "stockboxinput") {
+                    return;
+                }
+
+                clientlist.style.visibility = "hidden";
+            }
+
+            clientboxinput.focus();            
         }
 
         function displayTrades() {
@@ -2616,35 +2748,54 @@
             main.appendChild(headingstrip);
         }
 
-        function requestQuote(symbol) {
+        function requestQuote() {
             var quotereqbutton;
             var quotereqqty;
-            var stocklabel;
-            var settlabel;
             var orderdiv;
             var quantity;
             var cashorderqty;
-            var settlcurrency;
             var currencysel;
-            var qtyascashorshares = 1; // 1=shares, 2=cash
+            var qtyascashorshares = 1;
             var settlperiod;
-            var nosettdays;
+            var lblclient;
+            var lblquantity;
+            var lblsymbol;
+            var lblsettle;
+            var inpclient;
+            var inpsymbol;
+            var inpclientid;
+            var lblcurrency;
 
-            clearSymbolDiv(symbol);
+            selectClientStock("orderdiv");
 
-            quotereqbutton = document.createElement("input");
-            quotereqbutton.type = "button";
-            quotereqbutton.className = "quotereqbutton";
-            quotereqbutton.id = "quotereqbutton" + symbol;
-            quotereqbutton.value = "Request a quote";
-
-            quotereqbutton.onclick = function() {
-                sendIt();
-            }
+            lblclient = document.createElement("label");
+            lblclient.innerHTML = "Client:";
+            lblclient.className = "formlabel";
+            inpclient = document.createElement("input");
+            inpclient.id = "inpclient";
+            inpclient.className = "forminput";
+            lblquantity = document.createElement("label");
+            lblquantity.innerHTML = "Quantity:";
+            lblquantity.className = "formlabel";
+            lblsymbol = document.createElement("label");
+            lblsymbol.className = "formlabel";
+            lblsymbol.innerHTML = "Symbol:";
+            inpsymbol = document.createElement("input");
+            inpsymbol.id = "inpsymbol";
+            inpsymbol.className = "forminput";
+            lblcurrency = document.createElement("label");
+            lblcurrency.className = "formlabel";
+            lblcurrency.innerHTML = "Currency:";
+            lblsettle = document.createElement("label");
+            lblsettle.className = "formlabel";
+            lblsettle.innerHTML = "Settlement:";
+            inpclientid = document.createElement("input");
+            inpclientid.type = "hidden";
+            inpclientid.id = "inpclientid";
 
             quantitycashsel = document.createElement("select");
-            quantitycashsel.id = "quantitycashsel" + symbol;
-            quantitycashsel.className = "quantitycashsel";
+            quantitycashsel.id = "quantitycashsel";
+            quantitycashsel.className = "formselect";
 
             quantitycashsel[0] = new Option("Number of shares", 1, true, true);
             quantitycashsel[1] = new Option("Cash amount", 2, false, false);
@@ -2656,7 +2807,7 @@
             }
 
             quotereqqty = document.createElement("input");
-            quotereqqty.id = "quotereqquantity" + symbol;
+            quotereqqty.id = "quotereqquantity";
             quotereqqty.className = "quotereqquantity";
             quotereqqty.placeholder = getQuantityDesc(qtyascashorshares);
 
@@ -2666,46 +2817,51 @@
                 }
             }
 
-            stocklabel = document.createElement("label");
-            stocklabel.className = "orderstock";
-            stocklabel.innerHTML = symbol;
+            // option to change settlement currency
+            currencysel = document.createElement("select");
+            currencysel.id = "currency";
+            currencysel.className = "formselect";
 
-            settlabel = document.createElement("label");
-            settlabel.className = "quotereqlabel";
-            settlabel.innerHTML = " for settlement ";
-
-            settlcurrency = defaultsettlcurrency;
-
-            // option to change settlement currency for non-uk shares
-            if (instruments[symbol].currency != defaultsettlcurrency) {
-                settlabel.innerHTML = settlabel.innerHTML + "in ";
-                currencysel = document.createElement("select");
-                currencysel.id = "currency" + symbol;
-                currencysel.className = "currency";
-                currencysel[0] = new Option(defaultsettlcurrency, defaultsettlcurrency, true, true);
-                currencysel[1] = new Option(instruments[symbol].currency, instruments[symbol].currency, false, false);
-
-                currencysel.onchange = function() {
-                    settlcurrency = currencysel[currencysel.selectedIndex].value;
-                }
-            }
+            populateCurrencies(currencysel, defaultsettlcurrency);
 
             settlperiod = document.createElement("select");
-            settlperiod.id = "settlperiod:" + symbol;
+            settlperiod.id = "settlperiod";
+            settlperiod.className = "formselect";
 
-            populateSettlPeriod(settlperiod, instruments[symbol].instrumenttype);
+            populateSettlPeriod(settlperiod, "DE");
 
-            orderdiv = createDiv("orderdiv:" + symbol, symbol);
+            quotereqbutton = document.createElement("input");
+            quotereqbutton.type = "button";
+            quotereqbutton.className = "quotereqbutton";
+            quotereqbutton.id = "quotereqbutton";
+            quotereqbutton.value = "Request a quote";
 
-            orderdiv.appendChild(quotereqbutton);
+            quotereqbutton.onclick = function() {
+                sendIt();
+            }
+
+            orderdiv = document.createElement("div");
+
+            orderdiv.appendChild(lblclient);
+            orderdiv.appendChild(inpclient);
+            addNewLine(orderdiv);
+            orderdiv.appendChild(lblsymbol);
+            orderdiv.appendChild(inpsymbol);
+            addNewLine(orderdiv);
+            orderdiv.appendChild(lblquantity);
             orderdiv.appendChild(quantitycashsel);
             orderdiv.appendChild(quotereqqty);
-            orderdiv.appendChild(stocklabel);
-            orderdiv.appendChild(settlabel);
-            if (instruments[symbol].currency != defaultsettlcurrency) {
-                orderdiv.appendChild(currencysel);
-            }
+            addNewLine(orderdiv);
+            orderdiv.appendChild(lblcurrency);
+            orderdiv.appendChild(currencysel);
+            addNewLine(orderdiv);
+            orderdiv.appendChild(lblsettle);
             orderdiv.appendChild(settlperiod);
+            addNewLine(orderdiv);
+            orderdiv.appendChild(quotereqbutton);
+            orderdiv.appendChild(inpclientid);
+
+            main.appendChild(orderdiv);
 
             function sendIt() {
                 if (validateNumeric(quotereqqty, getQuantityDesc(qtyascashorshares))) {
@@ -2717,9 +2873,8 @@
                         quantity = "";                        
                     }
 
-                    nosettdays = settlperiod[settlperiod.selectedIndex].value;
-
-                    sendRequestQuote(symbol, quantity, cashorderqty, instruments[symbol].currency, settlcurrency, nosettdays);
+                    sendRequestQuote(symbol, quantity, cashorderqty, instruments[symbol].currency, currencysel[currencysel.selectedIndex].value, settlperiod[settlperiod.selectedIndex].value);
+                    
                     disable();
                 } else {
                     quotereqqty.focus();
@@ -2731,8 +2886,6 @@
                 quotereqqty.disabled = true;
                 quotereqqty.onkeypress = null;
             }
-
-            quotereqqty.focus();
         }
 
         function getQuantityDesc(qtyval) {
@@ -3015,7 +3168,7 @@
             var nosettdays;
 
             clearSymbolDiv(symbol);
-                             
+
             btn = document.createElement("input");
             btn.type = "button";
             btn.id = "orderbuysell" + symbol;
@@ -3584,7 +3737,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Clients", "Cash", "Hedging", "IFA's"];
+            menuarr = ["Clients", "Cash", "Request Quote", "Hedging", "IFA's"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -3622,23 +3775,26 @@
                     maintainCash();
                     break;
                 case 2:
-                    maintainHedging();
+                    requestQuote();
                     break;
                 case 3:
-                    maintainIFAs();
+                    maintainHedging();
                     break;
                 case 4:
-                    displayPositions();
+                    maintainIFAs();
                     break;
                 case 5:
+                    displayPositions();
+                    break;
+                case 6:
                     displayCash();
                     displayMargins();
                     displayReserves();
                     break;
-                case 6:
+                case 7:
                     requestHistory();
                     break;
-                case 7:
+                case 8:
                     settings();
                     break;
                 }
@@ -3897,7 +4053,6 @@
             main.appendChild(frmclient);
 
             inpclientid.disabled = true;
-            inpname.focus();
 
             displayClient(null, "frmclient", "");
         }
@@ -3977,9 +4132,23 @@
                 }
             } else {
                 inpclient = document.getElementById("inpclient");
-                inpclient.value = client.name + " - " + client.email;
+                inpclient.value = client.name;
                 inpclientid = document.getElementById("inpclientid");
-                inpclientid.value = client.orgid + ":" + client.clientid;
+                inpclientid.value = client.clientid;
+            }
+        }
+
+        function displaySymbol(symbol) {
+            var inpsymbol;
+
+            inpsymbol = document.getElementById("inpsymbol");
+            if (inpsymbol != null) {
+                inpsymbol.value = symbol;
+            }
+
+            settlperiod = document.getElementById("settlperiod");
+            if (settlperiod != null) {
+                populateSettlPeriod(settlperiod, instruments[symbol].instrumenttype);
             }
         }
 
@@ -4075,7 +4244,7 @@
                     return;
                 }
 
-                cashtrans.orgclientid = inpclientid.value;
+                cashtrans.clientid = inpclientid.value;
                 cashtrans.currency = selcurrency[selcurrency.selectedIndex].value;
                 cashtrans.transtype = seltranstype[seltranstype.selectedIndex].value;
                 cashtrans.amount = inpamount.value;

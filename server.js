@@ -3114,7 +3114,7 @@ function registerScripts() {
 
   //
   // get alpha sorted list of instruments for a specified client
-  // uses set of valid instrument types per client i.e. to add spreadbet - sadd 1:1:instrumenttypes SPB
+  // uses set of valid instrument types per client i.e. 1:instrumenttypes CFD
   //
   scriptgetinst = '\
   local instruments = redis.call("sort", "instruments", "ALPHA") \

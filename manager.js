@@ -54,6 +54,7 @@ var scriptgetcashtranstypes;
 var scriptgetcurrencies;
 var scriptcashtrans;
 var scriptupdateclient;
+var scriptgetinst;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -250,11 +251,10 @@ function newClient(client, conn) {
 
 function cashTrans(cashtrans, orguserkey, conn) {
   console.log("cashtrans");
-  console.log(cashtrans);
 
   cashtrans.timestamp = getUTCTimeStamp();
 
-  db.eval(scriptcashtrans, 7, cashtrans.orgclientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.desc, cashtrans.timestamp, "user:" + orguserkey, function(err, ret) {
+  db.eval(scriptcashtrans, 7, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.desc, cashtrans.timestamp, "user:" + orguserkey, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
@@ -822,7 +822,8 @@ function getValue(trade) {
 
 function sendInstruments(conn) {
   // get sorted subset of instruments for this client
-  db.eval(scriptgetinst, 1, orgclientkey, function(err, ret) {
+  db.eval(scriptgetinst, 0, function(err, ret) {
+    console.log(ret);
     conn.write("{\"instruments\":" + ret + "}");
   });
 }
@@ -1489,7 +1490,7 @@ function getReasonDesc(reason) {
 }
 
 function start(orgid, conn) {
-  //sendInstruments(conn);
+  sendInstruments(conn);
   sendOrganisations(conn);
   sendIFAs(conn);
   sendInstrumentTypes(conn);
@@ -1697,12 +1698,12 @@ function registerScripts() {
   // todo: tie in with server
   //
   updatecash = '\
-  local updatecash = function(orgclientkey, currency, transtype, amount, desc, timestamp, operator) \
+  local updatecash = function(clientid, currency, transtype, amount, desc, timestamp, operator) \
     local cashtransid = redis.call("incr", "cashtransid") \
     if not cashtransid then return {1005} end \
-    redis.call("hmset", "cashtrans:" .. cashtransid, "orgclientid", orgclientkey, "currency", currency, "transtype", transtype, "amount", amount, "desc", desc, "timestamp", timestamp, "operator", operator) \
-    local cashkey = orgclientkey .. ":cash:" .. currency \
-    local cashskey = orgclientkey .. ":cash" \
+    redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currency", currency, "transtype", transtype, "amount", amount, "desc", desc, "timestamp", timestamp, "operator", operator) \
+    local cashkey = clientid .. ":cash:" .. currency \
+    local cashskey = clientid .. ":cash" \
     local cash = redis.call("get", cashkey) \
     --[[ take account of +/- transaction type ]] \
     if transtype == "TB" or transtype == "CO" or transtype == "JO" then \
@@ -1851,5 +1852,28 @@ function registerScripts() {
     table.insert(currency, currencies[index]) \
   end \
   return cjson.encode(currency) \
+  ';
+
+  //
+  // get alpha sorted list of instruments based on set of valid instrument types
+  //
+  scriptgetinst = '\
+  local instruments = redis.call("sort", "instruments", "ALPHA") \
+  local fields = {"instrumenttype", "description", "currency", "marginpercent"} \
+  local vals \
+  local inst = {} \
+  local marginpc \
+  for index = 1, #instruments do \
+    vals = redis.call("hmget", "symbol:" .. instruments[index], unpack(fields)) \
+    if redis.call("sismember", "instrumenttypes", vals[1]) == 1 then \
+      if vals[4] then \
+        marginpc = vals[4] \
+      else \
+        marginpc = 100 \
+      end \
+      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc}) \
+    end \
+  end \
+  return cjson.encode(inst) \
   ';
 }
