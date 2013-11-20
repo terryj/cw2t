@@ -1,6 +1,6 @@
 /****************
 * server.js
-* Front-office trading server
+* Front-office client server
 * Cantwaittotrade Limited
 * Terry Johnston
 * September 2012

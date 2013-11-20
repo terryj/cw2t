@@ -84,7 +84,36 @@ db.on("error", function(err) {
 
 function initialise() {
   initDb();
+  pubsub();
   listen();
+}
+
+// pubsub connections
+function pubsub() {
+  dbsub = redis.createClient(redisport, redishost);
+  //dbpub = redis.createClient(redisport, redishost);
+
+  dbsub.on("subscribe", function(channel, count) {
+    console.log("subscribed to:" + channel + ", num. channels:" + count);
+  });
+
+  dbsub.on("unsubscribe", function(channel, count) {
+    console.log("unsubscribed from:" + channel + ", num. channels:" + count);
+  });
+
+  dbsub.on("message", function(channel, message) {
+    console.log("channel " + channel + ": " + message);
+
+    if (message.substr(0, 8) == "quoteack") {
+      sendQuoteack(message.substr(9));
+    } else if (message.substr(0, 5) == "quote") {
+      sendQuote(message.substr(6));
+    } else if (message.substr(0, 5) == "order") {
+      getSendOrder(message.substr(6));
+    }
+  });
+
+  dbsub.subscribe(2);
 }
 
 // sockjs server
@@ -110,7 +139,6 @@ function listen() {
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a client logs on
     var userid = "0";
-    var orguserkey;
 
     console.log('new connection');
 
@@ -132,11 +160,13 @@ function listen() {
         obj = JSON.parse(msg);
         orderBookRemoveRequest(orgclientkey, obj.orderbookremoverequest, conn);
       } else if (msg.substr(2, 5) == "order") {
-        obj = JSON.parse(msg);
-        newOrder(clientid, obj.order, conn);
+        db.publish(1, msg);
+        //obj = JSON.parse(msg);
+        //newOrder(clientid, obj.order, conn);
       } else if (msg.substr(2, 12) == "quoterequest") {
-        obj = JSON.parse(msg);
-        quoteRequest(clientid, obj.quoterequest);
+        db.publish(1, msg);
+        //obj = JSON.parse(msg);
+        //quoteRequest(clientid, obj.quoterequest);
       } else if (msg.substr(2, 8) == "register") {
         obj = JSON.parse(msg);
         registerClient(obj.register, conn);
@@ -173,13 +203,13 @@ function listen() {
       var reply = {};
       reply.success = false;
 
-      db.get("user:" + signin.email, function(err, orguserid) {
+      db.get("user:" + signin.email, function(err, emailuserid) {
         if (err) {
           console.log("Error in signIn:" + err);
           return;
         }
 
-        if (!orguserid) {
+        if (!emailuserid) {
           console.log("Email not found:" + signin.email);
           reply.reason = "Email or password incorrect. Please try again.";
           replySignIn(reply, conn);
@@ -187,7 +217,7 @@ function listen() {
         }
 
         // validate email/password
-        db.hgetall("user:" + orguserid, function(err, user) {
+        db.hgetall("user:" + emailuserid, function(err, user) {
           if (err) {
             console.log("Error in signIn:" + err);
             return;
@@ -201,18 +231,17 @@ function listen() {
 
           // validated, so set user id
           userid = user.userid;
-          orguserkey = orguserid;
-          connections[orguserkey] = conn;
+          connections[userid] = conn;
 
           // send a successful logon reply
           reply.success = true;
           reply.email = signin.email;
           replySignIn(reply, conn);
 
-          console.log("user " + orguserkey + " logged on");
+          console.log("user:" + userid + " logged on");
 
           // send the data
-          start(user.orgid, conn);
+          start(userid, user.orgid, conn);
         });
       });
     }
@@ -311,7 +340,7 @@ function getSendCashtrans(cashtransid, conn) {
   });
 }
 
-function quoteRequest(clientid, quoterequest) {
+/*function quoteRequest(clientid, quoterequest) {
   console.log("quoterequest");
   console.log(quoterequest);
 
@@ -348,7 +377,7 @@ function quoteRequest(clientid, quoterequest) {
     // forward the request to Proquote
     ptp.quoteRequest(quoterequest);
   });
-}
+}*/
 
 // roll date forwards by T+n number of days
 function getSettDate(nosettdays) {
@@ -428,7 +457,7 @@ function getFixDate(date) {
   conn.write("{\"quote\":" + JSON.stringify(quote) + "}");
 }*/
 
-function newOrder(clientid, order, conn) {
+/*function newOrder(clientid, order, conn) {
   var currencyratetoorg = 1; // product currency to org curreny rate
   var currencyindtoorg = 1;
   var settlcurrfxrate = 1; // settlement currency to product currency rate
@@ -481,7 +510,7 @@ function newOrder(clientid, order, conn) {
 
     processOrder(order, ret[8], ret[9], ret[10], conn);
   });
-}
+}*/
 
 function getSideDesc(side) {
   if (parseInt(side) == 1) {
@@ -560,9 +589,7 @@ function matchOrder(orderid) {
   });
 }
 
-function getSendOrder(orderid, sendmarginreserve, sendcash) {
-  var orgclientkey;
-
+function getSendOrder(orderid) {
   db.hgetall("order:" + orderid, function(err, order) {
     if (err) {
       console.log(err);
@@ -574,21 +601,9 @@ function getSendOrder(orderid, sendmarginreserve, sendcash) {
       return;
     }
 
-    // required for identifying the client connection
-    orgclientkey = order.orgid + ":" + order.clientid;
-
     // send to client, if connected
-    if (orgclientkey in connections) {
-      sendOrder(order, connections[orgclientkey]);
-    }
-
-    if (sendmarginreserve) {
-      getSendMargin(orgclientkey, order.currency);
-      getSendReserve(orgclientkey, order.symbol, order.settlcurrency);
-    }
-
-    if (sendcash) {
-      getSendCash(orgclientkey, order.settlcurrency);
+    if (order.operatorid in connections) {
+      sendOrder(order, connections[order.operatorid]);
     }
   });
 }
@@ -823,7 +838,6 @@ function getValue(trade) {
 function sendInstruments(conn) {
   // get sorted subset of instruments for this client
   db.eval(scriptgetinst, 0, function(err, ret) {
-    console.log(ret);
     conn.write("{\"instruments\":" + ret + "}");
   });
 }
@@ -1489,7 +1503,7 @@ function getReasonDesc(reason) {
   return desc;
 }
 
-function start(orgid, conn) {
+function start(userid, orgid, conn) {
   sendInstruments(conn);
   sendOrganisations(conn);
   sendIFAs(conn);
@@ -1499,11 +1513,11 @@ function start(orgid, conn) {
   sendCurrencies(conn);
 
   // make this the last one, as sends ready status to f/e
-  sendClients(orgid, conn);
+  sendClients(userid, orgid, conn);
 }
 
-function sendReadyToManage(conn) {
-  conn.write("{\"status\":\"readytomanage\"}");
+function sendUserid(userid, conn) {
+  conn.write("{\"userid\":" + userid + "}");
 }
 
 function replySignIn(reply, conn) {
@@ -1596,10 +1610,6 @@ function getUTCDateString(date) {
     return utcdate;
 }
 
-function sendQuote(quote, conn) {
-  conn.write("{\"quote\":" + JSON.stringify(quote) + "}");
-}
-
 /*
 * Get the nuber of seconds between two UTC datetimes
 */
@@ -1616,12 +1626,12 @@ function getDateString(utcdatetime) {
     return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
 }
 
-function sendClients(orgid, conn) {
+function sendClients(userid, orgid, conn) {
   // get sorted set of clients for specified organisation
   db.eval(scriptgetclients, 1, orgid, function(err, ret) {
     conn.write("{\"clients\":" + ret + "}");
 
-    sendReadyToManage(conn);
+    sendUserid(userid, conn);
   });
 }
 
@@ -1655,6 +1665,107 @@ function sendCurrencies(conn) {
   db.eval(scriptgetcurrencies, 0, function(err, ret) {
     conn.write("{\"currencies\":" + ret + "}");
   });  
+}
+
+function sendQuoteack(quotereqid) {
+  var quoteack = {};
+
+  console.log(quotereqid);
+  db.hgetall("quoterequest:" + quotereqid, function(err, quoterequest) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (quoterequest == null) {
+      console.log("can't find quote request id " + quotereqid);
+      return;
+    }
+
+    quoteack.quotereqid = quoterequest.quotereqid;
+    quoteack.clientid = quoterequest.clientid;
+    quoteack.symbol = quoterequest.symbol;
+    quoteack.quoterejectreasondesc = getPTPQuoteRejectReason(quoterequest.quoterejectreason);
+    if ('text' in quoterequest) {
+      quoteack.text = quoterequest.text;
+    }
+    console.log(quoteack);
+
+    // send the quote acknowledgement
+    if (quoterequest.operatorid in connections) {
+      connections[quoterequest.operatorid].write("{\"quoteack\":" + JSON.stringify(quoteack) + "}");
+    }
+  });
+}
+
+function sendQuote(quoteid) {
+  // get the quote
+  db.hgetall("quote:" + quoteid, function(err, quote) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (quote == null) {
+      console.log("Unable to find quote:" + quoteid);
+      return;
+    }
+
+    // get the number of seconds the quote is valid for
+    quote.noseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+
+    // send quote to the user who placed the quote request
+    db.hget("quoterequest:" + quote.quotereqid, "operatorid", function(err, operatorid) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      if (operatorid in connections) {
+        connections[operatorid].write("{\"quote\":" + JSON.stringify(quote) + "}");
+      }
+    });
+  });
+}
+
+//
+// todo: make common
+//
+function getPTPQuoteRejectReason(reason) {
+  var desc;
+  console.log(reason);
+
+  switch (parseInt(reason)) {
+  case 1:
+    desc = "Unknown symbol";
+    break;
+  case 2:
+    desc = "Exchange closed";
+    break;
+  case 3:
+    desc = "Quote Request exceeds limit";
+    break;
+  case 4:
+    desc = "Too late to enter";
+    break;
+  case 5:
+    desc = "Unknown Quote";
+    break;
+  case 6:
+    desc = "Duplicate Quote";
+    break;
+  case 7:
+    desc = "Invalid bid/ask spread";
+    break;
+  case 8:
+    desc = "Invalid price";
+    break;
+  case 9:
+    desc = "Not authorized to quote security";
+    break;
+  }
+
+  return desc;
 }
 
 function registerScripts() {
