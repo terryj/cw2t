@@ -23,6 +23,8 @@ var outofhours = false; // in or out of market hours - todo: replace with market
 var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;
+var operatortype = 2;
+var tradeserver = 3;
 
 // redis
 var redishost;
@@ -110,6 +112,8 @@ function pubsub() {
       sendQuote(message.substr(6));
     } else if (message.substr(0, 5) == "order") {
       getSendOrder(message.substr(6));
+    } else if (message.substr(0, 5) == "trade") {
+      getSendTrade(message.substr(6));
     }
   });
 
@@ -160,11 +164,11 @@ function listen() {
         obj = JSON.parse(msg);
         orderBookRemoveRequest(orgclientkey, obj.orderbookremoverequest, conn);
       } else if (msg.substr(2, 5) == "order") {
-        db.publish(1, msg);
+        db.publish(tradeserver, msg);
         //obj = JSON.parse(msg);
         //newOrder(clientid, obj.order, conn);
       } else if (msg.substr(2, 12) == "quoterequest") {
-        db.publish(1, msg);
+        db.publish(tradeserver, msg);
         //obj = JSON.parse(msg);
         //quoteRequest(clientid, obj.quoterequest);
       } else if (msg.substr(2, 8) == "register") {
@@ -184,7 +188,7 @@ function listen() {
         newClient(obj.newclient, conn);
       } else if (msg.substr(2, 9) == "cashtrans") {
         obj = JSON.parse(msg);
-        cashTrans(obj.cashtrans, orguserkey, conn);
+        cashTrans(obj.cashtrans, userid, conn);
       } else if (msg.substr(0, 4) == "ping") {
         conn.write("pong");
       } else {
@@ -278,12 +282,12 @@ function newClient(client, conn) {
   }
 }
 
-function cashTrans(cashtrans, orguserkey, conn) {
+function cashTrans(cashtrans, userid, conn) {
   console.log("cashtrans");
 
   cashtrans.timestamp = getUTCTimeStamp();
 
-  db.eval(scriptcashtrans, 7, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.desc, cashtrans.timestamp, "user:" + orguserkey, function(err, ret) {
+  db.eval(scriptcashtrans, 8, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.desc, cashtrans.timestamp, operatortype, userid, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
@@ -620,16 +624,16 @@ function getSendTrade(tradeid) {
       return;
     }
 
-    // send to client, if connected
-    var orgclientkey = trade.orgid + ":" + trade.clientid;
+    db.hget("order:" + trade.orderid, "operatorid", function(err, operatorid) {
+      if (err) {
+        console.log(err);
+        return;
+      }
 
-    if (orgclientkey in connections) {
-      sendTrade(trade, connections[orgclientkey]);
-    }
-
-    if ("positionid" in trade) {
-      getSendPosition(trade.positionid, orgclientkey);
-    }
+      if (operatorid in connections) {
+        sendTrade(trade, connections[operatorid]);
+      }
+    });
   });
 }
 
@@ -1809,10 +1813,10 @@ function registerScripts() {
   // todo: tie in with server
   //
   updatecash = '\
-  local updatecash = function(clientid, currency, transtype, amount, desc, timestamp, operator) \
+  local updatecash = function(clientid, currency, transtype, amount, desc, timestamp, operatortype, operatorid) \
     local cashtransid = redis.call("incr", "cashtransid") \
     if not cashtransid then return {1005} end \
-    redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currency", currency, "transtype", transtype, "amount", amount, "desc", desc, "timestamp", timestamp, "operator", operator) \
+    redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currency", currency, "transtype", transtype, "amount", amount, "desc", desc, "timestamp", timestamp, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
     local cashkey = clientid .. ":cash:" .. currency \
     local cashskey = clientid .. ":cash" \
     local cash = redis.call("get", cashkey) \
@@ -1906,7 +1910,7 @@ function registerScripts() {
   ';
 
   scriptcashtrans = updatecash + '\
-  local ret = updatecash(KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[7]) \
+  local ret = updatecash(KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[7], KEYS[8]) \
   return ret \
   ';
 

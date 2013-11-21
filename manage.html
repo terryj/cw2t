@@ -521,6 +521,11 @@
             width: 120px;
             height: 20px;
         }
+        .clientstockboxinput {
+            width: 120px;
+            height: 20px;            
+            margin: 2px 0 15px 10px;
+        }
         .stocklist {
             position: absolute;
             border: 1px solid grey;
@@ -936,10 +941,10 @@
 
             lblcashconf = document.getElementById("lblcashconf");
             if (lblcashconf != null) {
-                msg += cashtranstypes(cashtrans.transtype).desc;
+                msg += cashtranstypes[cashtrans.transtype].description;
                 msg += " of " + cashtrans.amount + " " + cashtrans.currency;
                 msg += " added for " + clients[cashtrans.clientid].name;
-                lblcashconf.value = msg;
+                lblcashconf.innerHTML = msg;
             }
 
             clearField(inpclient);
@@ -1168,6 +1173,7 @@
         function clearSelectDivs() {
             clearDiv("stockbox");
             clearDiv("clientbox");
+            clearDiv("orderdiv");
         }
 
         function clearStrip(stripid) {
@@ -1534,13 +1540,14 @@
 
                 clientlist.style.visibility = "hidden";
                 clientboxinput.value = "";
-                clientboxinput.focus();
 
                 displayClient(clients[element.value], frm, "");
+
+                stockboxinput.focus();
             }
 
             stockboxinput = document.createElement("input");
-            stockboxinput.className = "stockboxinput";
+            stockboxinput.className = "clientstockboxinput";
             stockboxinput.id = "stockboxinput";
             stockboxinput.placeholder = "Enter Stock";
 
@@ -1576,6 +1583,7 @@
                 var firstspace;
                 var symbol;
                 var element;
+                var quotereqquantity;
                 
                 if (!e) e = window.event;
                 element = e.target || e.srcElement;
@@ -1585,9 +1593,11 @@
 
                 stocklist.style.visibility = "hidden";
                 stockboxinput.value = "";
-                stockboxinput.focus();
 
                 displaySymbol(symbol);
+
+                quotereqquantity = document.getElementById("quotereqquantity");
+                quotereqquantity.focus();
             }
 
             clientstockbox.appendChild(clientboxinput);
@@ -1714,81 +1724,30 @@
             var msg;
             var listelement;
 
-            updateOrderVol(order);
-
-            orders[order.orderid] = order;
-
-            // add to quote
-            if (order.quoteid != "0") {
-                var quote = quotes[order.quoteid];
-                quote.orderid = order.orderid;
+            if (order.status == "0") {
+                msg = "Order acknowledged, id: " + order.orderid;
+                if ('text' in order && order.text != "") {
+                    msg += ", " + order.text;
+                }
+            } else if (order.status == "1") {
+                msg = "Order part-filled, order id: " + order.orderid;
+            } else if (order.status == "2") {
+                msg = "Order filled, order id: " + order.orderid;
+            } else if (order.status == "8") {
+                msg = "Order rejected, reason: " + getReasonDesc(order.reason);
+                if (order.text != "") {
+                    msg += " " + order.text;
+                }
+                msg += ", order id: " + order.orderid;
+            } else if (order.status == "4") {
+                msg = "Order cancelled";
             }
 
-            if (selectedmenu == 0) {
-                if (order.status == "0") {
-                    msg = "Order acknowledged, id: " + order.orderid;
-                    if ('text' in order && order.text != "") {
-                        msg += ", " + order.text;
-                    }
-                } else if (order.status == "1") {
-                    msg = "Order part-filled, order id: " + order.orderid;
-                } else if (order.status == "2") {
-                    msg = "Order filled, order id: " + order.orderid;
-                } else if (order.status == "8") {
-                    msg = "Order rejected, reason: " + getReasonDesc(order.reason);
-                    if (order.text != "") {
-                        msg += " " + order.text;
-                    }
-                    msg += ", order id: " + order.orderid;
-                } else if (order.status == "4") {
-                    msg = "Order cancelled";
-                }
+            addMessageToDiv(msg, "orderdiv");
 
-                addMessageToDiv(msg, "orderdiv");
-            } else if (selectedmenu == 2) {
-                if (order.status == "0") {
-                    msg = orderNewMsg(order);
-                    listelement = updateElement(msg, list1, order.orderid);
-                    if (listelement == null) {
-                        removeElementFromList(0, list1);
-                        listelement = addElement(msg, list1, order.orderid);
-                        optionToViewCancel(listelement, true);
-                    } else {
-                        optionToViewCancel(listelement, true);
-                    }
-                } else if (order.status == "1") {
-                    removeOrderAndTidy(order.orderid, list1);
-                    msg = orderFillMsg(order);
-                    listelement = updateElement(msg, list2, order.orderid);
-                    if (listelement == null) {
-                        removeElementFromList(0, list2);
-                        listelement = addElement(msg, list2, order.orderid);
-                        optionToViewCancel(listelement, true);
-                     } else {
-                        optionToViewCancel(listelement, true);
-                     }
-                } else if (order.status == "2") {
-                    removeOrderAndTidy(order.orderid, list1);
-                    removeOrderAndTidy(order.orderid, list2);
-                    removeElementFromList(0, list3);
-                    msg = orderFillMsg(order);
-                    listelement = addElement(msg, list3, order.orderid);
-                    optionToViewCancel(listelement, false);
-                } else if (order.status == "8") {
-                    removeOrderAndTidy(order.orderid, list1);
-                    removeElementFromList(0, list4);
-                    msg = orderRejectMsg(order);
-                    listelement = addElement(msg, list4, order.orderid);
-                    optionToViewCancel(listelement, false);
-                } else if (order.status == "4") {
-                    removeOrderAndTidy(order.orderid, list1);
-                    removeOrderAndTidy(order.orderid, list2);
-                    removeElementFromList(0, list5);
-                    msg = orderCancelMsg(order);
-                    listelement = addElement(msg, list5, order.orderid);
-                    optionToViewCancel(listelement, false);
-                }
-            }
+            /*if (order.status != 1 && order.status != 2) {
+                anotherQuote();
+            }*/
         }
 
         function removeOrderAndTidy(orderid, list) {
@@ -2149,6 +2108,10 @@
                 msg += " (" + trade.settlcurrency + ")"
             }
 
+            if (trade.clientid in clients) {
+                msg += " for " + clients[trade.clientid].name;
+            }
+
             msg += ", trade id: " + trade.tradeid + ", order id: " + trade.orderid + ", executed " + formatUTCDateTime(trade.timestamp);
 
             return msg;
@@ -2194,17 +2157,9 @@
         function updateTrade(trade) {
             var msg;
 
-            trades[trade.tradeid] = trade;
-
-            if (selectedmenu == 0) {
-                msg = tradeMsg(trade);
-                addMessageToDiv(msg, "orderdiv");
-            } else if (selectedmenu == 3) {
-                msg = tradeMsg(trade);
-                if (updateElement(msg, list1, trade.tradeid) == null) {
-                    addElement(msg, list1, trade.tradeid);
-                }
-            }
+            msg = tradeMsg(trade);
+            addMessageToDiv(msg, "orderdiv");
+            //anotherQuote();
         }
 
         function updatePosition(position) {
@@ -2843,7 +2798,7 @@
                 sendIt();
             }
 
-            orderdiv = createDiv("orderdiv");
+            orderdiv = getDiv("orderdiv");
 
             orderdiv.appendChild(lblclient);
             orderdiv.appendChild(inpclient);
@@ -2918,14 +2873,14 @@
 
         function formatUTCDate(utcdate) {
             var month = parseInt(utcdate.substr(4, 2));
-            return (utcdate.substr(6, 2) + " " + monthtext[month] + " " + utcdate.substr(0, 4));
+            return (utcdate.substr(6, 2) + " " + monthtext[month-1] + " " + utcdate.substr(0, 4));
         }
 
         function formatUTCDateTime(utcdatetime) {
             return (formatUTCDate(utcdatetime) + utcdatetime.substr(8));
         }
 
-        function createDiv(divid) {
+        function getDiv(divid) {
             var div = document.getElementById(divid);
 
             if (div == null) {
@@ -2955,7 +2910,6 @@
             quotereq.symbol = symbol;
             quotereq.currency = currency;
             quotereq.settlcurrency = settlcurrency;
-            //quotereq.futsettdate = settdate;
             quotereq.nosettdays = nosettdays;
             quotereq.operatortype = operatortype;
             quotereq.operatorid = userid;
@@ -2980,7 +2934,6 @@
             }
 
             addMessageToDiv(msg, "orderdiv");
-
         }
 
         function validateNumeric(field, fieldname) {
@@ -3031,7 +2984,28 @@
             }
 
             addMessageToDiv(msg, "orderdiv");
+
+            //anotherQuote();
         }
+
+        /*function anotherQuote() {
+            var anotherquotereqbutton;
+
+            anotherquotereqbutton = document.createElement("input");
+            anotherquotereqbutton.type = "button";
+            anotherquotereqbutton.className = "quotereqbutton";
+            anotherquotereqbutton.value = "Another quote";
+
+            anotherquotereqbutton.onclick = function() {
+                clearScreen();
+                requestQuote();
+            }
+
+            orderdiv = getDiv("orderdiv");
+
+            addNewLine(orderdiv);
+            orderdiv.appendChild(anotherquotereqbutton);
+        }*/
 
         function quoteReceived(quote) {
             var buybutton;
@@ -3118,7 +3092,7 @@
             }, 1000);
             // todo: clear if form is closed
 
-            orderdiv = createDiv("orderdiv");
+            orderdiv = getDiv("orderdiv");
 
             addNewLine(orderdiv);
             orderdiv.appendChild(sellbutton);
@@ -3334,7 +3308,7 @@
 
             populateSettlPeriod(settlperiod, 3);
 
-            orderdiv = createDiv("orderdiv");
+            orderdiv = getDiv("orderdiv");
 
             orderdiv.appendChild(btn);
             orderdiv.appendChild(quantityinput);
