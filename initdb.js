@@ -149,6 +149,13 @@ function initdb() {
   db.sadd("currencies", "EUR");
   db.sadd("currencies", "USD");
 
+  // client types
+  db.sadd("clienttypes", "1");
+  db.sadd("clienttypes", "2");
+
+  db.set("clienttypes:1", "Retail");
+  db.set("clienttypes:2", "Hedge");
+
   // order types - set of order types & string for each one
   //db.sadd("ordertypes", "1");
   db.sadd("ordertypes", "2");

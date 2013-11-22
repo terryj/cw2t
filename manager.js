@@ -57,6 +57,7 @@ var scriptgetcurrencies;
 var scriptcashtrans;
 var scriptupdateclient;
 var scriptgetinst;
+var scriptgetclienttypes;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -258,7 +259,7 @@ function newClient(client, conn) {
 
   // maybe a new client or an updated client
   if (client.clientid == "") {
-    db.eval(scriptnewclient, 7, client.orgid, client.name, client.email, client.mobile, client.address, client.ifaid, client.insttypes, function(err, ret) {
+    db.eval(scriptnewclient, 8, client.orgid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, function(err, ret) {
       if (err) throw err;
 
       if (ret[0] != 0) {
@@ -1515,6 +1516,7 @@ function start(userid, orgid, conn) {
   sendOrderTypes(conn);
   sendCashTransTypes(conn);
   sendCurrencies(conn);
+  sendClientTypes(conn);
 
   // make this the last one, as sends ready status to f/e
   sendClients(userid, orgid, conn);
@@ -1669,6 +1671,12 @@ function sendCurrencies(conn) {
   db.eval(scriptgetcurrencies, 0, function(err, ret) {
     conn.write("{\"currencies\":" + ret + "}");
   });  
+}
+
+function sendClientTypes(conn) {
+  db.eval(scriptgetclienttypes, 0, function(err, ret) {
+    conn.write("{\"clienttypes\":" + ret + "}");
+  });    
 }
 
 function sendQuoteack(quotereqid) {
@@ -1845,7 +1853,7 @@ function registerScripts() {
   //
   scriptgetclients = '\
   local clients = redis.call("sort", "clients", "ALPHA") \
-  local fields = {"orgid", "clientid", "email", "name", "address", "mobile", "ifaid"} \
+  local fields = {"orgid", "clientid", "email", "name", "address", "mobile", "ifaid", "type"} \
   local vals \
   local tblclient = {} \
   local tblinsttype = {} \
@@ -1853,7 +1861,7 @@ function registerScripts() {
     vals = redis.call("hmget", "client:" .. clients[index], unpack(fields)) \
     if KEYS[1] == vals[1] then \
       tblinsttype = redis.call("smembers", vals[2] .. ":instrumenttypes") \
-      table.insert(tblclient, {orgid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype}) \
+      table.insert(tblclient, {orgid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype, type = vals[8]}) \
     end \
   end \
   return cjson.encode(tblclient) \
@@ -1863,14 +1871,14 @@ function registerScripts() {
   local clientid = redis.call("incr", "clientid") \
   if not clientid then return {1005} end \
   --[[ store the client ]] \
-  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "orgid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6]) \
+  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "orgid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7]) \
   --[[ add to set of clients ]] \
   redis.call("sadd", "clients", clientid) \
   --[[ add route to find client from email ]] \
   redis.call("set", "client:" .. KEYS[3], clientid) \
   --[[ add tradeable instrument types ]] \
-  if KEYS[7] ~= "" then \
-    local insttypes = stringsplit(KEYS[7], ",") \
+  if KEYS[8] ~= "" then \
+    local insttypes = stringsplit(KEYS[8], ",") \
     for i = 1, #insttypes do \
       redis.call("sadd", clientid .. ":instrumenttypes", insttypes[i]) \
     end \
@@ -1884,7 +1892,7 @@ function registerScripts() {
   local email = redis.call("hget", clientkey, "email") \
   if not email then return 1017 end \
   --[[ update client ]] \
-  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "orgid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifa", KEYS[7]) \
+  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "orgid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifaid", KEYS[7]) \
   --[[ remove old email link and add new one ]] \
   if KEYS[4] ~= email then \
     redis.call("del", "client:" .. email) \
@@ -1936,6 +1944,17 @@ function registerScripts() {
     table.insert(ifa, {ifaid = vals[1], name = vals[2]}) \
   end \
   return cjson.encode(ifa) \
+  ';
+
+  scriptgetclienttypes = '\
+  local clienttypes = redis.call("sort", "clienttypes", "ALPHA") \
+  local clienttype = {} \
+  local val \
+  for index = 1, #clienttypes do \
+    val = redis.call("get", "clienttype:" .. clienttypes[index]) \
+    table.insert(clienttype, {clienttypeid = clienttypes[index], description = val}) \
+  end \
+  return cjson.encode(clienttype) \
   ';
 
   scriptgetinstrumenttypes = '\

@@ -571,7 +571,7 @@
         }
         .formlabel {
             display: inline-block;
-            width: 120px;
+            width: 150px;
             font-size: 21px;
             text-align: right;
             color: gray;
@@ -641,6 +641,7 @@
         var instrumenttypes = {};
         var cashtranstypes = {};
         var currencies = {};
+        var clienttypes = {};
         var lastElement = null;
         var lastsymbol = null;
         var extendedsettlement = false;
@@ -653,6 +654,7 @@
         var restarttimer;
         var userid;
         var operatortype = 2;
+        var defaultHedgebook = 999999;
 
         var datain = function(msg) {
             var obj = {};
@@ -743,6 +745,9 @@
             } else if (msg.substr(2, 7) == "clients") {
                 obj = JSON.parse(msg);
                 loadClients(obj.clients);
+            } else if (msg.substr(2, 11) == "clienttypes") {
+                obj = JSON.parse(msg);
+                loadClienttypes(obj.clienttypes);
             } else if (msg.substr(2, 6) == "client") {
                 obj = JSON.parse(msg);
                 updateClient(obj.client);
@@ -892,6 +897,12 @@
         function loadCurrencies(currencyarr) {
             for (var i = 0; i < currencyarr.length; ++i) {
                 currencies[currencyarr[i]] = currencyarr[i];
+            }                                                                        
+        }
+
+        function loadClienttypes(clienttypearr) {
+            for (var i = 0; i < clienttypearr.length; ++i) {
+                clienttypes[clienttypearr[i].clienttypeid] = clienttypearr[i];
             }                                                                        
         }
 
@@ -1238,6 +1249,7 @@
             clearForm("frminstrument", true);
             clearForm("frmclient", true);
             clearForm("frmcash", true);
+            clearForm("frmhedge", true);
         }
 
         function addElement(msg, list, index) {
@@ -3871,6 +3883,8 @@
             var btnupdate;
             var lblclientconf;
             var divaddress;
+            var lbltype;
+            var seltype;
 
             frmclient = document.getElementById("frmclient");
             if (frmclient != null) {
@@ -3906,6 +3920,9 @@
             lblcantrade = document.createElement("label");
             lblcantrade.className = "formlabel";
             lblcantrade.innerHTML = "Can Trade:";
+            lbltype = document.createElement("label");
+            lbltype.className = "formlabel";
+            lbltype.innerHTML = "Type:";
 
             inpname = document.createElement("input");
             inpname.id = "inpname";
@@ -3921,13 +3938,15 @@
             inpclientid.className = "forminput";
             inpaddress = document.createElement("textarea");
             inpaddress.id = "inpaddress";
-
             inpemail = document.createElement("input");
             inpemail.id = "inpemail";
             inpemail.className = "forminput";
             selifa = document.createElement("select");
             selifa.id = "selifa";
             selifa.className = "formselect";
+            seltype = document.createElement("select");
+            seltype.id = "seltype";
+            seltype.className = "formselect";            
 
             btnupdate = document.createElement("input");
             btnupdate.type = "button";
@@ -3958,6 +3977,7 @@
                 client.address = inpaddress.value;
                 client.email = inpemail.value;
                 client.ifaid = selifa[selifa.selectedIndex].value;
+                client.type = seltype[seltype.selectedIndex].value;
 
                 for (var i in instrumenttypes) {
                     chkinsttype = document.getElementById("checkbox:" + instrumenttypes[i].instrumenttypeid);
@@ -3996,6 +4016,9 @@
             addNewLine(frmclient);
             frmclient.appendChild(lblifa);
             frmclient.appendChild(selifa);
+            addNewLine(frmclient);
+            frmclient.appendChild(lbltype);
+            frmclient.appendChild(seltype);
             addNewLine(frmclient);
             frmclient.appendChild(lblcantrade);
 
@@ -4043,6 +4066,7 @@
             var chkinsttype;
             var found;
             var lblclientconf;
+            var seltype;
 
             if (frm == "frmclient") {
                 inpname = document.getElementById("inpname");
@@ -4052,6 +4076,7 @@
                 inpaddress = document.getElementById("inpaddress");
                 inpemail = document.getElementById("inpemail");
                 selifa = document.getElementById("selifa");
+                seltype = document.getElementById("seltype");
 
                 // create an empty client
                 if (client == null) {
@@ -4063,7 +4088,8 @@
                         address: '',
                         email: '',
                         ifaid: '',
-                        insttypes: []
+                        insttypes: [],
+                        type: 1
                     };
                 }
 
@@ -4075,6 +4101,7 @@
                     inpaddress.value = client.address;
                     inpemail.value = client.email;
                     populateIFAs(selifa, client.ifaid);
+                    populateClientTypes(seltype, client.type);
 
                     for (var i in instrumenttypes) {
                         chkinsttype = document.getElementById("checkbox:" + instrumenttypes[i].instrumenttypeid);
@@ -4253,6 +4280,98 @@
             main.appendChild(frmcash);
         }
 
+        function maintainHedging() {
+            var frmhedge;
+            var lblinsttype;
+            var lblcurrency;
+            var lblhedgebook;
+            var lblhedgeoverval;
+            var selinsttype;
+            var selcurrency;
+            var selhedgebook;
+            var inphedgeoverval;
+
+            frmhedge = document.getElementById("frmhedge");
+            if (frmhedge != null) {
+                return;
+            }
+
+            frmhedge = document.createElement("form");
+            frmhedge.id = "frmhedge";
+
+            addNewLine(frmhedge);
+            lblinsttype = newlabel("lblinsttype", "Instrument Type:", "formlabel", frmhedge);
+            selinsttype = newselect("selinsttype", "formselect", frmhedge);
+            //addNewLine(frmhedge);
+            lblcurrency = newlabel("lblcurrency", "Currency:", "formlabel", frmhedge);
+            selcurrency = newselect("selcurrency", "formselect", frmhedge);
+            addNewLine(frmhedge);
+            lblhedgebook = newlabel("lblhedgebook", "Hedge Book:", "formlabel", frmhedge);
+            selhedgebook = newselect("selhedgebook", "formselect", frmhedge);
+            //addNewLine(frmhedge);
+            lblhedgeoverval = newlabel("lblhedgeoverval", "Hedge Over Value:", "formlabel", frmhedge);
+            inphedgeoverval = newinput("inphedgeoverval", "forminput", frmhedge);
+
+            //selinsttype = newselect("selinsttype", "formselect");
+            //selcurrency = newselect("selcurrency", "formselect");
+            //selhedgebook = newselect("selhedgebook", "formselect");
+
+ 
+            /*selinsttype = document.createElement("select");
+            selinsttype.id = "selinsttype";
+            selinsttype.className = "formselect";
+            selcurrency = document.createElement("select");
+            selcurrency.id = "selcurrency";
+            selcurrency.className = "formselect";
+            selhedgebook = document.createElement("select");
+            selhedgebook.id = "selhedgebook";
+            selhedgebook.className = "formselect";*/
+
+            populateInstrumentTypes(selinsttype, "CFD");
+            populateCurrencies(selcurrency, "GBP");
+            populateHedgebooks(selhedgebook, defaultHedgebook);
+
+            //addNewLine(frmhedge);
+            //frmhedge.appendChild(lblinsttype);
+            //frmhedge.appendChild(selinsttype);
+            //addNewLine(frmhedge);
+            //frmhedge.appendChild(lblcurrency);
+            //frmhedge.appendChild(selcurrency);
+            //addNewLine(frmhedge);
+            //frmhedge.appendChild(lblhedgebook);
+            //frmhedge.appendChild(selhedgebook);
+            //addNewLine(frmhedge);
+            //frmhedge.appendChild(lblhedgeoverval);
+            //frmhedge.appendChild(inphedgeoverval);
+
+            main.appendChild(frmhedge);
+        }
+
+        function newlabel(id, text, classname, form) {
+            var label = document.createElement("label");
+            label.id = id;
+            label.className = classname;
+            label.innerHTML = text;
+            form.appendChild(label);   
+            return label;    
+        }
+
+        function newinput(id, classname, form) {
+            var input = document.createElement("input");
+            input.id = id;
+            input.className = classname;
+            form.appendChild(input);   
+            return input;
+        }
+
+        function newselect(id, classname, form) {
+            var select = document.createElement("select");
+            select.id = id;
+            select.className = classname;
+            form.appendChild(select);   
+            return select;
+        }
+
         function populateOrgs(orgselect, defaultid) {
             var i = 0;
 
@@ -4303,6 +4422,47 @@
                 }
                 i++;
             }
+        }
+
+        function populateClientTypes(clienttypeselect, defaultid) {
+            var i = 0;
+
+            for (var j in clienttypes) {
+                if (clienttypes[j].clienttypeid == defaultid) {
+                    clienttypeselect[i] = new Option(clienttypes[j].description, clienttypes[j].clienttypeid, true, true);
+                } else {
+                    clienttypeselect[i] = new Option(clienttypes[j].description, clienttypes[j].clienttypeid, false, false);         
+                }
+                i++;
+            }            
+        }
+
+        function populateInstrumentTypes(insttypeselect, defaultid) {
+            var i = 0;
+
+            for (var j in instrumenttypes) {
+                if (instrumenttypes[j].instrumenttypeid == defaultid) {
+                    insttypeselect[i] = new Option(instrumenttypes[j].description, instrumenttypes[j].instrumenttypeid, true, true);
+                } else {
+                    insttypeselect[i] = new Option(instrumenttypes[j].description, instrumenttypes[j].instrumenttypeid, false, false);         
+                }
+                i++;
+            }            
+        }
+
+        function populateHedgebooks(hedgebookselect, defaultid) {
+            var i = 0;
+
+            for (var j in clients) {
+                if (clients[j].type == 2) {
+                    if (clients[j].clientid == defaultid) {
+                        hedgebookselect[i] = new Option(clients[j].name, clients[j].clientid, true, true);
+                    } else {
+                        hedgebookselect[i] = new Option(clients[j].name, clients[j].clientid, false, false);         
+                    }
+                    i++;
+                }
+            }                        
         }
 
         function requestHistory() {
