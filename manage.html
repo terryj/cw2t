@@ -723,7 +723,7 @@
                 loadInstruments(obj.instruments);
             } else if (msg.substr(2, 10) == "instrument") {
                 obj = JSON.parse(msg);
-                loadInstrument(obj.instrument);
+                updateInstrument(obj.instrument);
             } else if (msg.substr(2, 7) == "margins") {
                 obj = JSON.parse(msg);
                 loadMargins(obj.margins);
@@ -840,7 +840,8 @@
             }
         }
 
-        function loadInstrument(instrument) {
+        function updateInstrument(instrument) {
+            console.log(instrument);
             instruments[instrument.symbol] = instrument;
         }
 
@@ -1250,6 +1251,7 @@
             clearForm("frmclient", true);
             clearForm("frmcash", true);
             clearForm("frmhedge", true);
+            clearForm("frmproduct", true);
         }
 
         function addElement(msg, list, index) {
@@ -3983,7 +3985,11 @@
                 client.email = inpemail.value;
                 client.ifaid = selifa[selifa.selectedIndex].value;
                 client.type = seltype[seltype.selectedIndex].value;
-                client.hedge = opthedgeyes.checked;
+                if (opthedgeyes.checked) {
+                    client.hedge = 1;
+                } else {
+                    client.hedge = 0;                    
+                }
 
                 for (var i in instrumenttypes) {
                     chkinsttype = document.getElementById("checkbox:" + instrumenttypes[i].instrumenttypeid);
@@ -4075,6 +4081,9 @@
             var lblclientconf;
             var seltype;
             var opthedgeyes;
+            var opthedgeno;
+
+            console.log(client);
 
             if (frm == "frmclient") {
                 inpname = document.getElementById("inpname");
@@ -4086,6 +4095,7 @@
                 selifa = document.getElementById("selifa");
                 seltype = document.getElementById("seltype");
                 opthedgeyes = document.getElementById("opthedgeyes");
+                opthedgeno = document.getElementById("opthedgeno");
 
                 // create an empty client
                 if (client == null) {
@@ -4099,7 +4109,7 @@
                         ifaid: '',
                         insttypes: [],
                         type: 1,
-                        hedge: true
+                        hedge: 1
                     };
                 }
 
@@ -4112,7 +4122,11 @@
                     inpemail.value = client.email;
                     populateIFAs(selifa, client.ifaid);
                     populateClientTypes(seltype, client.type);
-                    opthedgeyes.checked = client.hedge;
+                    if (parseInt(client.hedge)) {
+                        opthedgeyes.checked = true;
+                    } else {
+                        opthedgeno.checked = true;                        
+                    }
 
                     for (var i in instrumenttypes) {
                         chkinsttype = document.getElementById("checkbox:" + instrumenttypes[i].instrumenttypeid);
@@ -4432,8 +4446,12 @@
                 var inst = {};
 
                 inst.symbol = inpsymbol.value;
-                inst.marginpc = inpmargin.value;
-                inst.hedge = opthedgeyes.checked;
+                inst.marginpercent = inpmargin.value;
+                if (opthedgeyes.checked) {
+                    inst.hedge = 1;
+                } else {
+                    inst.hedge = 0;                    
+                }
 
                 sockjs.send("{\"instupdate\":" + JSON.stringify(inst) + "}");
             }
@@ -4450,8 +4468,7 @@
             var inpsector = document.getElementById("inpsector");
             var inpmargin = document.getElementById("inpmargin");
             var opthedgeyes = document.getElementById("opthedgeyes");
-
-            console.log(inst);
+            var opthedgeno = document.getElementById("opthedgeno");
 
             inpsymbol.value = inst.symbol;
             inpdesc.value = inst.description;
@@ -4459,8 +4476,12 @@
             inpsedol.value = inst.sedol;
             inpinsttype.value = inst.instrumenttype;
             inpsector.value = inst.sector;
-            inpmargin.value = inst.marginpc;
-            opthedgeyes.checked = inst.hedge;
+            inpmargin.value = inst.marginpercent;
+            if (parseInt(inst.hedge)) {
+                opthedgeyes.checked = true;
+            } else {
+                opthedgeno.checked = true;                
+            }
         }
 
         function addNewLine(frmclient) {

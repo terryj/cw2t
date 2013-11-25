@@ -190,6 +190,9 @@ function listen() {
       } else if (msg.substr(2, 9) == "cashtrans") {
         obj = JSON.parse(msg);
         cashTrans(obj.cashtrans, userid, conn);
+      } else if (msg.substr(2, 10) == "instupdate") {
+        obj = JSON.parse(msg);
+        instUpdate(obj.instupdate, userid, conn);
       } else if (msg.substr(0, 4) == "ping") {
         conn.write("pong");
       } else {
@@ -300,6 +303,16 @@ function cashTrans(cashtrans, userid, conn) {
   });
 }
 
+function instUpdate(inst, userid, conn) {
+  console.log(instUpdate);
+
+  db.eval(scriptinstupdate, 3, inst.symbol, inst.marginpercent, inst.hedge, function(err, ret) {
+    if (err) throw err;
+
+    getSendInst(inst.symbol, conn);
+  });
+}
+
 function getSendClient(clientid, conn) {
   db.hgetall("client:" + clientid, function(err, client) {
     if (err) {
@@ -342,6 +355,22 @@ function getSendCashtrans(cashtransid, conn) {
     }
 
     conn.write("{\"cashtrans\":" + JSON.stringify(cashtrans) + "}");
+  });
+}
+
+function getSendInst(symbol, conn) {
+  db.hgetall("symbol:" + symbol, function(err, inst) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (inst == null) {
+      console.log("Instrument not found");
+      return;
+    }
+
+    conn.write("{\"instrument\":" + JSON.stringify(inst) + "}");
   });
 }
 
@@ -1993,7 +2022,7 @@ function registerScripts() {
   //
   scriptgetinst = '\
   local instruments = redis.call("sort", "instruments", "ALPHA") \
-  local fields = {"instrumenttype", "description", "currency", "marginpercent", "market", "isin", "sedol", "sector"} \
+  local fields = {"instrumenttype", "description", "currency", "marginpercent", "market", "isin", "sedol", "sector", "hedge"} \
   local vals \
   local inst = {} \
   local marginpc \
@@ -2005,9 +2034,13 @@ function registerScripts() {
       else \
         marginpc = 100 \
       end \
-      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc, market = vals[5], isin = vals[6], sedol = vals[7], sector = vals[8]}) \
+      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc, market = vals[5], isin = vals[6], sedol = vals[7], sector = vals[8], hedge = vals[9]}) \
     end \
   end \
   return cjson.encode(inst) \
+  ';
+
+  scriptinstupdate = '\
+  redis.call("hmset", "symbol:" .. KEYS[1], "marginpercent", KEYS[2], "hedge", KEYS[3]) \
   ';
 }
