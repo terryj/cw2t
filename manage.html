@@ -1418,6 +1418,10 @@
             var stocklist;
             var searchtext;
 
+            stockbox = document.createElement("div");
+            stockbox.id = "stockbox";
+            stockbox.className = "stockbox";
+
             stockboxinput = document.createElement("input");
             stockboxinput.className = "stockboxinput";
             stockboxinput.id = "stockboxinput";
@@ -1462,15 +1466,11 @@
                 firstspace = element.innerHTML.indexOf(' ');
                 symbol = element.innerHTML.substr(0, firstspace);
 
-                if (symbol in obdisplay) {
-                    alert(symbol + " already in Watch List");
-                    e.stopPropagation();
-                } else {
-                    sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
-                    stocklist.style.visibility = "hidden";
-                    stockboxinput.value = "";
-                    stockboxinput.focus();
-                }
+                displayProduct(instruments[symbol]);
+
+                stocklist.style.visibility = "hidden";
+                stockboxinput.value = "";
+                stockboxinput.focus();
             }
 
             stockbox.appendChild(stockboxinput);
@@ -3717,7 +3717,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Clients", "Cash", "Request Quote", "Hedging", "IFA's"];
+            menuarr = ["Clients", "Cash", "Request Quote", "Products", "IFA's"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -3758,7 +3758,7 @@
                     requestQuote();
                     break;
                 case 3:
-                    maintainHedging();
+                    maintainProducts();
                     break;
                 case 4:
                     maintainIFAs();
@@ -3885,6 +3885,11 @@
             var divaddress;
             var lbltype;
             var seltype;
+            var lblhedge;
+            var opthedgeyes;
+            var opthedgeno;
+            var lblhedgeyes;
+            var lblhedgeno;
 
             frmclient = document.getElementById("frmclient");
             if (frmclient != null) {
@@ -3978,6 +3983,7 @@
                 client.email = inpemail.value;
                 client.ifaid = selifa[selifa.selectedIndex].value;
                 client.type = seltype[seltype.selectedIndex].value;
+                client.hedge = opthedgeyes.checked;
 
                 for (var i in instrumenttypes) {
                     chkinsttype = document.getElementById("checkbox:" + instrumenttypes[i].instrumenttypeid);
@@ -4034,6 +4040,13 @@
             }
 
             addNewLine(frmclient);
+            lblhedge = newlabel("lblhedge", "Hedge:", "formlabel", frmclient);
+            opthedgeyes = newoption("opthedgeyes", "opthedge", "formselect", frmclient);
+            lblhedgeyes = newlabel("lblhedgeyes", "Yes", "", frmclient);
+            opthedgeno = newoption("opthedgeno", "opthedge", "formselect", frmclient);
+            lblhedgeno = newlabel("lblhedgeno", "No", "", frmclient);
+
+            addNewLine(frmclient);
             frmclient.appendChild(lblclientid);
             frmclient.appendChild(inpclientid);
             addNewLine(frmclient);
@@ -4046,12 +4059,6 @@
             inpclientid.disabled = true;
 
             displayClient(null, "frmclient", "");
-        }
-
-        function addNewLine(frmclient) {
-            var newline = document.createElement("label");
-            newline.innerHTML = "<br>";
-            frmclient.appendChild(newline);
         }
 
         function displayClient(client, frm, msg) {
@@ -4067,6 +4074,7 @@
             var found;
             var lblclientconf;
             var seltype;
+            var opthedgeyes;
 
             if (frm == "frmclient") {
                 inpname = document.getElementById("inpname");
@@ -4077,6 +4085,7 @@
                 inpemail = document.getElementById("inpemail");
                 selifa = document.getElementById("selifa");
                 seltype = document.getElementById("seltype");
+                opthedgeyes = document.getElementById("opthedgeyes");
 
                 // create an empty client
                 if (client == null) {
@@ -4089,7 +4098,8 @@
                         email: '',
                         ifaid: '',
                         insttypes: [],
-                        type: 1
+                        type: 1,
+                        hedge: true
                     };
                 }
 
@@ -4102,6 +4112,7 @@
                     inpemail.value = client.email;
                     populateIFAs(selifa, client.ifaid);
                     populateClientTypes(seltype, client.type);
+                    opthedgeyes.checked = client.hedge;
 
                     for (var i in instrumenttypes) {
                         chkinsttype = document.getElementById("checkbox:" + instrumenttypes[i].instrumenttypeid);
@@ -4165,14 +4176,12 @@
             var clientboxinput;
 
             frmcash = document.getElementById("frmcash");
-            if (frmcash != null) {
-                return;
+            if (frmcash == null) {
+                frmcash = document.createElement("form");
+                frmcash.id = "frmcash";
             }
 
             selectClient("frmcash");
-
-            frmcash = document.createElement("form");
-            frmcash.id = "frmcash";
 
             lblclient = document.createElement("label");
             lblclient.className = "formlabel";
@@ -4347,6 +4356,119 @@
             main.appendChild(frmhedge);
         }
 
+        function maintainProducts() {
+            var frmproduct;
+            var lblinsttype;
+            var inpinsttype;
+            var lbldesc;
+            var inpdesc;
+            var lblisin;
+            var inpisin;
+            var lblsedol;
+            var inpsedol;
+            var lblcurrency;
+            var inpcurrency;
+            var lblmarket;
+            var inpmarket;
+            var lblsector;
+            var inpsector;
+            var lblmargin;
+            var inpmargin;
+            var lblhedge;
+            var opthedgeyes;
+            var lblhedgeyes;
+            var opthedgeno;
+            var lblhedgeno
+            var btnupdate;
+            var inpsymbol;
+
+            selectStock();
+
+            frmproduct = document.getElementById("frmproduct");
+            if (frmproduct == null) {
+                frmproduct = document.createElement("form");
+                frmproduct.id = "frmproduct";
+            }
+
+            addNewLine(frmproduct);
+            lbldesc = newlabel("lbldesc", "Description:", "formlabel", frmproduct);
+            inpdesc = newinput("inpdesc", "forminput", frmproduct);
+            addNewLine(frmproduct);
+            lblisin = newlabel("lblisin", "Isin:", "formlabel", frmproduct);
+            inpisin = newinput("inpisin", "forminput", frmproduct);
+            addNewLine(frmproduct);
+            lblsedol = newlabel("lblsedol", "Sedol:", "formlabel", frmproduct);
+            inpsedol = newinput("inpsedol", "forminput", frmproduct);
+            addNewLine(frmproduct);
+            lblinsttype = newlabel("lblinsttype", "Instrument Type:", "formlabel", frmproduct);
+            inpinsttype = newinput("inpinsttype", "forminput", frmproduct);
+            addNewLine(frmproduct);
+            lblcurrency = newlabel("lblcurrency", "Currency:", "formlabel", frmproduct);
+            inpcurrency = newinput("inpcurrency", "forminput", frmproduct);
+            addNewLine(frmproduct);
+            lblmarket = newlabel("lblmarket", "Market:", "formlabel", frmproduct);
+            inpmarket = newinput("inpmarket", "forminput", frmproduct);
+            addNewLine(frmproduct);
+            lblsector = newlabel("lblsector", "Sector:", "formlabel", frmproduct);
+            inpsector = newinput("inpsector", "forminput", frmproduct);
+            addNewLine(frmproduct);
+            lblmargin = newlabel("lblmargin", "Margin %:", "formlabel", frmproduct);
+            inpmargin = newinput("inpmargin", "forminput", frmproduct);
+            addNewLine(frmproduct);
+            lblhedge = newlabel("lblhedge", "Hedge:", "formlabel", frmproduct);
+            opthedgeyes = newoption("opthedgeyes", "opthedge", "formselect", frmproduct);
+            lblhedgeyes = newlabel("lblhedgeyes", "Yes", "", frmproduct);
+            opthedgeno = newoption("opthedgeno", "opthedge", "formselect", frmproduct);
+            lblhedgeno = newlabel("lblhedgeno", "No", "", frmproduct);
+            addNewLine(frmproduct);
+            btnupdate = newbutton("btnupdate", "Update", "", frmproduct);
+
+            inpsymbol = document.createElement("input");
+            inpsymbol.type = "hidden";
+            inpsymbol.id = "inpsymbol";
+            frmproduct.appendChild(inpsymbol);
+
+            btnupdate.onclick = function() {
+                var inst = {};
+
+                inst.symbol = inpsymbol.value;
+                inst.marginpc = inpmargin.value;
+                inst.hedge = opthedgeyes.checked;
+
+                sockjs.send("{\"instupdate\":" + JSON.stringify(inst) + "}");
+            }
+
+            main.appendChild(frmproduct);
+        }
+
+        function displayProduct(inst) {
+            var inpdesc = document.getElementById("inpdesc");
+            var inpisin = document.getElementById("inpisin");
+            var inpsedol = document.getElementById("inpsedol");
+            var inpinsttype = document.getElementById("inpinsttype");
+            var inpsymbol = document.getElementById("inpsymbol");
+            var inpsector = document.getElementById("inpsector");
+            var inpmargin = document.getElementById("inpmargin");
+            var opthedgeyes = document.getElementById("opthedgeyes");
+
+            console.log(inst);
+
+            inpsymbol.value = inst.symbol;
+            inpdesc.value = inst.description;
+            inpisin.value = inst.isin;
+            inpsedol.value = inst.sedol;
+            inpinsttype.value = inst.instrumenttype;
+            inpsector.value = inst.sector;
+            inpmargin.value = inst.marginpc;
+            opthedgeyes.checked = inst.hedge;
+        }
+
+        function addNewLine(frmclient) {
+            var newline = document.createElement("label");
+            newline.innerHTML = "<br>";
+            frmclient.appendChild(newline);
+        }
+
         function newlabel(id, text, classname, form) {
             var label = document.createElement("label");
             label.id = id;
@@ -4370,6 +4492,25 @@
             select.className = classname;
             form.appendChild(select);   
             return select;
+        }
+
+        function newoption(id, name, classname, form) {
+            var option = document.createElement("input");
+            option.type = "radio";
+            option.id = id;
+            option.name = name;
+            form.appendChild(option);   
+            return option;
+        }
+
+        function newbutton(id, value, classname, form) {
+            var button = document.createElement("input");
+            button.type = "button";
+            button.id = id;
+            button.value = value;
+            button.className = classname;
+            form.appendChild(button);   
+            return button;
         }
 
         function populateOrgs(orgselect, defaultid) {

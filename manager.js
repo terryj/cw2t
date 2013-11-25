@@ -259,7 +259,7 @@ function newClient(client, conn) {
 
   // maybe a new client or an updated client
   if (client.clientid == "") {
-    db.eval(scriptnewclient, 8, client.orgid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, function(err, ret) {
+    db.eval(scriptnewclient, 9, client.orgid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, function(err, ret) {
       if (err) throw err;
 
       if (ret[0] != 0) {
@@ -270,7 +270,7 @@ function newClient(client, conn) {
       getSendClient(ret[1], conn);
     });
   } else {
-    db.eval(scriptupdateclient, 8, client.clientid, client.orgid, client.name, client.email, client.mobile, client.address, client.ifaid, client.insttypes, function(err, ret) {
+    db.eval(scriptupdateclient, 9, client.clientid, client.orgid, client.name, client.email, client.mobile, client.address, client.ifaid, client.insttypes, client.hedge, function(err, ret) {
       if (err) throw err;
 
       if (ret != 0) {
@@ -1853,7 +1853,7 @@ function registerScripts() {
   //
   scriptgetclients = '\
   local clients = redis.call("sort", "clients", "ALPHA") \
-  local fields = {"orgid", "clientid", "email", "name", "address", "mobile", "ifaid", "type"} \
+  local fields = {"orgid", "clientid", "email", "name", "address", "mobile", "ifaid", "type", "hedge"} \
   local vals \
   local tblclient = {} \
   local tblinsttype = {} \
@@ -1861,7 +1861,7 @@ function registerScripts() {
     vals = redis.call("hmget", "client:" .. clients[index], unpack(fields)) \
     if KEYS[1] == vals[1] then \
       tblinsttype = redis.call("smembers", vals[2] .. ":instrumenttypes") \
-      table.insert(tblclient, {orgid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype, type = vals[8]}) \
+      table.insert(tblclient, {orgid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype, type = vals[8], hedge = vals[9]}) \
     end \
   end \
   return cjson.encode(tblclient) \
@@ -1871,7 +1871,7 @@ function registerScripts() {
   local clientid = redis.call("incr", "clientid") \
   if not clientid then return {1005} end \
   --[[ store the client ]] \
-  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "orgid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7]) \
+  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "orgid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7], "hedge", KEYS[9]) \
   --[[ add to set of clients ]] \
   redis.call("sadd", "clients", clientid) \
   --[[ add route to find client from email ]] \
@@ -1892,7 +1892,7 @@ function registerScripts() {
   local email = redis.call("hget", clientkey, "email") \
   if not email then return 1017 end \
   --[[ update client ]] \
-  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "orgid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifaid", KEYS[7]) \
+  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "orgid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifaid", KEYS[7], "hedge", KEYS[9]) \
   --[[ remove old email link and add new one ]] \
   if KEYS[4] ~= email then \
     redis.call("del", "client:" .. email) \
@@ -1993,7 +1993,7 @@ function registerScripts() {
   //
   scriptgetinst = '\
   local instruments = redis.call("sort", "instruments", "ALPHA") \
-  local fields = {"instrumenttype", "description", "currency", "marginpercent"} \
+  local fields = {"instrumenttype", "description", "currency", "marginpercent", "market", "isin", "sedol", "sector"} \
   local vals \
   local inst = {} \
   local marginpc \
@@ -2005,7 +2005,7 @@ function registerScripts() {
       else \
         marginpc = 100 \
       end \
-      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc}) \
+      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc, market = vals[5], isin = vals[6], sedol = vals[7], sector = vals[8]}) \
     end \
   end \
   return cjson.encode(inst) \

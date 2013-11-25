@@ -2563,6 +2563,11 @@ function registerScripts() {
   return orderid \
   ';
 
+/*
+    local hedgeoverval = redis.call("hget", "hedge:" .. instrumenttype .. ":" .. KEYS[18], "hedgeoverval") \
+    if not hedgeoverval or settlcurramt > hedgeoverval then \
+*/
+
   scriptneworder = neworder + creditcheck + newtrade + getproquotesymbol + getproquotequote + '\
   local orderid = neworder(KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[4], "0", KEYS[7], KEYS[8], KEYS[9], KEYS[10], KEYS[11], KEYS[12], KEYS[13], KEYS[14], 0, KEYS[15], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], "", "", KEYS[21], KEYS[22], KEYS[23], KEYS[24], KEYS[25]) \
   local side = tonumber(KEYS[3]) \
@@ -2594,9 +2599,10 @@ function registerScripts() {
     local hedgecosts = {0,0,0,0} \
     tradeid = newtrade(KEYS[1], orderid, KEYS[2], side, KEYS[4], KEYS[5], KEYS[11], 1, 1, ret[2], hedgebookid, KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 5, KEYS[22], KEYS[23]) \
     hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[2], KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 5, KEYS[22], KEYS[23]) \
-    --[[ see if we need to hedge this trade in the market (assume we do) ]] \
-    local hedgeoverval = redis.call("hget", "hedge:" .. instrumenttype .. ":" .. KEYS[18], "hedgeoverval") \
-    if not hedgeoverval or settlcurramt > hedgeoverval then \
+    --[[ see if we need to hedge this trade in the market ]] \
+    local hedgeclient = redis.call("hget", "client:" .. KEYS[1], "hedge") \
+    local hedgeinst = redis.call("hget", "symbol:" .. KEYS[2], "hedge") \
+    if hedgeclient or hedgeinst then \
       --[[ create a hedge order in the underlying product ]] \
       proquotesymbol = getproquotesymbol(KEYS[2]) \
       if proquotesymbol[4] then \
