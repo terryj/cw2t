@@ -2599,7 +2599,7 @@
 
         function formatUTCDate(utcdate) {
             var month = parseInt(utcdate.substr(4, 2));
-            return (utcdate.substr(6, 2) + " " + monthtext[month-1] + " " + utcdate.substr(0, 4));
+            return (utcdate.substr(6, 2) + " " + monthtext[month-1s] + " " + utcdate.substr(0, 4));
         }
 
         function formatUTCDateTime(utcdatetime) {
@@ -3623,6 +3623,9 @@
                 break;
             case 1016:
                 desc = "Proquote symbol not found";
+                break;
+            case 1017:
+                desc = "Client not authorised to trade this type of product";
                 break;
             case 0:
                 desc = "000";

@@ -111,6 +111,9 @@ function initdb() {
   db.hset("symbol:AMZN", "isin", "US0231351067");
   db.hset("symbol:AMZN", "exchange", "O");
   db.hset("symbol:AMZN", "topic", "TIT.AMZN");
+  db.hset("symbol:AMZN", "symbol", "AMZN");
+  db.hset("symbol:AMZN", "instrumenttype", "IE");
+  db.hset("symbol:BARC.L", "market", "O");
   db.set("proquotesymbol:AMZN", "AMZN");
   db.sadd("instruments", "AMZN");
   db.hset("symbol:BARC.L", "currency", "GBP");
@@ -119,6 +122,9 @@ function initdb() {
   db.hset("symbol:BARC.L", "isin", "GB0031348658");
   db.hset("symbol:BARC.L", "exchange", "L");
   db.hset("symbol:BARC.L", "topic", "TIT.BARC");
+  db.hset("symbol:BARC.L", "symbol", "BARC.L");
+  db.hset("symbol:BARC.L", "instrumenttype", "DE");
+  db.hset("symbol:BARC.L", "market", "L");
   db.set("proquotesymbol:BARC", "BARC.L");
   db.sadd("instruments", "BARC.L");
 
@@ -132,6 +138,9 @@ function initdb() {
   db.set("instrumenttype:IE", "International Equities");
   db.set("instrumenttype:CFD", "CFD");
   db.set("instrumenttype:SPB", "Spreadbet");
+
+  // indices
+  db.sadd("index:UKX", "BARC.L");
 
   // cash transaction types
   db.sadd("cashtranstypes", "CI");
@@ -165,6 +174,8 @@ function initdb() {
   //db.set("ordertype:7", "At Limit");
   db.sadd("ordertypes", "D");
   db.set("ordertype:D", "Quoted");
+  db.sadd("ordertypes", "X");
+  db.set("ordertype:X", "Hedge");
 
   console.log("done");
 }

@@ -304,8 +304,8 @@ function cashTrans(cashtrans, userid, conn) {
 }
 
 function instUpdate(inst, userid, conn) {
-  console.log(instUpdate);
-
+  console.log("instUpdate");
+  
   db.eval(scriptinstupdate, 3, inst.symbol, inst.marginpercent, inst.hedge, function(err, ret) {
     if (err) throw err;
 
@@ -334,7 +334,6 @@ function getSendClient(clientid, conn) {
       }
 
       client.insttypes = insttypes;
-      console.log(client);
 
       conn.write("{\"client\":" + JSON.stringify(client) + "}");
     });
@@ -489,61 +488,6 @@ function getFixDate(date) {
   quote.reasondesc = getReasonDesc(reason);
 
   conn.write("{\"quote\":" + JSON.stringify(quote) + "}");
-}*/
-
-/*function newOrder(clientid, order, conn) {
-  var currencyratetoorg = 1; // product currency to org curreny rate
-  var currencyindtoorg = 1;
-  var settlcurrfxrate = 1; // settlement currency to product currency rate
-  var settlcurrfxratecalc = 1;
-
-  console.log(order);
-
-  // todo: tie this in with in/out of hours
-  order.timestamp = getUTCTimeStamp();
-  order.markettype = 0; // 0 = main market, 1 = ooh
-  order.partfill = 1; // accept part-fill
-
-  // always put a price in the order
-  if (!("price" in order)) {
-    order.price = "";
-  }
-
-  // and always have a quote id
-  if (!("quoteid" in order)) {
-    order.quoteid = "0";
-  }
-
-  // store the order, get an id & credit check it
-  db.eval(scriptneworder, 24, orgid, clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.positionopenclose, order.positioncloseid, function(err, ret) {
-    if (err) throw err;
-    console.log(ret);
-
-    // credit check failed
-    if (ret[0] == 0) {
-      getSendOrder(ret[1], false, false);
-      return;
-    }
-
-    // update order details
-    order.orderid = ret[1];
-    order.instrumenttype = ret[7];
-
-    // use the returned instrument values required by proquote
-    if (order.markettype == 0) {
-      order.isin = ret[2];
-      order.proquotesymbol = ret[3];
-      order.exchange = ret[4];
-    }
-
-    // use the returned quote values required by proquote
-    if (order.ordertype == "D") {
-      order.proquotequoteid = ret[5];
-      order.qbroker = ret[6];
-    }
-
-    processOrder(order, ret[8], ret[9], ret[10], conn);
-  });
 }*/
 
 function getSideDesc(side) {
@@ -821,31 +765,6 @@ function orderCancelReject(orgclientkey, ocr, reason) {
 
   if (orgclientkey in connections) {
     connections[orgclientkey].write("{\"ordercancelreject\":" + JSON.stringify(ordercancelreject) + "}");
-  }
-}
-
-function processOrder(order, hedgeorderid, tradeid, hedgetradeid, conn) {
-  // either forward to Proquote or trade immediately or attempt to match the order, depending on the type of instrument & whether the market is open
-  if (order.markettype == 1) {
-    matchOrder(order.orderid, conn);
-  } else {
-    // forward client equity orders to the market
-    if (order.instrumenttype == "DE") {
-      ptp.newOrder(order);
-    } else {
-      // the trade has been done, so send the order & trade to the client
-      getSendOrder(order.orderid, true, true);
-      getSendTrade(tradeid);
-
-      // & send the other side to the hedge book
-      getSendTrade(hedgetradeid);
-
-      // if we are hedging, change the order id to that of the hedge & forward to proquote
-      if (hedgeorderid != "") {
-        order.orderid = hedgeorderid;
-        ptp.newOrder(order);
-      }
-    }
   }
 }
 

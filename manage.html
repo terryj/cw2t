@@ -1050,7 +1050,6 @@
             };
 
             sockjs.onheartbeat = function() {
-                console.log("heartbeat");
                 startHeartbeatTimer();
             };
         }
@@ -3719,7 +3718,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Clients", "Cash", "Request Quote", "Products", "IFA's"];
+            menuarr = ["Clients", "Cash", "Request Quote", "Products", "Hedge Books","IFA's"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -3763,20 +3762,23 @@
                     maintainProducts();
                     break;
                 case 4:
-                    maintainIFAs();
+                    maintainHedgebooks();
                     break;
                 case 5:
-                    displayPositions();
+                    maintainIFAs();
                     break;
                 case 6:
+                    displayPositions();
+                    break;
+                case 7:
                     displayCash();
                     displayMargins();
                     displayReserves();
                     break;
-                case 7:
+                case 8:
                     requestHistory();
                     break;
-                case 8:
+                case 9:
                     settings();
                     break;
                 }
@@ -3892,6 +3894,7 @@
             var opthedgeno;
             var lblhedgeyes;
             var lblhedgeno;
+            var lnknewclient;
 
             frmclient = document.getElementById("frmclient");
             if (frmclient != null) {
@@ -3955,10 +3958,7 @@
             seltype.id = "seltype";
             seltype.className = "formselect";            
 
-            btnupdate = document.createElement("input");
-            btnupdate.type = "button";
-            btnupdate.value = "Add";
-            btnupdate.className = "formsigninbutton";
+            btnupdate = newbutton("btnupdate", "Add", "formsigninbutton", frmclient);
 
             btnupdate.onclick = function() {
                 var client = {};
@@ -3985,6 +3985,7 @@
                 client.email = inpemail.value;
                 client.ifaid = selifa[selifa.selectedIndex].value;
                 client.type = seltype[seltype.selectedIndex].value;
+
                 if (opthedgeyes.checked) {
                     client.hedge = 1;
                 } else {
@@ -4006,6 +4007,12 @@
 
             lblclientconf = document.createElement("label");
             lblclientconf.id = "lblclientconf";
+
+            lnknewclient = newlink("lnknewclient", "New Client", "");
+            lnknewclient.onclick = function() {
+                displayClient(null, "frmclient", "");
+                inpname.focus();
+            }
 
             divaddress = document.createElement("div");
             divaddress.appendChild(lbladdress);
@@ -4057,6 +4064,7 @@
             frmclient.appendChild(inpclientid);
             addNewLine(frmclient);
             frmclient.appendChild(btnupdate);
+            frmclient.appendChild(lnknewclient);
             addNewLine(frmclient);
             frmclient.appendChild(lblclientconf);
 
@@ -4067,7 +4075,7 @@
             displayClient(null, "frmclient", "");
         }
 
-        function displayClient(client, frm, msg) {
+        function displayClient(client, frm, msg, focusfld) {
             var inpclient;
             var inpname;
             var inpmobile;
@@ -4082,8 +4090,8 @@
             var seltype;
             var opthedgeyes;
             var opthedgeno;
-
-            console.log(client);
+            var btnupdate;
+            var lnknewclient;
 
             if (frm == "frmclient") {
                 inpname = document.getElementById("inpname");
@@ -4096,6 +4104,8 @@
                 seltype = document.getElementById("seltype");
                 opthedgeyes = document.getElementById("opthedgeyes");
                 opthedgeno = document.getElementById("opthedgeno");
+                btnupdate = document.getElementById("btnupdate");
+                lnknewclient = document.getElementById("lnknewclient");
 
                 // create an empty client
                 if (client == null) {
@@ -4122,6 +4132,7 @@
                     inpemail.value = client.email;
                     populateIFAs(selifa, client.ifaid);
                     populateClientTypes(seltype, client.type);
+
                     if (parseInt(client.hedge)) {
                         opthedgeyes.checked = true;
                     } else {
@@ -4148,6 +4159,14 @@
                     lblclientconf = document.getElementById("lblclientconf");
                     if (lblclientconf != null) {
                         lblclientconf.innerHTML = msg;
+                    }
+
+                    if (client.name == "") {
+                        btnupdate.value = "Add";
+                        lnknewclient.style.visibility = "hidden";
+                    } else {
+                        btnupdate.value = "Update";
+                        lnknewclient.style.visibility = "visible";
                     }
                 }
             } else {
@@ -4303,73 +4322,6 @@
             main.appendChild(frmcash);
         }
 
-        function maintainHedging() {
-            var frmhedge;
-            var lblinsttype;
-            var lblcurrency;
-            var lblhedgebook;
-            var lblhedgeoverval;
-            var selinsttype;
-            var selcurrency;
-            var selhedgebook;
-            var inphedgeoverval;
-
-            frmhedge = document.getElementById("frmhedge");
-            if (frmhedge != null) {
-                return;
-            }
-
-            frmhedge = document.createElement("form");
-            frmhedge.id = "frmhedge";
-
-            addNewLine(frmhedge);
-            lblinsttype = newlabel("lblinsttype", "Instrument Type:", "formlabel", frmhedge);
-            selinsttype = newselect("selinsttype", "formselect", frmhedge);
-            //addNewLine(frmhedge);
-            lblcurrency = newlabel("lblcurrency", "Currency:", "formlabel", frmhedge);
-            selcurrency = newselect("selcurrency", "formselect", frmhedge);
-            addNewLine(frmhedge);
-            lblhedgebook = newlabel("lblhedgebook", "Hedge Book:", "formlabel", frmhedge);
-            selhedgebook = newselect("selhedgebook", "formselect", frmhedge);
-            //addNewLine(frmhedge);
-            lblhedgeoverval = newlabel("lblhedgeoverval", "Hedge Over Value:", "formlabel", frmhedge);
-            inphedgeoverval = newinput("inphedgeoverval", "forminput", frmhedge);
-
-            //selinsttype = newselect("selinsttype", "formselect");
-            //selcurrency = newselect("selcurrency", "formselect");
-            //selhedgebook = newselect("selhedgebook", "formselect");
-
- 
-            /*selinsttype = document.createElement("select");
-            selinsttype.id = "selinsttype";
-            selinsttype.className = "formselect";
-            selcurrency = document.createElement("select");
-            selcurrency.id = "selcurrency";
-            selcurrency.className = "formselect";
-            selhedgebook = document.createElement("select");
-            selhedgebook.id = "selhedgebook";
-            selhedgebook.className = "formselect";*/
-
-            populateInstrumentTypes(selinsttype, "CFD");
-            populateCurrencies(selcurrency, "GBP");
-            populateHedgebooks(selhedgebook, defaultHedgebook);
-
-            //addNewLine(frmhedge);
-            //frmhedge.appendChild(lblinsttype);
-            //frmhedge.appendChild(selinsttype);
-            //addNewLine(frmhedge);
-            //frmhedge.appendChild(lblcurrency);
-            //frmhedge.appendChild(selcurrency);
-            //addNewLine(frmhedge);
-            //frmhedge.appendChild(lblhedgebook);
-            //frmhedge.appendChild(selhedgebook);
-            //addNewLine(frmhedge);
-            //frmhedge.appendChild(lblhedgeoverval);
-            //frmhedge.appendChild(inphedgeoverval);
-
-            main.appendChild(frmhedge);
-        }
-
         function maintainProducts() {
             var frmproduct;
             var lblinsttype;
@@ -4394,6 +4346,7 @@
             var opthedgeno;
             var lblhedgeno
             var btnupdate;
+            var lblsymbol;
             var inpsymbol;
 
             selectStock();
@@ -4404,6 +4357,9 @@
                 frmproduct.id = "frmproduct";
             }
 
+            addNewLine(frmproduct);
+            lblsymbol = newlabel("lblsymbol", "Symbol:", "formlabel", frmproduct);
+            inpsymbol = newinput("inpsymbol", "forminput", frmproduct);
             addNewLine(frmproduct);
             lbldesc = newlabel("lbldesc", "Description:", "formlabel", frmproduct);
             inpdesc = newinput("inpdesc", "forminput", frmproduct);
@@ -4437,11 +4393,6 @@
             addNewLine(frmproduct);
             btnupdate = newbutton("btnupdate", "Update", "", frmproduct);
 
-            inpsymbol = document.createElement("input");
-            inpsymbol.type = "hidden";
-            inpsymbol.id = "inpsymbol";
-            frmproduct.appendChild(inpsymbol);
-
             btnupdate.onclick = function() {
                 var inst = {};
 
@@ -4460,6 +4411,7 @@
         }
 
         function displayProduct(inst) {
+            var inpsymbol = document.getElementById("inpsymbol");
             var inpdesc = document.getElementById("inpdesc");
             var inpisin = document.getElementById("inpisin");
             var inpsedol = document.getElementById("inpsedol");
@@ -4482,6 +4434,10 @@
             } else {
                 opthedgeno.checked = true;                
             }
+        }
+
+        function maintainHedgebooks() {
+            
         }
 
         function addNewLine(frmclient) {
@@ -4532,6 +4488,15 @@
             button.className = classname;
             form.appendChild(button);   
             return button;
+        }
+
+        function newlink(id, text, classname) {
+            var link = document.createElement('a');
+            link.id = id;
+            link.innerHTML = text;
+            link.href = "javascript:void(0);";
+            newlink.className = classname;
+            return link;
         }
 
         function populateOrgs(orgselect, defaultid) {
@@ -4765,6 +4730,9 @@
                 break;
             case 1016:
                 desc = "Proquote symbol not found";
+                break;
+            case 1017:
+                desc = "Client not authorised to trade this type of product";
                 break;
             case 0:
                 desc = "000";
