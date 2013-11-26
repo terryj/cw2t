@@ -1390,6 +1390,9 @@ function getReasonDesc(reason) {
       desc = "Proquote symbol not found";
       break;
     case 1017:
+      desc = "Client not found";
+      break;
+    case 1018:
       desc = "Client not authorised to trade this type of product";
       break;
     default:
@@ -2396,7 +2399,7 @@ function registerScripts() {
     end \
     --[[ see if client is allowed to trade this product ]] \
     if redis.call("sismember", clientid .. ":instrumenttypes", instrumenttype) == 0 then \
-      rejectorder(orderid, 1017, "") \
+      rejectorder(orderid, 1018, "") \
       return {0} \
     end \
     --[[ check margin for all derivative trades & equity buys ]] \

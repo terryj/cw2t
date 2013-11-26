@@ -1571,6 +1571,12 @@ function getReasonDesc(reason) {
     case 1016:
       desc = "Proquote symbol not found";
       break;
+    case 1017:
+      desc = "Client not found";
+      break;
+    case 1018:
+      desc = "Client not authorised to trade this type of product";
+      break;
     default:
       desc = "Unknown reason";
   }

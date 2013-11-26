@@ -58,6 +58,8 @@ var scriptcashtrans;
 var scriptupdateclient;
 var scriptgetinst;
 var scriptgetclienttypes;
+var scriptinstupdate;
+var scripthedgeupdate;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -193,6 +195,9 @@ function listen() {
       } else if (msg.substr(2, 10) == "instupdate") {
         obj = JSON.parse(msg);
         instUpdate(obj.instupdate, userid, conn);
+      } else if (msg.substr(2, 15) == "hedgebookupdate") {
+        obj = JSON.parse(msg);
+        hedgebookUpdate(obj.hedgebookupdate, userid, conn);
       } else if (msg.substr(0, 4) == "ping") {
         conn.write("pong");
       } else {
@@ -273,7 +278,7 @@ function newClient(client, conn) {
       getSendClient(ret[1], conn);
     });
   } else {
-    db.eval(scriptupdateclient, 9, client.clientid, client.orgid, client.name, client.email, client.mobile, client.address, client.ifaid, client.insttypes, client.hedge, function(err, ret) {
+    db.eval(scriptupdateclient, 10, client.clientid, client.orgid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, function(err, ret) {
       if (err) throw err;
 
       if (ret != 0) {
@@ -305,11 +310,21 @@ function cashTrans(cashtrans, userid, conn) {
 
 function instUpdate(inst, userid, conn) {
   console.log("instUpdate");
-  
+
   db.eval(scriptinstupdate, 3, inst.symbol, inst.marginpercent, inst.hedge, function(err, ret) {
     if (err) throw err;
 
     getSendInst(inst.symbol, conn);
+  });
+}
+
+function hedgebookUpdate(hedge, userid, conn) {
+  console.log("hedgebookUpdate");
+
+  db.eval(scripthedgeupdate, 3, hedge.insttype, hedge.currency, hedge.hedgebook, function(err, ret) {
+    if (err) throw err;
+
+    conn.write("{\"hedgebookupdated\":" + JSON.stringify(hedge) + "}");
   });
 }
 
@@ -1449,6 +1464,9 @@ function getReasonDesc(reason) {
     case 1017:
       desc = "Client not found";
       break;
+    case 1018:
+      desc = "Client not authorised to trade this type of product";
+      break;
     default:
       desc = "Unknown reason";
   }
@@ -1840,7 +1858,7 @@ function registerScripts() {
   local email = redis.call("hget", clientkey, "email") \
   if not email then return 1017 end \
   --[[ update client ]] \
-  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "orgid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifaid", KEYS[7], "hedge", KEYS[9]) \
+  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "orgid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifaid", KEYS[7], "type", KEYS[8], "hedge", KEYS[10]) \
   --[[ remove old email link and add new one ]] \
   if KEYS[4] ~= email then \
     redis.call("del", "client:" .. email) \
@@ -1848,7 +1866,7 @@ function registerScripts() {
   end \
   --[[ add/remove tradeable instrument types ]] \
   local insttypes = redis.call("smembers", "instrumenttypes") \
-  local clientinsttypes = stringsplit(KEYS[8], ",") \
+  local clientinsttypes = stringsplit(KEYS[9], ",") \
   for i = 1, #insttypes do \
     local found = false \
     for j = 1, #clientinsttypes do \
@@ -1961,5 +1979,9 @@ function registerScripts() {
 
   scriptinstupdate = '\
   redis.call("hmset", "symbol:" .. KEYS[1], "marginpercent", KEYS[2], "hedge", KEYS[3]) \
+  ';
+
+  scripthedgeupdate = '\
+  redis.call("hset", "hedge:" .. KEYS[1] .. ":" .. KEYS[2], "hedgebookid", KEYS[3]) \
   ';
 }

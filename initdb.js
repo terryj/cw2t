@@ -75,7 +75,7 @@ function initdb() {
   db.sadd("clients", "999999");
 
   // clients - hash for each
-  db.hmset("client:999999", "email", "tg@tg.com", "password", "tg", "orgid", 1, "clientid", 999999, "marketext", "LD", "name", "Thomas Grant & Co", "address", "", "mobile", "");
+  db.hmset("client:999999", "email", "tg@tg.com", "password", "tg", "orgid", 1, "clientid", 999999, "marketext", "LD", "name", "Thomas Grant & Co", "address", "", "mobile", "", "hedge", 0, "type", 2);
 
   // link between client email & id
   db.set("client:tg@tg.com", "999999");
@@ -162,8 +162,8 @@ function initdb() {
   db.sadd("clienttypes", "1");
   db.sadd("clienttypes", "2");
 
-  db.set("clienttypes:1", "Retail");
-  db.set("clienttypes:2", "Hedge");
+  db.set("clienttype:1", "Retail");
+  db.set("clienttype:2", "Hedge");
 
   // order types - set of order types & string for each one
   //db.sadd("ordertypes", "1");

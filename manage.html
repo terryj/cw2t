@@ -764,6 +764,10 @@
                 obj = JSON.parse(msg);
                 userid = obj.userid;
                 start();
+            } else if (msg.substr(2, 16) == "hedgebookupdated") {
+                obj = JSON.parse(msg);
+                userid = obj.userid;
+                hedgebookUpdated(obj.hedgebookupdated);
             } else if (msg.substr(2,6) == "status") {
                 obj = JSON.parse(msg);
                 statusMsg(obj.status);
@@ -841,7 +845,6 @@
         }
 
         function updateInstrument(instrument) {
-            console.log(instrument);
             instruments[instrument.symbol] = instrument;
         }
 
@@ -962,6 +965,11 @@
             clearField(inpclient);
             clearField(inpamount);
             clearField(inpdesc);
+        }
+
+        function hedgebookUpdated(hedge) {
+            var lblhedgeconf = document.getElementById("lblhedgeconf");
+            lblhedgeconf.innerHTML = "Updated Ok";
         }
 
         function clearField(fldname) {
@@ -1251,6 +1259,7 @@
             clearForm("frmcash", true);
             clearForm("frmhedge", true);
             clearForm("frmproduct", true);
+            clearForm("frmhedge", true);
         }
 
         function addElement(msg, list, index) {
@@ -4009,6 +4018,7 @@
             lblclientconf.id = "lblclientconf";
 
             lnknewclient = newlink("lnknewclient", "New Client", "");
+
             lnknewclient.onclick = function() {
                 displayClient(null, "frmclient", "");
                 inpname.focus();
@@ -4398,6 +4408,7 @@
 
                 inst.symbol = inpsymbol.value;
                 inst.marginpercent = inpmargin.value;
+
                 if (opthedgeyes.checked) {
                     inst.hedge = 1;
                 } else {
@@ -4429,6 +4440,7 @@
             inpinsttype.value = inst.instrumenttype;
             inpsector.value = inst.sector;
             inpmargin.value = inst.marginpercent;
+
             if (parseInt(inst.hedge)) {
                 opthedgeyes.checked = true;
             } else {
@@ -4437,13 +4449,51 @@
         }
 
         function maintainHedgebooks() {
-            
+            var frmhedge = newform("frmhedge");
+
+            var lblinsttype = newlabel("lblinsttype", "Instrument Type:", "formlabel", frmhedge);
+            var selinsttype = newselect("selinsttype", "formselect", frmhedge);
+            addNewLine(frmhedge);
+            var lblcurrency = newlabel("lblcurrency", "Currency:", "formlabel", frmhedge);
+            var selcurrency = newselect("selcurrency", "formselect", frmhedge);
+            addNewLine(frmhedge);
+            var lblhedgebook = newlabel("lblhedgebook", "Hedge Book:", "formlabel", frmhedge);
+            var selhedgebook = newselect("selhedgebook", "formselect", frmhedge);
+            addNewLine(frmhedge);
+            var btnupdate = newbutton("btnupdate", "Update", "", frmhedge);
+            addNewLine(frmhedge);
+            var lblhedgeconf = newlabel("lblhedgeconf", "", "", frmhedge);
+
+            populateInstrumentTypes(selinsttype, "CFD");
+            populateCurrencies(selcurrency, "GBP");
+            populateHedgebooks(selhedgebook, "999999");
+
+            btnupdate.onclick = function() {
+                var hedge = {};
+
+                hedge.insttype = selinsttype[selinsttype.selectedIndex].value;
+                hedge.currency = selcurrency[selcurrency.selectedIndex].value;
+                hedge.hedgebook = selhedgebook[selhedgebook.selectedIndex].value;
+
+                sockjs.send("{\"hedgebookupdate\":" + JSON.stringify(hedge) + "}");
+            }
+
+            main.appendChild(frmhedge);
         }
 
         function addNewLine(frmclient) {
             var newline = document.createElement("label");
             newline.innerHTML = "<br>";
             frmclient.appendChild(newline);
+        }
+
+        function newform(id) {
+            var form = document.getElementById(id);
+            if (form == null) {
+                form = document.createElement("form");
+                form.id = id;
+            }
+            return form;  
         }
 
         function newlabel(id, text, classname, form) {
@@ -4732,6 +4782,9 @@
                 desc = "Proquote symbol not found";
                 break;
             case 1017:
+                desc = "Client not found";
+                break;
+            case 1018:
                 desc = "Client not authorised to trade this type of product";
                 break;
             case 0:
