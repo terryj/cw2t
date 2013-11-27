@@ -593,6 +593,8 @@
         var heartbeattimer = null;
         var inconnectiontest = false;
         var restarttimer;
+        var operatortype = 1; // client
+        var clientid;
 
         var datain = function(msg) {
             var obj = {};
@@ -683,9 +685,7 @@
         };
 
         function loadIndex(index) {
-            console.log(index);
             indices[index.name] = index.symbols;
-            console.log(indices);
             displayIndex(index.name);
         }
 
@@ -708,11 +708,9 @@
 
         function loadPositions(positionarr) {
             var poskey;
-            console.log(positionarr);
 
             for (var i = 0; i < positionarr.length; ++i) {
                 poskey = positionarr[i].positionid;
-                //poskey = positionarr[i].symbol + ":" + positionarr[i].currency;
                 positions[poskey] = positionarr[i];
             }            
         }
@@ -869,7 +867,6 @@
             };
 
             sockjs.onheartbeat = function() {
-                console.log("heartbeat");
                 startHeartbeatTimer();
             };
         }
@@ -1240,7 +1237,7 @@
             stockboxinput = document.createElement("input");
             stockboxinput.className = "stockboxinput";
             stockboxinput.id = "stockboxinput";
-            stockboxinput.placeholder = "Enter Stock";
+            stockboxinput.placeholder = "Enter Symbol";
 
             stockboxinput.onkeyup = function() {
                 clearList(stocklist);
@@ -2599,7 +2596,7 @@
 
         function formatUTCDate(utcdate) {
             var month = parseInt(utcdate.substr(4, 2));
-            return (utcdate.substr(6, 2) + " " + monthtext[month-1s] + " " + utcdate.substr(0, 4));
+            return (utcdate.substr(6, 2) + " " + monthtext[month-1] + " " + utcdate.substr(0, 4));
         }
 
         function formatUTCDateTime(utcdatetime) {
@@ -2640,13 +2637,15 @@
             var quotereq = {};
             var msg;
 
+            quotereq.clientid = clientid;
             quotereq.quantity = quantity;
             quotereq.cashorderqty = cashorderqty;
             quotereq.symbol = symbol;
             quotereq.currency = currency;
             quotereq.settlcurrency = settlcurrency;
-            //quotereq.futsettdate = settdate;
             quotereq.nosettdays = nosettdays;
+            quotereq.operatortype = operatortype;
+            quotereq.operatorid = clientid;
 
             sockjs.send("{\"quoterequest\":" + JSON.stringify(quotereq) + "}");
 
@@ -3156,6 +3155,7 @@
             var neworder = {};
             var msg;
 
+            neworder.clientid = clientid;
             neworder.side = side;
             neworder.quantity = quantity;
             neworder.symbol = symbol;
@@ -3175,6 +3175,8 @@
             neworder.expiredate = expiredate;
             neworder.expiretime = expiretime;
             neworder.positioncloseid = positioncloseid;
+            neworder.operatortype = operatortype;
+            neworder.operatorid = clientid;
 
             sockjs.send("{\"order\":" + JSON.stringify(neworder) + "}");
 
@@ -3386,6 +3388,8 @@
             var lblreason;
             var cw2theading;
 
+            console.log(reply);
+
             frm = document.getElementById("frmsignin");
             if (frm != null) {
                 if (!reply.success) {
@@ -3403,6 +3407,8 @@
 
                     cw2theading = document.getElementById('cw2t');
                     cw2theading.innerHTML = cw2theading.innerHTML + " - " + reply.email;
+
+                    clientid = reply.clientid;
 
                     signedin = true;
                     displayWaitMsg();

@@ -4,6 +4,9 @@
 * Cantwaittotrade Limited
 * Terry Johnston
 * September 2012
+* 
+* Server to direct trading clients
+*
 ****************/
 
 // node libraries
@@ -16,8 +19,6 @@ var node_static = require('node-static');
 var redis = require('redis');
 
 // cw2t libraries
-//var winnclient = require('./winnclient.js'); // Winner API connection
-var ptpclient = require('./ptpclient.js'); // Proquote API connection
 
 // globals
 var connections = {}; // added to if & when a client logs on
@@ -27,6 +28,8 @@ var outofhours = false; // in or out of market hours - todo: replace with market
 var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;
+var tradeserverchannel = 3;
+var clientserverchannel = 1;
 
 // redis
 var redishost;
@@ -49,7 +52,6 @@ if (redislocal) {
 }
 
 // redis scripts
-var scriptquoterequest;
 var scriptneworder;
 var scriptmatchorder;
 var scriptordercancelrequest;
@@ -57,7 +59,6 @@ var scriptordercancel;
 var scriptorderack;
 var scriptnewtrade;
 var scriptquote;
-var scriptquoteack;
 var scriptrejectorder;
 var scriptgetinst;
 
@@ -90,7 +91,6 @@ db.on("error", function(err) {
 function initialise() {
   initDb();
   pubsub();
-  connectToTrading();
   listen();
 }
 
@@ -110,6 +110,16 @@ function pubsub() {
   dbsub.on("message", function(channel, message) {
     var topickey;
     console.log("channel " + channel + ": " + message);
+
+    if (message.substr(0, 8) == "quoteack") {
+      sendQuoteack(message.substr(9));
+    } else if (message.substr(0, 5) == "quote") {
+      sendQuote(message.substr(6));
+    } else if (message.substr(0, 5) == "order") {
+      getSendOrder(message.substr(6), true, true);
+    } else if (message.substr(0, 5) == "trade") {
+      getSendTrade(message.substr(6));
+    }
 
     // get the set of symbols linked to this topic (i.e. BARC.L & BARC.L.CFD are both linked to TIT.BARC.L)
     /*db.smembers("topictosymbol:" + channel, function(err, replies) {
@@ -131,7 +141,7 @@ function pubsub() {
         });
       });*/
 
-    db.smembers("proquote:" + channel, function(err, replies) {
+    /*db.smembers("proquote:" + channel, function(err, replies) {
       if (err) {
         console.log(err);
         return;
@@ -152,41 +162,16 @@ function pubsub() {
         }
 
         // just send the message as is
-        replies.forEach(function(orgclientkey, i) {
-          if (orgclientkey in connections) {
-            connections[orgclientkey].write(message);
+        replies.forEach(function(clientid, i) {
+          if (clientid in connections) {
+            connections[clientid].write(message);
           }
         });
       });
-    });
+    });*/
   });
-}
 
-// connection to Winner
-/*var winner = new winnclient.Winner();
-winner.on("connected", function() {
-  console.log("Connected to Winner");
-});
-winner.on("loggedon", function() {
-  console.log("Logged on to Winner");
-});
-winner.on('finished', function(message) {
-    console.log(message);
-});*/
-
-// connection to Proquote
-var ptp = new ptpclient.Ptp();
-ptp.on("connected", function() {
-  console.log("Connected to Proquote");
-});
-ptp.on('finished', function(message) {
-    console.log(message);
-});
-
-function connectToTrading() {
-  // try to connect
-  //winner.connect();
-  ptp.connect();
+  dbsub.subscribe(clientserverchannel);
 }
 
 // sockjs server
@@ -219,7 +204,6 @@ function listen() {
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a client logs on
     var clientid = "0";
-    var orgclientkey;
 
     console.log('new connection');
 
@@ -234,16 +218,14 @@ function listen() {
         orderCancelRequest(clientid, obj.ordercancelrequest);
       } else if (msg.substr(2, 16) == "orderbookrequest") {
         obj = JSON.parse(msg);
-        orderBookRequest(orgclientkey, obj.orderbookrequest, conn);
+        orderBookRequest(clientid, obj.orderbookrequest, conn);
       } else if (msg.substr(2, 22) == "orderbookremoverequest") {
         obj = JSON.parse(msg);
-        orderBookRemoveRequest(orgclientkey, obj.orderbookremoverequest, conn);
+        orderBookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
       } else if (msg.substr(2, 5) == "order") {
-        obj = JSON.parse(msg);
-        newOrder(clientid, obj.order, conn);
+        db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 12) == "quoterequest") {
-        obj = JSON.parse(msg);
-        quoteRequest(clientid, obj.quoterequest);
+        db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 8) == "register") {
         obj = JSON.parse(msg);
         registerClient(obj.register, conn);
@@ -255,7 +237,7 @@ function listen() {
         positionHistory(clientid, obj.positionhistoryrequest, conn);
       } else if (msg.substr(2, 5) == "index") {
         obj = JSON.parse(msg);
-        sendIndex(orgclientkey, obj.index, conn);   
+        sendIndex(clientid, obj.index, conn);   
       } else if (msg.substr(0, 4) == "ping") {
         conn.write("pong");
       } else {
@@ -267,16 +249,16 @@ function listen() {
     conn.on('close', function() {
       // todo: check for existence
       if (clientid != "0") {
-        if (orgclientkey in connections) {
-          console.log("client " + orgclientkey + " logged off");
+        if (clientid in connections) {
+          console.log("client:" + clientid + " logged off");
           // remove from list
-          delete connections[orgclientkey];
+          delete connections[clientid];
 
           // remove from database
-          db.srem("connections", orgclientkey);
+          db.srem("connections", clientid);
         }
 
-        unsubscribeTopics(orgclientkey);
+        unsubscribeTopics(clientid);
         clientid = "0";
       }
     });
@@ -286,13 +268,13 @@ function listen() {
       var reply = {};
       reply.success = false;
 
-      db.get("client:" + signin.email, function(err, orgclientid) {
+      db.get("client:" + signin.email, function(err, cid) {
         if (err) {
           console.log("Error in signIn:" + err);
           return;
         }
 
-        if (!orgclientid) {
+        if (!cid) {
           console.log("Email not found:" + signin.email);
           reply.reason = "Email or password incorrect. Please try again.";
           replySignIn(reply, conn);
@@ -300,7 +282,7 @@ function listen() {
         }
 
         // validate email/password
-        db.hgetall("client:" + orgclientid, function(err, client) {
+        db.hgetall("client:" + cid, function(err, client) {
           if (err) {
             console.log("Error in signIn:" + err);
             return;
@@ -314,63 +296,24 @@ function listen() {
 
           // validated, so set client id & add client to list of connections
           clientid = client.clientid;
-          orgclientkey = orgclientid;
-          connections[orgclientkey] = conn;
+          connections[clientid] = conn;
 
           // keep a record
-          db.sadd("connections", orgclientkey);
+          db.sadd("connections", clientid);
 
           // send a successful logon reply
           reply.success = true;
           reply.email = signin.email;
+          reply.clientid = clientid;
           replySignIn(reply, conn);
 
-          console.log("client " + orgclientkey + " logged on");
+          console.log("client:" + clientid + " logged on");
 
           // send the data
-          start(orgclientkey, conn);
+          start(clientid, conn);
         });
       });
     }
-  });
-}
-
-function quoteRequest(clientid, quoterequest) {
-  console.log("quoterequest");
-  console.log(quoterequest);
-
-  quoterequest.timestamp = getUTCTimeStamp();
-
-  // get settlement date from T+n no. of days
-  quoterequest.futsettdate = getUTCDateString(getSettDate(quoterequest.nosettdays));
-
-  // store the quote request & get an id
-  db.eval(scriptquoterequest, 10, orgid, clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, function(err, ret) {
-    if (err) throw err;
-  
-    if (ret[0] != 0) {
-      // todo: send a quote ack to client
-
-      console.log("Error in scriptquoterequest:" + getReasonDesc(ret[0]));
-      return;
-    }
-
-    // add the quote request id & symbol details required for proquote
-    quoterequest.quotereqid = ret[1];
-    quoterequest.isin = ret[2];
-    quoterequest.proquotesymbol = ret[3];
-    quoterequest.exchange = ret[4];
-
-    // for derivatives, make the quote request for the default settlement date
-    if (ret[5] != "DE") {
-      if (quoterequest.nosettdays != defaultnosettdays) {
-        quoterequest.futsettdate = getUTCDateString(getSettDate(defaultnosettdays));
-        quoterequest.nosettdays = defaultnosettdays;
-      }
-    }
-
-    // forward the request to Proquote
-    ptp.quoteRequest(quoterequest);
   });
 }
 
@@ -452,61 +395,6 @@ function getFixDate(date) {
   conn.write("{\"quote\":" + JSON.stringify(quote) + "}");
 }*/
 
-function newOrder(clientid, order, conn) {
-  var currencyratetoorg = 1; // product currency to org curreny rate
-  var currencyindtoorg = 1;
-  var settlcurrfxrate = 1; // settlement currency to product currency rate
-  var settlcurrfxratecalc = 1;
-
-  console.log(order);
-
-  // todo: tie this in with in/out of hours
-  order.timestamp = getUTCTimeStamp();
-  order.markettype = 0; // 0 = main market, 1 = ooh
-  order.partfill = 1; // accept part-fill
-
-  // always put a price in the order
-  if (!("price" in order)) {
-    order.price = "";
-  }
-
-  // and always have a quote id
-  if (!("quoteid" in order)) {
-    order.quoteid = "0";
-  }
-
-  // store the order, get an id & credit check it
-  db.eval(scriptneworder, 24, orgid, clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.positionopenclose, order.positioncloseid, function(err, ret) {
-    if (err) throw err;
-    console.log(ret);
-
-    // credit check failed
-    if (ret[0] == 0) {
-      getSendOrder(ret[1], false, false);
-      return;
-    }
-
-    // update order details
-    order.orderid = ret[1];
-    order.instrumenttype = ret[7];
-
-    // use the returned instrument values required by proquote
-    if (order.markettype == 0) {
-      order.isin = ret[2];
-      order.proquotesymbol = ret[3];
-      order.exchange = ret[4];
-    }
-
-    // use the returned quote values required by proquote
-    if (order.ordertype == "D") {
-      order.proquotequoteid = ret[5];
-      order.qbroker = ret[6];
-    }
-
-    processOrder(order, ret[8], ret[9], ret[10], conn);
-  });
-}
-
 function getSideDesc(side) {
   if (parseInt(side) == 1) {
     return "Buy";
@@ -536,11 +424,9 @@ function matchOrder(orderid) {
         return;
       }
 
-      var orgclientkey = order.orgid + ":" + order.clientid;
-
       // send to client, if connected
-      if (orgclientkey in connections) {
-        sendOrder(order, connections[orgclientkey]);
+      if (order.clientid in connections) {
+        sendOrder(order, connections[order.clientid]);
       }
 
       // broadcast market - todo: timer based? - pubsub?
@@ -553,14 +439,14 @@ function matchOrder(orderid) {
 
       // send cash
       if (ret[1].length > 0) {
-        getSendCash(orgclientkey, order.settlcurrency);
+        getSendCash(order.clientid, order.settlcurrency);
       }
 
       // send margin/reserve
       if (parseInt(order.side) == 1) {
-        getSendMargin(orgclientkey, order.settlcurrency);
+        getSendMargin(order.clientid, order.settlcurrency);
       } else {
-        getSendReserve(orgclientkey, order.symbol, order.settlcurrency);
+        getSendReserve(order.clientid, order.symbol, order.settlcurrency);
       }
 
       // send any matched orders
@@ -585,8 +471,6 @@ function matchOrder(orderid) {
 }
 
 function getSendOrder(orderid, sendmarginreserve, sendcash) {
-  var orgclientkey;
-
   db.hgetall("order:" + orderid, function(err, order) {
     if (err) {
       console.log(err);
@@ -594,25 +478,22 @@ function getSendOrder(orderid, sendmarginreserve, sendcash) {
     }
 
     if (order == null) {
-      console.log("Order #" + orderid + " not found");
+      console.log("Order:" + orderid + " not found");
       return;
     }
 
-    // required for identifying the client connection
-    orgclientkey = order.orgid + ":" + order.clientid;
-
     // send to client, if connected
-    if (orgclientkey in connections) {
-      sendOrder(order, connections[orgclientkey]);
+    if (order.clientid in connections) {
+      sendOrder(order, connections[order.clientid]);
     }
 
     if (sendmarginreserve) {
-      getSendMargin(orgclientkey, order.currency);
-      getSendReserve(orgclientkey, order.symbol, order.settlcurrency);
+      getSendMargin(order.clientid, order.currency);
+      getSendReserve(order.clientid, order.symbol, order.settlcurrency);
     }
 
     if (sendcash) {
-      getSendCash(orgclientkey, order.settlcurrency);
+      getSendCash(order.clientid, order.settlcurrency);
     }
   });
 }
@@ -625,19 +506,17 @@ function getSendTrade(tradeid) {
     }
 
     if (trade == null) {
-      console.log("Trade #" + tradeid + " not found");
+      console.log("Trade:" + tradeid + " not found");
       return;
     }
 
     // send to client, if connected
-    var orgclientkey = trade.orgid + ":" + trade.clientid;
-
-    if (orgclientkey in connections) {
-      sendTrade(trade, connections[orgclientkey]);
+    if (trade.clientid in connections) {
+      sendTrade(trade, connections[trade.clientid]);
     }
 
     if ("positionid" in trade) {
-      getSendPosition(trade.positionid, orgclientkey);
+      getSendPosition(trade.positionid, trade.clientid);
     }
   });
 }
@@ -669,10 +548,10 @@ function getSendPosition(positionid, orgclientid) {
   });
 }
 
-function getSendCash(orgclientkey, currency) {
+function getSendCash(clientid, currency) {
   var cash = {};
 
-  db.get(orgclientkey + ":cash:" + currency, function(err, amount) {
+  db.get(clientid + ":cash:" + currency, function(err, amount) {
     if (err) {
       console.log(err);
       return;
@@ -688,16 +567,16 @@ function getSendCash(orgclientkey, currency) {
     cash.currency = currency;
 
     // send to client, if connected
-    if (orgclientkey in connections) {
-      sendCashItem(cash, connections[orgclientkey]);
+    if (clientid in connections) {
+      sendCashItem(cash, connections[clientid]);
     }
   });
 }
 
-function getSendMargin(orgclientkey, currency) {
+function getSendMargin(clientid, currency) {
   var margin = {};
 
-  db.get(orgclientkey + ":margin:" + currency, function(err, amount) {
+  db.get(clientid + ":margin:" + currency, function(err, amount) {
     if (err) {
       console.log(err);
       return;
@@ -712,16 +591,16 @@ function getSendMargin(orgclientkey, currency) {
 
     margin.currency = currency;
 
-    if (orgclientkey in connections) {
-      sendMargin(margin, connections[orgclientkey]);
+    if (clientid in connections) {
+      sendMargin(margin, connections[clientid]);
     }
   });
 }
 
-function getSendReserve(orgclientkey, symbol, currency) {
+function getSendReserve(clientid, symbol, currency) {
   var reserve = {};
 
-  db.get(orgclientkey + ":reserve:" + symbol + ":" + currency, function(err, res) {
+  db.get(clientid + ":reserve:" + symbol + ":" + currency, function(err, res) {
     if (err) {
       console.log(err);
       return;
@@ -737,13 +616,13 @@ function getSendReserve(orgclientkey, symbol, currency) {
     reserve.symbol = symbol;
     reserve.currency = currency;
 
-    if (orgclientkey in connections) {
-      sendReserve(reserve, connections[orgclientkey]);
+    if (clientid in connections) {
+      sendReserve(reserve, connections[clientid]);
     }
   });
 }
 
-function orderCancelRequest(clientid, ocr) {
+/*function orderCancelRequest(clientid, ocr) {
   console.log("Order cancel request received for order#" + ocr.orderid);
 
   ocr.timestamp = getUTCTimeStamp();
@@ -785,21 +664,21 @@ function orderCancelRequest(clientid, ocr) {
     // distribute any changes to the order book
     broadcastLevelTwo(ret[3], null);
   });
-}
+}*/
 
-function orderCancelReject(orgclientkey, ocr, reason) {
+function orderCancelReject(clientid, ocr, reason) {
   var ordercancelreject = {};
 
   ordercancelreject.orderid = ocr.orderid;
 
   console.log("Order cancel request #" + ordercancelreject.orderid + " rejected, reason: " + getReasonDesc(reason));
 
-  if (orgclientkey in connections) {
-    connections[orgclientkey].write("{\"ordercancelreject\":" + JSON.stringify(ordercancelreject) + "}");
+  if (clientid in connections) {
+    connections[clientid].write("{\"ordercancelreject\":" + JSON.stringify(ordercancelreject) + "}");
   }
 }
 
-function processOrder(order, hedgeorderid, tradeid, hedgetradeid, conn) {
+/*function processOrder(order, hedgeorderid, tradeid, hedgetradeid, conn) {
   // either forward to Proquote or trade immediately or attempt to match the order, depending on the type of instrument & whether the market is open
   if (order.markettype == 1) {
     matchOrder(order.orderid, conn);
@@ -822,7 +701,7 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid, conn) {
       }
     }
   }
-}
+}*/
 
 function displayOrderBook(symbol, lowerbound, upperbound) {
   db.zrangebyscore(symbol, lowerbound, upperbound, function(err, matchorders) {
@@ -893,9 +772,9 @@ function getValue(trade) {
   });
 }*/
 
-function sendInstruments(orgclientkey, conn) {
+function sendInstruments(clientid, conn) {
   // get sorted subset of instruments for this client
-  db.eval(scriptgetinst, 1, orgclientkey, function(err, ret) {
+  db.eval(scriptgetinst, 1, clientid, function(err, ret) {
     conn.write("{\"instruments\":" + ret + "}");
   });
 }
@@ -939,7 +818,7 @@ function sendOrderTypes(conn) {
   });
 }
 
-function sendIndex(orgclientkey, index, conn) {
+function sendIndex(clientid, index, conn) {
   var i = {symbols: []};
   var count;
 
@@ -954,7 +833,7 @@ function sendIndex(orgclientkey, index, conn) {
 
     count = replies.length;
     if (count == 0) {
-      console.log("Index: " + index + " not found");
+      console.log("Index:" + index + " not found");
       return;
     }
 
@@ -967,7 +846,7 @@ function sendIndex(orgclientkey, index, conn) {
         }
 
         if (inst == null) {
-          console.log("Symbol " + symbol + " not found");
+          console.log("Symbol:" + symbol + " not found");
           count--;
           return;
         }
@@ -981,7 +860,7 @@ function sendIndex(orgclientkey, index, conn) {
         //count--;
         //if (count <= 0) {
           //conn.write("{\"index\":" + JSON.stringify(i) + "}");
-          orderBookOut(orgclientkey, symbol, conn);
+          orderBookOut(clientid, symbol, conn);
         //}
       });
     });
@@ -994,11 +873,11 @@ function sendOrder(order, conn) {
   }
 }
 
-function sendOrders(orgclientkey, conn) {
+function sendOrders(clientid, conn) {
   var o = {orders: []};
   var count;
 
-  db.smembers(orgclientkey + ":orders", function(err, replies) {
+  db.smembers(clientid + ":orders", function(err, replies) {
     if (err) {
       console.log(err);
       return;
@@ -1034,11 +913,11 @@ function sendTrade(trade, conn) {
   }
 }
 
-function sendTrades(orgclientkey, conn) {
+function sendTrades(clientid, conn) {
   var t = {trades: []};
   var count;
 
-  db.smembers(orgclientkey + ":trades", function(err, replies) {
+  db.smembers(clientid + ":trades", function(err, replies) {
     if (err) {
       console.log(err);
       return;
@@ -1067,11 +946,11 @@ function sendPosition(position, conn) {
   conn.write("{\"position\":" + JSON.stringify(position) + "}");
 }
 
-function sendPositions(orgclientkey, conn) {
+function sendPositions(clientid, conn) {
   var posarray = {positions: []};
   var count;
 
-  db.smembers(orgclientkey + ":positions", function(err, replies) {
+  db.smembers(clientid + ":positions", function(err, replies) {
     if (err) {
       console.log(err);
       return;
@@ -1093,7 +972,6 @@ function sendPositions(orgclientkey, conn) {
 
         // send array if we have added the last item
         count--;
-        console.log(count);
         if (count <= 0) {
           conn.write(JSON.stringify(posarray));
         }
@@ -1106,11 +984,11 @@ function sendCashItem(cash, conn) {
   conn.write("{\"cashitem\":" + JSON.stringify(cash) + "}");
 }
 
-function sendCash(orgclientkey, conn) {
+function sendCash(clientid, conn) {
   var arr = {cash: []};
   var count;
 
-  db.smembers(orgclientkey + ":cash", function(err, replies) {
+  db.smembers(clientid + ":cash", function(err, replies) {
     if (err) {
       console.log("sendCash:" + err);
       return;
@@ -1122,7 +1000,7 @@ function sendCash(orgclientkey, conn) {
     }
 
     replies.forEach(function (currency, i) {
-      db.get(orgclientkey + ":cash:" + currency, function(err, amount) {
+      db.get(clientid + ":cash:" + currency, function(err, amount) {
         if (err) {
           console.log(err);
           return;
@@ -1148,11 +1026,11 @@ function sendMargin(margin, conn) {
   conn.write("{\"margin\":" + JSON.stringify(margin) + "}");
 }
 
-function sendMargins(orgclientkey, conn) {
+function sendMargins(clientid, conn) {
   var arr = {margins: []};
   var count;
 
-  db.smembers(orgclientkey + ":margins", function(err, replies) {
+  db.smembers(clientid + ":margins", function(err, replies) {
     if (err) {
       console.log(err);
       return;
@@ -1164,7 +1042,7 @@ function sendMargins(orgclientkey, conn) {
     }
 
     replies.forEach(function (currency, i) {
-      db.get(orgclientkey + ":margin:" + currency, function(err, amount) {
+      db.get(clientid + ":margin:" + currency, function(err, amount) {
         if (err) {
           console.log(err);
           return;
@@ -1190,11 +1068,11 @@ function sendReserve(reserve, conn) {
   conn.write("{\"reserve\":" + JSON.stringify(reserve) + "}");
 }
 
-function sendReserves(orgclientkey, conn) {
+function sendReserves(clientid, conn) {
   var arr = {reserves: []};
   var count;
 
-  db.smembers(orgclientkey + ":reserves", function(err, replies) {
+  db.smembers(clientid + ":reserves", function(err, replies) {
     if (err) {
       console.log(err);
       return;
@@ -1206,7 +1084,7 @@ function sendReserves(orgclientkey, conn) {
     }
 
     replies.forEach(function (reskey, i) {
-      db.hgetall(orgclientkey + ":reserve:" + reskey, function(err, reserve) {
+      db.hgetall(clientid + ":reserve:" + reskey, function(err, reserve) {
         if (err) {
           console.log(err);
           return;
@@ -1304,9 +1182,9 @@ function sendOrderBook(symbol, level1arr, send, conn) {
 //
 // send all the orderbooks for a single client
 //
-function sendOrderBooksClient(orgclientkey, conn) {
+function sendOrderBooksClient(clientid, conn) {
   // get all the instruments in the order book for this client
-  db.smembers(orgclientkey + ":orderbooks", function(err, instruments) {
+  db.smembers(clientid + ":orderbooks", function(err, instruments) {
     if (err) {
       console.log("error in sendOrderBooksClient:" + err);
       return;
@@ -1314,7 +1192,7 @@ function sendOrderBooksClient(orgclientkey, conn) {
 
     // send the order book for each instrument
     instruments.forEach(function (symbol, i) {
-      orderBookOut(orgclientkey, symbol, conn);
+      orderBookOut(clientid, symbol, conn);
     });
   });
 }
@@ -1584,15 +1462,15 @@ function getReasonDesc(reason) {
   return desc;
 }
 
-function start(orgclientkey, conn) {
-  sendOrderBooksClient(orgclientkey, conn);
-  sendInstruments(orgclientkey, conn);
+function start(clientid, conn) {
+  sendOrderBooksClient(clientid, conn);
+  sendInstruments(clientid, conn);
   sendOrderTypes(conn);
-  sendPositions(orgclientkey, conn);
-  sendOrders(orgclientkey, conn);
-  sendCash(orgclientkey, conn);
-  sendMargins(orgclientkey, conn);
-  sendReserves(orgclientkey, conn);
+  sendPositions(clientid, conn);
+  sendOrders(clientid, conn);
+  sendCash(clientid, conn);
+  sendMargins(clientid, conn);
+  sendReserves(clientid, conn);
 
   // may not be last, but...
   sendReadyToTrade(conn);
@@ -1657,25 +1535,25 @@ function registerClient(reg, conn) {
   });
 }
 
-function orderBookRequest(orgclientkey, symbol, conn) {
+function orderBookRequest(clientid, symbol, conn) {
   // add the client to the order book set for this instrument
-  db.sadd("orderbook:" + symbol, orgclientkey);
+  db.sadd("orderbook:" + symbol, clientid);
 
   // & add the instrument to the watchlist for this client
-  db.sadd(orgclientkey + ":orderbooks", symbol);
+  db.sadd(clientid + ":orderbooks", symbol);
 
-  orderBookOut(orgclientkey, symbol, conn);
+  orderBookOut(clientid, symbol, conn);
 }
 
-function orderBookOut(orgclientkey, symbol, conn) {
+function orderBookOut(clientid, symbol, conn) {
   if (outofhours) {
     broadcastLevelTwo(symbol, conn);
   } else {
-    subscribeAndSend(orgclientkey, symbol, conn);
+    subscribeAndSend(clientid, symbol, conn);
   }
 }
 
-function subscribeAndSend(orgclientkey, symbol, conn) {
+function subscribeAndSend(clientid, symbol, conn) {
   // get the proquote topic
   db.hgetall("symbol:" + symbol, function(err, inst) {
     if (err) {
@@ -1689,14 +1567,14 @@ function subscribeAndSend(orgclientkey, symbol, conn) {
     }
 
     // get the client to check market extension - defaults to 'LD' for LSE delayed
-    db.hgetall("client:" + orgclientkey, function(err, client) {
+    db.hgetall("client:" + clientid, function(err, client) {
       if (err) {
         console.log(err);
         return;
       }
 
       if (!client) {
-        console.log("client:" + orgclientkey + " not found");
+        console.log("client:" + clientid + " not found");
         return;
       }
 
@@ -1724,27 +1602,27 @@ function subscribeAndSend(orgclientkey, symbol, conn) {
         }
 
         // is this client subscribed?
-        db.sismember("proquote:" + inst.topic, orgclientkey, function(err, clientfound) {
+        db.sismember("proquote:" + inst.topic, clientid, function(err, clientfound) {
           if (err) {
             console.log(err);
             return;
           }
 
           if (!clientfound) {
-            console.log("subscribing " + orgclientkey + " to " + inst.topic)
+            console.log("subscribing client:" + clientid + " to " + inst.topic)
             // add client to the set for this instrument
-            db.sadd("proquote:" + inst.topic, orgclientkey);
+            db.sadd("proquote:" + inst.topic, clientid);
           }
         });
       });
 
       // send the orderbook, with the current stored prices
-      sendCurrentOrderBook(orgclientkey, symbol, inst.topic, conn);
+      sendCurrentOrderBook(clientid, symbol, inst.topic, conn);
     });
   });
 }
 
-function sendCurrentOrderBook(orgclientkey, symbol, topic, conn) {
+function sendCurrentOrderBook(clientid, symbol, topic, conn) {
   var orderbook = {pricelevels : []};
   var pricelevel1 = {};
   var pricelevel2 = {};
@@ -1753,6 +1631,8 @@ function sendCurrentOrderBook(orgclientkey, symbol, topic, conn) {
   var pricelevel5 = {};
   var pricelevel6 = {};
 
+  console.log("sendCurrentOrderBook");
+
   db.hgetall("topic:" + topic, function(err, topicrec) {
     if (err) {
       console.log(err);
@@ -1760,7 +1640,16 @@ function sendCurrentOrderBook(orgclientkey, symbol, topic, conn) {
     }
 
     if (!topicrec) {
-      return;
+      console.log("topic:" + topic + " not found");
+
+      // send zeros
+      topicrec = {};
+      topicrec.bid1 = 0;
+      topicrec.offer1 = 0;
+      topicrec.bid2 = 0;
+      topicrec.offer2 = 0;
+      topicrec.bid3 = 0;
+      topicrec.offer3 = 0;
     }
 
     // 3 levels
@@ -1817,25 +1706,25 @@ function sendCurrentOrderBook(orgclientkey, symbol, topic, conn) {
   });
 }
 
-function orderBookRemoveRequest(orgclientkey, symbol, conn) {
+function orderBookRemoveRequest(clientid, symbol, conn) {
   // remove the client from the order book set for this instrument
-  db.srem("orderbook:" + symbol, orgclientkey);
+  db.srem("orderbook:" + symbol, clientid);
 
   // & remove the instrument from the order book set for this client
-  db.srem(orgclientkey + ":orderbooks", symbol);
+  db.srem(clientid + ":orderbooks", symbol);
 
   // get the market extension for this client, as topic may need to be adjusted for live/delayed
-  db.hget("client:" + orgclientkey, "marketext", function(err, marketext) {
+  db.hget("client:" + clientid, "marketext", function(err, marketext) {
     if (err) {
       console.log("Error in orderBookRemoveRequest:" + err);
       return;
     }
 
-    unsubscribeTopic(orgclientkey, symbol, marketext);
+    unsubscribeTopic(clientid, symbol, marketext);
   });
 }
 
-function unsubscribeTopic(orgclientkey, symbol, marketext) {
+function unsubscribeTopic(clientid, symbol, marketext) {
   // get the proquote topic
   db.hgetall("symbol:" + symbol, function(err, inst) {
     if (err) {
@@ -1854,29 +1743,30 @@ function unsubscribeTopic(orgclientkey, symbol, marketext) {
     }
 
     // remove client from set for this topic
-    db.srem("proquote:" + inst.topic, orgclientkey);
+    db.srem("proquote:" + inst.topic, clientid);
 
     // unsubscribe from this topic if no clients are looking at it
     db.scard("proquote:" + inst.topic, function(err, numelements) {
       if (numelements == 0) {
         dbsub.unsubscribe(inst.topic);
         db.srem("proquote", inst.topic);
+        // todo: change from dbpub?
         dbpub.publish("cw2t", "unsubscribe:" + inst.topic);
       }
     });
   });
 }
 
-function unsubscribeTopics(orgclientkey) {
+function unsubscribeTopics(clientid) {
   // get the market extension for this client, as topic may need to be adjusted for live/delayed
-  db.hget("client:" + orgclientkey, "marketext", function(err, marketext) {
+  db.hget("client:" + clientid, "marketext", function(err, marketext) {
     if (err) {
       console.log("Error in unsubscribeTopics:" + err);
       return;
     }
 
     // get all the orderbooks
-    db.smembers(orgclientkey + ":orderbooks", function(err, orderbooks) {
+    db.smembers(clientid + ":orderbooks", function(err, orderbooks) {
       if (err) {
         console.log("Error in unsubscribeTopics:" + err);
         return;
@@ -1884,7 +1774,7 @@ function unsubscribeTopics(orgclientkey) {
 
       // & unsubscibe
       orderbooks.forEach(function(symbol, i) {
-        unsubscribeTopic(orgclientkey, symbol, marketext);
+        unsubscribeTopic(clientid, symbol, marketext);
       });
     });
   });
@@ -1945,7 +1835,7 @@ function getUTCDateString(date) {
     return utcdate;
 }
 
-ptp.on("orderReject", function(exereport) {
+/*ptp.on("orderReject", function(exereport) {
   var text = "";
   var ordrejreason = "";
   console.log(exereport);
@@ -1975,12 +1865,12 @@ ptp.on("orderReject", function(exereport) {
     // send to client if connected
     getSendOrder(exereport.clordid, false, false);
   });
-});
+});*/
 
 //
 // Limit order acknowledgement
 //
-ptp.on("orderAck", function(exereport) {
+/*ptp.on("orderAck", function(exereport) {
   var text = "";
   console.log("Order acknowledged, id:" + exereport.clordid);
   console.log(exereport);
@@ -1995,9 +1885,9 @@ ptp.on("orderAck", function(exereport) {
     // ok, so send confirmation
     getSendOrder(exereport.clordid, true, false);
   });
-});
+});*/
 
-ptp.on("orderCancel", function(exereport) {
+/*ptp.on("orderCancel", function(exereport) {
   console.log("Order cancelled by Proquote, ordercancelrequest id:" + exereport.clordid);
 
   db.eval(scriptordercancel, 1, exereport.clordid, function(err, ret) {
@@ -2019,9 +1909,9 @@ ptp.on("orderCancel", function(exereport) {
     //getSendMargin(orgclientkey, ret[1][31]); // orgclientkey, currency
     //getSendReserve(orgclientkey, ret[1][5]); // orgclientkey, symbol
   });
-});
+});*/
 
-ptp.on("orderExpired", function(exereport) {
+/*ptp.on("orderExpired", function(exereport) {
   console.log(exereport);
   console.log("order expired, id:" + exereport.clordid);
 
@@ -2039,194 +1929,10 @@ ptp.on("orderExpired", function(exereport) {
 
     getSendOrder(exereport.clordid, true, false);
   });
-});
+});*/
 
-ptp.on("orderFill", function(exereport) {
-  var currencyratetoorg = 1; // product currency rate back to org 
-  var currencyindtoorg = 1;
-  var counterpartyorgid = ""; // external, so no counterparty orgid, just counterparty id
-
-  console.log(exereport);
-
-  if (!('settlcurrfxrate' in exereport)) {
-    exereport.settlcurrfxrate = 1;
-  }
-
-  // we don't get this from proquote - todo: set based on currency pair
-  exereport.settlcurrfxratecalc = 1;    
-
-  db.eval(scriptnewtrade, 21, exereport.clordid, exereport.symbol, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currency, currencyratetoorg, currencyindtoorg, counterpartyorgid, exereport.execbroker, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.ordstatus, exereport.lastmkt, exereport.leavesqty, exereport.orderid, exereport.settlcurrency, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, function(err, ret) {
-    if (err) {
-      console.log(err);
-      return
-    }
-
-    // send the order & trade
-    getSendOrder(exereport.clordid, true, true);
-    getSendTrade(ret);
-  });
-});
-
-ptp.on("orderCancelReject", function(ordercancelreject) {
-  var reasondesc;
-
-  console.log("Order cancel reject, order cancel request id:" + ordercancelreject.clordid);
-
-  reasondesc = ordercancelreject.cxlrejreason;
-  if ('text' in ordercancelreject) {
-    reasondesc += ordercancelreject.text;
-  }
-
-  // update the db - todo: update status?
-  db.hset("ordercancelrequest:" + ordercancelreject.clordid, "reason", reasondesc);
-
-  // get the request
-  db.hgetall("ordercancelrequest:" + ordercancelreject.clordid, function(err, ordercancelrequest) {
-    if (err) {
-      console.log(err); // can't get order cancel request, so just log
-      return;
-    }
-
-    if (ordercancelrequest == null) {
-      console.log("Order cancel request not found, id:" + ordercancelreject.clordid);
-      return;
-    }
-
-    var orgclientkey = ordercancelrequest.orgid + ":" + ordercancelrequest.clientid;
-
-    // send to the client
-    orderCancelReject(orgclientkey, ordercancelrequest, ordercancelreject.cxlrejreason);
-  });
-});
-
-ptp.on("quote", function(quote, header) {
-  console.log("quote received");
-  console.log(quote);
-
-  // check to see if the quote may be a duplicate &, if it is, reject messages older than a limit
-  // - todo: inform client & limit as parameter?
-  if ('possdupflag' in header) {
-    if (header.possdupflag == 'Y') {
-      var sendingtime = new Date(getDateString(header.sendingtime));
-      var validuntiltime = new Date(getDateString(quote.validuntiltime));
-      if (validuntiltime < sendingtime) {
-        console.log("Quote received is past valid until time, discarding");
-        return;
-      }
-    }
-  }
-
-  // a two-way quote arrives in two bits, so fill in 'missing' price/size/quote id (note: separate external quote id for bid & offer)
-  if (!('bidpx' in quote)) {
-    quote.bidpx = '';
-    quote.bidsize = '';
-    quote.bidquoteid = '';
-    quote.offerquoteid = quote.quoteid;
-    quote.offerqbroker = quote.qbroker;
-  }
-  if (!('offerpx' in quote)) {
-    quote.offerpx = '';
-    quote.offersize = '';
-    quote.offerquoteid = '';
-    quote.bidquoteid = quote.quoteid;
-    quote.bidqbroker = quote.qbroker;
-  }
-
-  // quote script
-  // note: not passing securityid & idsource as proquote symbol should be enough
-  db.eval(scriptquote, 15, quote.quotereqid, quote.bidquoteid, quote.offerquoteid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.bidqbroker, quote.offerqbroker, quote.futsettdate, function(err, ret) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (ret[0] != 0) {
-      // can't find quote request, so don't know which client to inform
-      console.log("Error in scriptquote:" + getReasonDesc(ret[0]));
-      return;
-    }
-
-    // exit if this is the first part of the quote as waiting for a two-way quote
-    // todo: do we need to handle event of only getting one leg?
-    if (ret[1] == 1) {return};
-
-    // get the quote
-    db.hgetall("quote:" + ret[2], function(err, storedquote) {
-      var orgclientkey;
-
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      if (storedquote == null) {
-        console.log("Unable to find quote #" + ret[2]);
-        return;
-      }
-
-      // get the number of seconds the quote is valid for
-      storedquote.noseconds = getSeconds(storedquote.transacttime, storedquote.validuntiltime);
-
-      // send quote to the client, if connected
-      orgclientkey = storedquote.orgid + ":" + storedquote.clientid;
-      if (orgclientkey in connections) {
-        sendQuote(storedquote, connections[orgclientkey]);
-      }
-    });
-  });
-});
-
-function sendQuote(quote, conn) {
-  conn.write("{\"quote\":" + JSON.stringify(quote) + "}");
-}
-
-//
-// quote rejection
-//
-ptp.on("quoteack", function(quoteack) {
-  var orgclientkey;
-
-  console.log("quote ack, request id " + quoteack.quotereqid);
-  console.log(quoteack);
-
-  db.eval(scriptquoteack, 4, quoteack.quotereqid, quoteack.quotestatus, quoteack.quoterejectreason, quoteack.text, function(err, ret) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (ret == 1) {
-      console.log("already received rejection for this quote request, ignoring");
-      return;
-    }
-
-    db.hgetall("quoterequest:" + quoteack.quotereqid, function(err, quoterequest) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      if (quoterequest == null) {
-        console.log("can't find quote request id " + quoteack.quotereqid);
-        return;
-      }
-
-      orgclientkey = quoterequest.orgid + ":" + quoterequest.clientid;
-
-      quoteack.symbol = quoterequest.symbol;
-      quoteack.quoterejectreasondesc = ptp.getQuoteRejectReason(quoteack.quoterejectreason);
-
-      // send the quote acknowledgement
-      if (orgclientkey in connections) {
-        connections[orgclientkey].write("{\"quoteack\":" + JSON.stringify(quoteack) + "}");
-      }
-    });
-  });
-});
-
-/*function sendQuoteAck(quotereqid) {
+function sendQuoteack(quotereqid) {
   var quoteack = {};
-  var orgclientkey;
 
   db.hgetall("quoterequest:" + quotereqid, function(err, quoterequest) {
     if (err) {
@@ -2239,37 +1945,50 @@ ptp.on("quoteack", function(quoteack) {
       return;
     }
 
-    quoteack.quotereqid = quotereqid;
+    quoteack.quotereqid = quoterequest.quotereqid;
+    quoteack.clientid = quoterequest.clientid;
     quoteack.symbol = quoterequest.symbol;
-    quoteack.quoterejectreason = quoterequest.quoterejectreason;
-
-    orgclientkey = quoterequest.orgid + ":" + quoterequest.clientid;
+    quoteack.quoterejectreasondesc = getPTPQuoteRejectReason(quoterequest.quoterejectreason);
+    if ('text' in quoterequest) {
+      quoteack.text = quoterequest.text;
+    }
 
     // send the quote acknowledgement
-    if (orgclientkey in connections) {
-      connections[orgclientkey].write("{\"quoteack\":" + JSON.stringify(quoteack) + "}");
+    if (quoterequest.operatorid in connections) {
+      connections[quoterequest.operatorid].write("{\"quoteack\":" + JSON.stringify(quoteack) + "}");
     }
   });
-}*/
+}
 
-//
-// message error
-//
-ptp.on("reject", function(reject) {
-  console.log("Error: reject received, fixseqnum:" + reject.refseqnum);
-  console.log("Text:" + reject.text);
-  console.log("Tag id:" + reject.reftagid);
-  console.log("Msg type:" + reject.refmsgtype);
-  if ('sessionrejectreason' in reject) {
-    var reasondesc = ptp.getSessionRejectReason(reject.sessionrejectreason);
-    console.log("Reason:" + reasondesc);
-  }
-});
+function sendQuote(quoteid) {
+  // get the quote
+  db.hgetall("quote:" + quoteid, function(err, quote) {
+    if (err) {
+      console.log(err);
+      return;
+    }
 
-ptp.on("businessReject", function(businessreject) {
-  console.log(businessreject);
-  // todo: lookup fix msg to get details of what it relates to
-});
+    if (quote == null) {
+      console.log("Unable to find quote:" + quoteid);
+      return;
+    }
+
+    // get the number of seconds the quote is valid for
+    quote.noseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+
+    // send quote to the client who placed the quote request
+    db.hget("quoterequest:" + quote.quotereqid, "operatorid", function(err, operatorid) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      if (operatorid in connections) {
+        connections[operatorid].write("{\"quote\":" + JSON.stringify(quote) + "}");
+      }
+    });
+  });
+}
 
 /*
 * Get the nuber of seconds between two UTC datetimes
@@ -2286,42 +2005,6 @@ function getSeconds(startutctime, finishutctime) {
 function getDateString(utcdatetime) {
     return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
 }
-
-/*
-local results = redis.call("HGETALL", KEYS[1]);
-if results ~= 0 then
-    for key, value in ipairs(results) do
-        -- do something here
-    end
-end
-
-local data = redis.call('GET', key);
-local json;
-
-if not data then
-    json = {};
-else
-    json = cjson.decode(data);
-end
-
-json[name] = value;
-redis.call('SET', key, cjson.encode(json));
-return cjson.encode(json);
-
-string luaScript = "local tDecoded = redis.call('GET', KEYS[1]);\n"
-                    + "local tFinal = {};\n"
-                    + "for iIndex, tValue in ipairs(tDecoded) do\n"
-                    + "     if tonumber( tValue.Value ) < 20 then\n"
-                    + "        table.insert(tFinal, { ID = tValue.ID, Value = tValue.Value});\n"
-                    + "     else\n"
-                    + "         table.insert(tFinal, { ID = 999, Value = 0});\n"
-                    + "     end\n"
-                    + "end\n"
-                    + "return cjson.encode(tFinal);";
-
-                var test = redisClient.ExecLuaAsString(luaScript, "Meds25");
-
-*/
 
 function registerScripts() {
   var updateposition;
@@ -2417,250 +2100,9 @@ function registerScripts() {
   end \
   ';
 
-  updateordermargin = '\
-  local updateordermargin = function(orderid, orgclientkey, ordmargin, currency, newordmargin) \
-    if newordmargin == ordmargin then return end \
-    local marginkey = orgclientkey .. ":margin:" .. currency \
-    local marginskey = orgclientkey .. ":margins" \
-    local margin = redis.call("get", marginkey) \
-    if not margin then \
-      redis.call("set", marginkey, newordmargin) \
-      redis.call("sadd", marginskey, currency) \
-    else \
-      local adjmargin = tonumber(margin) - tonumber(ordmargin) + tonumber(newordmargin) \
-      if adjmargin == 0 then \
-        redis.call("del", marginkey) \
-        redis.call("srem", marginskey, currency) \
-      else \
-        redis.call("set", marginkey, adjmargin) \
-      end \
-    end \
-    redis.call("hset", "order:" .. orderid, "margin", newordmargin) \
-  end \
-  ';
-
-  updatetrademargin = '\
-  local updatetrademargin = function(tradeid, orgclientkey, currency, initialmargin) \
-    local marginkey = orgclientkey .. ":margin:" .. currency \
-    local marginskey = orgclientkey .. ":margins" \
-    local margin = redis.call("get", marginkey) \
-    if not margin then \
-      redis.call("set", marginkey, margin) \
-      redis.call("sadd", marginskey, currency) \
-    else \
-      local adjmargin = tonumber(margin) + tonumber(initialmargin) \
-      if adjmargin == 0 then \
-        redis.call("del", marginkey) \
-        redis.call("srem", marginskey, currency) \
-      else \
-        redis.call("set", marginkey, adjmargin) \
-      end \
-    end \
-    redis.call("hset", "trade:" .. tradeid, "margin", initialmargin) \
-  end \
-  ';
-
-  updatereserve = '\
-  local updatereserve = function(orgclientkey, symbol, currency, quantity) \
-    local poskey = symbol .. ":" .. currency \
-    local reservekey = orgclientkey .. ":reserve:" .. poskey \
-    local reserveskey = orgclientkey .. ":reserves" \
-    local reserve = redis.call("get", reservekey) \
-    if not reserve then \
-      redis.call("set", reservekey, quantity) \
-      redis.call("sadd", reserveskey, poskey) \
-    else \
-      local adjquantity = tonumber(reserve) + tonumber(quantity) \
-      if adjquantity == 0 then \
-        redis.call("del", reservekey) \
-        redis.call("srem", reserveskey, poskey) \
-      else \
-        redis.call("set", reservekey, adjquantity) \
-      end \
-    end \
-  end \
-  ';
-
-  updatecash = '\
-  local updatecash = function(orgclientkey, currency, amount) \
-    local cashkey = orgclientkey .. ":cash:" .. currency \
-    local cashskey = orgclientkey .. ":cash" \
-    local cash = redis.call("get", cashkey) \
-    if not cash then \
-      redis.call("set", cashkey, amount) \
-      redis.call("sadd", cashskey, currency) \
-    else \
-      local adjamount = tonumber(cash) + tonumber(amount) \
-      if adjamount == 0 then \
-        redis.call("del", cashkey) \
-        redis.call("srem", cashskey, currency) \
-      else \
-        redis.call("set", cashkey, adjamount) \
-      end \
-    end \
-  end \
-  ';
-
-  //
-  // tradecost & currency should be in settlement currency
-  //
-  updateposition = '\
-  local updateposition = function(orgclientkey, symbol, side, tradequantity, tradeprice, tradecost, currency, initialmargin, positionopenclose, positioncloseid) \
-    local positionskey = orgclientkey .. ":positions" \
-    local positionid \
-    if tonumber(positionopenclose) == 1 then \
-      --[[ opening position, so get a new id ]] \
-      positionid = redis.call("incr", "positionid") \
-      --[[ create the position ]] \
-      redis.call("hmset", "position:" .. positionid, "orgclientkey", orgclientkey, "symbol", symbol, "longshort", side, "quantity", tradequantity, "cost", tradecost, "currency", currency, "initialmargin", initialmargin, "positionid", positionid) \
-      redis.call("sadd", positionskey, positionid) \
-    else \
-      --[[ closing, so get the position ]] \
-      positionid = positioncloseid \
-      local fields = {"quantity", "cost", "initialmargin"} \
-      local vals = redis.call("hmget", "position:" .. positionid, unpack(fields)) \
-      local posqty = tonumber(vals[1]) \
-      local poscost = tonumber(vals[2]) \
-      local posinitialmargin = tonumber(vals[3]) \
-      posqty = posqty - tradequantity \
-    end \
-    return positionid \
-  end \
-  ';
-
-    /*local symbolcurrency = symbol .. ":" .. currency \
-    local positionkey = orgclientkey .. ":position:" .. symbolcurrency \
-    local positionskey = orgclientkey .. ":positions" \
-    local posqty = 0 \
-    local poscost = 0 \
-    local posinitialmargin = 0 \
-    local fields = {"quantity", "cost", "initialmargin"} \
-    local vals = redis.call("hmget", positionkey, unpack(fields)) \
-    if vals[1] then \
-      posqty = vals[1] \
-      poscost = vals[2] \
-      posinitialmargin = vals[3] \
-    end \
-    if side == "1" then \
-      if posqty ~= 0 then \
-        local adjqty = tonumber(posqty) + tonumber(tradequantity) \
-        local adjcost = tonumber(poscost) + tonumber(tradecost) \
-        local adjinitialmargin = tonumber(posinitialmargin) + tonumber(initialmargin) \
-        if adjqty == 0 then \
-          redis.call("hdel", positionkey, "symbol", "quantity", "cost", "currency", "initialmargin") \
-          redis.call("srem", positionskey, symbolcurrency) \
-        else \
-          redis.call("hmset", positionkey, "quantity", adjqty, "price", tradeprice, "cost", adjcost, "initialmargin", adjinitialmargin) \
-        end \
-      else \
-        redis.call("hmset", positionkey, "symbol", symbol, "quantity", tradequantity, "cost", tradecost, "currency", currency, "initialmargin", initialmargin) \
-        redis.call("sadd", positionskey, symbolcurrency) \
-      end \
-    else \
-      if posqty ~= 0 then \
-        local adjqty = tonumber(posqty) - tradequantity \
-        local adjcost = tonumber(poscost) - tradecost \
-        local adjinitialmargin = tonumber(posinitialmargin) - tonumber(initialmargin) \
-        if adjqty == 0 then \
-          redis.call("hdel", positionkey, "symbol", "quantity", "cost", "currency", "initialmargin") \
-          redis.call("srem", positionskey, symbolcurrency) \
-        else \
-          redis.call("hmset", positionkey, "quantity", adjqty, "cost", adjcost, "initialmargin", adjinitialmargin) \
-        end \
-      else \
-        redis.call("hmset", positionkey, "symbol", symbol, "quantity", -tradequantity, "cost", -tradecost, "currency", currency, "initialmargin", initialmargin) \
-        redis.call("sadd", positionskey, symbolcurrency) \
-      end \
-    end \
-  end \
-  ';*/
-
-  adjustmarginreserve = getinitialmargin + updateordermargin + updatereserve + '\
-  local adjustmarginreserve = function(orderid, orgclientkey, symbol, side, price, ordmargin, currency, remquantity, newremquantity) \
-    local instrumenttype = redis.call("hget", "symbol:" .. symbol, "instrumenttype") \
-    if tonumber(side) == 1 then \
-      if tonumber(newremquantity) ~= tonumber(remquantity) then \
-        local newordmargin = {0} \
-        if tonumber(newremquantity) ~= 0 then \
-          newordmargin = getinitialmargin(symbol, instrumenttype, newremquantity, price, currency) \
-        end \
-        updateordermargin(orderid, orgclientkey, ordmargin, currency, newordmargin[1]) \
-      end \
-    else \
-      if tonumber(newremquantity) ~= tonumber(remquantity) then \
-        updatereserve(orgclientkey, symbol, currency, -tonumber(remquantity) + tonumber(newremquantity)) \
-      end \
-    end \
-  end \
-  ';
-
   rejectorder = '\
   local rejectorder = function(orderid, reason, text) \
     redis.call("hmset", "order:" .. orderid, "status", "8", "reason", reason, "text", text) \
-  end \
-  ';
-
-  creditcheck =  getinitialmargin + rejectorder + updateordermargin + updatereserve + '\
-  local creditcheck = function(orderid, orgclientkey, symbol, side, quantity, price, currency, instrumenttype, positionopenclose) \
-    --[[ calculate initial margin, including costs ]] \
-    local initialmargin = getinitialmargin(symbol, instrumenttype, quantity, price, currency) \
-    --[[ always allow closing trades ]] \
-    if tonumber(positionopenclose) == 2 then \
-      return {1, initialmargin[2]} \
-    end \
-    --[[ check margin for all derivative trades & equity buys ]] \
-    if instrumenttype == "CFD" or instrumenttype == "SPB" or tonumber(side) == 1 then \
-      --[[ get existing margin ]] \
-      local margin = redis.call("get", orgclientkey .. ":margin:" .. currency) \
-      if not margin then margin = 0 end \
-      --[[ get cash ]] \
-      local cash = redis.call("get", orgclientkey .. ":cash:" .. currency) \
-      if not cash then \
-        rejectorder(orderid, 1001, "") \
-        return {0} \
-      end \
-      --[[ check there is enough cash to cover total margin ]] \
-      if tonumber(cash) < tonumber(margin) + initialmargin[1] then \
-        rejectorder(orderid, 1002, "") \
-        return {0} \
-      end \
-      updateordermargin(orderid, orgclientkey, 0, currency, initialmargin[1]) \
-    else \
-      --[[ check there is a large enough position in this symbol/currency ]] \
-      local poskey = symbol .. ":" .. currency \
-      local position = redis.call("hget", orgclientkey .. ":position:" .. poskey, "quantity") \
-      if not position then \
-        rejectorder(orderid, 1003, "") \
-        return {0} \
-      end \
-      local netpos = tonumber(position) \
-      local reserve = redis.call("get", orgclientkey .. ":reserve:" .. poskey) \
-      if reserve then \
-        netpos = netpos - tonumber(reserve) \
-      end \
-      --[[ check what we have against quantity of order ]] \
-      if netpos < tonumber(quantity) then \
-        rejectorder(orderid, 1004, "") \
-        return {0} \
-      end \
-      updatereserve(orgclientkey, symbol, currency, quantity) \
-    end \
-    return {1, initialmargin[2]} \
-  end \
-  ';
-
-  cancelorder = adjustmarginreserve + '\
-  local cancelorder = function(orderid, status) \
-    local orderkey = "order:" .. orderid \
-    redis.call("hset", orderkey, "status", status) \
-    local fields = {"orgid", "clientid", "symbol", "side", "quantity", "price", "settlcurrency", "margin", "remquantity"} \
-    local vals = redis.call("hmget", orderkey, unpack(fields)) \
-    if not vals[1] then \
-      return 1009 \
-    end \
-    local orgclientkey = vals[1] .. ":" .. vals[2] \
-    adjustmarginreserve(orderid, orgclientkey, vals[3], vals[4], vals[6], vals[8], vals[7], vals[9], 0) \
-    return 0 \
   end \
   ';
 
@@ -2719,31 +2161,6 @@ function registerScripts() {
   end \
   ';
 
-  newtrade = updateposition + updatecash + '\
-  local newtrade = function(orgid, clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyorgid, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, positionopenclose, positioncloseid) \
-    local tradeid = redis.call("incr", "tradeid") \
-    if not tradeid then return 0 end \
-    local tradekey = "trade:" .. tradeid \
-    redis.call("hmset", tradekey, "orgid", orgid, "clientid", clientid, "orderid", orderid, "symbol", symbol, "side", side, "quantity", quantity, "price", price, "currency", currency, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyorgid", counterpartyorgid, "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrency", settlcurrency, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "positionopenclose", positionopenclose, "positioncloseid", positioncloseid) \
-    redis.call("sadd", "trades", tradeid) \
-    local orgclientkey = orgid .. ":" .. clientid \
-    redis.call("sadd", orgclientkey .. ":trades", tradeid) \
-    redis.call("sadd", "order:" .. orderid .. ":trades", tradeid) \
-    local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
-    local tradecost \
-    if tonumber(side) == 1 then \
-      tradecost = settlcurramt + totalcost \
-      updatecash(orgclientkey, settlcurrency, -tradecost) \
-    else \
-      tradecost = settlcurramt - totalcost \
-      updatecash(orgclientkey, settlcurrency, tradecost) \
-    end \
-    local positionid = updateposition(orgclientkey, symbol, side, quantity, price, tradecost, settlcurrency, initialmargin, positionopenclose, positioncloseid) \
-    redis.call("hset", tradekey, "positionid", positionid) \
-    return tradeid \
-  end \
-  ';
-
   calcfinance = round + '\
   local calcfinance = function(consid, currency, longshort, nosettdays) \
     local finance = 0 \
@@ -2755,194 +2172,6 @@ function registerScripts() {
    end \
    return finance \
   end \
-  ';
-
-  scriptrejectorder = rejectorder + adjustmarginreserve + '\
-  rejectorder(KEYS[1], KEYS[2], KEYS[3]) \
-  local fields = {"orgid", "clientid", "symbol", "side", "price", "margin", "settlcurrency", "remquantity"} \
-  local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
-  if not vals[1] then \
-    return 1009 \
-  end \
-  local orgclientkey = vals[1] .. ":" .. vals[2] \
-  adjustmarginreserve(KEYS[1], orgclientkey, vals[3], vals[4], vals[5], vals[6], vals[7], vals[8], 0) \
-  return 0 \
-  ';
-
-  scriptneworder = creditcheck + newtrade + getproquotesymbol + getproquotequote + '\
-  local orderid = redis.call("incr", "orderid") \
-  if not orderid then return 1005 end \
-  redis.call("hmset", "order:" .. orderid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "side", KEYS[4], "quantity", KEYS[5], "price", KEYS[6], "ordertype", KEYS[7], "remquantity", KEYS[5], "status", "0", "markettype", KEYS[8], "futsettdate", KEYS[9], "partfill", KEYS[10], "quoteid", KEYS[11], "currency", KEYS[12], "currencyratetoorg", KEYS[13], "currencyindtoorg", KEYS[14], "timestamp", KEYS[15], "margin", 0, "timeinforce", KEYS[16], "expiredate", KEYS[17], "expiretime", KEYS[18], "settlcurrency", KEYS[19], "settlcurrfxrate", KEYS[20], "settlcurrfxratecalc", KEYS[21], "orderid", orderid, "externalorderid", "", "execid", "", "nosettdays", KEYS[22], "positionopenclose", KEYS[23], "positioncloseid", KEYS[24]) \
-  local orgclientkey = KEYS[1] .. ":" .. KEYS[2] \
-  local side = tonumber(KEYS[4]) \
-  local markettype = tonumber(KEYS[8]) \
-  --[[ add to set of orders for this client ]] \
-  redis.call("sadd", orgclientkey .. ":orders", orderid) \
-  --[[ add to set of orders for back-office ]] \
-  redis.call("sadd", "orders", orderid) \
-  --[[ add order id to associated quote, if there is one ]] \
-  if KEYS[11] ~= "" then \
-    redis.call("hset", "quote:" .. KEYS[11], "orderid", orderid) \
-  end \
-  --[[ calculate consideration in settlement currency, costs will be added later ]] \
-  local settlcurramt = tonumber(KEYS[5]) * tonumber(KEYS[6]) \
-  local instrumenttype = redis.call("hget", "symbol:" .. KEYS[3], "instrumenttype") \
-  local ret = creditcheck(orderid, orgclientkey, KEYS[3], side, KEYS[5], KEYS[6], KEYS[19], instrumenttype, KEYS[23]) \
-  --[[ return order id for lookup, if credit check has failed ]] \
-  if ret[1] == 0 then \
-    return {ret[1], orderid} \
-  end \
-  local proquotesymbol = {"", "", "", ""} \
-  local proquotequote = {"", ""} \
-  local hedgebookid = "" \
-  local tradeid = "" \
-  local hedgeorderid = "" \
-  local hedgetradeid = "" \
-  if instrumenttype == "CFD" or instrumenttype == "SPB" then \
-    --[[ create trades for client & hedge book for off-exchange products ]] \
-    hedgebookid = redis.call("hget", "hedge:" .. instrumenttype .. ":" .. KEYS[19], "hedgebookid") \
-    if not hedgebookid then hedgebookid = 999999 end \
-    local reverseside \
-    if side == 1 then \
-      reverseside = 2 \
-    else \
-      reverseside = 1 \
-    end \
-    local hedgecosts = {0,0,0,0} \
-    tradeid = newtrade(KEYS[1], KEYS[2], orderid, KEYS[3], side, KEYS[5], KEYS[6], KEYS[12], 1, 1, ret[2], KEYS[1], hedgebookid, KEYS[8], "", KEYS[9], KEYS[15], "", "", KEYS[19], settlcurramt, KEYS[20], KEYS[21], KEYS[22], 5, KEYS[23], KEYS[24]) \
-    hedgetradeid = newtrade(KEYS[1], hedgebookid, orderid, KEYS[3], reverseside, KEYS[5], KEYS[6], KEYS[12], 1, 1, hedgecosts, KEYS[1], KEYS[2], KEYS[8], "", KEYS[9], KEYS[15], "", "", KEYS[19], settlcurramt, KEYS[20], KEYS[21], KEYS[22], 5, KEYS[23], KEYS[24]) \
-    --[[ see if we need to hedge this trade in the market (assume we do) ]] \
-    local hedgeoverval = redis.call("hget", "hedge:" .. instrumenttype .. ":" .. KEYS[19], "hedgeoverval") \
-    if not hedgeoverval or settlcurramt > hedgeoverval then \
-      --[[ create a hedge order in the underlying product ]] \
-      proquotesymbol = getproquotesymbol(KEYS[3]) \
-      if proquotesymbol[4] then \
-        hedgeorderid = redis.call("incr", "orderid") \
-        redis.call("hmset", "order:" .. hedgeorderid, "orgid", KEYS[1], "clientid", hedgebookid, "symbol", proquotesymbol[4], "side", KEYS[4], "quantity", KEYS[5], "price", KEYS[6], "ordertype", KEYS[7], "remquantity", KEYS[5], "status", "0", "markettype", KEYS[8], "futsettdate", KEYS[9], "partfill", KEYS[10], "quoteid", KEYS[11], "currency", KEYS[12], "currencyratetoorg", KEYS[13], "currencyindtoorg", KEYS[14], "timestamp", KEYS[15], "margin", 0, "timeinforce", KEYS[16], "expiredate", KEYS[17], "expiretime", KEYS[18], "settlcurrency", KEYS[19], "settlcurrfxrate", KEYS[20], "settlcurrfxratecalc", KEYS[21], "orderid", hedgeorderid, "externalorderid", "", "execid", "", "nosettdays", KEYS[22], "positionopenclose", KEYS[23], "positioncloseid", KEYS[24]) \
-        --[[ get proquote values ]] \
-        proquotequote = getproquotequote(KEYS[11], side) \
-      end \
-    end \
-  else \
-    --[[ get proquote values if order is external ]] \
-    if markettype == 0 then \
-      proquotesymbol = getproquotesymbol(KEYS[3]) \
-      proquotequote = getproquotequote(KEYS[11], side) \
-    end \
-  end \
-  return {ret[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttype, hedgeorderid, tradeid, hedgetradeid} \
-  ';
-
-  // todo: add lastmkt
-  // quantity required as number of shares
-  // todo: settlcurrency
-  scriptmatchorder = addtoorderbook + removefromorderbook + adjustmarginreserve + newtrade + getcosts + '\
-  local fields = {"orgid", "clientid", "symbol", "side", "quantity", "price", "currency", "margin", "remquantity", "futsettdate", "timestamp"} \
-  local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
-  local orgclientkey = vals[1] .. ":" .. vals[2] \
-  local remquantity = tonumber(vals[9]) \
-  if remquantity <= 0 then return "1010" end \
-  local instrumenttype = redis.call("hget", "symbol:" .. vals[3], "instrumenttype") \
-  local lowerbound \
-  local upperbound \
-  local matchside \
-  if tonumber(vals[4]) == 1 then \
-    lowerbound = 0 \
-    upperbound = vals[6] \
-    matchside = 2 \
-  else \
-    lowerbound = "-inf" \
-    upperbound = "-" .. vals[6] \
-    matchside = 1 \
-  end \
-  local mo = {} \
-  local t = {} \
-  local mt = {} \
-  local mc = {} \
-  local j = 1 \
-  local matchorders = redis.call("zrangebyscore", vals[3], lowerbound, upperbound) \
-  for i = 1, #matchorders do \
-    local matchvals = redis.call("hmget", "order:" .. matchorders[i], unpack(fields)) \
-    local matchorgclientkey = matchvals[1] .. ":" .. matchvals[2] \
-    local matchremquantity = tonumber(matchvals[9]) \
-    if matchremquantity > 0 and matchorgclientkey ~= orgclientkey then \
-      local tradequantity \
-      --[[ calculate trade & remaining order quantities ]] \
-      if matchremquantity >= remquantity then \
-        tradequantity = remquantity \
-        matchremquantity = matchremquantity - remquantity \
-        remquantity = 0 \
-      else \
-        tradequantity = matchremquantity \
-        remquantity = remquantity - matchremquantity \
-        matchremquantity = 0 \
-      end \
-      --[[ adjust order book & update passive order ]] \
-      local matchorderstatus \
-      if matchremquantity == 0 then \
-        removefromorderbook(matchvals[3], matchorders[i]) \
-        matchorderstatus = 2 \
-      else \
-        matchorderstatus = 1 \
-      end \
-      redis.call("hmset", "order:" .. matchorders[i], "remquantity", matchremquantity, "status", matchorderstatus) \
-      --[[ adjust margin/reserve ]] \
-      adjustmarginreserve(matchorders[i], matchorgclientkey, matchvals[3], matchvals[4], matchvals[6], matchvals[8], matchvals[7], matchvals[9], matchremquantity) \
-      --[[ trade gets done at passive order price ]] \
-      local tradeprice = tonumber(matchvals[6]) \
-      local consid = tradequantity * tradeprice \
-      --[[ create trades for active & passive orders ]] \
-      local costs = getcosts(instrumenttype, vals[4], consid, vals[7]) \
-      local matchcosts = getcosts(instrumenttype, matchside, consid, matchvals[7]) \
-      local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], vals[4], tradequantity, tradeprice, vals[7], costs, matchorder[2], matchorder[4], "1", "", vals[10], vals[11], "", "", vals[7], "", "") \
-      local matchtradeid = newtrade(matchvals[2], matchvals[4], matchorders[i], matchvals[3], matchside, tradequantity, tradeprice, matchvals[7], matchcosts, order[2], order[4], "1", "", matchvals[10], matchvals[11], "", "", vals[7], "", "") \
-      --[[ update return values ]] \
-      mo[j] = matchorders[i] \
-      t[j] = tradeid \
-      mt[j] = matchtradeid \
-      mc[j] = matchorgclientkey \
-      j = j + 1 \
-    end \
-    if remquantity == 0 then break end \
-  end \
-  local orderstatus = "0" \
-  if remquantity > 0 then \
-    addtoorderbook(vals[3], KEYS[1], vals[4], vals[6]) \
-  else \
-    orderstatus = "2" \
-  end \
-  if remquantity < tonumber(vals[5]) then \
-    --[[ reduce margin/reserve that has been added in the credit check ]] \
-    adjustmarginreserve(KEYS[1], orgclientkey, vals[3], vals[4], vals[6], vals[8], vals[7], vals[9], remquantity) \
-    if remquantity ~= 0 then \
-      orderstatus = "1" \
-    end \
-  end \
-  --[[ update active order ]] \
-  redis.call("hmset", "order:" .. KEYS[1], "remquantity", remquantity, "status", orderstatus) \
-  return {mo, t, mt, mc} \
-  ';
-
-  //
-  // fill
-  //
-  // todo: should currency be settlcurrency?
-  scriptnewtrade = newtrade + getcosts + adjustmarginreserve + updatetrademargin + '\
-  local fields = {"orgid", "clientid", "symbol", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "positionopenclose", "positioncloseid"} \
-  local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
-  local quantity = tonumber(KEYS[4]) \
-  local price = tonumber(KEYS[5]) \
-  local orgclientkey = vals[1] .. ":" .. vals[2] \
-  local instrumenttype = redis.call("hget", "symbol:" .. vals[3], "instrumenttype") \
-  local initialmargin = getinitialmargin(vals[3], instrumenttype, quantity, price, KEYS[18]) \
-  local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], initialmargin[2], KEYS[9], KEYS[10], 0, KEYS[11], KEYS[12], KEYS[13], KEYS[15], KEYS[17], KEYS[18], KEYS[19], KEYS[20], KEYS[21], vals[9], initialmargin[1], vals[10], vals[11]) \
-  --[[ adjust order related margin/reserve ]] \
-  adjustmarginreserve(KEYS[1], orgclientkey, vals[3], vals[4], vals[6], vals[7], KEYS[18], vals[8], KEYS[16]) \
-  --[[ adjust order ]] \
-  redis.call("hmset", "order:" .. KEYS[1], "remquantity", KEYS[16], "status", KEYS[14]) \
-  --[[ adjust trade related margin ]] \
-  updatetrademargin(tradeid, orgclientkey, KEYS[18], initialmargin[1]) \
-  return tradeid \
   ';
 
   scriptordercancelrequest = removefromorderbook + cancelorder + getproquotesymbol + '\
@@ -3015,18 +2244,6 @@ function registerScripts() {
   scriptorderexpire = cancelorder + '\
   local ret = cancelorder(KEYS[1], "C") \
   return ret \
-  ';
-
-  scriptquoterequest = getproquotesymbol + '\
-  local quotereqid = redis.call("incr", "quotereqid") \
-  if not quotereqid then return 1005 end \
-  --[[ store the quote request ]] \
-  redis.call("hmset", "quoterequest:" .. quotereqid, "orgid", KEYS[1], "clientid", KEYS[2], "symbol", KEYS[3], "quantity", KEYS[4], "cashorderqty", KEYS[5], "currency", KEYS[6], "settlcurrency", KEYS[7], "nosettdays", KEYS[8], "futsettdate", KEYS[9], "quotestatus", "", "timestamp", KEYS[10], "quoteid", "", "quoterejectreason", "", "quotereqid", quotereqid) \
-  redis.call("sadd", KEYS[1] .. ":" .. KEYS[2] .. ":quoterequests", quotereqid) \
-  --[[ get required instrument values for proquote ]] \
-  local proquotesymbol = getproquotesymbol(KEYS[3]) \
-  local instrumenttype = redis.call("hget", "symbol:" .. KEYS[3], "instrumenttype") \
-  return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], instrumenttype} \
   ';
 
   // todo: check proquotsymbol against quote request symbol?
@@ -3106,16 +2323,6 @@ function registerScripts() {
     sides = 2 \
   end \
   return {errorcode, sides, quoteid} \
-  ';
-
-  scriptquoteack = '\
-  --[[ see if the quote request has already been rejected - this can happen as there may be a rejection message for bid & offer ]] \
-  local quotestatus = redis.call("hget", "quoterequest:" .. KEYS[1], "quotestatus") \
-  if quotestatus ~= "" then \
-    return 1 \
-  end \
-  redis.call("hmset", "quoterequest:" .. KEYS[1], "quotestatus", KEYS[2], "quoterejectreason", KEYS[3], "text", KEYS[4]) \
-  return 0 \
   ';
 
   //

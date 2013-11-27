@@ -1987,28 +1987,6 @@ ptp.on("quoteack", function(quoteack) {
     }
 
     db.publish(ret[1], "quoteack:" + quoteack.quotereqid);
-
-    /*db.hgetall("quoterequest:" + quoteack.quotereqid, function(err, quoterequest) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      if (quoterequest == null) {
-        console.log("can't find quote request id " + quoteack.quotereqid);
-        return;
-      }
-
-      orgclientkey = quoterequest.orgid + ":" + quoterequest.clientid;
-
-      quoteack.symbol = quoterequest.symbol;
-      quoteack.quoterejectreasondesc = ptp.getQuoteRejectReason(quoteack.quoterejectreason);
-
-      // send the quote acknowledgement
-      if (orgclientkey in connections) {
-        connections[orgclientkey].write("{\"quoteack\":" + JSON.stringify(quoteack) + "}");
-      }
-    });*/
   });
 });
 

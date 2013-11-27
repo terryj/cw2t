@@ -653,7 +653,7 @@
         var inconnectiontest = false;
         var restarttimer;
         var userid;
-        var operatortype = 2;
+        var operatortype = 2; // user
         var defaultHedgebook = 999999;
 
         var datain = function(msg) {
@@ -766,7 +766,6 @@
                 start();
             } else if (msg.substr(2, 16) == "hedgebookupdated") {
                 obj = JSON.parse(msg);
-                userid = obj.userid;
                 hedgebookUpdated(obj.hedgebookupdated);
             } else if (msg.substr(2,6) == "status") {
                 obj = JSON.parse(msg);
@@ -1435,7 +1434,7 @@
             stockboxinput = document.createElement("input");
             stockboxinput.className = "stockboxinput";
             stockboxinput.id = "stockboxinput";
-            stockboxinput.placeholder = "Enter Stock";
+            stockboxinput.placeholder = "Enter Symbol";
 
             stockboxinput.onkeyup = function() {
                 clearList(stocklist);
@@ -1571,7 +1570,7 @@
             stockboxinput = document.createElement("input");
             stockboxinput.className = "clientstockboxinput";
             stockboxinput.id = "stockboxinput";
-            stockboxinput.placeholder = "Enter Stock";
+            stockboxinput.placeholder = "Enter Symbol";
 
             stockboxinput.onkeyup = function() {
                 clearList(stocklist);
@@ -4467,6 +4466,21 @@
             populateInstrumentTypes(selinsttype, "CFD");
             populateCurrencies(selcurrency, "GBP");
             populateHedgebooks(selhedgebook, "999999");
+
+            // todo:...
+            /*selinsttype.onchange = function() {
+                var selectedday = day[day.selectedIndex].value;
+                day.length = 0;
+                nummonthdays = getMonthDays(year[year.selectedIndex].value, month.selectedIndex);
+                populateDay(day, nummonthdays, selectedday);
+            }
+
+            selcurrency.onchange = function() {
+                var selectedday = day[day.selectedIndex].value;
+                day.length = 0;
+                nummonthdays = getMonthDays(year[year.selectedIndex].value, month.selectedIndex);
+                populateDay(day, nummonthdays, selectedday);
+            }*/
 
             btnupdate.onclick = function() {
                 var hedge = {};

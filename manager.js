@@ -24,7 +24,8 @@ var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;
 var operatortype = 2;
-var tradeserver = 3;
+var tradeserverchannel = 3;
+var userserverchannel = 2;
 
 // redis
 var redishost;
@@ -120,7 +121,7 @@ function pubsub() {
     }
   });
 
-  dbsub.subscribe(2);
+  dbsub.subscribe(userserverchannel);
 }
 
 // sockjs server
@@ -167,13 +168,9 @@ function listen() {
         obj = JSON.parse(msg);
         orderBookRemoveRequest(orgclientkey, obj.orderbookremoverequest, conn);
       } else if (msg.substr(2, 5) == "order") {
-        db.publish(tradeserver, msg);
-        //obj = JSON.parse(msg);
-        //newOrder(clientid, obj.order, conn);
+        db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 12) == "quoterequest") {
-        db.publish(tradeserver, msg);
-        //obj = JSON.parse(msg);
-        //quoteRequest(clientid, obj.quoterequest);
+        db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 8) == "register") {
         obj = JSON.parse(msg);
         registerClient(obj.register, conn);
@@ -387,45 +384,6 @@ function getSendInst(symbol, conn) {
     conn.write("{\"instrument\":" + JSON.stringify(inst) + "}");
   });
 }
-
-/*function quoteRequest(clientid, quoterequest) {
-  console.log("quoterequest");
-  console.log(quoterequest);
-
-  quoterequest.timestamp = getUTCTimeStamp();
-
-  // get settlement date from T+n no. of days
-  quoterequest.futsettdate = getUTCDateString(getSettDate(quoterequest.nosettdays));
-
-  // store the quote request & get an id
-  db.eval(scriptquoterequest, 10, orgid, clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, function(err, ret) {
-    if (err) throw err;
-  
-    if (ret[0] != 0) {
-      // todo: send a quote ack to client
-
-      console.log("Error in scriptquoterequest:" + getReasonDesc(ret[0]));
-      return;
-    }
-
-    // add the quote request id & symbol details required for proquote
-    quoterequest.quotereqid = ret[1];
-    quoterequest.isin = ret[2];
-    quoterequest.proquotesymbol = ret[3];
-    quoterequest.exchange = ret[4];
-
-    // for derivatives, make the quote request for the default settlement date
-    if (ret[5] != "DE") {
-      if (quoterequest.nosettdays != defaultnosettdays) {
-        quoterequest.futsettdate = getUTCDateString(getSettDate(defaultnosettdays));
-        quoterequest.nosettdays = defaultnosettdays;
-      }
-    }
-
-    // forward the request to Proquote
-    ptp.quoteRequest(quoterequest);
-  });
-}*/
 
 // roll date forwards by T+n number of days
 function getSettDate(nosettdays) {
@@ -1648,7 +1606,6 @@ function sendClientTypes(conn) {
 function sendQuoteack(quotereqid) {
   var quoteack = {};
 
-  console.log(quotereqid);
   db.hgetall("quoterequest:" + quotereqid, function(err, quoterequest) {
     if (err) {
       console.log(err);
@@ -1667,7 +1624,6 @@ function sendQuoteack(quotereqid) {
     if ('text' in quoterequest) {
       quoteack.text = quoterequest.text;
     }
-    console.log(quoteack);
 
     // send the quote acknowledgement
     if (quoterequest.operatorid in connections) {
@@ -1837,7 +1793,7 @@ function registerScripts() {
   local clientid = redis.call("incr", "clientid") \
   if not clientid then return {1005} end \
   --[[ store the client ]] \
-  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "orgid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7], "hedge", KEYS[9]) \
+  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "orgid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7], "hedge", KEYS[9]) \
   --[[ add to set of clients ]] \
   redis.call("sadd", "clients", clientid) \
   --[[ add route to find client from email ]] \
