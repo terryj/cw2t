@@ -642,6 +642,7 @@
         var cashtranstypes = {};
         var currencies = {};
         var clienttypes = {};
+        var hedgebooks = {};
         var lastElement = null;
         var lastsymbol = null;
         var extendedsettlement = false;
@@ -654,7 +655,7 @@
         var restarttimer;
         var userid;
         var operatortype = 2; // user
-        var defaultHedgebook = 999999;
+        var defaultHedgebook = "999999";
 
         var datain = function(msg) {
             var obj = {};
@@ -760,13 +761,16 @@
             } else if (msg.substr(2, 10) == "currencies") {
                 obj = JSON.parse(msg);
                 loadCurrencies(obj.currencies);
+            } else if (msg.substr(2, 10) == "hedgebooks") {
+                obj = JSON.parse(msg);
+                loadHedgebooks(obj.hedgebooks);
+            } else if (msg.substr(2, 9) == "hedgebook") {
+                obj = JSON.parse(msg);
+                updateHedgebook(obj.hedgebook);
             } else if (msg.substr(2, 6) == "userid") {
                 obj = JSON.parse(msg);
                 userid = obj.userid;
                 start();
-            } else if (msg.substr(2, 16) == "hedgebookupdated") {
-                obj = JSON.parse(msg);
-                hedgebookUpdated(obj.hedgebookupdated);
             } else if (msg.substr(2,6) == "status") {
                 obj = JSON.parse(msg);
                 statusMsg(obj.status);
@@ -844,7 +848,14 @@
         }
 
         function updateInstrument(instrument) {
+            var lblinstconf;
+
             instruments[instrument.symbol] = instrument;
+
+            lblinstconf = document.getElementById("lblinstconf");
+            if (lblinstconf != null) {
+                lblinstconf.innerHTML = instrument.symbol + " updated ok";
+            }
         }
 
         function loadOrderTypes(ordertypearr) {
@@ -909,6 +920,23 @@
             }                                                                        
         }
 
+        function loadHedgebooks(hedgebookarr) {
+            for (var i = 0; i < hedgebookarr.length; ++i) {
+                hedgebooks[hedgebookarr[i].hedgebookkey] = hedgebookarr[i];
+            }                                                                        
+        }
+
+        function updateHedgebook(hedgebook) {
+            var lblhedgeconf;
+
+            hedgebooks[hedgebook.hedgebookkey] = hedgebook;
+
+            lblhedgeconf = document.getElementById("lblhedgeconf");
+            if (lblhedgeconf != null) {
+                lblhedgeconf.innerHTML = "Hedgebook updated Ok";
+            }
+        }
+
         function displayIndex(index) {
             var s;
             var sym;
@@ -964,11 +992,6 @@
             clearField(inpclient);
             clearField(inpamount);
             clearField(inpdesc);
-        }
-
-        function hedgebookUpdated(hedge) {
-            var lblhedgeconf = document.getElementById("lblhedgeconf");
-            lblhedgeconf.innerHTML = "Updated Ok";
         }
 
         function clearField(fldname) {
@@ -4063,9 +4086,9 @@
 
             addNewLine(frmclient);
             lblhedge = newlabel("lblhedge", "Hedge:", "formlabel", frmclient);
-            opthedgeyes = newoption("opthedgeyes", "opthedge", "formselect", frmclient);
+            opthedgeyes = newoption("opthedgeyes", "opthedge", "formcheckbox", frmclient);
             lblhedgeyes = newlabel("lblhedgeyes", "Yes", "", frmclient);
-            opthedgeno = newoption("opthedgeno", "opthedge", "formselect", frmclient);
+            opthedgeno = newoption("opthedgeno", "opthedge", "formcheckbox", frmclient);
             lblhedgeno = newlabel("lblhedgeno", "No", "", frmclient);
 
             addNewLine(frmclient);
@@ -4357,6 +4380,7 @@
             var btnupdate;
             var lblsymbol;
             var inpsymbol;
+            var lblinstconf;
 
             selectStock();
 
@@ -4368,42 +4392,53 @@
 
             addNewLine(frmproduct);
             lblsymbol = newlabel("lblsymbol", "Symbol:", "formlabel", frmproduct);
-            inpsymbol = newinput("inpsymbol", "forminput", frmproduct);
+            inpsymbol = newinput("inpsymbol", "forminput", frmproduct, true);
             addNewLine(frmproduct);
             lbldesc = newlabel("lbldesc", "Description:", "formlabel", frmproduct);
-            inpdesc = newinput("inpdesc", "forminput", frmproduct);
+            inpdesc = newinput("inpdesc", "forminput", frmproduct, true);
             addNewLine(frmproduct);
             lblisin = newlabel("lblisin", "Isin:", "formlabel", frmproduct);
-            inpisin = newinput("inpisin", "forminput", frmproduct);
+            inpisin = newinput("inpisin", "forminput", frmproduct, true);
             addNewLine(frmproduct);
             lblsedol = newlabel("lblsedol", "Sedol:", "formlabel", frmproduct);
-            inpsedol = newinput("inpsedol", "forminput", frmproduct);
+            inpsedol = newinput("inpsedol", "forminput", frmproduct, true);
             addNewLine(frmproduct);
             lblinsttype = newlabel("lblinsttype", "Instrument Type:", "formlabel", frmproduct);
-            inpinsttype = newinput("inpinsttype", "forminput", frmproduct);
+            inpinsttype = newinput("inpinsttype", "forminput", frmproduct, true);
             addNewLine(frmproduct);
             lblcurrency = newlabel("lblcurrency", "Currency:", "formlabel", frmproduct);
-            inpcurrency = newinput("inpcurrency", "forminput", frmproduct);
+            inpcurrency = newinput("inpcurrency", "forminput", frmproduct, true);
             addNewLine(frmproduct);
             lblmarket = newlabel("lblmarket", "Market:", "formlabel", frmproduct);
-            inpmarket = newinput("inpmarket", "forminput", frmproduct);
+            inpmarket = newinput("inpmarket", "forminput", frmproduct, true);
             addNewLine(frmproduct);
             lblsector = newlabel("lblsector", "Sector:", "formlabel", frmproduct);
-            inpsector = newinput("inpsector", "forminput", frmproduct);
+            inpsector = newinput("inpsector", "forminput", frmproduct, true);
             addNewLine(frmproduct);
             lblmargin = newlabel("lblmargin", "Margin %:", "formlabel", frmproduct);
             inpmargin = newinput("inpmargin", "forminput", frmproduct);
             addNewLine(frmproduct);
             lblhedge = newlabel("lblhedge", "Hedge:", "formlabel", frmproduct);
-            opthedgeyes = newoption("opthedgeyes", "opthedge", "formselect", frmproduct);
+            opthedgeyes = newoption("opthedgeyes", "opthedge", "formcheckbox", frmproduct);
             lblhedgeyes = newlabel("lblhedgeyes", "Yes", "", frmproduct);
-            opthedgeno = newoption("opthedgeno", "opthedge", "formselect", frmproduct);
+            opthedgeno = newoption("opthedgeno", "opthedge", "formcheckbox", frmproduct);
             lblhedgeno = newlabel("lblhedgeno", "No", "", frmproduct);
             addNewLine(frmproduct);
-            btnupdate = newbutton("btnupdate", "Update", "", frmproduct);
+            btnupdate = newbutton("btnupdate", "Update", "formsigninbutton", frmproduct);
+            addNewLine(frmproduct);
+            lblinstconf = newlabel("lblinstconf", "", "", frmproduct);
 
             btnupdate.onclick = function() {
                 var inst = {};
+
+                if (!validateNumeric(inpmargin, "Margin")) {
+                    return;
+                }
+
+                if (inpmargin.value > 100) {
+                    alert("Enter a Margin < 100");
+                    return;
+                }
 
                 inst.symbol = inpsymbol.value;
                 inst.marginpercent = inpmargin.value;
@@ -4431,6 +4466,7 @@
             var inpmargin = document.getElementById("inpmargin");
             var opthedgeyes = document.getElementById("opthedgeyes");
             var opthedgeno = document.getElementById("opthedgeno");
+            var lblinstconf = document.getElementById("lblinstconf");
 
             inpsymbol.value = inst.symbol;
             inpdesc.value = inst.description;
@@ -4439,15 +4475,22 @@
             inpinsttype.value = inst.instrumenttype;
             inpsector.value = inst.sector;
             inpmargin.value = inst.marginpercent;
+            inpcurrency.value = inst.currency;
+            inpmarket.value = inst.market;
 
             if (parseInt(inst.hedge)) {
                 opthedgeyes.checked = true;
             } else {
                 opthedgeno.checked = true;                
             }
+
+            lblinstconf.innerHTML = "";
         }
 
         function maintainHedgebooks() {
+            var insttype = "CFD";
+            var currency = "GBP";
+
             var frmhedge = newform("frmhedge");
 
             var lblinsttype = newlabel("lblinsttype", "Instrument Type:", "formlabel", frmhedge);
@@ -4459,37 +4502,44 @@
             var lblhedgebook = newlabel("lblhedgebook", "Hedge Book:", "formlabel", frmhedge);
             var selhedgebook = newselect("selhedgebook", "formselect", frmhedge);
             addNewLine(frmhedge);
-            var btnupdate = newbutton("btnupdate", "Update", "", frmhedge);
+            var btnupdate = newbutton("btnupdate", "Update", "formsigninbutton", frmhedge);
             addNewLine(frmhedge);
             var lblhedgeconf = newlabel("lblhedgeconf", "", "", frmhedge);
 
-            populateInstrumentTypes(selinsttype, "CFD");
-            populateCurrencies(selcurrency, "GBP");
-            populateHedgebooks(selhedgebook, "999999");
+            populateInstrumentTypes(selinsttype, insttype);
+            populateCurrencies(selcurrency, currency);
+            repopulateHedgebooks();
 
-            // todo:...
-            /*selinsttype.onchange = function() {
-                var selectedday = day[day.selectedIndex].value;
-                day.length = 0;
-                nummonthdays = getMonthDays(year[year.selectedIndex].value, month.selectedIndex);
-                populateDay(day, nummonthdays, selectedday);
+            selinsttype.onchange = function() {
+                insttype = selinsttype[selinsttype.selectedIndex].value;
+                repopulateHedgebooks();
             }
 
             selcurrency.onchange = function() {
-                var selectedday = day[day.selectedIndex].value;
-                day.length = 0;
-                nummonthdays = getMonthDays(year[year.selectedIndex].value, month.selectedIndex);
-                populateDay(day, nummonthdays, selectedday);
-            }*/
+                currency = selcurrency[selcurrency.selectedIndex].value;
+                repopulateHedgebooks();
+            }
 
             btnupdate.onclick = function() {
-                var hedge = {};
+                var hedgebook = {};
 
-                hedge.insttype = selinsttype[selinsttype.selectedIndex].value;
-                hedge.currency = selcurrency[selcurrency.selectedIndex].value;
-                hedge.hedgebook = selhedgebook[selhedgebook.selectedIndex].value;
+                hedgebook.insttype = selinsttype[selinsttype.selectedIndex].value;
+                hedgebook.currency = selcurrency[selcurrency.selectedIndex].value;
+                hedgebook.hedgebookid = selhedgebook[selhedgebook.selectedIndex].value;
 
-                sockjs.send("{\"hedgebookupdate\":" + JSON.stringify(hedge) + "}");
+                sockjs.send("{\"hedgebookupdate\":" + JSON.stringify(hedgebook) + "}");
+            }
+
+            function repopulateHedgebooks() {
+                console.log(insttype);
+                console.log(currency);
+                console.log(hedgebooks);
+                var hedgebookkey = insttype + ":" + currency;
+                if (hedgebookkey in hedgebooks) {
+                    populateHedgebooks(selhedgebook, hedgebooks[hedgebookkey].hedgebookid);                    
+                } else {
+                    populateHedgebooks(selhedgebook, defaultHedgebook);                                        
+                }
             }
 
             main.appendChild(frmhedge);
@@ -4513,16 +4563,23 @@
         function newlabel(id, text, classname, form) {
             var label = document.createElement("label");
             label.id = id;
-            label.className = classname;
+            if (classname != "") {
+                label.className = classname;
+            }
             label.innerHTML = text;
             form.appendChild(label);   
             return label;    
         }
 
-        function newinput(id, classname, form) {
+        function newinput(id, classname, form, disabled) {
             var input = document.createElement("input");
             input.id = id;
-            input.className = classname;
+            if (classname != "") {
+                input.className = classname;
+            }
+            if (disabled) {
+                input.disabled = true;
+            }
             form.appendChild(input);   
             return input;
         }
@@ -4530,7 +4587,9 @@
         function newselect(id, classname, form) {
             var select = document.createElement("select");
             select.id = id;
-            select.className = classname;
+            if (classname != "") {
+                select.className = classname;
+            }
             form.appendChild(select);   
             return select;
         }
@@ -4540,6 +4599,9 @@
             option.type = "radio";
             option.id = id;
             option.name = name;
+            if (classname != "") {
+                option.className = classname;
+            }
             form.appendChild(option);   
             return option;
         }
@@ -4549,7 +4611,9 @@
             button.type = "button";
             button.id = id;
             button.value = value;
-            button.className = classname;
+            if (classname != "") {
+                button.className = classname;
+            }
             form.appendChild(button);   
             return button;
         }
@@ -4559,7 +4623,9 @@
             link.id = id;
             link.innerHTML = text;
             link.href = "javascript:void(0);";
-            newlink.className = classname;
+            if (classname != "") {
+                newlink.className = classname;
+            }
             return link;
         }
 

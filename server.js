@@ -52,7 +52,6 @@ if (redislocal) {
 }
 
 // redis scripts
-var scriptneworder;
 var scriptmatchorder;
 var scriptordercancelrequest;
 var scriptordercancel;
@@ -85,7 +84,7 @@ if (redisauth) {
 }
 
 db.on("error", function(err) {
-  console.log(err);
+  console.log("Db Error:" + err);
 });
 
 function initialise() {
@@ -775,6 +774,11 @@ function getValue(trade) {
 function sendInstruments(clientid, conn) {
   // get sorted subset of instruments for this client
   db.eval(scriptgetinst, 1, clientid, function(err, ret) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+    console.log("gotinst");
     conn.write("{\"instruments\":" + ret + "}");
   });
 }
@@ -798,6 +802,7 @@ function sendOrderTypes(conn) {
     replies.forEach(function(ordertypeid, i) {
       db.get("ordertype:" + ordertypeid, function(err, description) {
         var ordertype = {};
+        console.log("ot");
 
         ordertype.id = ordertypeid;
         ordertype.description = description;
@@ -967,6 +972,7 @@ function sendPositions(clientid, conn) {
           console.log(err);
           return;
         }
+        console.log("pos");
 
         posarray.positions.push(position);
 
@@ -1048,6 +1054,11 @@ function sendMargins(clientid, conn) {
           return;
         }
 
+        if (amount == null) {
+          console.log("Margin not found:" + clientid + ":margin:" + currency);
+          return;
+        }
+
         var margin = {};
         margin.currency = currency;
         margin.amount = amount;
@@ -1090,6 +1101,11 @@ function sendReserves(clientid, conn) {
           return;
         }
 
+        if (reserve == null) {
+          console.log("Reserve not found:" + clientid + ":reserve:" + reskey);
+          return;
+        }
+
         arr.reserves.push(reserve);
 
         // send array if we have added the last item
@@ -1110,7 +1126,7 @@ function sendAllOrderBooks(conn) {
   // get all the instruments in the order book
   db.smembers("orderbooks", function(err, instruments) {
     if (err) {
-      console.log("error in sendAllOrderBooks:" + err);
+      console.log("Error in sendAllOrderBooks:" + err);
       return;
     }
 
@@ -1186,7 +1202,7 @@ function sendOrderBooksClient(clientid, conn) {
   // get all the instruments in the order book for this client
   db.smembers(clientid + ":orderbooks", function(err, instruments) {
     if (err) {
-      console.log("error in sendOrderBooksClient:" + err);
+      console.log("Error in sendOrderBooksClient:" + err);
       return;
     }
 

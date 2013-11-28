@@ -1416,7 +1416,7 @@
             orders[order.orderid] = order;
 
             // add to quote
-            if (order.quoteid != "0") {
+            if (order.quoteid != "") {
                 var quote = quotes[order.quoteid];
                 quote.orderid = order.orderid;
             }
@@ -1831,6 +1831,8 @@
 
         function tradeMsg(trade) {
             var msg;
+
+            console.log(trade);
 
             msg = getSideDescTrade(trade.side) + " " + trade.quantity + " " + trade.symbol;
 
@@ -2618,7 +2620,7 @@
         function displayElement(element, symbol) {
             var nextsymbol;
 
-            if (obdisplay[symbol].insertbefore == null) {
+            if (!(symbol in obdisplay) || obdisplay[symbol].insertbefore == null) {
                 main.appendChild(element);
             } else {
                 nextsymbol = document.getElementById("strip:" + obdisplay[symbol].insertbefore + ":0");
@@ -3387,8 +3389,6 @@
             var frm;
             var lblreason;
             var cw2theading;
-
-            console.log(reply);
 
             frm = document.getElementById("frmsignin");
             if (frm != null) {

@@ -61,6 +61,7 @@ var scriptgetinst;
 var scriptgetclienttypes;
 var scriptinstupdate;
 var scripthedgeupdate;
+var scriptgethedgebooks;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -307,6 +308,7 @@ function cashTrans(cashtrans, userid, conn) {
 
 function instUpdate(inst, userid, conn) {
   console.log("instUpdate");
+  console.log(inst);
 
   db.eval(scriptinstupdate, 3, inst.symbol, inst.marginpercent, inst.hedge, function(err, ret) {
     if (err) throw err;
@@ -315,13 +317,21 @@ function instUpdate(inst, userid, conn) {
   });
 }
 
-function hedgebookUpdate(hedge, userid, conn) {
+function hedgebookUpdate(hedgebk, userid, conn) {
   console.log("hedgebookUpdate");
+  console.log(hedgebk);
 
-  db.eval(scripthedgeupdate, 3, hedge.insttype, hedge.currency, hedge.hedgebook, function(err, ret) {
+  db.eval(scripthedgeupdate, 3, hedgebk.insttype, hedgebk.currency, hedgebk.hedgebookid, function(err, ret) {
     if (err) throw err;
 
-    conn.write("{\"hedgebookupdated\":" + JSON.stringify(hedge) + "}");
+    var hedgebookkey = hedgebk.insttype + ":" + hedgebk.currency;
+
+    db.get(hedgebookkey, function(err, hedgebookid) {
+      var hedgebook = {};
+      hedgebook.hedgebookkey = hedgebookkey;
+      hedgebook.hedgebookid = hedgebookid;
+      conn.write("{\"hedgebook\":" + JSON.stringify(hedgebook) + "}");
+    })
   });
 }
 
@@ -1441,6 +1451,7 @@ function start(userid, orgid, conn) {
   sendCashTransTypes(conn);
   sendCurrencies(conn);
   sendClientTypes(conn);
+  sendHedgebooks(conn);
 
   // make this the last one, as sends ready status to f/e
   sendClients(userid, orgid, conn);
@@ -1601,6 +1612,12 @@ function sendClientTypes(conn) {
   db.eval(scriptgetclienttypes, 0, function(err, ret) {
     conn.write("{\"clienttypes\":" + ret + "}");
   });    
+}
+
+function sendHedgebooks(conn) {
+  db.eval(scriptgethedgebooks, 0, function(err, ret) {
+    conn.write("{\"hedgebooks\":" + ret + "}");
+  });      
 }
 
 function sendQuoteack(quotereqid) {
@@ -1910,6 +1927,17 @@ function registerScripts() {
   return cjson.encode(currency) \
   ';
 
+  scriptgethedgebooks = '\
+  local hedgebooks = redis.call("sort", "hedgebooks", "ALPHA") \
+  local hedgebook = {} \
+  local val \
+  for index = 1, #hedgebooks do \
+    val = redis.call("get", "hedgebook:" .. hedgebooks[index]) \
+    table.insert(hedgebook, {hedgebookkey = hedgebooks[index], hedgebookid = val}) \
+  end \
+  return cjson.encode(hedgebook) \
+  ';
+
   //
   // get alpha sorted list of instruments based on set of valid instrument types
   //
@@ -1938,6 +1966,8 @@ function registerScripts() {
   ';
 
   scripthedgeupdate = '\
-  redis.call("hset", "hedge:" .. KEYS[1] .. ":" .. KEYS[2], "hedgebookid", KEYS[3]) \
+  local hedgebookkey = KEYS[1] .. ":" .. KEYS[2] \
+  redis.call("set", "hedgebook:" .. hedgebookkey, KEYS[3]) \
+  redis.call("sadd", "hedgebooks", hedgebookkey) \
   ';
 }

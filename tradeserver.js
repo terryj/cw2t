@@ -20,6 +20,9 @@ var outofhours = false; // in or out of market hours - todo: replace with market
 var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;
+var tradeserverchannel = 3;
+var userserverchannel = 2;
+var clientserverchannel = 1;
 
 // redis
 var redishost;
@@ -112,7 +115,7 @@ function pubsub() {
     }
   });
 
-  dbsub.subscribe(3);
+  dbsub.subscribe(tradeserverchannel);
 }
 
 // connection to Winner
@@ -621,10 +624,10 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
       db.publish(order.operatortype, "trade:" + tradeid);
 
       // publish the hedge to the client server, so anyone viewing the hedgebook receives it
-      db.publish(1, "trade:" + hedgetradeid);
+      db.publish(clientserverchannel, "trade:" + hedgetradeid);
 
       // & publish it to the user server
-      db.publish(2, "trade:" + hedgetradeid);
+      db.publish(userserverchannel, "trade:" + hedgetradeid);
 
       // the trade has been done, so send the order & trade to the client
       //getSendOrder(order.orderid, true, true);
@@ -1867,9 +1870,6 @@ ptp.on("orderFill", function(exereport) {
     }
 
     // send the order & trade
-    //getSendOrder(exereport.clordid, true, true);
-    //getSendTrade(ret);
-
     db.publish(ret[1], "order:" + exereport.clordid);
     db.publish(ret[1], "trade:" + ret[0]);
   });
@@ -2573,7 +2573,7 @@ function registerScripts() {
   local hedgetradeid = "" \
   if instrumenttype == "CFD" or instrumenttype == "SPB" then \
     --[[ create trades for client & hedge book for off-exchange products ]] \
-    hedgebookid = redis.call("hget", "hedge:" .. instrumenttype .. ":" .. KEYS[18], "hedgebookid") \
+    hedgebookid = redis.call("get", "hedgebook:" .. instrumenttype .. ":" .. KEYS[18]) \
     if not hedgebookid then hedgebookid = 999999 end \
     local reverseside \
     if side == 1 then \
@@ -2712,7 +2712,7 @@ function registerScripts() {
   local initialmargin = getinitialmargin(vals[2], instrumenttype, quantity, price, KEYS[18]) \
   local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], initialmargin[2], KEYS[9], 0, KEYS[10], KEYS[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin[1], vals[9], vals[10]) \
   --[[ adjust order related margin/reserve ]] \
-  adjustmarginreserve(KEYS[1], vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[18], vals[7], KEYS[15]) \
+  adjustmarginreserve(KEYS[1], vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[17], vals[7], KEYS[15]) \
   --[[ adjust order ]] \
   redis.call("hmset", "order:" .. KEYS[1], "remquantity", KEYS[15], "status", KEYS[13]) \
   --[[ adjust trade related margin ]] \
