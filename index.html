@@ -1322,7 +1322,8 @@
 
             if (firsttrade) {
                 addElement("No fills this session", list1, 0);                
-            } else {
+            }
+
                  list1.onclick = function(e) {
                     var element;
                     
@@ -1331,7 +1332,6 @@
 
                     viewTrade(element.value);
                 }
-            }
         }
 
         function displayQuotes() {
@@ -1422,6 +1422,8 @@
             }
 
             if (selectedmenu == 0) {
+                if (!(order.symbol in orderbooks)) {return;}
+
                 if (order.status == "0") {
                     msg = "Order acknowledged, id: " + order.orderid;
                     if ('text' in order && order.text != "") {
@@ -1726,8 +1728,9 @@
             var listelement = null;
 
             for (var i = 0; i < list.childNodes.length; ++i) {
-                if (list.childNodes[i].value == index) {
+                if (list.childNodes[i].value == index || list.childNodes[i].value == 0) {
                     listelement = list.childNodes[i];
+                    listelement.value = index;
                     listelement.innerHTML = msg;
                     break;
                 }
@@ -1832,8 +1835,6 @@
         function tradeMsg(trade) {
             var msg;
 
-            console.log(trade);
-
             msg = getSideDescTrade(trade.side) + " " + trade.quantity + " " + trade.symbol;
 
             if (instruments[trade.symbol].instrumenttype == "DE") {
@@ -1896,6 +1897,7 @@
             trades[trade.tradeid] = trade;
 
             if (selectedmenu == 0) {
+                if (!(trade.symbol in orderbooks)) {return;}
                 msg = tradeMsg(trade);
                 addMessageToDiv(msg, "orderdiv:" + trade.symbol, trade.symbol);
             } else if (selectedmenu == 3) {
@@ -2620,7 +2622,7 @@
         function displayElement(element, symbol) {
             var nextsymbol;
 
-            if (!(symbol in obdisplay) || obdisplay[symbol].insertbefore == null) {
+            if (obdisplay[symbol].insertbefore == null) {
                 main.appendChild(element);
             } else {
                 nextsymbol = document.getElementById("strip:" + obdisplay[symbol].insertbefore + ":0");
@@ -3201,7 +3203,7 @@
             if (quoteid != null) {
                 msg += ", quote id " + quoteid;
             }
-            // todo: check
+
             addMessageToDiv(msg, "orderdiv:" + symbol, symbol);
         }
 

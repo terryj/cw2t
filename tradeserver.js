@@ -629,13 +629,6 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
       // & publish it to the user server
       db.publish(userserverchannel, "trade:" + hedgetradeid);
 
-      // the trade has been done, so send the order & trade to the client
-      //getSendOrder(order.orderid, true, true);
-      //getSendTrade(tradeid);
-
-      // & send the other side to the hedge book
-      //getSendTrade(hedgetradeid);
-
       // if we are hedging, change the order id to that of the hedge & forward to proquote
       if (hedgeorderid != "") {
         order.orderid = hedgeorderid;
@@ -1869,9 +1862,16 @@ ptp.on("orderFill", function(exereport) {
       return
     }
 
-    // send the order & trade
+    // send the order & trade to the returned operator type
     db.publish(ret[1], "order:" + exereport.clordid);
     db.publish(ret[1], "trade:" + ret[0]);
+
+    // if we have not sent to the client channel & this fill is for a hedge order, forward to client channel for hedge book monitoring
+    if (ret[1] != clientserverchannel) {
+      if (ret[2] != "") {
+        db.publish(clientserverchannel, "trade:" + ret[0]);        
+      }
+    }
   });
 });
 
@@ -1978,8 +1978,6 @@ ptp.on("quoteack", function(quoteack) {
       console.log(err);
       return;
     }
-
-    console.log(ret);
 
     if (ret[0] == 1) {
       console.log("already received rejection for this quote request, ignoring");
@@ -2704,7 +2702,7 @@ function registerScripts() {
   //
   // todo: should currency be settlcurrency?
   scriptnewtrade = newtrade + getcosts + adjustmarginreserve + updatetrademargin + '\
-  local fields = {"clientid", "symbol", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "positionopenclose", "positioncloseid", "operatortype"} \
+  local fields = {"clientid", "symbol", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "positionopenclose", "positioncloseid", "operatortype", "hedgeorderid"} \
   local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
   local quantity = tonumber(KEYS[4]) \
   local price = tonumber(KEYS[5]) \
@@ -2717,7 +2715,7 @@ function registerScripts() {
   redis.call("hmset", "order:" .. KEYS[1], "remquantity", KEYS[15], "status", KEYS[13]) \
   --[[ adjust trade related margin ]] \
   updatetrademargin(tradeid, vals[1], KEYS[17], initialmargin[1]) \
-  return {tradeid, vals[11]} \
+  return {tradeid, vals[11], vals[12]} \
   ';
 
   scriptordercancelrequest = removefromorderbook + cancelorder + getproquotesymbol + '\

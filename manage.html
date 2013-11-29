@@ -923,7 +923,7 @@
         function loadHedgebooks(hedgebookarr) {
             for (var i = 0; i < hedgebookarr.length; ++i) {
                 hedgebooks[hedgebookarr[i].hedgebookkey] = hedgebookarr[i];
-            }                                                                        
+            }
         }
 
         function updateHedgebook(hedgebook) {
@@ -4531,18 +4531,20 @@
             }
 
             function repopulateHedgebooks() {
-                console.log(insttype);
-                console.log(currency);
-                console.log(hedgebooks);
                 var hedgebookkey = insttype + ":" + currency;
                 if (hedgebookkey in hedgebooks) {
                     populateHedgebooks(selhedgebook, hedgebooks[hedgebookkey].hedgebookid);                    
                 } else {
                     populateHedgebooks(selhedgebook, defaultHedgebook);                                        
                 }
+                lblhedgeconf.innerHTML = "";
             }
 
             main.appendChild(frmhedge);
+        }
+
+        function maintainIFAs() {
+
         }
 
         function addNewLine(frmclient) {

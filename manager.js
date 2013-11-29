@@ -317,22 +317,26 @@ function instUpdate(inst, userid, conn) {
   });
 }
 
-function hedgebookUpdate(hedgebk, userid, conn) {
+function hedgebookUpdate(hedgebook, userid, conn) {
   console.log("hedgebookUpdate");
-  console.log(hedgebk);
+  console.log(hedgebook);
 
-  db.eval(scripthedgeupdate, 3, hedgebk.insttype, hedgebk.currency, hedgebk.hedgebookid, function(err, ret) {
+  db.eval(scripthedgeupdate, 3, hedgebook.insttype, hedgebook.currency, hedgebook.hedgebookid, function(err, ret) {
     if (err) throw err;
 
-    var hedgebookkey = hedgebk.insttype + ":" + hedgebk.currency;
-
-    db.get(hedgebookkey, function(err, hedgebookid) {
-      var hedgebook = {};
-      hedgebook.hedgebookkey = hedgebookkey;
-      hedgebook.hedgebookid = hedgebookid;
-      conn.write("{\"hedgebook\":" + JSON.stringify(hedgebook) + "}");
-    })
+    getSendHedgebook(hedgebook, conn);
   });
+}
+
+function getSendHedgebook(hedgebook, conn) {
+    var hedgebookkey = hedgebook.insttype + ":" + hedgebook.currency;
+
+    db.get("hedgebook:" + hedgebookkey, function(err, hedgebookid) {
+      var hedgebk = {};
+      hedgebk.hedgebookkey = hedgebookkey;
+      hedgebk.hedgebookid = hedgebookid;
+      conn.write("{\"hedgebook\":" + JSON.stringify(hedgebk) + "}");
+    })
 }
 
 function getSendClient(clientid, conn) {

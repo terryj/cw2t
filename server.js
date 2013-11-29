@@ -778,7 +778,6 @@ function sendInstruments(clientid, conn) {
       console.log(err);
       return;
     }
-    console.log("gotinst");
     conn.write("{\"instruments\":" + ret + "}");
   });
 }
@@ -802,7 +801,6 @@ function sendOrderTypes(conn) {
     replies.forEach(function(ordertypeid, i) {
       db.get("ordertype:" + ordertypeid, function(err, description) {
         var ordertype = {};
-        console.log("ot");
 
         ordertype.id = ordertypeid;
         ordertype.description = description;
@@ -972,7 +970,6 @@ function sendPositions(clientid, conn) {
           console.log(err);
           return;
         }
-        console.log("pos");
 
         posarray.positions.push(position);
 
@@ -1646,8 +1643,6 @@ function sendCurrentOrderBook(clientid, symbol, topic, conn) {
   var pricelevel4 = {};
   var pricelevel5 = {};
   var pricelevel6 = {};
-
-  console.log("sendCurrentOrderBook");
 
   db.hgetall("topic:" + topic, function(err, topicrec) {
     if (err) {
