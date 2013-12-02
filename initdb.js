@@ -52,14 +52,11 @@ function initdb() {
   db.set("fobomsgid", 0);
   db.set("positionid", 0);
   db.set("cashtransid", 0);
+  db.set("ifaid", 0);
 
   // organisations
   db.hmset("organisation:1", "orgid", 1, "name", "Thomas Grant & Company");
   db.sadd("organisations", 1);
-
-  // ifas
-  db.hmset("ifa:1", "ifaid", 1, "name", "Test IFA");
-  db.sadd("ifas", 1);  
 
   // charges
   db.set("commissionpercent", 1);

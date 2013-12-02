@@ -64,6 +64,7 @@ var scripthedgeupdate;
 var scriptgethedgebooks;
 var scriptcost;
 var scriptgetcosts;
+var scriptifa;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -201,6 +202,9 @@ function listen() {
       } else if (msg.substr(2, 4) == "cost") {
         obj = JSON.parse(msg);
         costUpdate(obj.cost, conn);
+      } else if (msg.substr(2, 3) == "ifa") {
+        obj = JSON.parse(msg);
+        newIfa(obj.ifa, conn);
       } else if (msg.substr(0, 4) == "ping") {
         conn.write("pong");
       } else {
@@ -292,6 +296,30 @@ function newClient(client, conn) {
       getSendClient(client.clientid, conn);
     });
   }
+}
+
+function newIfa(ifa, conn) {
+  console.log("new ifa");
+  console.log(ifa);
+
+  db.eval(scriptifa, 5, ifa.ifaid, ifa.name, ifa.email, ifa.address, ifa.mobile, function(err, ret) {
+    if (err) throw err;
+
+    if (ret[0] != 0) {
+      console.log("Error in scriptifa:" + getReasonDesc(ret[0]));
+      return;
+    }
+
+    getSendIfa(ret[1], conn);
+  });
+}
+
+function getSendIfa(ifaid, conn) {
+    db.hgetall("ifa:" + ifaid, function(err, ifa) {
+      if (err) throw err;
+
+      conn.write("{\"ifa\":" + JSON.stringify(ifa) + "}");
+    });
 }
 
 function cashTrans(cashtrans, userid, conn) {
@@ -1473,7 +1501,7 @@ function getReasonDesc(reason) {
 function start(userid, orgid, conn) {
   sendInstruments(conn);
   sendOrganisations(conn);
-  sendIFAs(conn);
+  sendIfas(conn);
   sendInstrumentTypes(conn);
   sendOrderTypes(conn);
   sendCashTransTypes(conn);
@@ -1614,7 +1642,7 @@ function sendOrganisations(conn) {
   });
 }
 
-function sendIFAs(conn) {
+function sendIfas(conn) {
   // get sorted set of ifas
   db.eval(scriptgetifas, 0, function(err, ret) {
     if (err) throw err;
@@ -1917,18 +1945,6 @@ function registerScripts() {
   return cjson.encode(org) \
   ';
 
-  scriptgetifas = '\
-  local ifas = redis.call("sort", "ifas", "ALPHA") \
-  local fields = {"ifaid", "name"} \
-  local vals \
-  local ifa = {} \
-  for index = 1, #ifas do \
-    vals = redis.call("hmget", "ifa:" .. ifas[index], unpack(fields)) \
-    table.insert(ifa, {ifaid = vals[1], name = vals[2]}) \
-  end \
-  return cjson.encode(ifa) \
-  ';
-
   scriptgetclienttypes = '\
   local clienttypes = redis.call("sort", "clienttypes", "ALPHA") \
   local clienttype = {} \
@@ -2032,5 +2048,32 @@ function registerScripts() {
     table.insert(cost, {costkey = costs[index], commissionpercent = vals[1], commissionmin = vals[2], ptmlevylimit = vals[3], ptmlevy = vals[4], stampdutylimit = vals[5], stampdutypercent = vals[6], contractcharge = vals[7], finance = vals[8]}) \
   end \
   return cjson.encode(cost) \
+  ';
+
+  scriptgetifas = '\
+  local ifas = redis.call("sort", "ifas", "ALPHA") \
+  local fields = {"ifaid", "name", "email", "address", "mobile"} \
+  local vals \
+  local ifa = {} \
+  for index = 1, #ifas do \
+    vals = redis.call("hmget", "ifa:" .. ifas[index], unpack(fields)) \
+    table.insert(ifa, {ifaid = vals[1], name = vals[2], email = vals[3], address = vals[4], mobile = vals[5]}) \
+  end \
+  return cjson.encode(ifa) \
+  ';
+
+  scriptifa = '\
+  local ifaid \
+  if KEYS[1] == "" then \
+    ifaid = redis.call("incr", "ifaid") \
+    --[[ set the default password to email ]] \
+    redis.call("hmset", "ifa:" .. ifaid, "ifaid", ifaid, "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "address", KEYS[4], "mobile", KEYS[5]) \
+  else \
+    ifaid = KEYS[1] \
+    --[[ do not update id/password ]] \
+    redis.call("hmset", "ifa:" .. ifaid, "name", KEYS[2], "email", KEYS[3], "address", KEYS[4], "mobile", KEYS[5]) \
+  end \
+  redis.call("sadd", "ifas", KEYS[1]) \
+  return {0, ifaid} \
   ';
 }

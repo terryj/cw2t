@@ -758,7 +758,10 @@
                 loadOrganisations(obj.organisations);
             } else if (msg.substr(2, 4) == "ifas") {
                 obj = JSON.parse(msg);
-                loadIFAs(obj.ifas);
+                loadIfas(obj.ifas);
+            } else if (msg.substr(2, 3) == "ifa") {
+                obj = JSON.parse(msg);
+                updateIfa(obj.ifa);
             } else if (msg.substr(2, 10) == "currencies") {
                 obj = JSON.parse(msg);
                 loadCurrencies(obj.currencies);
@@ -769,7 +772,6 @@
                 obj = JSON.parse(msg);
                 updateHedgebook(obj.hedgebook);
             } else if (msg.substr(2, 5) == "costs") {
-                console.log(msg);
                 obj = JSON.parse(msg);
                 loadCosts(obj.costs);
             } else if (msg.substr(2, 4) == "cost") {
@@ -898,10 +900,21 @@
             }                                                
         }
 
-        function loadIFAs(ifaarr) {
+        function loadIfas(ifaarr) {
             for (var i = 0; i < ifaarr.length; ++i) {
                 ifas[ifaarr[i].ifaid] = ifaarr[i];
             }                                                
+        }
+
+        function updateIfa(ifa) {
+            var lblifaconf;
+
+            ifas[ifa.ifaid] = ifa;
+
+            lblifaconf = document.getElementById("lblifaconf");
+            if (lblifaconf != null) {
+                lblifaconf.innerHTML = "";
+            }
         }
 
         function loadInstrumenttypes(insttypearr) {
@@ -953,12 +966,11 @@
 
         function updateCost(cost) {
             var lblcostsconf;
-            console.log(cost);
 
             costs[cost.costkey] = cost;
 
             lblcostsconf = document.getElementById("lblcostsconf");
-            lblcostsconf.innerHTML = cost.costkey + " updated ok";
+            lblcostsconf.innerHTML = "Updated ok";
         }
 
         function displayIndex(index) {
@@ -1307,6 +1319,7 @@
             clearForm("frmproduct", true);
             clearForm("frmhedge", true);
             clearForm("frmcosts", true);
+            clearForm("frmifa", true);
         }
 
         function addElement(msg, list, index) {
@@ -3823,7 +3836,7 @@
                 case 5:
                     maintainCosts();
                 case 6:
-                    maintainIFAs();
+                    maintainIfas();
                     break;
                 case 7:
                     displayPositions();
@@ -4189,7 +4202,7 @@
                     inpclientid.value = client.clientid;
                     inpaddress.value = client.address;
                     inpemail.value = client.email;
-                    populateIFAs(selifa, client.ifaid);
+                    populateIfas(selifa, client.ifaid);
                     populateClientTypes(seltype, client.type);
 
                     if (parseInt(client.hedge)) {
@@ -4571,9 +4584,6 @@
             main.appendChild(frmhedge);
         }
 
-        function maintainIFAs() {
-        }
-
         function maintainCosts() {
             var insttype = "DE";
             var currency = "GBP";
@@ -4616,7 +4626,7 @@
             addNewLine(frmcosts);
             var btnupdate = newbutton("btnupdate", "Update", "formsigninbutton", frmcosts);
             addNewLine(frmcosts);
-            var lblcostsconf = newlabel("lblcostsconf", "", "formlabel", frmcosts);
+            var lblcostsconf = newlabel("lblcostsconf", "", "", frmcosts);
 
             selinsttype.onchange = function() {
                 insttype = selinsttype[selinsttype.selectedIndex].value;
@@ -4677,8 +4687,6 @@
             var inpcontractcharge = document.getElementById("inpcontractcharge");
             var inpfinance = document.getElementById("inpfinance");
 
-            console.log(costs);
-
             if (costkey in costs) {
                 inpcommissionpercent.value = costs[costkey].commissionpercent;
                 inpcommissionmin.value = costs[costkey].commissionmin;
@@ -4697,6 +4705,87 @@
                 inpstampdutypercent.value = "";
                 inpcontractcharge.value = "";
                 inpfinance.value = "";                
+            }
+        }
+
+        function maintainIfas() {
+            var frmifa = newform("frmifa");
+
+            var selifa = newselect("selinsttype", "formselect", frmifa);
+            addNewLine(frmifa);
+            var lblname = newlabel("lblname", "Name:", "formlabel", frmifa);
+            var inpname = newinput("inpname", "forminput", frmifa);
+            addNewLine(frmifa);
+            var lblemail = newlabel("lblemail", "Email:", "formlabel", frmifa);
+            var inpemail = newinput("inpemail", "forminput", frmifa);
+            addNewLine(frmifa);
+            var lblmobile = newlabel("lblmobile", "Mobile:", "formlabel", frmifa);
+            var inpmobile = newinput("inpmobile", "forminput", frmifa);
+            addNewLine(frmifa);
+            var lbladdress = document.createElement("label");
+            lbladdress.className = "formlabel";
+            lbladdress.innerHTML = "Address:";
+            var inpaddress = document.createElement("textarea");
+            inpaddress.id = "inpaddress";
+            var divaddress = document.createElement("div");
+            divaddress.appendChild(lbladdress);
+            divaddress.appendChild(inpaddress);
+            frmifa.appendChild(divaddress);
+            addNewLine(frmifa);
+            var lblifaid = newlabel("lblifaid", "Id:", "formlabel", frmifa);
+            var inpifaid = newinput("inpifaid", "forminput", frmifa, true);
+            addNewLine(frmifa);
+            var btnupdate = newbutton("btnupdate", "Update", "formsigninbutton", frmifa);
+            addNewLine(frmifa);
+            var lblifaconf = newlabel("lblifaconf", "", "", frmifa);
+
+            selifa.onchange = function() {
+                repopulateIfa();
+            }
+
+            btnupdate.onclick = function() {
+                var ifa = {};
+
+                ifa.ifaid = inpifaid.value;
+                ifa.name = inpname.value;
+                ifa.email = inpemail.value;
+                ifa.mobile = inpmobile.value;
+                ifa.address = inpaddress.value;
+
+                sockjs.send("{\"ifa\":" + JSON.stringify(ifa) + "}");
+            }
+
+            function repopulateIfa() {
+                displayIfa(selifa[selifa.selectedIndex].value);                    
+                lblifaconf.innerHTML = "";                
+            }
+
+            populateIfas(selifa, 1);
+
+            main.appendChild(frmifa);
+
+            repopulateIfa();
+        }
+
+        function displayIfa(ifaid) {
+            var inpname = document.getElementById("inpname");
+            var inpemail = document.getElementById("inpemail");
+            var inpmobile = document.getElementById("inpmobile");
+            var inpaddress = document.getElementById("inpaddress");
+            var inpifaid = document.getElementById("inpifaid");
+
+            if (ifaid in ifas) {
+                inpname.value = ifas[ifaid].name;
+                inpemail.value = ifas[ifaid].email;
+                inpmobile.value = ifas[ifaid].mobile;
+                inpaddress.value = ifas[ifaid].address;
+                inpifaid.value = ifas[ifaid].ifaid;
+            } else {
+                inpname.value = "";
+                inpemail.value = "";
+                inpmobile.value = "";
+                inpaddress.value = "";
+                inpifaid.value = "";
             }
         }
 
@@ -4797,7 +4886,7 @@
             }
         }
 
-        function populateIFAs(ifaselect, defaultid) {
+        function populateIfas(ifaselect, defaultid) {
             var i = 0;
 
             for (var j in ifas) {
@@ -4807,6 +4896,12 @@
                     ifaselect[i] = new Option(ifas[j].name, ifas[j].ifaid, false, false);                    
                 }
                 i++;
+            }
+
+            if (i == 0) {
+                ifaselect[i] = new Option("New IFA", 0, true, true);
+            } else {
+                ifaselect[i] = new Option("New IFA", 0, false, false);
             }
         }
 
