@@ -643,6 +643,7 @@
         var currencies = {};
         var clienttypes = {};
         var hedgebooks = {};
+        var costs = {};
         var lastElement = null;
         var lastsymbol = null;
         var extendedsettlement = false;
@@ -767,6 +768,13 @@
             } else if (msg.substr(2, 9) == "hedgebook") {
                 obj = JSON.parse(msg);
                 updateHedgebook(obj.hedgebook);
+            } else if (msg.substr(2, 5) == "costs") {
+                console.log(msg);
+                obj = JSON.parse(msg);
+                loadCosts(obj.costs);
+            } else if (msg.substr(2, 4) == "cost") {
+                obj = JSON.parse(msg);
+                updateCost(obj.cost);
             } else if (msg.substr(2, 6) == "userid") {
                 obj = JSON.parse(msg);
                 userid = obj.userid;
@@ -935,6 +943,22 @@
             if (lblhedgeconf != null) {
                 lblhedgeconf.innerHTML = "Hedgebook updated Ok";
             }
+        }
+
+        function loadCosts(costsarr) {
+            for (var i = 0; i < costsarr.length; ++i) {
+                costs[costsarr[i].costkey] = costsarr[i];
+            }
+        }
+
+        function updateCost(cost) {
+            var lblcostsconf;
+            console.log(cost);
+
+            costs[cost.costkey] = cost;
+
+            lblcostsconf = document.getElementById("lblcostsconf");
+            lblcostsconf.innerHTML = cost.costkey + " updated ok";
         }
 
         function displayIndex(index) {
@@ -1282,6 +1306,7 @@
             clearForm("frmhedge", true);
             clearForm("frmproduct", true);
             clearForm("frmhedge", true);
+            clearForm("frmcosts", true);
         }
 
         function addElement(msg, list, index) {
@@ -3749,7 +3774,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Clients", "Cash", "Request Quote", "Products", "Hedge Books","IFA's"];
+            menuarr = ["Clients", "Cash", "Request Quote", "Products", "Hedge Books", "Costs", "IFA's"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -3796,20 +3821,22 @@
                     maintainHedgebooks();
                     break;
                 case 5:
+                    maintainCosts();
+                case 6:
                     maintainIFAs();
                     break;
-                case 6:
+                case 7:
                     displayPositions();
                     break;
-                case 7:
+                case 8:
                     displayCash();
                     displayMargins();
                     displayReserves();
                     break;
-                case 8:
+                case 9:
                     requestHistory();
                     break;
-                case 9:
+                case 10:
                     settings();
                     break;
                 }
@@ -4508,7 +4535,6 @@
 
             populateInstrumentTypes(selinsttype, insttype);
             populateCurrencies(selcurrency, currency);
-            repopulateHedgebooks();
 
             selinsttype.onchange = function() {
                 insttype = selinsttype[selinsttype.selectedIndex].value;
@@ -4540,11 +4566,138 @@
                 lblhedgeconf.innerHTML = "";
             }
 
+            repopulateHedgebooks();
+
             main.appendChild(frmhedge);
         }
 
         function maintainIFAs() {
+        }
 
+        function maintainCosts() {
+            var insttype = "DE";
+            var currency = "GBP";
+            var side = 1;
+
+            var frmcosts = newform("frmcosts");
+
+            var lblinsttype = newlabel("lblinsttype", "Instrument Type:", "formlabel", frmcosts);
+            var selinsttype = newselect("selinsttype", "formselect", frmcosts);
+            addNewLine(frmcosts);
+            var lblcurrency = newlabel("lblcurrency", "Currency:", "formlabel", frmcosts);
+            var selcurrency = newselect("selcurrency", "formselect", frmcosts);
+            addNewLine(frmcosts);
+            var lblside = newlabel("lblside", "Buy/Sell:", "formlabel", frmcosts);
+            var selside = newselect("selside", "formselect", frmcosts);
+            addNewLine(frmcosts);
+            var lblcommissionpercent = newlabel("lblcommissionpercent", "Commission %:", "formlabel", frmcosts);
+            var inpcommissionpercent = newinput("inpcommissionpercent", "forminput", frmcosts, false);
+            addNewLine(frmcosts);
+            var lblcommissionmin = newlabel("lblcommissionmin", "Commission Min:", "formlabel", frmcosts);
+            var inpcommissionmin = newinput("inpcommissionmin", "forminput", frmcosts, false);
+            addNewLine(frmcosts);
+            var lblptmlevylimit = newlabel("lblptmlevylimit", "PTM Levy Limit:", "formlabel", frmcosts);
+            var inpptmlevylimit = newinput("inpptmlevylimit", "forminput", frmcosts, false);
+            addNewLine(frmcosts);
+            var lblptmlevy = newlabel("lblptmlevy", "PTM Levy:", "formlabel", frmcosts);
+            var inpptmlevy = newinput("inpptmlevy", "forminput", frmcosts, false);
+            addNewLine(frmcosts);
+            var lblstampdutylimit = newlabel("lblstampdutylimit", "Stamp Duty Limit:", "formlabel", frmcosts);
+            var inpstampdutylimit = newinput("inpstampdutylimit", "forminput", frmcosts, false);
+            addNewLine(frmcosts);
+            var lblstampdutypercent = newlabel("lblstampdutypercent", "Stamp Duty:", "formlabel", frmcosts);
+            var inpstampdutypercent = newinput("inpstampdutypercent", "forminput", frmcosts, false);
+            addNewLine(frmcosts);
+            var lblcontractcharge = newlabel("lblcontractcharge", "Contract Charge:", "formlabel", frmcosts);
+            var inpcontractcharge = newinput("inpcontractcharge", "forminput", frmcosts, false);
+            addNewLine(frmcosts);
+            var lblfinance = newlabel("lblfinance", "Finance:", "formlabel", frmcosts);
+            var inpfinance = newinput("inpfinance", "forminput", frmcosts, false);
+            addNewLine(frmcosts);
+            var btnupdate = newbutton("btnupdate", "Update", "formsigninbutton", frmcosts);
+            addNewLine(frmcosts);
+            var lblcostsconf = newlabel("lblcostsconf", "", "formlabel", frmcosts);
+
+            selinsttype.onchange = function() {
+                insttype = selinsttype[selinsttype.selectedIndex].value;
+                repopulateCosts();
+            }
+
+            selcurrency.onchange = function() {
+                currency = selcurrency[selcurrency.selectedIndex].value;
+                repopulateCosts();
+            }
+
+            selside.onchange = function() {
+                side = selside[selside.selectedIndex].value;
+                repopulateCosts();
+            }
+
+            btnupdate.onclick = function() {
+                var cost = {};
+
+                cost.insttype = selinsttype[selinsttype.selectedIndex].value;
+                cost.currency = selcurrency[selcurrency.selectedIndex].value;
+                cost.side = selside[selside.selectedIndex].value;
+                cost.commissionpercent = inpcommissionpercent.value;
+                cost.commissionmin = inpcommissionmin.value;
+                cost.ptmlevylimit = inpptmlevylimit.value;
+                cost.ptmlevy = inpptmlevy.value;
+                cost.stampdutylimit = inpstampdutylimit.value;
+                cost.stampdutypercent = inpstampdutypercent.value;
+                cost.contractcharge = inpcontractcharge.value;
+                cost.finance = inpfinance.value;
+
+                sockjs.send("{\"cost\":" + JSON.stringify(cost) + "}");
+            }
+
+            function repopulateCosts() {
+                displayCosts(selinsttype[selinsttype.selectedIndex].value, selcurrency[selcurrency.selectedIndex].value, selside[selside.selectedIndex].value);                    
+                lblcostsconf.innerHTML = "";
+            }
+
+            populateInstrumentTypes(selinsttype, insttype);
+            populateCurrencies(selcurrency, currency);
+            populateSide(selside, side);
+
+            main.appendChild(frmcosts);
+
+            repopulateCosts();
+        }
+
+        function displayCosts(insttype, currency, side) {
+            var costkey = insttype + ":" + currency + ":" + side;
+
+            var inpcommissionpercent = document.getElementById("inpcommissionpercent");
+            var inpcommissionmin = document.getElementById("inpcommissionmin");
+            var inpptmlevylimit = document.getElementById("inpptmlevylimit");
+            var inpptmlevy = document.getElementById("inpptmlevy");
+            var inpstampdutylimit = document.getElementById("inpstampdutylimit");
+            var inpstampdutypercent = document.getElementById("inpstampdutypercent");
+            var inpcontractcharge = document.getElementById("inpcontractcharge");
+            var inpfinance = document.getElementById("inpfinance");
+
+            console.log(costs);
+
+            if (costkey in costs) {
+                inpcommissionpercent.value = costs[costkey].commissionpercent;
+                inpcommissionmin.value = costs[costkey].commissionmin;
+                inpptmlevylimit.value = costs[costkey].ptmlevylimit;
+                inpptmlevy.value = costs[costkey].ptmlevy;
+                inpstampdutylimit.value = costs[costkey].stampdutylimit;
+                inpstampdutypercent.value = costs[costkey].stampdutypercent;
+                inpcontractcharge.value = costs[costkey].contractcharge;
+                inpfinance.value = costs[costkey].finance;
+            } else {
+                inpcommissionpercent.value = "";
+                inpcommissionmin.value = "";
+                inpptmlevylimit.value = "";
+                inpptmlevy.value = "";
+                inpstampdutylimit.value = "";
+                inpstampdutypercent.value = "";
+                inpcontractcharge.value = "";
+                inpfinance.value = "";                
+            }
         }
 
         function addNewLine(frmclient) {
@@ -4722,6 +4875,16 @@
                     i++;
                 }
             }                        
+        }
+
+        function populateSide(sideselect, defaultside) {
+            if (defaultside == 1) {
+                sideselect[0] = new Option("Buy", 1, true, true);
+                sideselect[1] = new Option("Sell", 2, false, false);
+            } else {
+                sideselect[0] = new Option("Buy", 2, false, false);
+                sideselect[1] = new Option("Sell", 1, true, true);                
+            }
         }
 
         function requestHistory() {

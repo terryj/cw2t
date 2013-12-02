@@ -62,6 +62,8 @@ var scriptgetclienttypes;
 var scriptinstupdate;
 var scripthedgeupdate;
 var scriptgethedgebooks;
+var scriptcost;
+var scriptgetcosts;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -196,6 +198,9 @@ function listen() {
       } else if (msg.substr(2, 15) == "hedgebookupdate") {
         obj = JSON.parse(msg);
         hedgebookUpdate(obj.hedgebookupdate, userid, conn);
+      } else if (msg.substr(2, 4) == "cost") {
+        obj = JSON.parse(msg);
+        costUpdate(obj.cost, conn);
       } else if (msg.substr(0, 4) == "ping") {
         conn.write("pong");
       } else {
@@ -336,6 +341,25 @@ function getSendHedgebook(hedgebook, conn) {
       hedgebk.hedgebookkey = hedgebookkey;
       hedgebk.hedgebookid = hedgebookid;
       conn.write("{\"hedgebook\":" + JSON.stringify(hedgebk) + "}");
+    })
+}
+
+function costUpdate(cost, conn) {
+  console.log("costUpdate");
+  console.log(cost);
+
+  db.eval(scriptcost, 11, cost.insttype, cost.currency, cost.side, cost.commissionpercent, cost.commissionmin, cost.ptmlevylimit, cost.ptmlevy, cost.stampdutylimit, cost.stampdutypercent, cost.contractcharge, cost.finance, function(err, ret) {
+    if (err) throw err;
+
+    getSendCost(cost.insttype, cost.currency, cost.side, conn);
+  });
+}
+
+function getSendCost(insttype, currency, side, conn) {
+    var costkey = insttype + ":" + currency + ":" + side;
+
+    db.hgetall("cost:" + costkey, function(err, cost) {
+      conn.write("{\"cost\":" + JSON.stringify(cost) + "}");
     })
 }
 
@@ -1456,6 +1480,7 @@ function start(userid, orgid, conn) {
   sendCurrencies(conn);
   sendClientTypes(conn);
   sendHedgebooks(conn);
+  sendCosts(conn);
 
   // make this the last one, as sends ready status to f/e
   sendClients(userid, orgid, conn);
@@ -1574,6 +1599,7 @@ function getDateString(utcdatetime) {
 function sendClients(userid, orgid, conn) {
   // get sorted set of clients for specified organisation
   db.eval(scriptgetclients, 1, orgid, function(err, ret) {
+    if (err) throw err;
     conn.write("{\"clients\":" + ret + "}");
 
     sendUserid(userid, conn);
@@ -1583,6 +1609,7 @@ function sendClients(userid, orgid, conn) {
 function sendOrganisations(conn) {
   // get sorted set of orgs
   db.eval(scriptgetorgs, 0, function(err, ret) {
+    if (err) throw err;
     conn.write("{\"organisations\":" + ret + "}");
   });
 }
@@ -1590,37 +1617,50 @@ function sendOrganisations(conn) {
 function sendIFAs(conn) {
   // get sorted set of ifas
   db.eval(scriptgetifas, 0, function(err, ret) {
+    if (err) throw err;
     conn.write("{\"ifas\":" + ret + "}");
   });
 }
 
 function sendInstrumentTypes(conn) {
   db.eval(scriptgetinstrumenttypes, 0, function(err, ret) {
+    if (err) throw err;
     conn.write("{\"instrumenttypes\":" + ret + "}");
   });
 }
 
 function sendCashTransTypes(conn) {
   db.eval(scriptgetcashtranstypes, 0, function(err, ret) {
+    if (err) throw err;
     conn.write("{\"cashtranstypes\":" + ret + "}");
   });  
 }
 
 function sendCurrencies(conn) {
   db.eval(scriptgetcurrencies, 0, function(err, ret) {
+    if (err) throw err;
     conn.write("{\"currencies\":" + ret + "}");
   });  
 }
 
 function sendClientTypes(conn) {
   db.eval(scriptgetclienttypes, 0, function(err, ret) {
+    if (err) throw err;
     conn.write("{\"clienttypes\":" + ret + "}");
   });    
 }
 
 function sendHedgebooks(conn) {
   db.eval(scriptgethedgebooks, 0, function(err, ret) {
+    if (err) throw err;
     conn.write("{\"hedgebooks\":" + ret + "}");
+  });      
+}
+
+function sendCosts(conn) {
+  db.eval(scriptgetcosts, 0, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"costs\":" + ret + "}");
   });      
 }
 
@@ -1973,5 +2013,24 @@ function registerScripts() {
   local hedgebookkey = KEYS[1] .. ":" .. KEYS[2] \
   redis.call("set", "hedgebook:" .. hedgebookkey, KEYS[3]) \
   redis.call("sadd", "hedgebooks", hedgebookkey) \
+  ';
+
+  scriptcost = '\
+  local costkey = KEYS[1] .. ":" .. KEYS[2] .. ":" .. KEYS[3] \
+  redis.call("hmset", "cost:" .. costkey, "costkey", costkey, "commissionpercent", KEYS[4], "commissionmin", KEYS[5], "ptmlevylimit", KEYS[6], "ptmlevy", KEYS[7], "stampdutylimit", KEYS[8], "stampdutypercent", KEYS[9], "contractcharge", KEYS[10], "finance", KEYS[11]) \
+  redis.call("sadd", "costs", costkey) \
+  ';
+
+  // todo: use 'hgetall' & ipair to get all vals
+  scriptgetcosts = '\
+  local costs = redis.call("smembers", "costs") \
+  local fields = {"commissionpercent", "commissionmin", "ptmlevylimit", "ptmlevy", "stampdutylimit", "stampdutypercent", "contractcharge", "finance"} \
+  local vals \
+  local cost = {} \
+  for index = 1, #costs do \
+    vals = redis.call("hmget", "cost:" .. costs[index], unpack(fields)) \
+    table.insert(cost, {costkey = costs[index], commissionpercent = vals[1], commissionmin = vals[2], ptmlevylimit = vals[3], ptmlevy = vals[4], stampdutylimit = vals[5], stampdutypercent = vals[6], contractcharge = vals[7], finance = vals[8]}) \
+  end \
+  return cjson.encode(cost) \
   ';
 }

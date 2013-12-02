@@ -2025,14 +2025,11 @@ function registerScripts() {
   var removefromorderbook;
   var cancelorder;
   var newtrade;
-  var getcosts;
   var round;
-  var gettotalcost;
   var rejectorder;
   var adjustmarginreserve;
   var creditcheck;
   var getproquotesymbol;
-  var getinitialmargin;
   var updatetrademargin;
   var calcfinance;
 
@@ -2040,74 +2037,6 @@ function registerScripts() {
   local round = function(num, dp) \
     local mult = 10 ^ (dp or 0) \
     return math.floor(num * mult + 0.5) / mult \
-  end \
-  ';
-
-  getcosts = round + '\
-  local getcosts = function(instrumenttype, side, consid, currency) \
-    local commission = 0 \
-    local ptmlevy = 0 \
-    local stampduty = 0 \
-    local contractcharge = 0 \
-    local commpercent = redis.call("get", "commissionpercent") \
-    local commmin = redis.call("get", "commissionmin:" .. currency) \
-    if commpercent then \
-      commission = round(consid * tonumber(commpercent) / 100, 2) \
-    end \
-    if commmin then \
-      if commission < tonumber(commmin) then \
-        commission = tonumber(commmin) \
-      end \
-    end \
-    if currency == "GBP" then \
-      if instrumenttype == "DE" then \
-        local ptmlevylimit = redis.call("get", "ptmlevylimit") \
-        if ptmlevylimit then \
-          if consid > tonumber(ptmlevylimit) then \
-            ptmlevy = tonumber(redis.call("get", "ptmlevy")) \
-          end \
-        end \
-        if tonumber(side) == 1 then \
-          local stampdutylimit = redis.call("get", "stampdutylimit") \
-          if stampdutylimit then \
-            if consid > tonumber(stampdutylimit) then \
-              local stampdutypercent = redis.call("get", "stampdutypercent") \
-              if stampdutypercent then \
-                stampduty = round(consid * tonumber(stampdutypercent) / 100, 2) \
-              end \
-            end \
-          end \
-        end \
-      end \
-    end \
-    local contractchargeamt = redis.call("get", "contractcharge") \
-    if contractchargeamt then \
-      contractcharge = tonumber(contractchargeamt) \
-    end \
-    return {commission, ptmlevy, stampduty, contractcharge} \
-  end \
-  ';
-
-  gettotalcost = getcosts + '\
-  local gettotalcost = function(instrumenttype, side, quantity, price, currency) \
-    local consid = tonumber(quantity) * tonumber(price) \
-    local costs =  getcosts(instrumenttype, side, consid, currency) \
-    return consid + costs[1] + costs[2] + costs[3] + costs[4] \
-  end \
-  ';
-
-  //
-  // get initial margin to include costs
-  //
-  getinitialmargin = getcosts + '\
-  local getinitialmargin = function(symbol, instrumenttype, quantity, price, currency) \
-    local marginpercent = redis.call("hget", "symbol:" .. symbol, "marginpercent") \
-    if not marginpercent then marginpercent = 100 end \
-    local consid = tonumber(quantity) * tonumber(price) \
-    local initialmargin = consid * tonumber(marginpercent) / 100 \
-    local instrumenttype = redis.call("hget", "symbol:" .. symbol, "instrumenttype") \
-    local costs = getcosts(instrumenttype, 1, consid, currency) \
-    return {initialmargin + costs[1] + costs[2] + costs[3] + costs[4], costs} \
   end \
   ';
 
