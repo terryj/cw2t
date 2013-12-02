@@ -2073,7 +2073,7 @@ function registerScripts() {
     --[[ do not update id/password ]] \
     redis.call("hmset", "ifa:" .. ifaid, "name", KEYS[2], "email", KEYS[3], "address", KEYS[4], "mobile", KEYS[5]) \
   end \
-  redis.call("sadd", "ifas", KEYS[1]) \
+  redis.call("sadd", "ifas", ifaid) \
   return {0, ifaid} \
   ';
 }

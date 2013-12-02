@@ -913,7 +913,7 @@
 
             lblifaconf = document.getElementById("lblifaconf");
             if (lblifaconf != null) {
-                lblifaconf.innerHTML = "";
+                lblifaconf.innerHTML = ifa.name + " updated ok";
             }
         }
 
@@ -3835,6 +3835,7 @@
                     break;
                 case 5:
                     maintainCosts();
+                    break;
                 case 6:
                     maintainIfas();
                     break;
@@ -4202,7 +4203,7 @@
                     inpclientid.value = client.clientid;
                     inpaddress.value = client.address;
                     inpemail.value = client.email;
-                    populateIfas(selifa, client.ifaid);
+                    populateIfas(selifa, client.ifaid, false);
                     populateClientTypes(seltype, client.type);
 
                     if (parseInt(client.hedge)) {
@@ -4615,13 +4616,13 @@
             var lblstampdutylimit = newlabel("lblstampdutylimit", "Stamp Duty Limit:", "formlabel", frmcosts);
             var inpstampdutylimit = newinput("inpstampdutylimit", "forminput", frmcosts, false);
             addNewLine(frmcosts);
-            var lblstampdutypercent = newlabel("lblstampdutypercent", "Stamp Duty:", "formlabel", frmcosts);
+            var lblstampdutypercent = newlabel("lblstampdutypercent", "Stamp Duty %:", "formlabel", frmcosts);
             var inpstampdutypercent = newinput("inpstampdutypercent", "forminput", frmcosts, false);
             addNewLine(frmcosts);
             var lblcontractcharge = newlabel("lblcontractcharge", "Contract Charge:", "formlabel", frmcosts);
             var inpcontractcharge = newinput("inpcontractcharge", "forminput", frmcosts, false);
             addNewLine(frmcosts);
-            var lblfinance = newlabel("lblfinance", "Finance:", "formlabel", frmcosts);
+            var lblfinance = newlabel("lblfinance", "Finance %:", "formlabel", frmcosts);
             var inpfinance = newinput("inpfinance", "forminput", frmcosts, false);
             addNewLine(frmcosts);
             var btnupdate = newbutton("btnupdate", "Update", "formsigninbutton", frmcosts);
@@ -4662,7 +4663,8 @@
             }
 
             function repopulateCosts() {
-                displayCosts(selinsttype[selinsttype.selectedIndex].value, selcurrency[selcurrency.selectedIndex].value, selside[selside.selectedIndex].value);                    
+                displayCosts(selinsttype[selinsttype.selectedIndex].value, selcurrency[selcurrency.selectedIndex].value, selside[selside.selectedIndex].value);
+                inpcommissionpercent.focus();         
                 lblcostsconf.innerHTML = "";
             }
 
@@ -4760,7 +4762,7 @@
                 lblifaconf.innerHTML = "";                
             }
 
-            populateIfas(selifa, 1);
+            populateIfas(selifa, 1, true);
 
             main.appendChild(frmifa);
 
@@ -4787,6 +4789,8 @@
                 inpaddress.value = "";
                 inpifaid.value = "";
             }
+
+            inpname.focus();
         }
 
         function addNewLine(frmclient) {
@@ -4886,7 +4890,7 @@
             }
         }
 
-        function populateIfas(ifaselect, defaultid) {
+        function populateIfas(ifaselect, defaultid, newoption) {
             var i = 0;
 
             for (var j in ifas) {
@@ -4898,10 +4902,12 @@
                 i++;
             }
 
-            if (i == 0) {
-                ifaselect[i] = new Option("New IFA", 0, true, true);
-            } else {
-                ifaselect[i] = new Option("New IFA", 0, false, false);
+            if (newoption) {
+                if (i == 0) {
+                    ifaselect[i] = new Option("New IFA", 0, true, true);
+                } else {
+                    ifaselect[i] = new Option("New IFA", 0, false, false);
+                }
             }
         }
 

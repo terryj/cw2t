@@ -1862,6 +1862,8 @@ ptp.on("orderFill", function(exereport) {
       return
     }
 
+    console.log(ret);
+
     // send the order & trade to the returned operator type
     db.publish(ret[1], "order:" + exereport.clordid);
     db.publish(ret[1], "trade:" + ret[0]);
@@ -2116,44 +2118,40 @@ function registerScripts() {
 
   getcosts = round + '\
   local getcosts = function(instrumenttype, side, consid, currency) \
+    local fields = {"commissionpercent", "commissionmin", "ptmlevylimit", "ptmlevy", "stampdutylimit", "stampdutypercent", "contractcharge"} \
+    local vals = redis.call("hmget", "cost:" .. instrumenttype .. ":" .. currency .. ":" .. side, unpack(fields)) \
     local commission = 0 \
     local ptmlevy = 0 \
     local stampduty = 0 \
     local contractcharge = 0 \
-    local commpercent = redis.call("get", "commissionpercent") \
-    local commmin = redis.call("get", "commissionmin:" .. currency) \
-    if commpercent then \
-      commission = round(consid * tonumber(commpercent) / 100, 2) \
+    --[[ commission ]] \
+    if vals[1] and tonumber(vals[1]) ~= nil then \
+      commission = round(consid * tonumber(vals[1]) / 100, 2) \
     end \
-    if commmin then \
-      if commission < tonumber(commmin) then \
-        commission = tonumber(commmin) \
+    if vals[2] and tonumber(vals[2]) ~= nil then \
+      if commission < tonumber(vals[2]) then \
+        commission = tonumber(vals[2]) \
       end \
     end \
-    if currency == "GBP" then \
-      if instrumenttype == "DE" then \
-        local ptmlevylimit = redis.call("get", "ptmlevylimit") \
-        if ptmlevylimit then \
-          if consid > tonumber(ptmlevylimit) then \
-            ptmlevy = tonumber(redis.call("get", "ptmlevy")) \
-          end \
-        end \
-        if tonumber(side) == 1 then \
-          local stampdutylimit = redis.call("get", "stampdutylimit") \
-          if stampdutylimit then \
-            if consid > tonumber(stampdutylimit) then \
-              local stampdutypercent = redis.call("get", "stampdutypercent") \
-              if stampdutypercent then \
-                stampduty = round(consid * tonumber(stampdutypercent) / 100, 2) \
-              end \
-            end \
-          end \
+    --[[ ptm levy ]] \
+    if vals[3] and tonumber(vals[3]) ~= nil then \
+      if consid > tonumber(vals[3]) then \
+        if vals[4] and tonumber(vals[4]) ~= nil then \
+          ptmlevy = tonumber(vals[4]) \
         end \
       end \
     end \
-    local contractchargeamt = redis.call("get", "contractcharge") \
-    if contractchargeamt then \
-      contractcharge = tonumber(contractchargeamt) \
+    --[[ stamp duty ]] \
+    if vals[5] and tonumber(vals[5]) ~= nil then \
+      if consid > tonumber(vals[5]) then \
+        if vals[6] and tonumber(vals[6]) ~= nil then \
+          stampduty = round(consid * tonumber(vals[6]) / 100, 2) \
+        end \
+      end \
+    end \
+    --[[ contract charge ]] \
+    if vals[7] and tonumber(vals[7]) ~= nil then \
+      contractcharge = tonumber(vals[7]) \
     end \
     return {commission, ptmlevy, stampduty, contractcharge} \
   end \
@@ -2513,10 +2511,10 @@ function registerScripts() {
   ';
 
   calcfinance = round + '\
-  local calcfinance = function(consid, currency, longshort, nosettdays) \
+  local calcfinance = function(instrumenttype, consid, currency, longshort, nosettdays) \
     local finance = 0 \
-    local financerate = redis.call("get", "financerate:" .. currency .. ":" .. longshort) \
-    if financerate then \
+    local financerate = redis.call("hget", "cost:" .. instrumenttype .. ":" .. currency .. ":" .. longshort, "finance") \
+    if financerate and tonumber(financerate) ~= nil then \
       --[[ nosettdays = 0 represents rolling settlement, so set it to 1 day for interest calculation ]] \
       if tonumber(nosettdays) == 0 then nosettdays = 1 end \
       finance = round(consid * tonumber(nosettdays) / 365 * tonumber(financerate) / 100, 2) \
@@ -2707,7 +2705,7 @@ function registerScripts() {
   local quantity = tonumber(KEYS[4]) \
   local price = tonumber(KEYS[5]) \
   local instrumenttype = redis.call("hget", "symbol:" .. vals[2], "instrumenttype") \
-  local initialmargin = getinitialmargin(vals[2], instrumenttype, quantity, price, KEYS[18]) \
+  local initialmargin = getinitialmargin(vals[2], instrumenttype, quantity, price, KEYS[17]) \
   local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], initialmargin[2], KEYS[9], 0, KEYS[10], KEYS[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin[1], vals[9], vals[10]) \
   --[[ adjust order related margin/reserve ]] \
   adjustmarginreserve(KEYS[1], vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[17], vals[7], KEYS[15]) \
@@ -2828,9 +2826,7 @@ function registerScripts() {
     else \
       offerquantity = tonumber(vals[4]) \
     end \
-    if instrumenttype == "CFD" or instrumenttype == "SPB" then \
-      offerfinance = calcfinance(offerquantity * offerprice, vals[7], 1, vals[6]) \
-    end \
+    offerfinance = calcfinance(instrumenttype, offerquantity * offerprice, vals[7], 1, vals[6]) \
   else \
     local bidprice = tonumber(KEYS[5]) \
     if vals[4] == "" then \
@@ -2838,9 +2834,7 @@ function registerScripts() {
     else \
       bidquantity = tonumber(vals[4]) \
     end \
-    if instrumenttype == "CFD" or instrumenttype == "SPB" then \
-      bidfinance = calcfinance(bidquantity * bidprice, vals[7], 2, vals[6]) \
-    end \
+    bidfinance = calcfinance(instrumenttype, bidquantity * bidprice, vals[7], 2, vals[6]) \
   end \
   --[[ quotes for bid/offer arrive separately, so see if this is the first by checking for a quote id ]] \
   if vals[2] == "" then \
