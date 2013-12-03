@@ -348,8 +348,6 @@ function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, m
 				return;
 			}
 
-			console.log('storing message #' + msgseqnumout);
-
 			// store the message in case it needs to be resent later
 			// just store the body as the header & footer will be affected by a resend
 			db.hset("messageout:" + msgseqnumout, "body", body);
@@ -359,7 +357,6 @@ function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, m
 			// this is a new message, but if we are in a recovery phase, don't send now
 			// instead, the message should be sent by the recovery process itself
 			if (!messagerecoveryout) {
-				console.log('sending message #' + msgseqnumout);
 				sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnumout, timestamp, origtimestamp);
 			}
 		});

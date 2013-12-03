@@ -1826,10 +1826,6 @@
             }
 
             addMessageToDiv(msg, "orderdiv");
-
-            /*if (order.status != 1 && order.status != 2) {
-                anotherQuote();
-            }*/
         }
 
         function removeOrderAndTidy(orderid, list) {
@@ -2241,7 +2237,6 @@
 
             msg = tradeMsg(trade);
             addMessageToDiv(msg, "orderdiv");
-            //anotherQuote();
         }
 
         function updatePosition(position) {
@@ -3066,28 +3061,7 @@
             }
 
             addMessageToDiv(msg, "orderdiv");
-
-            //anotherQuote();
         }
-
-        /*function anotherQuote() {
-            var anotherquotereqbutton;
-
-            anotherquotereqbutton = document.createElement("input");
-            anotherquotereqbutton.type = "button";
-            anotherquotereqbutton.className = "quotereqbutton";
-            anotherquotereqbutton.value = "Another quote";
-
-            anotherquotereqbutton.onclick = function() {
-                clearScreen();
-                requestQuote();
-            }
-
-            orderdiv = getDiv("orderdiv");
-
-            addNewLine(orderdiv);
-            orderdiv.appendChild(anotherquotereqbutton);
-        }*/
 
         function quoteReceived(quote) {
             var buybutton;
@@ -3500,6 +3474,11 @@
         }
 
         function populateSettlPeriod(settlperiod, instrumenttype) {
+            console.log(instrumenttype);
+            console.log(settlperiod.options.length);
+
+            settlperiod.options.length = 0;
+            
             if (instrumenttype != "DE") {
                 settlperiod[0] = new Option("T+0 (Rolling)", 0, true, true);
                 settlperiod[1] = new Option("T+10", 10, false, false);
@@ -3787,7 +3766,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Clients", "Cash", "Request Quote", "Products", "Hedge Books", "Costs", "IFA's"];
+            menuarr = ["Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "Portfolio", "Request Quote"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -3825,22 +3804,22 @@
                     maintainCash();
                     break;
                 case 2:
-                    requestQuote();
-                    break;
-                case 3:
                     maintainProducts();
                     break;
-                case 4:
+                case 3:
                     maintainHedgebooks();
                     break;
-                case 5:
+                case 4:
                     maintainCosts();
                     break;
-                case 6:
+                case 5:
                     maintainIfas();
                     break;
-                case 7:
+                case 6:
                     displayPositions();
+                    break;
+                case 7:
+                    requestQuote();
                     break;
                 case 8:
                     displayCash();
@@ -4055,7 +4034,11 @@
                 client.clientid = inpclientid.value;
                 client.address = inpaddress.value;
                 client.email = inpemail.value;
-                client.ifaid = selifa[selifa.selectedIndex].value;
+                if (selifa.options.length != 0) {
+                    client.ifaid = selifa[selifa.selectedIndex].value;
+                } else {
+                    client.ifaid = "";
+                }
                 client.type = seltype[seltype.selectedIndex].value;
 
                 if (opthedgeyes.checked) {
@@ -4252,6 +4235,7 @@
 
         function displaySymbol(symbol) {
             var inpsymbol;
+            var settlperiod;
 
             inpsymbol = document.getElementById("inpsymbol");
             if (inpsymbol != null) {

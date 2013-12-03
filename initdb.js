@@ -58,24 +58,14 @@ function initdb() {
   db.hmset("organisation:1", "orgid", 1, "name", "Thomas Grant & Company");
   db.sadd("organisations", 1);
 
-  // charges
-  db.set("commissionpercent", 1);
-  db.set("commissionmin:GBP", 10);
-  db.set("commissionmin:USD", 15);
-  db.set("ptmlevylimit", 10000);
-  db.set("ptmlevy", 1);
-  db.set("stampdutylimit", 100);
-  db.set("stampdutypercent", 0.5);
-  db.set("contractcharge", 2);
-
   // set of clients
   db.sadd("clients", "999999");
 
   // clients - hash for each
-  db.hmset("client:999999", "email", "999999@thomas-grant.com", "password", "999999", "orgid", 1, "clientid", 999999, "marketext", "LD", "name", "Thomas Grant Hedgebook", "address", "", "mobile", "", "hedge", 0, "type", 2);
+  db.hmset("client:999999", "email", "999999@thomasgrant.co.uk", "password", "999999", "orgid", 1, "clientid", 999999, "marketext", "LD", "name", "Thomas Grant Hedgebook", "address", "", "mobile", "", "hedge", 0, "type", 2);
 
   // link between client email & id
-  db.set("client:999999@thomas-grant.com", "999999");
+  db.set("client:999999@thomasgrant.co.uk", "999999");
 
   // set of users
   db.sadd("users", "1");
@@ -87,19 +77,19 @@ function initdb() {
 
   // user hash
   db.hmset("user:1", "email", "terry@cw2t.com", "password", "terry", "orgid", 1, "userid", 1, "name", "Terry Johnston");
-  db.hmset("user:2", "email", "grant@thomas-grant.com", "password", "grant", "orgid", 1, "userid", 2, "name", "Grant Oliver");
-  db.hmset("user:3", "email", "tina@thomas-grant.com", "password", "tina", "orgid", 1, "userid", 3, "name", "Tina Tyers");
-  db.hmset("user:4", "email", "patrick@thomas-grant.com", "password", "patrick", "orgid", 1, "userid", 4, "name", "Patrick Waldron");
-  db.hmset("user:5", "email", "sheila@thomas-grant.com", "password", "sheila", "orgid", 1, "userid", 5, "name", "Sheila");
-  db.hmset("user:6", "email", "kevin@thomas-grant.com", "password", "kevin", "orgid", 1, "userid", 6, "name", "Kevin");
+  db.hmset("user:2", "email", "grant@thomasgrant.co.uk", "password", "grant", "orgid", 1, "userid", 2, "name", "Grant Oliver");
+  db.hmset("user:3", "email", "tina@thomasgrant.co.uk", "password", "tina", "orgid", 1, "userid", 3, "name", "Tina Tyers");
+  db.hmset("user:4", "email", "patrick@thomasgrant.co.uk", "password", "patrick", "orgid", 1, "userid", 4, "name", "Patrick Waldron");
+  db.hmset("user:5", "email", "sheila@thomasgrant.co.uk", "password", "sheila", "orgid", 1, "userid", 5, "name", "Sheila");
+  db.hmset("user:6", "email", "kevin@thomasgrant.co.uk", "password", "kevin", "orgid", 1, "userid", 6, "name", "Kevin");
 
   // link between user email & id
   db.set("user:terry@cw2t.com", "1");
-  db.set("user:grant@thomas-grant.com", "2");
-  db.set("user:tina@thomas-grant.com", "3");
-  db.set("user:patrick@thomas-grant.com", "4");
-  db.set("user:sheila@thomas-grant.com", "5");
-  db.set("user:kevin@thomas-grant.com", "6");
+  db.set("user:grant@thomasgrant.co.uk", "2");
+  db.set("user:tina@thomasgrant.co.uk", "3");
+  db.set("user:patrick@thomasgrant.co.uk", "4");
+  db.set("user:sheila@thomasgrant.co.uk", "5");
+  db.set("user:kevin@thomasgrant.co.uk", "6");
 
   // stocks - add international stocks to set of stocks & hash
   db.hset("symbol:AMZN", "currency", "USD");
