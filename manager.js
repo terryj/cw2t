@@ -21,7 +21,7 @@ var static_directory = new node_static.Server(__dirname); // static files server
 var cw2tport = 8081; // client listen port
 var outofhours = false; // in or out of market hours - todo: replace with markettype?
 var ordertypes = {};
-var orgid = "1"; // todo: via logon
+var brokerid = "1"; // todo: via logon
 var defaultnosettdays = 3;
 var operatortype = 2;
 var tradeserverchannel = 3;
@@ -50,7 +50,7 @@ if (redislocal) {
 // redis scripts
 var scriptgetclients;
 var scriptnewclient;
-var scriptgetorgs;
+var scriptgetbrokers;
 var scriptgetifas;
 var scriptgetinstrumenttypes;
 var scriptgetcashtranstypes;
@@ -163,14 +163,14 @@ function listen() {
       // todo: no orgclientkey
 
       if (msg.substr(2, 18) == "ordercancelrequest") {
-        obj = JSON.parse(msg);
-        orderCancelRequest(clientid, obj.ordercancelrequest);
+        // todo: test
+        db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 16) == "orderbookrequest") {
         obj = JSON.parse(msg);
-        orderBookRequest(orgclientkey, obj.orderbookrequest, conn);
+        orderBookRequest(userid, obj.orderbookrequest, conn);
       } else if (msg.substr(2, 22) == "orderbookremoverequest") {
         obj = JSON.parse(msg);
-        orderBookRemoveRequest(orgclientkey, obj.orderbookremoverequest, conn);
+        orderBookRemoveRequest(userid, obj.orderbookremoverequest, conn);
       } else if (msg.substr(2, 5) == "order") {
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 12) == "quoterequest") {
@@ -261,10 +261,209 @@ function listen() {
           console.log("user:" + userid + " logged on");
 
           // send the data
-          start(userid, user.orgid, conn);
+          start(userid, user.brokerid, conn);
         });
       });
     }
+  });
+}
+
+function orderBookRequest(userid, symbol, conn) {
+  // add the client to the order book set for this instrument
+  // todo - take account of client/user/other
+  db.sadd("orderbook:" + symbol, userid);
+
+  // & add the instrument to the watchlist for this user
+  db.sadd("user:" + userid + ":orderbooks", symbol);
+
+  orderBookOut(userid, symbol, conn);
+}
+
+function orderBookOut(userid, symbol, conn) {
+  if (outofhours) {
+    // todo:
+    //broadcastLevelTwo(symbol, conn);
+  } else {
+    subscribeAndSend(userid, symbol, conn);
+  }
+}
+
+function subscribeAndSend(userid, symbol, conn) {
+  // get the proquote topic
+  db.hgetall("symbol:" + symbol, function(err, inst) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (inst == null) {
+      console.log("symbol:" + symbol + " not found");
+      return;
+    }
+
+    // get the user to check market extension - defaults to 'LD' for LSE delayed
+    db.hgetall("user:" + userid, function(err, user) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      if (!user) {
+        console.log("user:" + userid + " not found");
+        return;
+      }
+
+      // may need to adjust the topic to delayed
+      if (user.marketext == "LD") {
+        inst.topic += "D";
+      }
+
+      // are we subscribed to this topic?
+      db.sismember("proquote", inst.topic, function(err, instsubscribed) {
+        if (err) {
+          console.log(err);
+          return;
+        }
+
+        // if not, add it
+        if (!instsubscribed) {
+          dbsub.subscribe(inst.topic);
+
+          // let proquote know
+          //dbpub.publish("cw2t", "subscribe:" + inst.topic);
+          db.publish("cw2t", "subscribe:" + inst.topic);
+
+          // add topic to the set
+          db.sadd("proquote", inst.topic);
+        }
+
+        // is this user subscribed?
+        db.sismember("proquote:users:" + inst.topic, userid, function(err, userfound) {
+          if (err) {
+            console.log(err);
+            return;
+          }
+
+          if (!userfound) {
+            console.log("subscribing user:" + userid + " to " + inst.topic)
+            // add client to the set for this instrument
+            db.sadd("proquote:users:" + inst.topic, userid);
+          }
+        });
+      });
+
+      // send the orderbook, with the current stored prices
+      sendCurrentOrderBook(symbol, inst.topic, conn);
+    });
+  });
+}
+
+function sendCurrentOrderBook(symbol, topic, conn) {
+  var orderbook = {pricelevels : []};
+  var pricelevel1 = {};
+  var pricelevel2 = {};
+  var pricelevel3 = {};
+  var pricelevel4 = {};
+  var pricelevel5 = {};
+  var pricelevel6 = {};
+
+  db.hgetall("topic:" + topic, function(err, topicrec) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (!topicrec) {
+      console.log("topic:" + topic + " not found");
+
+      // send zeros
+      topicrec = {};
+      topicrec.bid1 = 0;
+      topicrec.offer1 = 0;
+      topicrec.bid2 = 0;
+      topicrec.offer2 = 0;
+      topicrec.bid3 = 0;
+      topicrec.offer3 = 0;
+    }
+
+    // 3 levels
+    pricelevel1.bid = topicrec.bid1;
+    pricelevel1.level = 1;
+    orderbook.pricelevels.push(pricelevel1);
+    pricelevel2.offer = topicrec.offer1;
+    pricelevel2.level = 1;
+    orderbook.pricelevels.push(pricelevel2);
+    pricelevel3.bid = topicrec.bid2;
+    pricelevel3.level = 2;
+    orderbook.pricelevels.push(pricelevel3);
+    pricelevel4.offer = topicrec.offer2;
+    pricelevel4.level = 2;
+    orderbook.pricelevels.push(pricelevel4);
+    pricelevel5.bid = topicrec.bid3;
+    pricelevel5.level = 3;
+    orderbook.pricelevels.push(pricelevel5);
+    pricelevel6.offer = topicrec.offer3;
+    pricelevel6.level = 3;
+    orderbook.pricelevels.push(pricelevel6);
+
+    orderbook.symbol = symbol;
+
+    if (conn != null) {
+      conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
+    }
+  });
+}
+
+function orderBookRemoveRequest(userid, symbol, conn) {
+  // remove the client from the order book set for this instrument
+  // todo: adjust for clients...
+  db.srem("orderbook:" + symbol, userid);
+
+  // & remove the instrument from the order book set for this user
+  db.srem("user:" + userid + ":orderbooks", symbol);
+
+  // get the market extension for this client, as topic may need to be adjusted for live/delayed
+  db.hget("user:" + userid, "marketext", function(err, marketext) {
+    if (err) {
+      console.log("Error in orderBookRemoveRequest:" + err);
+      return;
+    }
+
+    unsubscribeTopic(userid, symbol, marketext);
+  });
+}
+
+function unsubscribeTopic(userid, symbol, marketext) {
+  // get the proquote topic
+  db.hgetall("symbol:" + symbol, function(err, inst) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (inst == null) {
+      console.log("symbol:" + symbol + " not found");
+      return;
+    }
+
+    // adjust the topic for the client market extension (i.e. delayed/live)
+    if (marketext == "LD") {
+      inst.topic += "D";
+    }
+
+    // remove user from set for this topic
+    db.srem("proquote:users:" + inst.topic, userid);
+
+    // unsubscribe from this topic if no clients are looking at it
+    db.scard("proquote:" + inst.topic, function(err, numelements) {
+      if (numelements == 0) {
+        dbsub.unsubscribe(inst.topic);
+        db.srem("proquote", inst.topic);
+        // todo: change from dbpub?
+        //dbpub.publish("cw2t", "unsubscribe:" + inst.topic);
+        db.publish("cw2t", "unsubscribe:" + inst.topic);
+      }
+    });
   });
 }
 
@@ -274,7 +473,7 @@ function newClient(client, conn) {
 
   // maybe a new client or an updated client
   if (client.clientid == "") {
-    db.eval(scriptnewclient, 9, client.orgid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, function(err, ret) {
+    db.eval(scriptnewclient, 10, client.brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, function(err, ret) {
       if (err) throw err;
 
       if (ret[0] != 0) {
@@ -285,7 +484,7 @@ function newClient(client, conn) {
       getSendClient(ret[1], conn);
     });
   } else {
-    db.eval(scriptupdateclient, 10, client.clientid, client.orgid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, function(err, ret) {
+    db.eval(scriptupdateclient, 11, client.clientid, client.brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, function(err, ret) {
       if (err) throw err;
 
       if (ret != 0) {
@@ -537,75 +736,6 @@ function getSideDesc(side) {
   }
 }
 
-function matchOrder(orderid) {
-  db.eval(scriptmatchorder, 1, orderid, function(err, ret) {
-    if (err) throw err;
-
-    /*if (orderid == 2000 || orderid == 4000) {
-      var now = new Date().getTime();
-      var elapsed = now-startms;
-      console.log("done,"+elapsed);
-    }*/
-
-    // todo: replace with getsendorder?
-
-    // todo: check ret value
-
-    // get order here as we need a number of order values
-    db.hgetall("order:" + orderid, function(err, order) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      var orgclientkey = order.orgid + ":" + order.clientid;
-
-      // send to client, if connected
-      if (orgclientkey in connections) {
-        sendOrder(order, connections[orgclientkey]);
-      }
-
-      // broadcast market - todo: timer based? - pubsub?
-      broadcastLevelTwo(order.symbol, null);
-
-      // send any trades for active order client
-      for (var i = 0; i < ret[1].length; ++i) {
-        getSendTrade(ret[1][i]);
-      }
-
-      // send cash
-      if (ret[1].length > 0) {
-        getSendCash(orgclientkey, order.settlcurrency);
-      }
-
-      // send margin/reserve
-      if (parseInt(order.side) == 1) {
-        getSendMargin(orgclientkey, order.settlcurrency);
-      } else {
-        getSendReserve(orgclientkey, order.symbol, order.settlcurrency);
-      }
-
-      // send any matched orders
-      for (var i = 0; i < ret[0].length; ++i) {
-        // todo: send margin/reserve/cash
-        getSendOrder(ret[0][i], false, false);
-      }
-
-      // send any matched trades
-      for (var i = 0; i < ret[2].length; ++i) {
-        getSendTrade(ret[2][i]);
-      }
-
-      // send cash/position/margin/reserve for matched clients
-      for (var i = 0; i < ret[3].length; ++i) {
-        getSendCash(ret[3][i], order.settlcurrency);
-        getSendMargin(ret[3][i], order.settlcurrency);
-        getSendReserve(ret[3][i], order.symbol, order.settlcurrency);
-      }
-    });
-  });
-}
-
 function getSendOrder(orderid) {
   db.hgetall("order:" + orderid, function(err, order) {
     if (err) {
@@ -751,50 +881,6 @@ function getSendReserve(orgclientkey, symbol, currency) {
   });
 }
 
-function orderCancelRequest(clientid, ocr) {
-  console.log("Order cancel request received for order#" + ocr.orderid);
-
-  ocr.timestamp = getUTCTimeStamp();
-
-  db.eval(scriptordercancelrequest, 4, orgid, clientid, ocr.orderid, ocr.timestamp, function(err, ret) {
-    if (err) throw err;
-
-    console.log(ret);
-
-    var orgclientkey = orgid + ":" + clientid;
-
-    // error, so send a cancel reject message
-    if (ret[0] != 0) {
-      orderCancelReject(orgclientkey, ocr, ret[0]);
-      return;
-    }
-
-    // forward to Proquote
-    if (ret[1] == "0") {
-      ocr.ordercancelreqid = ret[2];
-      ocr.symbol = ret[3];
-      ocr.isin = ret[4];
-      ocr.proquotesymbol = ret[5];
-      ocr.exchange = ret[6];
-      ocr.side = ret[7];
-      ocr.quantity = ret[8];
-
-      ptp.orderCancelRequest(ocr);
-      return;
-    }
-
-    // ok, so send confirmation
-    getSendOrder(ocr.orderid, true, false);
-
-    // send margin & reserve
-    //getSendMargin(orgclientkey, ret[1][31]); // for this currency
-    //getSendReserve(orgclientkey, ret[1][5]); // for this symbol
-
-    // distribute any changes to the order book
-    broadcastLevelTwo(ret[3], null);
-  });
-}
-
 function orderCancelReject(orgclientkey, ocr, reason) {
   var ordercancelreject = {};
 
@@ -805,18 +891,6 @@ function orderCancelReject(orgclientkey, ocr, reason) {
   if (orgclientkey in connections) {
     connections[orgclientkey].write("{\"ordercancelreject\":" + JSON.stringify(ordercancelreject) + "}");
   }
-}
-
-function displayOrderBook(symbol, lowerbound, upperbound) {
-  db.zrangebyscore(symbol, lowerbound, upperbound, function(err, matchorders) {
-    console.log("order book for instrument " + symbol + " has " + matchorders.length + " order(s)");
-
-    matchorders.forEach(function (matchorderid, i) {
-      db.hgetall("order:" + matchorderid, function(err, matchorder) {
-        console.log("orderid="+matchorder.orderid+", clientid="+matchorder.clientid+", price="+matchorder.price+", side="+matchorder.side+", quantity="+matchorder.remquantity);
-      });
-    });
-  });
 }
 
 function getValue(trade) {
@@ -1238,172 +1312,17 @@ function sendOrderBook(symbol, level1arr, send, conn) {
 //
 // send all the orderbooks for a single client
 //
-function sendOrderBooksClient(orgclientkey, conn) {
-  // get all the instruments in the order book for this client
-  db.smembers(orgclientkey + ":orderbooks", function(err, instruments) {
+function sendOrderBooks(userid, conn) {
+  // get all the instruments in the order book for this user
+  db.smembers("user:" + userid + ":orderbooks", function(err, instruments) {
     if (err) {
-      console.log("error in sendOrderBooksClient:" + err);
+      console.log("Error in sendOrderBooks:" + err);
       return;
     }
 
     // send the order book for each instrument
     instruments.forEach(function (symbol, i) {
-      orderBookOut(orgclientkey, symbol, conn);
-    });
-  });
-}
-
-function broadcastLevelOne(symbol) {
-  var level1 = {};
-  var count;
-
-  level1.bestbid = 0;
-  level1.bestoffer = 0;
-
-  db.zrange(symbol, 0, -1, "WITHSCORES", function(err, orders) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = orders.length;
-    if (count == 0) {
-      publishMessage("{\"orderbook\":" + JSON.stringify(level1) + "}");
-      return;
-    }
-
-    orders.forEach(function (reply, i) {
-      if (i % 2 != 0) {
-        if (i == 1) { // first score
-          if (reply < 0) {
-            level1.bestbid = -parseFloat(reply);
-          } else if (reply > 0) {
-            level1.bestoffer = parseFloat(reply);
-          }
-        } else if (level1.bestoffer == 0) {
-          if (reply > 0) {
-            level1.bestoffer = parseFloat(reply);
-          }
-        }
-      }
-
-      count--;
-      if (count <= 0) {
-        publishMessage("{\"orderbook\":" + JSON.stringify(level1) + "}");
-      }
-    });
-  });
-}
-
-/*
- * pass conn=null to send to all interested parties
- */
-function broadcastLevelTwo(symbol, conn) {
-  var orderbook = {pricelevels : []};
-  var lastprice = 0;
-  var lastside = 0;
-  var firstbid = true;
-  var firstoffer = true;
-  var bidlevel = 0;
-  var offerlevel = 0;
-  var count;
-
-  console.log("broadcastLevelTwo:"+symbol);
-
-  orderbook.symbol = symbol;
-
-  // get bids & offers in the same call as, despite code complexity, seems safest
-  db.zrange(symbol, 0, -1, function(err, orders) {
-    if (err) {
-      console.log("zrange error:" + err + ", symbol:" + symbol);
-      return;
-    }
-
-    count = orders.length;
-    if (count == 0) {
-      // build & send a message showing no orders in the order book
-      var pricelevel = {};
-      pricelevel.bid = 0;
-      pricelevel.bidsize = 0;
-      pricelevel.offer = 0;
-      pricelevel.offersize = 0;
-      orderbook.pricelevels[0] = pricelevel;
-
-      if (conn != null) {
-        conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-      } else {
-        publishMessage("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-      }
-      return;
-    }
-
-    orders.forEach(function (orderid, i) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      // get order hash
-      db.hgetall("order:" + orderid, function(err, order) {
-        var level1 = {};
-
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        if (order.price != lastprice || order.side != lastside) {
-          if (parseInt(order.side) == 1) {
-            if (!firstbid) {
-              bidlevel++;
-            } else {
-              firstbid = false;
-            }
-
-            level1.bid = order.price;
-            level1.bidsize = parseInt(order.remquantity);
-            level1.offer = 0;
-            level1.offersize = 0;
-            orderbook.pricelevels[bidlevel] = level1;
-          } else {
-            if (!firstoffer) {
-              offerlevel++;
-            } else {
-              firstoffer = false;
-            }
-
-            if (offerlevel <= bidlevel && !firstbid) {
-              orderbook.pricelevels[offerlevel].offer = order.price;
-              orderbook.pricelevels[offerlevel].offersize = parseInt(order.remquantity);
-            } else {
-              level1.bid = 0;
-              level1.bidsize = 0;
-              level1.offer = order.price;
-              level1.offersize = parseInt(order.remquantity);
-              orderbook.pricelevels[offerlevel] = level1;
-            }
-          }
-
-          lastprice = order.price;
-          lastside = order.side;
-        } else {
-          if (parseInt(order.side) == 1) {
-            orderbook.pricelevels[bidlevel].bidsize += parseInt(order.remquantity);
-          } else {
-            orderbook.pricelevels[offerlevel].offersize += parseInt(order.remquantity);
-          }
-        }
-
-        count--;
-        if (count <= 0) {
-          if (conn != null) {
-            conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-          } else {
-            // broadcast to all interested parties
-            publishMessage("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-          }
-        }
-      });
+      orderBookOut(userid, symbol, conn);
     });
   });
 }
@@ -1498,9 +1417,10 @@ function getReasonDesc(reason) {
   return desc;
 }
 
-function start(userid, orgid, conn) {
+function start(userid, brokerid, conn) {
+  sendOrderBooks(userid, conn);
   sendInstruments(conn);
-  sendOrganisations(conn);
+  sendBrokers(conn);
   sendIfas(conn);
   sendInstrumentTypes(conn);
   sendOrderTypes(conn);
@@ -1511,7 +1431,7 @@ function start(userid, orgid, conn) {
   sendCosts(conn);
 
   // make this the last one, as sends ready status to f/e
-  sendClients(userid, orgid, conn);
+  sendClients(userid, brokerid, conn);
 }
 
 function sendUserid(userid, conn) {
@@ -1624,9 +1544,9 @@ function getDateString(utcdatetime) {
     return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
 }
 
-function sendClients(userid, orgid, conn) {
-  // get sorted set of clients for specified organisation
-  db.eval(scriptgetclients, 1, orgid, function(err, ret) {
+function sendClients(userid, brokerid, conn) {
+  // get sorted set of clients for specified broker
+  db.eval(scriptgetclients, 1, brokerid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"clients\":" + ret + "}");
 
@@ -1634,11 +1554,11 @@ function sendClients(userid, orgid, conn) {
   });
 }
 
-function sendOrganisations(conn) {
-  // get sorted set of orgs
-  db.eval(scriptgetorgs, 0, function(err, ret) {
+function sendBrokers(conn) {
+  // get sorted set of brokers
+  db.eval(scriptgetbrokers, 0, function(err, ret) {
     if (err) throw err;
-    conn.write("{\"organisations\":" + ret + "}");
+    conn.write("{\"brokers\":" + ret + "}");
   });
 }
 
@@ -1792,7 +1712,6 @@ function getPTPQuoteRejectReason(reason) {
 }
 
 function registerScripts() {
-  var addremoveinstrumenttypes;
   var stringsplit;
   var updatecash;
 
@@ -1813,18 +1732,6 @@ function registerScripts() {
     end \
     table.insert(outResults, string.sub(str, theStart)) \
     return outResults \
-  end \
-  ';
-
-  addremoveinstrumenttypes = '\
-  local addremoveinstrumenttypes = function(orgclientkey, insttypes) \
-    for key, value in pairs(insttypes) do \
-      if value == "true" then \
-        redis.call("sadd", orgclientkey .. ":instrumenttypes", key) \
-      else \
-        redis.call("srem", orgclientkey .. ":instrumenttypes", key) \
-      end \
-    end \
   end \
   ';
 
@@ -1860,11 +1767,11 @@ function registerScripts() {
   ';
 
   //
-  // get alpha sorted list of clients for a specified organisation
+  // get alpha sorted list of clients for a specified broker
   //
   scriptgetclients = '\
   local clients = redis.call("sort", "clients", "ALPHA") \
-  local fields = {"orgid", "clientid", "email", "name", "address", "mobile", "ifaid", "type", "hedge"} \
+  local fields = {"brokerid", "clientid", "email", "name", "address", "mobile", "ifaid", "type", "hedge", "brokerclientcode"} \
   local vals \
   local tblclient = {} \
   local tblinsttype = {} \
@@ -1872,7 +1779,7 @@ function registerScripts() {
     vals = redis.call("hmget", "client:" .. clients[index], unpack(fields)) \
     if KEYS[1] == vals[1] then \
       tblinsttype = redis.call("smembers", vals[2] .. ":instrumenttypes") \
-      table.insert(tblclient, {orgid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype, type = vals[8], hedge = vals[9]}) \
+      table.insert(tblclient, {brokerid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype, type = vals[8], hedge = vals[9], brokerclientcode = vals[10]}) \
     end \
   end \
   return cjson.encode(tblclient) \
@@ -1882,7 +1789,7 @@ function registerScripts() {
   local clientid = redis.call("incr", "clientid") \
   if not clientid then return {1005} end \
   --[[ store the client ]] \
-  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "orgid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7], "hedge", KEYS[9]) \
+  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "brokerid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7], "hedge", KEYS[9], "brokerclientcode", KEYS[10]) \
   --[[ add to set of clients ]] \
   redis.call("sadd", "clients", clientid) \
   --[[ add route to find client from email ]] \
@@ -1903,7 +1810,7 @@ function registerScripts() {
   local email = redis.call("hget", clientkey, "email") \
   if not email then return 1017 end \
   --[[ update client ]] \
-  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "orgid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifaid", KEYS[7], "type", KEYS[8], "hedge", KEYS[10]) \
+  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "brokerid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifaid", KEYS[7], "type", KEYS[8], "hedge", KEYS[10], "brokerclientcode", KEYS[11]) \
   --[[ remove old email link and add new one ]] \
   if KEYS[4] ~= email then \
     redis.call("del", "client:" .. email) \
@@ -1933,16 +1840,16 @@ function registerScripts() {
   return ret \
   ';
 
-  scriptgetorgs = '\
-  local orgs = redis.call("sort", "organisations", "ALPHA") \
-  local fields = {"orgid", "name"} \
+  scriptgetbrokers = '\
+  local brokers = redis.call("sort", "brokers", "ALPHA") \
+  local fields = {"brokerid", "name"} \
   local vals \
-  local org = {} \
-  for index = 1, #orgs do \
-    vals = redis.call("hmget", "organisation:" .. orgs[index], unpack(fields)) \
-    table.insert(org, {orgid = vals[1], name = vals[2]}) \
+  local broker = {} \
+  for index = 1, #brokers do \
+    vals = redis.call("hmget", "broker:" .. brokers[index], unpack(fields)) \
+    table.insert(broker, {brokerid = vals[1], name = vals[2]}) \
   end \
-  return cjson.encode(org) \
+  return cjson.encode(broker) \
   ';
 
   scriptgetclienttypes = '\
@@ -1957,7 +1864,7 @@ function registerScripts() {
   ';
 
   scriptgetinstrumenttypes = '\
-  local instrumenttypes = redis.call("sort", "instrumenttypes", "ALPHA") \
+  local instrumenttypes = redis.call("smembers", "instrumenttypes") \
   local instrumenttype = {} \
   local val \
   for index = 1, #instrumenttypes do \

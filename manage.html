@@ -636,7 +636,7 @@
         var indices = {};
         var timeinforces = {};
         var clients = {};
-        var organisations = {};
+        var brokers = {};
         var ifas = {};
         var instrumenttypes = {};
         var cashtranstypes = {};
@@ -753,9 +753,9 @@
             } else if (msg.substr(2, 6) == "client") {
                 obj = JSON.parse(msg);
                 updateClient(obj.client);
-            } else if (msg.substr(2, 13) == "organisations") {
+            } else if (msg.substr(2, 7) == "brokers") {
                 obj = JSON.parse(msg);
-                loadOrganisations(obj.organisations);
+                loadBrokers(obj.brokers);
             } else if (msg.substr(2, 4) == "ifas") {
                 obj = JSON.parse(msg);
                 loadIfas(obj.ifas);
@@ -894,9 +894,9 @@
             }                                    
         }
 
-        function loadOrganisations(orgarr) {
-            for (var i = 0; i < orgarr.length; ++i) {
-                organisations[orgarr[i].orgid] = orgarr[i];
+        function loadBrokers(brokerarr) {
+            for (var i = 0; i < brokerarr.length; ++i) {
+                brokers[brokerarr[i].brokerid] = brokerarr[i];
             }                                                
         }
 
@@ -1043,7 +1043,9 @@
 
             selectedmenu = 0;
 
-            maintainClients();
+            displayOrderBooks();
+
+            //maintainClients();
         }
 
         function statusMsg(status) {
@@ -1363,7 +1365,7 @@
         }
 
         function displayOrderBooks() {
-            selectStock();
+            selectStock(0);
 
             displayOrderBookHeadings();
 
@@ -1482,7 +1484,7 @@
             //addElement(msg, list1, orders[x].orderid);
         }
 
-        function selectStock() {
+        function selectStock(callerid) {
             var stockbox;
             var stockboxinput;
             var stocklist;
@@ -1536,7 +1538,19 @@
                 firstspace = element.innerHTML.indexOf(' ');
                 symbol = element.innerHTML.substr(0, firstspace);
 
-                displayProduct(instruments[symbol]);
+                if (callerid == 0) {
+                    if (symbol in obdisplay) {
+                        alert(symbol + " already in Watch List");
+                        e.stopPropagation();
+                    } else {
+                        sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
+                        stocklist.style.visibility = "hidden";
+                        stockboxinput.value = "";
+                        stockboxinput.focus();
+                    }
+                } else {
+                    displayProduct(instruments[symbol]);
+                }
 
                 stocklist.style.visibility = "hidden";
                 stockboxinput.value = "";
@@ -3478,7 +3492,7 @@
             console.log(settlperiod.options.length);
 
             settlperiod.options.length = 0;
-            
+
             if (instrumenttype != "DE") {
                 settlperiod[0] = new Option("T+0 (Rolling)", 0, true, true);
                 settlperiod[1] = new Option("T+10", 10, false, false);
@@ -3766,7 +3780,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "Portfolio", "Request Quote"];
+            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "Portfolio", "Request Quote"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -3798,38 +3812,41 @@
 
                 switch (selectedmenu) {
                 case 0:
-                    maintainClients();
+                    displayOrderBooks();
                     break;
                 case 1:
-                    maintainCash();
+                    maintainClients();
                     break;
                 case 2:
-                    maintainProducts();
+                    maintainCash();
                     break;
                 case 3:
-                    maintainHedgebooks();
+                    maintainProducts();
                     break;
                 case 4:
-                    maintainCosts();
+                    maintainHedgebooks();
                     break;
                 case 5:
-                    maintainIfas();
+                    maintainCosts();
                     break;
                 case 6:
-                    displayPositions();
+                    maintainIfas();
                     break;
                 case 7:
-                    requestQuote();
+                    displayPositions();
                     break;
                 case 8:
+                    requestQuote();
+                    break;
+                case 9:
                     displayCash();
                     displayMargins();
                     displayReserves();
                     break;
-                case 9:
+                case 10:
                     requestHistory();
                     break;
-                case 10:
+                case 11:
                     settings();
                     break;
                 }
@@ -3919,97 +3936,78 @@
         }
 
         function maintainClients() {
-            var frmclient;
-            var lblname;
-            var lblmobile;
-            var lblorg;
-            var lblclientid;
-            var lbladdress;
-            var lblemail;
-            var lblifa;
-            var lblcantrade;
-            var inpname;
-            var inpmobile;
-            var selorg;
-            var selifa;
-            var inpclientid;
-            var inpaddress;
-            var inpemail;
-            var btnupdate;
-            var lblclientconf;
-            var divaddress;
-            var lbltype;
-            var seltype;
-            var lblhedge;
-            var opthedgeyes;
-            var opthedgeno;
-            var lblhedgeyes;
-            var lblhedgeno;
-            var lnknewclient;
-
-            frmclient = document.getElementById("frmclient");
-            if (frmclient != null) {
-                return;
-            }
-             
             selectClient("frmclient");
 
-            frmclient = document.createElement("form");
-            frmclient.id = "frmclient";
+            var frmclient = newform("frmclient");
 
-            lblname = document.createElement("label");
-            lblname.className = "formlabel";
-            lblname.innerHTML = "Name:";
-            lblmobile = document.createElement("label");
-            lblmobile.className = "formlabel";
-            lblmobile.innerHTML = "Mobile:";
-            lblorg = document.createElement("label");
-            lblorg.className = "formlabel";
-            lblorg.innerHTML = "Organisation:";
-            lblclientid = document.createElement("label");
-            lblclientid.className = "formlabel";
-            lblclientid.innerHTML = "Client Id:";
-            lbladdress = document.createElement("label");
-            lbladdress.className = "formlabel";
-            lbladdress.innerHTML = "Address:";
-            lblemail = document.createElement("label");
-            lblemail.className = "formlabel";
-            lblemail.innerHTML = "Email:";
-            lblifa = document.createElement("label");
-            lblifa.className = "formlabel";
-            lblifa.innerHTML = "IFA:";
-            lblcantrade = document.createElement("label");
-            lblcantrade.className = "formlabel";
-            lblcantrade.innerHTML = "Can Trade:";
-            lbltype = document.createElement("label");
-            lbltype.className = "formlabel";
-            lbltype.innerHTML = "Type:";
+            addNewLine(frmclient);
+            var lblname = newlabel("lblname", "Name:", "formlabel", frmclient);
+            var inpname = newinput("inpname", "forminput", frmclient);
 
-            inpname = document.createElement("input");
-            inpname.id = "inpname";
-            inpname.className = "forminput";
-            inpmobile = document.createElement("input");
-            inpmobile.id = "inpmobile";
-            inpmobile.className = "forminput";
-            selorg = document.createElement("select");
-            selorg.id = "selorg";
-            selorg.className = "formselect";
-            inpclientid = document.createElement("input");
-            inpclientid.id = "inpclientid";
-            inpclientid.className = "forminput";
-            inpaddress = document.createElement("textarea");
+            addNewLine(frmclient);
+            var lblemail = newlabel("lblemail", "Email:", "formlabel", frmclient);
+            var inpemail = newinput("inpemail", "forminput", frmclient);
+
+            addNewLine(frmclient);
+            var lblmobile = newlabel("lblmobile", "Mobile:", "formlabel", frmclient);
+            var inpmobile = newinput("inpmobile", "forminput", frmclient);
+
+            addNewLine(frmclient);
+            var lbladdress = newlabel("lbladdress", "Address:", "formlabel", null);
+            var inpaddress = document.createElement("textarea");
             inpaddress.id = "inpaddress";
-            inpemail = document.createElement("input");
-            inpemail.id = "inpemail";
-            inpemail.className = "forminput";
-            selifa = document.createElement("select");
-            selifa.id = "selifa";
-            selifa.className = "formselect";
-            seltype = document.createElement("select");
-            seltype.id = "seltype";
-            seltype.className = "formselect";            
+            var divaddress = document.createElement("div");
+            divaddress.appendChild(lbladdress);
+            divaddress.appendChild(inpaddress);
+            frmclient.appendChild(divaddress);
 
-            btnupdate = newbutton("btnupdate", "Add", "formsigninbutton", frmclient);
+            addNewLine(frmclient);
+            var lblbroker = newlabel("lblbroker", "Broker:", "formlabel", frmclient);
+            var selbroker = newselect("selbroker", "formselect", frmclient);
+
+            addNewLine(frmclient);
+            var lblbrokerclientcode = newlabel("lblbrokerclientcode", "Broker Client Code:", "formlabel", frmclient);
+            var inpbrokerclientcode = newinput("inpbrokerclientcode", "forminput", frmclient);
+
+            addNewLine(frmclient);
+            var lblifa = newlabel("lblifa", "IFA:", "formlabel", frmclient);
+            var selifa = newselect("selifa", "formselect", frmclient);
+
+            addNewLine(frmclient);
+            var lbltype = newlabel("lbltype", "Client Type:", "formlabel", frmclient);
+            var seltype = newselect("seltype", "formselect", frmclient);
+
+            addNewLine(frmclient);
+            var lblcantrade = newlabel("lblcantrade", "Can Trade:", "formlabel", frmclient);
+
+            for (var i in instrumenttypes) {
+                var chkinsttype = document.createElement("input");
+                chkinsttype.type = "checkbox";
+                chkinsttype.id = "checkbox:" + instrumenttypes[i].instrumenttypeid;
+                chkinsttype.className = "formcheckbox";
+                var textinsttype = document.createTextNode(instrumenttypes[i].description);
+
+                frmclient.appendChild(chkinsttype);
+                frmclient.appendChild(textinsttype);
+            }
+
+            addNewLine(frmclient);
+            var lblhedge = newlabel("lblhedge", "Hedge:", "formlabel", frmclient);
+            var opthedgeyes = newoption("opthedgeyes", "opthedge", "formcheckbox", frmclient);
+            var lblhedgeyes = newlabel("lblhedgeyes", "Yes", "", frmclient);
+            var opthedgeno = newoption("opthedgeno", "opthedge", "formcheckbox", frmclient);
+            var lblhedgeno = newlabel("lblhedgeno", "No", "", frmclient);
+
+            addNewLine(frmclient);
+            var lblclientid = newlabel("lblclientid", "Client Id:", "formlabel", frmclient);
+            var inpclientid = newinput("inpclientid", "forminput", frmclient, true);
+
+            addNewLine(frmclient);
+            var btnupdate = newbutton("btnupdate", "Add", "formsigninbutton", frmclient);
+            var lnknewclient = newlink("lnknewclient", "New Client", "", frmclient);
+
+            addNewLine(frmclient);
+            var lblclientconf = newlabel("lblclientconf", "", "", frmclient);
 
             btnupdate.onclick = function() {
                 var client = {};
@@ -4030,14 +4028,15 @@
 
                 client.name = inpname.value;
                 client.mobile = inpmobile.value;
-                client.orgid = selorg[selorg.selectedIndex].value;
+                client.brokerid = selbroker[selbroker.selectedIndex].value;
+                client.brokerclientcode = inpbrokerclientcode.value;
                 client.clientid = inpclientid.value;
                 client.address = inpaddress.value;
                 client.email = inpemail.value;
-                if (selifa.options.length != 0) {
-                    client.ifaid = selifa[selifa.selectedIndex].value;
-                } else {
+                if (selifa.selectedIndex == 0) {
                     client.ifaid = "";
+                } else {
+                    client.ifaid = selifa[selifa.selectedIndex].value;
                 }
                 client.type = seltype[seltype.selectedIndex].value;
 
@@ -4060,69 +4059,10 @@
                 sockjs.send("{\"newclient\":" + JSON.stringify(client) + "}");
             }
 
-            lblclientconf = document.createElement("label");
-            lblclientconf.id = "lblclientconf";
-
-            lnknewclient = newlink("lnknewclient", "New Client", "");
-
             lnknewclient.onclick = function() {
                 displayClient(null, "frmclient", "");
                 inpname.focus();
             }
-
-            divaddress = document.createElement("div");
-            divaddress.appendChild(lbladdress);
-            divaddress.appendChild(inpaddress);
-
-            addNewLine(frmclient);
-            frmclient.appendChild(lblname);
-            frmclient.appendChild(inpname);
-            addNewLine(frmclient);
-            frmclient.appendChild(lblemail);
-            frmclient.appendChild(inpemail);
-            addNewLine(frmclient);
-            frmclient.appendChild(lblmobile);
-            frmclient.appendChild(inpmobile);
-            addNewLine(frmclient);
-            frmclient.appendChild(divaddress);
-            addNewLine(frmclient);
-            frmclient.appendChild(lblorg);
-            frmclient.appendChild(selorg);
-            addNewLine(frmclient);
-            frmclient.appendChild(lblifa);
-            frmclient.appendChild(selifa);
-            addNewLine(frmclient);
-            frmclient.appendChild(lbltype);
-            frmclient.appendChild(seltype);
-            addNewLine(frmclient);
-            frmclient.appendChild(lblcantrade);
-
-            for (var i in instrumenttypes) {
-                var chkinsttype = document.createElement("input");
-                chkinsttype.type = "checkbox";
-                chkinsttype.id = "checkbox:" + instrumenttypes[i].instrumenttypeid;
-                chkinsttype.className = "formcheckbox";
-                var textinsttype = document.createTextNode(instrumenttypes[i].description);
-
-                frmclient.appendChild(chkinsttype);
-                frmclient.appendChild(textinsttype);
-            }
-
-            addNewLine(frmclient);
-            lblhedge = newlabel("lblhedge", "Hedge:", "formlabel", frmclient);
-            opthedgeyes = newoption("opthedgeyes", "opthedge", "formcheckbox", frmclient);
-            lblhedgeyes = newlabel("lblhedgeyes", "Yes", "", frmclient);
-            opthedgeno = newoption("opthedgeno", "opthedge", "formcheckbox", frmclient);
-            lblhedgeno = newlabel("lblhedgeno", "No", "", frmclient);
-
-            addNewLine(frmclient);
-            frmclient.appendChild(lblclientid);
-            frmclient.appendChild(inpclientid);
-            addNewLine(frmclient);
-            frmclient.appendChild(btnupdate);
-            frmclient.appendChild(lnknewclient);
-            addNewLine(frmclient);
-            frmclient.appendChild(lblclientconf);
 
             main.appendChild(frmclient);
 
@@ -4135,7 +4075,8 @@
             var inpclient;
             var inpname;
             var inpmobile;
-            var selorg;
+            var selbroker;
+            var inpbrokerclientcode;
             var inpclientid;
             var inpaddress;
             var inpemail;
@@ -4152,7 +4093,8 @@
             if (frm == "frmclient") {
                 inpname = document.getElementById("inpname");
                 inpmobile = document.getElementById("inpmobile");
-                selorg = document.getElementById("selorg");
+                selbroker = document.getElementById("selbroker");
+                inpbrokerclientcode = document.getElementById("inpbrokerclientcode");
                 inpclientid = document.getElementById("inpclientid");
                 inpaddress = document.getElementById("inpaddress");
                 inpemail = document.getElementById("inpemail");
@@ -4168,11 +4110,12 @@
                     client = {
                         name:  '',
                         mobile:    '',
-                        orgid:  1,
+                        brokerid:  1,
+                        brokerclientcode: '',
                         clientid: '',
                         address: '',
                         email: '',
-                        ifaid: '',
+                        ifaid: 0,
                         insttypes: [],
                         type: 1,
                         hedge: 1
@@ -4182,11 +4125,12 @@
                 if (inpname != null) {
                     inpname.value = client.name;
                     inpmobile.value = client.mobile;
-                    populateOrgs(selorg, client.orgid);
+                    populateBrokers(selbroker, client.brokerid);
+                    inpbrokerclientcode.value = client.brokerclientcode;
                     inpclientid.value = client.clientid;
                     inpaddress.value = client.address;
                     inpemail.value = client.email;
-                    populateIfas(selifa, client.ifaid, false);
+                    populateIfas(selifa, client.ifaid, 0);
                     populateClientTypes(seltype, client.type);
 
                     if (parseInt(client.hedge)) {
@@ -4407,7 +4351,7 @@
             var inpsymbol;
             var lblinstconf;
 
-            selectStock();
+            selectStock(1);
 
             frmproduct = document.getElementById("frmproduct");
             if (frmproduct == null) {
@@ -4746,7 +4690,7 @@
                 lblifaconf.innerHTML = "";                
             }
 
-            populateIfas(selifa, 1, true);
+            populateIfas(selifa, 0, 1);
 
             main.appendChild(frmifa);
 
@@ -4799,7 +4743,9 @@
                 label.className = classname;
             }
             label.innerHTML = text;
-            form.appendChild(label);   
+            if (form != null) {
+                form.appendChild(label);
+            }
             return label;    
         }
 
@@ -4850,7 +4796,7 @@
             return button;
         }
 
-        function newlink(id, text, classname) {
+        function newlink(id, text, classname, form) {
             var link = document.createElement('a');
             link.id = id;
             link.innerHTML = text;
@@ -4858,23 +4804,24 @@
             if (classname != "") {
                 newlink.className = classname;
             }
+            form.appendChild(link);
             return link;
         }
 
-        function populateOrgs(orgselect, defaultid) {
+        function populateBrokers(brokerselect, defaultid) {
             var i = 0;
 
-            for (var j in organisations) {
-                if (organisations[j].orgid == defaultid) {
-                    orgselect[i] = new Option(organisations[j].name, organisations[j].orgid, true, true);
+            for (var j in brokers) {
+                if (brokers[j].brokerid == defaultid) {
+                    brokerselect[i] = new Option(brokers[j].name, brokers[j].brokerid, true, true);
                 } else {
-                    orgselect[i] = new Option(organisations[j].name, organisations[j].orgid, false, false);                    
+                    brokerselect[i] = new Option(brokers[j].name, brokers[j].brokerid, false, false);                    
                 }
                 i++;
             }
         }
 
-        function populateIfas(ifaselect, defaultid, newoption) {
+        function populateIfas(ifaselect, defaultid, option) {
             var i = 0;
 
             for (var j in ifas) {
@@ -4886,11 +4833,17 @@
                 i++;
             }
 
-            if (newoption) {
+            if (option == 1) {
                 if (i == 0) {
                     ifaselect[i] = new Option("New IFA", 0, true, true);
                 } else {
                     ifaselect[i] = new Option("New IFA", 0, false, false);
+                }
+            } else if (option == 0) {
+                if (i == 0) {
+                    ifaselect[i] = new Option("None", 0, true, true);
+                } else {
+                    ifaselect[i] = new Option("None", 0, false, false);
                 }
             }
         }

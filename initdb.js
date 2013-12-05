@@ -28,15 +28,15 @@ db.on("error", function (err) {
 function initdb() {
   // Comment out one or the other...
   // keep fix sequence numbers the same
-  /*db.get("fixseqnumin", function(err, fixseqnumin) {
+  db.get("fixseqnumin", function(err, fixseqnumin) {
     db.set("fixseqnumin", fixseqnumin);
   });
   db.get("fixseqnumout", function(err, fixseqnumout) {
     db.set("fixseqnumout", fixseqnumout);
-  });*/
+  });
   // or set them to start at 1
-  db.set("fixseqnumin", 0);
-  db.set("fixseqnumout", 0); // first out will be 1
+  //db.set("fixseqnumin", 0);
+  //db.set("fixseqnumout", 0); // first out will be 1
 
   // clear all key values
   db.flushdb();
@@ -54,18 +54,25 @@ function initdb() {
   db.set("cashtransid", 0);
   db.set("ifaid", 0);
 
-  // organisations
-  db.hmset("organisation:1", "orgid", 1, "name", "Thomas Grant & Company");
-  db.sadd("organisations", 1);
+  // brokers
+  db.hmset("broker:1", "brokerid", 1, "name", "Thomas Grant & Company");
+  db.sadd("brokers", 1);
 
-  // set of clients
+  // default hedge client
   db.sadd("clients", "999999");
 
   // clients - hash for each
-  db.hmset("client:999999", "email", "999999@thomasgrant.co.uk", "password", "999999", "orgid", 1, "clientid", 999999, "marketext", "LD", "name", "Thomas Grant Hedgebook", "address", "", "mobile", "", "hedge", 0, "type", 2);
+  db.hmset("client:999999", "email", "999999@thomasgrant.co.uk", "password", "999999", "brokerid", 1, "clientid", 999999, "marketext", "LD", "name", "Thomas Grant Hedgebook", "address", "", "mobile", "", "hedge", 0, "type", 2, "brokerclientcode", 999999);
 
   // link between client email & id
   db.set("client:999999@thomasgrant.co.uk", "999999");
+
+  // instruments types hedge client can trade
+  db.sadd("999999:instrumenttypes", "CFD");
+  db.sadd("999999:instrumenttypes", "SPB");
+  db.sadd("999999:instrumenttypes", "DE");
+  db.sadd("999999:instrumenttypes", "IE");
+  db.sadd("999999:instrumenttypes", "CCFD");
 
   // set of users
   db.sadd("users", "1");
@@ -76,12 +83,12 @@ function initdb() {
   db.sadd("users", "6");
 
   // user hash
-  db.hmset("user:1", "email", "terry@cw2t.com", "password", "terry", "orgid", 1, "userid", 1, "name", "Terry Johnston");
-  db.hmset("user:2", "email", "grant@thomasgrant.co.uk", "password", "grant", "orgid", 1, "userid", 2, "name", "Grant Oliver");
-  db.hmset("user:3", "email", "tina@thomasgrant.co.uk", "password", "tina", "orgid", 1, "userid", 3, "name", "Tina Tyers");
-  db.hmset("user:4", "email", "patrick@thomasgrant.co.uk", "password", "patrick", "orgid", 1, "userid", 4, "name", "Patrick Waldron");
-  db.hmset("user:5", "email", "sheila@thomasgrant.co.uk", "password", "sheila", "orgid", 1, "userid", 5, "name", "Sheila");
-  db.hmset("user:6", "email", "kevin@thomasgrant.co.uk", "password", "kevin", "orgid", 1, "userid", 6, "name", "Kevin");
+  db.hmset("user:1", "email", "terry@cw2t.com", "password", "terry", "brokerid", 1, "userid", 1, "name", "Terry Johnston", "marketext", "LD");
+  db.hmset("user:2", "email", "grant@thomasgrant.co.uk", "password", "grant", "brokerid", 1, "userid", 2, "name", "Grant Oliver", "marketext", "LD");
+  db.hmset("user:3", "email", "tina@thomasgrant.co.uk", "password", "tina", "brokerid", 1, "userid", 3, "name", "Tina Tyers", "marketext", "LD");
+  db.hmset("user:4", "email", "patrick@thomasgrant.co.uk", "password", "patrick", "brokerid", 1, "userid", 4, "name", "Patrick Waldron", "marketext", "LD");
+  db.hmset("user:5", "email", "sheila@thomasgrant.co.uk", "password", "sheila", "brokerid", 1, "userid", 5, "name", "Sheila", "marketext", "LD");
+  db.hmset("user:6", "email", "kevin@thomasgrant.co.uk", "password", "kevin", "brokerid", 1, "userid", 6, "name", "Kevin", "marketext", "LD");
 
   // link between user email & id
   db.set("user:terry@cw2t.com", "1");
@@ -120,11 +127,13 @@ function initdb() {
   db.sadd("instrumenttypes", "IE");
   db.sadd("instrumenttypes", "CFD");
   db.sadd("instrumenttypes", "SPB");
+  db.sadd("instrumenttypes", "CCFD");
 
   db.set("instrumenttype:DE", "UK Equities");
   db.set("instrumenttype:IE", "International Equities");
   db.set("instrumenttype:CFD", "CFD");
   db.set("instrumenttype:SPB", "Spreadbet");
+  db.set("instrumenttype:CCFD", "Convertible CFD");
 
   // indices
   db.sadd("index:UKX", "BARC.L");
@@ -148,9 +157,11 @@ function initdb() {
   // client types
   db.sadd("clienttypes", "1");
   db.sadd("clienttypes", "2");
+  db.sadd("clienttypes", "3");
 
   db.set("clienttype:1", "Retail");
   db.set("clienttype:2", "Hedge");
+  db.set("clienttype:3", "Certificated");
 
   // order types - set of order types & string for each one
   //db.sadd("ordertypes", "1");

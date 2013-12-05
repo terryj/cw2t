@@ -2362,7 +2362,7 @@ function registerScripts() {
     redis.call("hmset", "order:" .. orderid, "status", "8", "reason", reason, "text", text) \
   end \
   ';
-
+  
   creditcheck = getinitialmargin + rejectorder + updateordermargin + updatereserve + '\
   local creditcheck = function(orderid, clientid, symbol, side, quantity, price, currency, instrumenttype, positionopenclose) \
     --[[ calculate initial margin, including costs ]] \
@@ -2377,7 +2377,7 @@ function registerScripts() {
       return {0} \
     end \
     --[[ check margin for all derivative trades & equity buys ]] \
-    if instrumenttype == "CFD" or instrumenttype == "SPB" or tonumber(side) == 1 then \
+    if instrumenttype == "CFD" or instrumenttype == "SPB" or instrumenttype == "CCFD" or tonumber(side) == 1 then \
       --[[ get existing margin ]] \
       local margin = redis.call("get", clientid .. ":margin:" .. currency) \
       if not margin then margin = 0 end \
@@ -2394,6 +2394,11 @@ function registerScripts() {
       end \
       updateordermargin(orderid, clientid, 0, currency, initialmargin[1]) \
     else \
+      if instrumenttype == "DE" then \
+        if redis.call("hget", "client:" .. clientid, "type") == "3" then \
+          return {1, initialmargin[2]} \
+        end \
+      end \
       --[[ check there is a large enough position in this symbol/currency ]] \
       local poskey = symbol .. ":" .. currency \
       local position = redis.call("hget", clientid .. ":position:" .. poskey, "quantity") \
@@ -2567,7 +2572,7 @@ function registerScripts() {
   local tradeid = "" \
   local hedgeorderid = "" \
   local hedgetradeid = "" \
-  if instrumenttype == "CFD" or instrumenttype == "SPB" then \
+  if instrumenttype == "CFD" or instrumenttype == "SPB" or instrumenttype == "CCFD" then \
     --[[ create trades for client & hedge book for off-exchange products ]] \
     hedgebookid = redis.call("get", "hedgebook:" .. instrumenttype .. ":" .. KEYS[18]) \
     if not hedgebookid then hedgebookid = 999999 end \
