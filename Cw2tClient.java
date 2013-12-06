@@ -168,7 +168,7 @@ class Cw2tSubscriberThread extends Thread {
     
     public void run() {
         System.out.println("Starting pubsub thread");
-        jedissubscriber.subscribe(cw2tsubscriber, "cw2t");
+        jedissubscriber.subscribe(cw2tsubscriber, "proquote");
         System.out.println( "Exiting pubsub thread");
     }
 }
@@ -313,7 +313,7 @@ public class Cw2tClient implements ISessionObserver {
             cache.put( topics[i], tvm );
         }*/
         
-        // get the symbol - todo: keep in a symbol -> topic hash
+        // get the symbol - todo: keep in a symbol -> topic hash?
         String symbol = jedispublisher.hget("topic:" + Tpc, "symbol");
         
         // only interested in topics that are recognised symbols
@@ -321,8 +321,8 @@ public class Cw2tClient implements ISessionObserver {
             System.out.println("Topic not found: " + Tpc);
             return;
         }
-        
-        String jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\",\"pricelevels\":[";
+        //{\"orderbook\":{\"symbol\":\"" + symbol + "\",\"
+        String jsonmsg = "\"prices\":[";
         boolean firstprice = true;
         String level = "";
         String bidoffer = "";
@@ -332,10 +332,7 @@ public class Cw2tClient implements ISessionObserver {
         while (tvi.hasNext()) {
             // get the tag
             int i = tvi.next();
-            //int tag = Tag.getTag(i);
             String tag = Tag.toString(i);
-            //String tagname = getTagName(Tag.toString(i));
-            level = "";
             
             // get the tag description and level
             int slash = tag.indexOf("/");
@@ -353,10 +350,14 @@ public class Cw2tClient implements ISessionObserver {
             Value value = tvi.getValue();
             if (value.getType() == value.DOUBLE) {
                 double d = value.getDoubleValue();
-                d = d * 10000;
+                
+                // will produce 2dp - todo: check & vary this?
+                s = String.format("%.2f", d);
+
+                /*d = d * 10000;
                 d = (double) ((long) d);
                 d = d / 10000;
-                s = Double.toString(d);
+                s = Double.toString(d);*/
             } else if (value.getType() == value.STRING) {
                 s = value.getStringValue();
             } else if (value.getType() == value.BOOL) {
@@ -378,8 +379,8 @@ public class Cw2tClient implements ISessionObserver {
         }
         
         // complete the message
-        jsonmsg = jsonmsg + "]}}";
-        System.out.println(jsonmsg);
+        jsonmsg = jsonmsg + "]";
+        //System.out.println(jsonmsg);
         
         // publish message to channel
         jedispublisher.publish(Tpc, jsonmsg);
@@ -387,6 +388,19 @@ public class Cw2tClient implements ISessionObserver {
         // store prices
         String status = jedispublisher.hmset("topic:" + Tpc, fieldmap);
 	}
+    
+    /* try for subscribe...
+     new Thread(new Runnable() {
+        @Override
+        public void run() {
+            Jedis subscriberJedis = new Jedis("localhost");
+            try {
+                subscriberJedis.subscribe(new JedisPubSub() …..,"CC");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }).start();*/
     
     public void updateIndex(String index, TagValueMap tvm) {
         String symbol = "";
@@ -470,7 +484,12 @@ public class Cw2tClient implements ISessionObserver {
             
             // just domestic & international equities for the time being
             if (tagname.equals("instrumenttype")) {
-                insttype = s;
+                if (s.equals("DE") || s.equals("IE")) {
+                    insttype = s;
+                } else {
+                    System.out.println("ignoring, type:" + s);                
+                    return;
+                }
             }
             
             // store the topic for reverse link
@@ -480,7 +499,7 @@ public class Cw2tClient implements ISessionObserver {
             
             // change 'GBX' to 'GBP'
             if (tagname.equals("currency")) {
-                if (s == "GBX") {
+                if (s.equals("GBX")) {
                     s = "GBP";
                 }
             }
@@ -525,11 +544,13 @@ public class Cw2tClient implements ISessionObserver {
         jedispublisher.sadd("instrumenttypes", insttype);
         
         // create a way to get from topic to symbol (i.e. 'TIT.VOD.L' -> 'VOD.L')
-        topicfieldmap.put("symbol", symbol);
+        //topicfieldmap.put("symbol", symbol);
         status = jedispublisher.hmset("topic:" + topic, topicfieldmap);
+        jedispublisher.sadd("topic:" + topic + ":symbols", symbol);
         
         // & for delayed (i.e. 'TIT.VOD.LD' -> 'VOD.L')
         status = jedispublisher.hmset("topic:" + topic + "D", topicfieldmap);
+        jedispublisher.sadd("topic:" + topic + "D" + ":symbols", symbol);
         
         // initialise stored prices
         initPrices("topic:" + topic);
@@ -554,6 +575,12 @@ public class Cw2tClient implements ISessionObserver {
         fieldmap.put("offer2", "0");
         fieldmap.put("bid3", "0");
         fieldmap.put("offer3", "0");
+        fieldmap.put("bid4", "0");
+        fieldmap.put("offer4", "0");
+        fieldmap.put("bid5", "0");
+        fieldmap.put("offer5", "0");
+        fieldmap.put("bid6", "0");
+        fieldmap.put("offer6", "0");
         
         String status = jedispublisher.hmset(topickey, fieldmap);
         

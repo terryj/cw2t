@@ -273,12 +273,34 @@ function listen() {
 }
 
 function newPrice(topic, msg) {
-  db.eval(scriptnewprice, 1, topic, function(err, ret) {
+  var jsonmsg;
+  /*db.eval(scriptnewprice, 1, topic, function(err, ret) {
     if (err) throw err;
 
     console.log(ret);
 
     //conn.write("{\"hedgebooks\":" + ret + "}");
+  });*/
+
+  db.smembers("topic:" + topic + ":symbols", function(err, symbols) {
+    if (err) throw err;
+
+    symbols.forEach(function(symbol, i) {
+      console.log(symbol);
+      jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
+      console.log(jsonmsg);
+      db.smembers("topic:" + topic + ":symbol:" + symbol + ":users", function(err, users) {
+        if (err) throw err;
+
+        users.forEach(function(user, i) {
+          console.log(user);
+
+          if (user in connections) {
+            connections[user].write(jsonmsg);
+          }
+        });
+      });
+    });
   });
 }
 
@@ -383,13 +405,13 @@ function subscribeAndSend(userid, symbol, conn) {
 }
 
 function sendCurrentOrderBook(symbol, topic, conn) {
-  var orderbook = {pricelevels : []};
-  var pricelevel1 = {};
-  var pricelevel2 = {};
-  var pricelevel3 = {};
-  var pricelevel4 = {};
-  var pricelevel5 = {};
-  var pricelevel6 = {};
+  var orderbook = {prices : []};
+  var level1 = {};
+  var level2 = {};
+  var level3 = {};
+  var level4 = {};
+  var level5 = {};
+  var level6 = {};
 
   db.hgetall("topic:" + topic, function(err, topicrec) {
     if (err) {
@@ -411,24 +433,24 @@ function sendCurrentOrderBook(symbol, topic, conn) {
     }
 
     // 3 levels
-    pricelevel1.bid = topicrec.bid1;
-    pricelevel1.level = 1;
-    orderbook.pricelevels.push(pricelevel1);
-    pricelevel2.offer = topicrec.offer1;
-    pricelevel2.level = 1;
-    orderbook.pricelevels.push(pricelevel2);
-    pricelevel3.bid = topicrec.bid2;
-    pricelevel3.level = 2;
-    orderbook.pricelevels.push(pricelevel3);
-    pricelevel4.offer = topicrec.offer2;
-    pricelevel4.level = 2;
-    orderbook.pricelevels.push(pricelevel4);
-    pricelevel5.bid = topicrec.bid3;
-    pricelevel5.level = 3;
-    orderbook.pricelevels.push(pricelevel5);
-    pricelevel6.offer = topicrec.offer3;
-    pricelevel6.level = 3;
-    orderbook.pricelevels.push(pricelevel6);
+    level1.bid = topicrec.bid1;
+    level1.level = 1;
+    orderbook.prices.push(level1);
+    level2.offer = topicrec.offer1;
+    level2.level = 1;
+    orderbook.prices.push(level2);
+    level3.bid = topicrec.bid2;
+    level3.level = 2;
+    orderbook.prices.push(level3);
+    level4.offer = topicrec.offer2;
+    level4.level = 2;
+    orderbook.prices.push(level4);
+    level5.bid = topicrec.bid3;
+    level5.level = 3;
+    orderbook.prices.push(level5);
+    level6.offer = topicrec.offer3;
+    level6.level = 3;
+    orderbook.prices.push(level6);
 
     orderbook.symbol = symbol;
 
@@ -2041,6 +2063,6 @@ function registerScripts() {
       table.insert(voyeurs, {symbol = symbols[i], userid = users[j]}) \
     end \
   end \
-  return {voyeurs} \
+  return voyeurs \
 ';
 }

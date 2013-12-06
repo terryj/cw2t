@@ -52,16 +52,19 @@ function cfdspb(index, marginpercent) {
         db.hmset("symbol:" + cfd, "currency", inst.currency, "description", inst.description + " CFD", "proquotesymbol", inst.proquotesymbol, "isin", inst.isin, "exchange", inst.exchange, "topic", inst.topic, "market", inst.market, "sedol", inst.sedol, "longname", inst.longname, "instrumenttype", "CFD", "category", inst.category, "sector", inst.sector, "marginpercent", marginpercent, "hedgesymbol", symbol, "hedge", 1, "symbol", cfd);
         db.sadd("instruments", cfd);
         db.sadd("topic:" + inst.topic + ":symbols", cfd);
+        db.sadd("topic:" + inst.topic + "D" + ":symbols", cfd);
 
         // spreadbet
         db.hmset("symbol:" + spb, "currency", inst.currency, "description", inst.description + " Spreadbet", "proquotesymbol", inst.proquotesymbol, "isin", inst.isin, "exchange", inst.exchange, "topic", inst.topic, "market", inst.market, "sedol", inst.sedol, "longname", inst.longname, "instrumenttype", "SPB", "category", inst.category, "sector", inst.sector, "marginpercent", marginpercent, "hedgesymbol", symbol, "hedge", 1, "symbol", spb);
         db.sadd("instruments", spb);
         db.sadd("topic:" + inst.topic + ":symbols", spb);
+        db.sadd("topic:" + inst.topic + "D" + ":symbols", spb);
 
         // create ccfd
         db.hmset("symbol:" + ccfd, "currency", inst.currency, "description", inst.description + " Convertible CFD", "proquotesymbol", inst.proquotesymbol, "isin", inst.isin, "exchange", inst.exchange, "topic", inst.topic, "market", inst.market, "sedol", inst.sedol, "longname", inst.longname, "instrumenttype", "CCFD", "category", inst.category, "sector", inst.sector, "marginpercent", marginpercent, "hedgesymbol", symbol, "hedge", 1, "symbol", ccfd);
         db.sadd("instruments", ccfd);
         db.sadd("topic:" + inst.topic + ":symbols", ccfd);
+        db.sadd("topic:" + inst.topic + "D" + ":symbols", ccfd);
 
         console.log("cfd, ccfd & spreadbet added for symbol:" + symbol);
       });
