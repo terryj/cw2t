@@ -65,6 +65,8 @@ var scriptgethedgebooks;
 var scriptcost;
 var scriptgetcosts;
 var scriptifa;
+var scriptsubscribeuser;
+var scriptnewprice;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -112,7 +114,7 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    console.log("channel " + channel + ": " + message);
+    console.log("channel:" + channel + ", " + message);
 
     if (message.substr(0, 8) == "quoteack") {
       sendQuoteack(message.substr(9));
@@ -122,6 +124,8 @@ function pubsub() {
       getSendOrder(message.substr(6));
     } else if (message.substr(0, 5) == "trade") {
       getSendTrade(message.substr(6));
+    } else {
+      newPrice(channel, message);
     }
   });
 
@@ -268,15 +272,37 @@ function listen() {
   });
 }
 
+function newPrice(topic, msg) {
+  db.eval(scriptnewprice, 1, topic, function(err, ret) {
+    if (err) throw err;
+
+    console.log(ret);
+
+    //conn.write("{\"hedgebooks\":" + ret + "}");
+  });
+}
+
 function orderBookRequest(userid, symbol, conn) {
-  // add the client to the order book set for this instrument
-  // todo - take account of client/user/other
-  db.sadd("orderbook:" + symbol, userid);
+  db.eval(scriptsubscribeuser, 2, symbol, userid, function(err, ret) {
+    if (err) throw err;
+
+    console.log(ret);
+
+    if (ret[0]) {
+      dbsub.subscribe(ret[1]);
+    }
+
+    // send the orderbook, with the current stored prices
+    sendCurrentOrderBook(symbol, ret[1], conn);
+  });
+/*
+  // add the user to the orderbook set for this instrument
+  db.sadd("orderbook:users:" + symbol, userid);
 
   // & add the instrument to the watchlist for this user
   db.sadd("user:" + userid + ":orderbooks", symbol);
 
-  orderBookOut(userid, symbol, conn);
+  orderBookOut(userid, symbol, conn);*/
 }
 
 function orderBookOut(userid, symbol, conn) {
@@ -314,9 +340,7 @@ function subscribeAndSend(userid, symbol, conn) {
       }
 
       // may need to adjust the topic to delayed
-      if (user.marketext == "LD") {
-        inst.topic += "D";
-      }
+      inst.topic += user.marketext;
 
       // are we subscribed to this topic?
       db.sismember("proquote", inst.topic, function(err, instsubscribed) {
@@ -331,14 +355,14 @@ function subscribeAndSend(userid, symbol, conn) {
 
           // let proquote know
           //dbpub.publish("cw2t", "subscribe:" + inst.topic);
-          db.publish("cw2t", "subscribe:" + inst.topic);
+          db.publish("proquote", "subscribe:" + inst.topic);
 
           // add topic to the set
           db.sadd("proquote", inst.topic);
         }
 
         // is this user subscribed?
-        db.sismember("proquote:users:" + inst.topic, userid, function(err, userfound) {
+        /*db.sismember("proquote:users:" + inst.topic, userid, function(err, userfound) {
           if (err) {
             console.log(err);
             return;
@@ -349,7 +373,7 @@ function subscribeAndSend(userid, symbol, conn) {
             // add client to the set for this instrument
             db.sadd("proquote:users:" + inst.topic, userid);
           }
-        });
+        });*/
       });
 
       // send the orderbook, with the current stored prices
@@ -447,9 +471,7 @@ function unsubscribeTopic(userid, symbol, marketext) {
     }
 
     // adjust the topic for the client market extension (i.e. delayed/live)
-    if (marketext == "LD") {
-      inst.topic += "D";
-    }
+    inst.topic += marketext;
 
     // remove user from set for this topic
     db.srem("proquote:users:" + inst.topic, userid);
@@ -461,7 +483,7 @@ function unsubscribeTopic(userid, symbol, marketext) {
         db.srem("proquote", inst.topic);
         // todo: change from dbpub?
         //dbpub.publish("cw2t", "unsubscribe:" + inst.topic);
-        db.publish("cw2t", "unsubscribe:" + inst.topic);
+        db.publish("proquote", "unsubscribe:" + inst.topic);
       }
     });
   });
@@ -1789,7 +1811,7 @@ function registerScripts() {
   local clientid = redis.call("incr", "clientid") \
   if not clientid then return {1005} end \
   --[[ store the client ]] \
-  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "brokerid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7], "hedge", KEYS[9], "brokerclientcode", KEYS[10]) \
+  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "brokerid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7], "hedge", KEYS[9], "brokerclientcode", KEYS[10], "marketext", "D") \
   --[[ add to set of clients ]] \
   redis.call("sadd", "clients", clientid) \
   --[[ add route to find client from email ]] \
@@ -1983,4 +2005,42 @@ function registerScripts() {
   redis.call("sadd", "ifas", ifaid) \
   return {0, ifaid} \
   ';
+
+  // params: symbol, userid
+  scriptsubscribeuser = '\
+  --[[ add the user to the orderbook set for this instrument ]] \
+  redis.call("sadd", "orderbook:" .. KEYS[1] .. ":users", KEYS[2]) \
+  --[[ add the instrument to the watchlist for this user ]] \
+  redis.call("sadd", "user:" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
+  --[[ get the topic for this symbol ]] \
+  local topic = redis.call("hget", "symbol:" .. KEYS[1], "topic") \
+  --[[ get the market extension for this user ]] \
+  local marketext = redis.call("hget", "user:" .. KEYS[2], "marketext") \
+  if marketext then \
+    topic = topic .. marketext \
+  end \
+  local needtosubscribe = 0 \
+  --[[ subscribe to proquote topic, if we are not already ]] \
+  if redis.call("sismember", "proquote", topic) == 0 then \
+    redis.call("publish", "proquote", "subscribe:" .. topic) \
+    redis.call("sadd", "proquote", topic) \
+    --[[ subcribe via subscription channel separately ]] \
+    needtosubscribe = 1 \
+  end \
+  --[[ add user to topic ]] \
+  redis.call("sadd", "topic:" .. topic .. ":symbol:" .. KEYS[1] .. ":users", KEYS[2]) \
+  return {needtosubscribe, topic} \
+  ';
+
+  scriptnewprice = '\
+  local symbols = redis.call("smembers", "topic:" .. KEYS[1] .. ":symbols") \
+  local voyeurs = {} \
+  for i = 1, #symbols do \
+    local users = redis.call("smembers", "topic:" .. KEYS[1] .. ":symbol:" .. symbols[i] .. ":users") \
+    for j = 1, #users do \
+      table.insert(voyeurs, {symbol = symbols[i], userid = users[j]}) \
+    end \
+  end \
+  return {voyeurs} \
+';
 }

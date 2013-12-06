@@ -120,7 +120,7 @@ function pubsub() {
     }
 
     // get the set of symbols linked to this topic (i.e. BARC.L & BARC.L.CFD are both linked to TIT.BARC.L)
-    /*db.smembers("topictosymbol:" + channel, function(err, replies) {
+    /*db.smembers("topicsymbol:" + channel, function(err, replies) {
       if (err) {
         console.log(err);
         return;
@@ -1591,9 +1591,7 @@ function subscribeAndSend(clientid, symbol, conn) {
       }
 
       // may need to adjust the topic to delayed
-      if (client.marketext == "LD") {
-        inst.topic += "D";
-      }
+      inst.topic += "D";
 
       // are we subscribed to this topic?
       db.sismember("proquote", inst.topic, function(err, instsubscribed) {
@@ -1748,9 +1746,7 @@ function unsubscribeTopic(clientid, symbol, marketext) {
     }
 
     // adjust the topic for the client market extension (i.e. delayed/live)
-    if (marketext == "LD") {
-      inst.topic += "D";
-    }
+    inst.topic += marketext;
 
     // remove client from set for this topic
     db.srem("proquote:" + inst.topic, clientid);

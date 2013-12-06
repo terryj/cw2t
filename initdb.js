@@ -62,7 +62,7 @@ function initdb() {
   db.sadd("clients", "999999");
 
   // clients - hash for each
-  db.hmset("client:999999", "email", "999999@thomasgrant.co.uk", "password", "999999", "brokerid", 1, "clientid", 999999, "marketext", "LD", "name", "Thomas Grant Hedgebook", "address", "", "mobile", "", "hedge", 0, "type", 2, "brokerclientcode", 999999);
+  db.hmset("client:999999", "email", "999999@thomasgrant.co.uk", "password", "999999", "brokerid", 1, "clientid", 999999, "marketext", "D", "name", "Thomas Grant Hedgebook", "address", "", "mobile", "", "hedge", 0, "type", 2, "brokerclientcode", 999999);
 
   // link between client email & id
   db.set("client:999999@thomasgrant.co.uk", "999999");
@@ -83,12 +83,12 @@ function initdb() {
   db.sadd("users", "6");
 
   // user hash
-  db.hmset("user:1", "email", "terry@cw2t.com", "password", "terry", "brokerid", 1, "userid", 1, "name", "Terry Johnston", "marketext", "LD");
-  db.hmset("user:2", "email", "grant@thomasgrant.co.uk", "password", "grant", "brokerid", 1, "userid", 2, "name", "Grant Oliver", "marketext", "LD");
-  db.hmset("user:3", "email", "tina@thomasgrant.co.uk", "password", "tina", "brokerid", 1, "userid", 3, "name", "Tina Tyers", "marketext", "LD");
-  db.hmset("user:4", "email", "patrick@thomasgrant.co.uk", "password", "patrick", "brokerid", 1, "userid", 4, "name", "Patrick Waldron", "marketext", "LD");
-  db.hmset("user:5", "email", "sheila@thomasgrant.co.uk", "password", "sheila", "brokerid", 1, "userid", 5, "name", "Sheila", "marketext", "LD");
-  db.hmset("user:6", "email", "kevin@thomasgrant.co.uk", "password", "kevin", "brokerid", 1, "userid", 6, "name", "Kevin", "marketext", "LD");
+  db.hmset("user:1", "email", "terry@cw2t.com", "password", "terry", "brokerid", 1, "userid", 1, "name", "Terry Johnston", "marketext", "D");
+  db.hmset("user:2", "email", "grant@thomasgrant.co.uk", "password", "grant", "brokerid", 1, "userid", 2, "name", "Grant Oliver", "marketext", "D");
+  db.hmset("user:3", "email", "tina@thomasgrant.co.uk", "password", "tina", "brokerid", 1, "userid", 3, "name", "Tina Tyers", "marketext", "D");
+  db.hmset("user:4", "email", "patrick@thomasgrant.co.uk", "password", "patrick", "brokerid", 1, "userid", 4, "name", "Patrick Waldron", "marketext", "D");
+  db.hmset("user:5", "email", "sheila@thomasgrant.co.uk", "password", "sheila", "brokerid", 1, "userid", 5, "name", "Sheila", "marketext", "D");
+  db.hmset("user:6", "email", "kevin@thomasgrant.co.uk", "password", "kevin", "brokerid", 1, "userid", 6, "name", "Kevin", "marketext", "D");
 
   // link between user email & id
   db.set("user:terry@cw2t.com", "1");
