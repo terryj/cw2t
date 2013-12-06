@@ -314,13 +314,13 @@ public class Cw2tClient implements ISessionObserver {
         }*/
         
         // get the symbol - todo: keep in a symbol -> topic hash?
-        String symbol = jedispublisher.hget("topic:" + Tpc, "symbol");
+        //String symbol = jedispublisher.hget("topic:" + Tpc, "symbol");
         
         // only interested in topics that are recognised symbols
-        if (symbol == null) {
+        /*if (symbol == null) {
             System.out.println("Topic not found: " + Tpc);
             return;
-        }
+        }*/
         //{\"orderbook\":{\"symbol\":\"" + symbol + "\",\"
         String jsonmsg = "\"prices\":[";
         boolean firstprice = true;

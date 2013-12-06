@@ -2053,6 +2053,48 @@ function registerScripts() {
   redis.call("sadd", "topic:" .. topic .. ":symbol:" .. KEYS[1] .. ":users", KEYS[2]) \
   return {needtosubscribe, topic} \
   ';
+  // get the proquote topic
+  db.hgetall("symbol:" + symbol, function(err, inst) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (inst == null) {
+      console.log("symbol:" + symbol + " not found");
+      return;
+    }
+
+    // adjust the topic for the client market extension (i.e. delayed/live)
+    inst.topic += marketext;
+
+    // remove user from set for this topic
+    db.srem("proquote:users:" + inst.topic, userid);
+
+    // unsubscribe from this topic if no clients are looking at it
+    db.scard("proquote:" + inst.topic, function(err, numelements) {
+      if (numelements == 0) {
+        dbsub.unsubscribe(inst.topic);
+        db.srem("proquote", inst.topic);
+        // todo: change from dbpub?
+        //dbpub.publish("cw2t", "unsubscribe:" + inst.topic);
+        db.publish("proquote", "unsubscribe:" + inst.topic);
+      }
+
+  scriptunsubscribeuser = '\
+  redis.call("srem", "orderbook:" .. KEYS[1] .. ":users", KEYS[2]) \
+  // & remove the instrument from the order book set for this user
+  redis.call("srem", "user:" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
+  --[[ get the topic for this symbol ]] \
+  local topic = redis.call("hget", "symbol:" .. KEYS[1], "topic") \
+  --[[ get the market extension for this user ]] \
+  local marketext = redis.call("hget", "user:" .. KEYS[2], "marketext") \
+  if marketext then \
+    topic = topic .. marketext \
+  end \
+  --[[ remove user from topic ]] \
+  redis.call("srem", "topic:" .. topic .. ":symbol:" .. KEYS[1] .. ":users", KEYS[2]) \
+  ';
 
   scriptnewprice = '\
   local symbols = redis.call("smembers", "topic:" .. KEYS[1] .. ":symbols") \
