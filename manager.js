@@ -67,6 +67,7 @@ var scriptgetcosts;
 var scriptifa;
 var scriptsubscribeinstrument;
 var scriptunsubscribeinstrument;
+var scriptsubscribeuser;
 var scriptunsubscribeuser;
 var scriptnewprice;
 
@@ -291,12 +292,10 @@ function tidy(userid) {
     db.eval(scriptunsubscribeuser, 1, userid, function(err, ret) {
       if (err) throw err;
 
-      console.log(ret);
-
       // the script tells us if we need to unsubscribe
-      //if (ret[0]) {
-        //dbsub.subscribe(ret[1]);
-      //}
+      for (var i = 0; i < ret.length; i++) {
+        dbsub.unsubscribe(ret[i]);
+      }
     });
   }
 }
@@ -322,9 +321,8 @@ function newPrice(topic, msg) {
       jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
       console.log(jsonmsg);
 
-      //db.smembers("topic:" + topic + ":symbol:" + symbol + ":users", function(err, users) {
       // get the users watching this symbol
-      db.smembers("orderbook:" + symbol + ":users", function(err, users) {
+      db.smembers("topic:" + topic + ":symbol:" + symbol + ":users", function(err, users) {
         if (err) throw err;
 
         // send the message to each user
@@ -1756,6 +1754,8 @@ function getPTPQuoteRejectReason(reason) {
 function registerScripts() {
   var stringsplit;
   var updatecash;
+  var subscribeinstrument;
+  var unsubscribeinstrument;
 
   //
   // function to split a string into an array of substrings, based on a character
@@ -2026,86 +2026,98 @@ function registerScripts() {
   return {0, ifaid} \
   ';
 
-  // params: symbol, userid
-  scriptsubscribeinstrument = '\
-  --[[ add the user to the orderbook set for this instrument ]] \
-  redis.call("sadd", "orderbook:" .. KEYS[1] .. ":users", KEYS[2]) \
-  --[[ add the instrument to the watchlist for this user ]] \
-  redis.call("sadd", "user:" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
-  --[[ get the topic for this symbol ]] \
-  local topic = redis.call("hget", "symbol:" .. KEYS[1], "topic") \
-  --[[ get the market extension for this user ]] \
-  local marketext = redis.call("hget", "user:" .. KEYS[2], "marketext") \
-  if marketext then \
-    topic = topic .. marketext \
-  end \
-  local needtosubscribe = 0 \
-  --[[ subscribe to proquote topic, if we are not already ]] \
-  if redis.call("sismember", "proquote:topics:user", topic) == 0 then \
-    redis.call("publish", "proquote", "subscribe:" .. topic) \
-    redis.call("sadd", "proquote:topics:user", topic) \
-    --[[ subcribe via subscription channel separately ]] \
-    needtosubscribe = 1 \
-  end \
-  --[[ add user to topic ]] \
-  redis.call("sadd", "topic:" .. topic .. ":users", KEYS[2]) \
-  --[[ add topic to user ]] \
-  redis.call("sadd", "user:" .. KEYS[2] .. ":topics", topic) \
-  --[[ add symbol to topic for this user as may be more than one symbol for a topic ]] \
-  redis.call("sadd", "topic:" .. topic .. ":user:" .. KEYS[2] .. ":symbols", KEYS[1]) \
-  return {needtosubscribe, topic} \
-  ';
-
-  // params: symbol, userid
-  scriptunsubscribeinstrument = '\
-  --[[ remove the user from the orderbook set for this instrument ]] \
-  redis.call("srem", "orderbook:" .. KEYS[1] .. ":users", KEYS[2]) \
-  --[[ remove the instrument from the order book set for this user ]] \
-  redis.call("srem", "user:" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
-  --[[ get the topic for this symbol ]] \
-  local topic = redis.call("hget", "symbol:" .. KEYS[1], "topic") \
-  --[[ get the market extension for this user ]] \
-  local marketext = redis.call("hget", "user:" .. KEYS[2], "marketext") \
-  if marketext then \
-    topic = topic .. marketext \
-  end \
-  local needtounsubscribe = 0 \
-  --[[ remove symbol from topic for this user ]] \
-  redis.call("srem", "topic:" .. topic .. ":user:" .. KEYS[2] .. ":symbols", KEYS[1]) \
-  if redis.call("scard", "topic:" .. topic .. ":user:" .. KEYS[2] .. ":symbols") == 0 then \
-    --[[ remove topic from user ]] \
-    redis.call("srem", "user:" .. KEYS[2] .. ":topics", topic) \
-    --[[ remove user from topic ]] \
-    redis.call("srem", "topic:" .. topic .. ":users", KEYS[2]) \
-    if redis.call("scard", "topic:" .. topic .. ":users") == 0 then \
-      --[[ we can unsubscribe from this topic ]] \
-      redis.call("publish", "proquote", "unsubscribe:" .. topic) \
-      redis.call("srem", "proquote:topics:user", topic) \
-      needtounsubscribe = 1 \
+  subscribeinstrument = '\
+  local subscribeinstrument = function(symbol, userid) \
+    local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
+    local marketext = redis.call("hget", "user:" .. userid, "marketext") \
+    if marketext then \
+      topic = topic .. marketext \
     end \
+    local needtosubscribe = 0 \
+    if redis.call("sismember", "proquote:topics:user", topic) == 0 then \
+      redis.call("publish", "proquote", "subscribe:" .. topic) \
+      redis.call("sadd", "proquote:topics:user", topic) \
+      needtosubscribe = 1 \
+    end \
+    redis.call("sadd", "topic:" .. topic .. ":users", userid) \
+    redis.call("sadd", "user:" .. userid .. ":topics", topic) \
+    redis.call("sadd", "topic:" .. topic .. ":user:" .. userid .. ":symbols", symbol) \
+    redis.call("sadd", "topic:" .. topic .. ":symbol:" .. symbol .. ":users", userid) \
+    return {needtosubscribe, topic} \
   end \
-  return {needtounsubscribe, topic} \
   ';
 
-  scriptunsubscribeuser = '\
-  local topics = redis.call("smembers", "user:" .. KEYS[1] .. ":topics") \
+  // params: symbol, userid
+  scriptsubscribeinstrument = subscribeinstrument + '\
+  redis.call("sadd", "orderbook:" .. KEYS[1] .. ":users", KEYS[2]) \
+  redis.call("sadd", "user:" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
+  local ret = subscribeinstrument(KEYS[1], KEYS[2]) \
+  return ret \
+  ';
+
+  scriptsubscribeuser = subscribeinstrument + '\
+  local orderbooks = redis.call("smembers", "user:" .. KEYS[1] .. ":orderbooks") \
+  for i = 1, #orderbooks do \
+    subscribeinstrument(orderbooks[i], KEYS[1]) \
+  end \
+  ';
+
+  unsubscribeinstrument = '\
+  local unsubscribeinstrument = function(symbol, userid) \
+    local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
+    local marketext = redis.call("hget", "user:" .. userid, "marketext") \
+    if marketext then \
+      topic = topic .. marketext \
+    end \
+    local needtounsubscribe = 0 \
+    redis.call("srem", "topic:" .. topic .. ":symbol:" .. symbol .. ":users", userid) \
+    redis.call("srem", "topic:" .. topic .. ":user:" .. userid .. ":symbols", symbol) \
+    if redis.call("scard", "topic:" .. topic .. ":user:" .. userid .. ":symbols") == 0 then \
+      redis.call("srem", "user:" .. userid .. ":topics", topic) \
+      redis.call("srem", "topic:" .. topic .. ":users", userid) \
+      if redis.call("scard", "topic:" .. topic .. ":users") == 0 then \
+        redis.call("publish", "proquote", "unsubscribe:" .. topic) \
+        redis.call("srem", "proquote:topics:user", topic) \
+        needtounsubscribe = 1 \
+      end \
+    end \
+    return {needtounsubscribe, topic} \
+  end \
+  ';
+
+  // params: symbol, userid
+  scriptunsubscribeinstrument = unsubscribeinstrument + '\
+  redis.call("srem", "orderbook:" .. KEYS[1] .. ":users", KEYS[2]) \
+  redis.call("srem", "user:" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
+  local ret = unsubscribeinstrument(KEYS[1], KEYS[2]) \
+  return ret \
+  ';
+
+  scriptunsubscribeuser = unsubscribeinstrument + '\
+  local orderbooks = redis.call("smembers", "user:" .. KEYS[1] .. ":orderbooks") \
+  for i = 1, #orderbooks do \
+    unsubscribeinstrument(orderbooks[i], KEYS[1]) \
+  end \
+  ';
+
+  /*local topics = redis.call("smembers", "user:" .. KEYS[1] .. ":topics") \
   local needtounsubscribe = {} \
   for i = 1, #topics do \
     local symbols = redis.call("smembers", "topic:" .. topics[i] .. ":user:" .. KEYS[1] .. ":symbols") \
     for j = 1, #symbols do \
       redis.call("srem", "topic:" .. topics[i] .. ":user:" .. KEYS[1] .. ":symbols", symbols[j]) \
+      redis.call("srem", "topic:" .. topics[i] .. ":symbol:" .. symbols[j] .. ":users", KEYS[1]) \
     end \
     redis.call("srem", "user:" .. KEYS[1] .. ":topics", topics[i]) \
     redis.call("srem", "topic:" .. topics[i] .. ":users", KEYS[1]) \
     if redis.call("scard", "topic:" .. topics[i] .. ":users") == 0 then \
-      --[[ we can unsubscribe from this topic ]] \
       redis.call("publish", "proquote", "unsubscribe:" .. topics[i]) \
       redis.call("srem", "proquote:topics:user", topics[i]) \
       table.insert(needtounsubscribe, topics[i]) \
     end \
   end \
   return needtounsubscribe \
-  ';
+  ';*/
 
   scriptnewprice = '\
   local symbols = redis.call("smembers", "topic:" .. KEYS[1] .. ":symbols") \
