@@ -65,7 +65,9 @@ var scriptgethedgebooks;
 var scriptcost;
 var scriptgetcosts;
 var scriptifa;
-var scriptsubscribeuser;
+var scriptsubscribeinstrument;
+var scriptunsubscribeinstrument;
+var scriptunsubscribeuser;
 var scriptnewprice;
 
 // set-up a redis client
@@ -103,7 +105,6 @@ function initialise() {
 // pubsub connections
 function pubsub() {
   dbsub = redis.createClient(redisport, redishost);
-  //dbpub = redis.createClient(redisport, redishost);
 
   dbsub.on("subscribe", function(channel, count) {
     console.log("subscribed to:" + channel + ", num. channels:" + count);
@@ -129,6 +130,7 @@ function pubsub() {
     }
   });
 
+  // listen for trading messages
   dbsub.subscribe(userserverchannel);
 }
 
@@ -218,6 +220,8 @@ function listen() {
 
     // close connection callback
     conn.on('close', function() {
+      tidy(userid);
+
       // todo: check for existence
       userid = "0";
     });
@@ -272,6 +276,31 @@ function listen() {
   });
 }
 
+function tidy(userid) {
+  if (userid != "0") {
+    if (userid in connections) {
+      console.log("user:" + userid + " logged off");
+
+      // remove from list
+      delete connections[userid];
+
+      // remove from database
+      db.srem("connections:users", userid);
+    }
+
+    db.eval(scriptunsubscribeuser, 1, userid, function(err, ret) {
+      if (err) throw err;
+
+      console.log(ret);
+
+      // the script tells us if we need to unsubscribe
+      //if (ret[0]) {
+        //dbsub.subscribe(ret[1]);
+      //}
+    });
+  }
+}
+
 function newPrice(topic, msg) {
   var jsonmsg;
   /*db.eval(scriptnewprice, 1, topic, function(err, ret) {
@@ -285,13 +314,20 @@ function newPrice(topic, msg) {
   db.smembers("topic:" + topic + ":symbols", function(err, symbols) {
     if (err) throw err;
 
+    // get the symbols covered by this topic - equity price covers cfd, spb...
     symbols.forEach(function(symbol, i) {
       console.log(symbol);
+
+      // build the message according to the symbol
       jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
       console.log(jsonmsg);
-      db.smembers("topic:" + topic + ":symbol:" + symbol + ":users", function(err, users) {
+
+      //db.smembers("topic:" + topic + ":symbol:" + symbol + ":users", function(err, users) {
+      // get the users watching this symbol
+      db.smembers("orderbook:" + symbol + ":users", function(err, users) {
         if (err) throw err;
 
+        // send the message to each user
         users.forEach(function(user, i) {
           console.log(user);
 
@@ -305,11 +341,12 @@ function newPrice(topic, msg) {
 }
 
 function orderBookRequest(userid, symbol, conn) {
-  db.eval(scriptsubscribeuser, 2, symbol, userid, function(err, ret) {
+  db.eval(scriptsubscribeinstrument, 2, symbol, userid, function(err, ret) {
     if (err) throw err;
 
     console.log(ret);
 
+    // the script tells us if we need to subscribe to a topic
     if (ret[0]) {
       dbsub.subscribe(ret[1]);
     }
@@ -376,7 +413,6 @@ function subscribeAndSend(userid, symbol, conn) {
           dbsub.subscribe(inst.topic);
 
           // let proquote know
-          //dbpub.publish("cw2t", "subscribe:" + inst.topic);
           db.publish("proquote", "subscribe:" + inst.topic);
 
           // add topic to the set
@@ -461,53 +497,15 @@ function sendCurrentOrderBook(symbol, topic, conn) {
 }
 
 function orderBookRemoveRequest(userid, symbol, conn) {
-  // remove the client from the order book set for this instrument
-  // todo: adjust for clients...
-  db.srem("orderbook:" + symbol, userid);
+  db.eval(scriptunsubscribeinstrument, 2, symbol, userid, function(err, ret) {
+    if (err) throw err;
 
-  // & remove the instrument from the order book set for this user
-  db.srem("user:" + userid + ":orderbooks", symbol);
+    console.log(ret);
 
-  // get the market extension for this client, as topic may need to be adjusted for live/delayed
-  db.hget("user:" + userid, "marketext", function(err, marketext) {
-    if (err) {
-      console.log("Error in orderBookRemoveRequest:" + err);
-      return;
+    // the script will tell us if we need to unsubscribe from the topic
+    if (ret[0]) {
+      dbsub.unsubscribe(ret[1]);
     }
-
-    unsubscribeTopic(userid, symbol, marketext);
-  });
-}
-
-function unsubscribeTopic(userid, symbol, marketext) {
-  // get the proquote topic
-  db.hgetall("symbol:" + symbol, function(err, inst) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (inst == null) {
-      console.log("symbol:" + symbol + " not found");
-      return;
-    }
-
-    // adjust the topic for the client market extension (i.e. delayed/live)
-    inst.topic += marketext;
-
-    // remove user from set for this topic
-    db.srem("proquote:users:" + inst.topic, userid);
-
-    // unsubscribe from this topic if no clients are looking at it
-    db.scard("proquote:" + inst.topic, function(err, numelements) {
-      if (numelements == 0) {
-        dbsub.unsubscribe(inst.topic);
-        db.srem("proquote", inst.topic);
-        // todo: change from dbpub?
-        //dbpub.publish("cw2t", "unsubscribe:" + inst.topic);
-        db.publish("proquote", "unsubscribe:" + inst.topic);
-      }
-    });
   });
 }
 
@@ -2029,7 +2027,7 @@ function registerScripts() {
   ';
 
   // params: symbol, userid
-  scriptsubscribeuser = '\
+  scriptsubscribeinstrument = '\
   --[[ add the user to the orderbook set for this instrument ]] \
   redis.call("sadd", "orderbook:" .. KEYS[1] .. ":users", KEYS[2]) \
   --[[ add the instrument to the watchlist for this user ]] \
@@ -2043,47 +2041,26 @@ function registerScripts() {
   end \
   local needtosubscribe = 0 \
   --[[ subscribe to proquote topic, if we are not already ]] \
-  if redis.call("sismember", "proquote", topic) == 0 then \
+  if redis.call("sismember", "proquote:topics:user", topic) == 0 then \
     redis.call("publish", "proquote", "subscribe:" .. topic) \
-    redis.call("sadd", "proquote", topic) \
+    redis.call("sadd", "proquote:topics:user", topic) \
     --[[ subcribe via subscription channel separately ]] \
     needtosubscribe = 1 \
   end \
   --[[ add user to topic ]] \
-  redis.call("sadd", "topic:" .. topic .. ":symbol:" .. KEYS[1] .. ":users", KEYS[2]) \
+  redis.call("sadd", "topic:" .. topic .. ":users", KEYS[2]) \
+  --[[ add topic to user ]] \
+  redis.call("sadd", "user:" .. KEYS[2] .. ":topics", topic) \
+  --[[ add symbol to topic for this user as may be more than one symbol for a topic ]] \
+  redis.call("sadd", "topic:" .. topic .. ":user:" .. KEYS[2] .. ":symbols", KEYS[1]) \
   return {needtosubscribe, topic} \
   ';
-  // get the proquote topic
-  db.hgetall("symbol:" + symbol, function(err, inst) {
-    if (err) {
-      console.log(err);
-      return;
-    }
 
-    if (inst == null) {
-      console.log("symbol:" + symbol + " not found");
-      return;
-    }
-
-    // adjust the topic for the client market extension (i.e. delayed/live)
-    inst.topic += marketext;
-
-    // remove user from set for this topic
-    db.srem("proquote:users:" + inst.topic, userid);
-
-    // unsubscribe from this topic if no clients are looking at it
-    db.scard("proquote:" + inst.topic, function(err, numelements) {
-      if (numelements == 0) {
-        dbsub.unsubscribe(inst.topic);
-        db.srem("proquote", inst.topic);
-        // todo: change from dbpub?
-        //dbpub.publish("cw2t", "unsubscribe:" + inst.topic);
-        db.publish("proquote", "unsubscribe:" + inst.topic);
-      }
-
-  scriptunsubscribeuser = '\
+  // params: symbol, userid
+  scriptunsubscribeinstrument = '\
+  --[[ remove the user from the orderbook set for this instrument ]] \
   redis.call("srem", "orderbook:" .. KEYS[1] .. ":users", KEYS[2]) \
-  // & remove the instrument from the order book set for this user
+  --[[ remove the instrument from the order book set for this user ]] \
   redis.call("srem", "user:" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
   --[[ get the topic for this symbol ]] \
   local topic = redis.call("hget", "symbol:" .. KEYS[1], "topic") \
@@ -2092,8 +2069,42 @@ function registerScripts() {
   if marketext then \
     topic = topic .. marketext \
   end \
-  --[[ remove user from topic ]] \
-  redis.call("srem", "topic:" .. topic .. ":symbol:" .. KEYS[1] .. ":users", KEYS[2]) \
+  local needtounsubscribe = 0 \
+  --[[ remove symbol from topic for this user ]] \
+  redis.call("srem", "topic:" .. topic .. ":user:" .. KEYS[2] .. ":symbols", KEYS[1]) \
+  if redis.call("scard", "topic:" .. topic .. ":user:" .. KEYS[2] .. ":symbols") == 0 then \
+    --[[ remove topic from user ]] \
+    redis.call("srem", "user:" .. KEYS[2] .. ":topics", topic) \
+    --[[ remove user from topic ]] \
+    redis.call("srem", "topic:" .. topic .. ":users", KEYS[2]) \
+    if redis.call("scard", "topic:" .. topic .. ":users") == 0 then \
+      --[[ we can unsubscribe from this topic ]] \
+      redis.call("publish", "proquote", "unsubscribe:" .. topic) \
+      redis.call("srem", "proquote:topics:user", topic) \
+      needtounsubscribe = 1 \
+    end \
+  end \
+  return {needtounsubscribe, topic} \
+  ';
+
+  scriptunsubscribeuser = '\
+  local topics = redis.call("smembers", "user:" .. KEYS[1] .. ":topics") \
+  local needtounsubscribe = {} \
+  for i = 1, #topics do \
+    local symbols = redis.call("smembers", "topic:" .. topics[i] .. ":user:" .. KEYS[1] .. ":symbols") \
+    for j = 1, #symbols do \
+      redis.call("srem", "topic:" .. topics[i] .. ":user:" .. KEYS[1] .. ":symbols", symbols[j]) \
+    end \
+    redis.call("srem", "user:" .. KEYS[1] .. ":topics", topics[i]) \
+    redis.call("srem", "topic:" .. topics[i] .. ":users", KEYS[1]) \
+    if redis.call("scard", "topic:" .. topics[i] .. ":users") == 0 then \
+      --[[ we can unsubscribe from this topic ]] \
+      redis.call("publish", "proquote", "unsubscribe:" .. topics[i]) \
+      redis.call("srem", "proquote:topics:user", topics[i]) \
+      table.insert(needtounsubscribe, topics[i]) \
+    end \
+  end \
+  return needtounsubscribe \
   ';
 
   scriptnewprice = '\

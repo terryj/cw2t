@@ -253,7 +253,7 @@ function listen() {
           delete connections[clientid];
 
           // remove from database
-          db.srem("connections", clientid);
+          db.srem("connections:clients", clientid);
         }
 
         unsubscribeTopics(clientid);
@@ -297,7 +297,7 @@ function listen() {
           connections[clientid] = conn;
 
           // keep a record
-          db.sadd("connections", clientid);
+          db.sadd("connections:clients", clientid);
 
           // send a successful logon reply
           reply.success = true;
