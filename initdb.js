@@ -99,7 +99,7 @@ function initdb() {
   db.set("user:kevin@thomasgrant.co.uk", "6");
 
   // stocks - add international stocks to set of stocks & hash
-  db.hset("symbol:AMZN", "currency", "USD");
+  /*db.hset("symbol:AMZN", "currency", "USD");
   db.hset("symbol:AMZN", "description", "Amazon.com, Inc");
   db.hset("symbol:AMZN", "proquotesymbol", "AMZN");
   db.hset("symbol:AMZN", "isin", "US0231351067");
@@ -120,7 +120,7 @@ function initdb() {
   db.hset("symbol:BARC.L", "instrumenttype", "DE");
   db.hset("symbol:BARC.L", "market", "L");
   db.set("proquotesymbol:BARC", "BARC.L");
-  db.sadd("instruments", "BARC.L");
+  db.sadd("instruments", "BARC.L");*/
 
   // instrument types
   db.sadd("instrumenttypes", "DE");

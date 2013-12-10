@@ -15,10 +15,13 @@ var sockjs = require('sockjs');
 var node_static = require('node-static');
 var redis = require('redis');
 
+// internal libraries
+var common = require('./common.js');
+
 // globals
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
-var cw2tport = 8081; // client listen port
+var cw2tport = 8081; // user listen port
 var outofhours = false; // in or out of market hours - todo: replace with markettype?
 var ordertypes = {};
 var brokerid = "1"; // todo: via logon
@@ -26,6 +29,7 @@ var defaultnosettdays = 3;
 var operatortype = 2;
 var tradeserverchannel = 3;
 var userserverchannel = 2;
+var servertype = "user";
 
 // redis
 var redishost;
@@ -65,10 +69,6 @@ var scriptgethedgebooks;
 var scriptcost;
 var scriptgetcosts;
 var scriptifa;
-var scriptsubscribeinstrument;
-var scriptunsubscribeinstrument;
-var scriptsubscribeuser;
-var scriptunsubscribeuser;
 var scriptnewprice;
 
 // set-up a redis client
@@ -289,10 +289,12 @@ function tidy(userid) {
       db.srem("connections:users", userid);
     }
 
-    db.eval(scriptunsubscribeuser, 1, userid, function(err, ret) {
+    db.eval(common.scriptunsubscribeid, 2, userid, servertype, function(err, ret) {
       if (err) throw err;
 
-      // the script tells us if we need to unsubscribe
+      console.log(ret);
+
+      // unsubscribe returned topics
       for (var i = 0; i < ret.length; i++) {
         dbsub.unsubscribe(ret[i]);
       }
@@ -339,7 +341,7 @@ function newPrice(topic, msg) {
 }
 
 function orderBookRequest(userid, symbol, conn) {
-  db.eval(scriptsubscribeinstrument, 2, symbol, userid, function(err, ret) {
+  db.eval(common.scriptsubscribeinstrument, 3, symbol, userid, servertype, function(err, ret) {
     if (err) throw err;
 
     console.log(ret);
@@ -351,90 +353,6 @@ function orderBookRequest(userid, symbol, conn) {
 
     // send the orderbook, with the current stored prices
     sendCurrentOrderBook(symbol, ret[1], conn);
-  });
-/*
-  // add the user to the orderbook set for this instrument
-  db.sadd("orderbook:users:" + symbol, userid);
-
-  // & add the instrument to the watchlist for this user
-  db.sadd("user:" + userid + ":orderbooks", symbol);
-
-  orderBookOut(userid, symbol, conn);*/
-}
-
-function orderBookOut(userid, symbol, conn) {
-  if (outofhours) {
-    // todo:
-    //broadcastLevelTwo(symbol, conn);
-  } else {
-    subscribeAndSend(userid, symbol, conn);
-  }
-}
-
-function subscribeAndSend(userid, symbol, conn) {
-  // get the proquote topic
-  db.hgetall("symbol:" + symbol, function(err, inst) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (inst == null) {
-      console.log("symbol:" + symbol + " not found");
-      return;
-    }
-
-    // get the user to check market extension - defaults to 'LD' for LSE delayed
-    db.hgetall("user:" + userid, function(err, user) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      if (!user) {
-        console.log("user:" + userid + " not found");
-        return;
-      }
-
-      // may need to adjust the topic to delayed
-      inst.topic += user.marketext;
-
-      // are we subscribed to this topic?
-      db.sismember("proquote", inst.topic, function(err, instsubscribed) {
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        // if not, add it
-        if (!instsubscribed) {
-          dbsub.subscribe(inst.topic);
-
-          // let proquote know
-          db.publish("proquote", "subscribe:" + inst.topic);
-
-          // add topic to the set
-          db.sadd("proquote", inst.topic);
-        }
-
-        // is this user subscribed?
-        /*db.sismember("proquote:users:" + inst.topic, userid, function(err, userfound) {
-          if (err) {
-            console.log(err);
-            return;
-          }
-
-          if (!userfound) {
-            console.log("subscribing user:" + userid + " to " + inst.topic)
-            // add client to the set for this instrument
-            db.sadd("proquote:users:" + inst.topic, userid);
-          }
-        });*/
-      });
-
-      // send the orderbook, with the current stored prices
-      sendCurrentOrderBook(symbol, inst.topic, conn);
-    });
   });
 }
 
@@ -495,7 +413,7 @@ function sendCurrentOrderBook(symbol, topic, conn) {
 }
 
 function orderBookRemoveRequest(userid, symbol, conn) {
-  db.eval(scriptunsubscribeinstrument, 2, symbol, userid, function(err, ret) {
+  db.eval(common.scriptunsubscribeinstrument, 3, symbol, userid, servertype, function(err, ret) {
     if (err) throw err;
 
     console.log(ret);
@@ -1029,7 +947,8 @@ function sendIndex(orgclientkey, index, conn) {
         //count--;
         //if (count <= 0) {
           //conn.write("{\"index\":" + JSON.stringify(i) + "}");
-          orderBookOut(orgclientkey, symbol, conn);
+          //orderBookOut(orgclientkey, symbol, conn);
+          //orderBookRequest...
         //}
       });
     });
@@ -1350,7 +1269,7 @@ function sendOrderBook(symbol, level1arr, send, conn) {
 }
 
 //
-// send all the orderbooks for a single client
+// send all the orderbooks for a single user
 //
 function sendOrderBooks(userid, conn) {
   // get all the instruments in the order book for this user
@@ -1362,7 +1281,7 @@ function sendOrderBooks(userid, conn) {
 
     // send the order book for each instrument
     instruments.forEach(function (symbol, i) {
-      orderBookOut(userid, symbol, conn);
+      orderBookRequest(userid, symbol, conn);
     });
   });
 }
@@ -1483,6 +1402,7 @@ function replySignIn(reply, conn) {
 }
 
 function initDb() {
+  common.registerCommonScripts();
   registerScripts();
 }
 
@@ -1754,8 +1674,6 @@ function getPTPQuoteRejectReason(reason) {
 function registerScripts() {
   var stringsplit;
   var updatecash;
-  var subscribeinstrument;
-  var unsubscribeinstrument;
 
   //
   // function to split a string into an array of substrings, based on a character
@@ -2025,99 +1943,6 @@ function registerScripts() {
   redis.call("sadd", "ifas", ifaid) \
   return {0, ifaid} \
   ';
-
-  subscribeinstrument = '\
-  local subscribeinstrument = function(symbol, userid) \
-    local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
-    local marketext = redis.call("hget", "user:" .. userid, "marketext") \
-    if marketext then \
-      topic = topic .. marketext \
-    end \
-    local needtosubscribe = 0 \
-    if redis.call("sismember", "proquote:topics:user", topic) == 0 then \
-      redis.call("publish", "proquote", "subscribe:" .. topic) \
-      redis.call("sadd", "proquote:topics:user", topic) \
-      needtosubscribe = 1 \
-    end \
-    redis.call("sadd", "topic:" .. topic .. ":users", userid) \
-    redis.call("sadd", "user:" .. userid .. ":topics", topic) \
-    redis.call("sadd", "topic:" .. topic .. ":user:" .. userid .. ":symbols", symbol) \
-    redis.call("sadd", "topic:" .. topic .. ":symbol:" .. symbol .. ":users", userid) \
-    return {needtosubscribe, topic} \
-  end \
-  ';
-
-  // params: symbol, userid
-  scriptsubscribeinstrument = subscribeinstrument + '\
-  redis.call("sadd", "orderbook:" .. KEYS[1] .. ":users", KEYS[2]) \
-  redis.call("sadd", "user:" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
-  local ret = subscribeinstrument(KEYS[1], KEYS[2]) \
-  return ret \
-  ';
-
-  scriptsubscribeuser = subscribeinstrument + '\
-  local orderbooks = redis.call("smembers", "user:" .. KEYS[1] .. ":orderbooks") \
-  for i = 1, #orderbooks do \
-    subscribeinstrument(orderbooks[i], KEYS[1]) \
-  end \
-  ';
-
-  unsubscribeinstrument = '\
-  local unsubscribeinstrument = function(symbol, userid) \
-    local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
-    local marketext = redis.call("hget", "user:" .. userid, "marketext") \
-    if marketext then \
-      topic = topic .. marketext \
-    end \
-    local needtounsubscribe = 0 \
-    redis.call("srem", "topic:" .. topic .. ":symbol:" .. symbol .. ":users", userid) \
-    redis.call("srem", "topic:" .. topic .. ":user:" .. userid .. ":symbols", symbol) \
-    if redis.call("scard", "topic:" .. topic .. ":user:" .. userid .. ":symbols") == 0 then \
-      redis.call("srem", "user:" .. userid .. ":topics", topic) \
-      redis.call("srem", "topic:" .. topic .. ":users", userid) \
-      if redis.call("scard", "topic:" .. topic .. ":users") == 0 then \
-        redis.call("publish", "proquote", "unsubscribe:" .. topic) \
-        redis.call("srem", "proquote:topics:user", topic) \
-        needtounsubscribe = 1 \
-      end \
-    end \
-    return {needtounsubscribe, topic} \
-  end \
-  ';
-
-  // params: symbol, userid
-  scriptunsubscribeinstrument = unsubscribeinstrument + '\
-  redis.call("srem", "orderbook:" .. KEYS[1] .. ":users", KEYS[2]) \
-  redis.call("srem", "user:" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
-  local ret = unsubscribeinstrument(KEYS[1], KEYS[2]) \
-  return ret \
-  ';
-
-  scriptunsubscribeuser = unsubscribeinstrument + '\
-  local orderbooks = redis.call("smembers", "user:" .. KEYS[1] .. ":orderbooks") \
-  for i = 1, #orderbooks do \
-    unsubscribeinstrument(orderbooks[i], KEYS[1]) \
-  end \
-  ';
-
-  /*local topics = redis.call("smembers", "user:" .. KEYS[1] .. ":topics") \
-  local needtounsubscribe = {} \
-  for i = 1, #topics do \
-    local symbols = redis.call("smembers", "topic:" .. topics[i] .. ":user:" .. KEYS[1] .. ":symbols") \
-    for j = 1, #symbols do \
-      redis.call("srem", "topic:" .. topics[i] .. ":user:" .. KEYS[1] .. ":symbols", symbols[j]) \
-      redis.call("srem", "topic:" .. topics[i] .. ":symbol:" .. symbols[j] .. ":users", KEYS[1]) \
-    end \
-    redis.call("srem", "user:" .. KEYS[1] .. ":topics", topics[i]) \
-    redis.call("srem", "topic:" .. topics[i] .. ":users", KEYS[1]) \
-    if redis.call("scard", "topic:" .. topics[i] .. ":users") == 0 then \
-      redis.call("publish", "proquote", "unsubscribe:" .. topics[i]) \
-      redis.call("srem", "proquote:topics:user", topics[i]) \
-      table.insert(needtounsubscribe, topics[i]) \
-    end \
-  end \
-  return needtounsubscribe \
-  ';*/
 
   scriptnewprice = '\
   local symbols = redis.call("smembers", "topic:" .. KEYS[1] .. ":symbols") \
