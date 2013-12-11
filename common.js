@@ -108,7 +108,7 @@ exports.registerCommonScripts = function () {
   	// unsubscribe everything for a server type
   	// params: servertype
   	//
-  	exports.scriptunsubscribeserver = '\
+  	/*exports.scriptunsubscribeserver = '\
   	local topics = redis.call("smembers", "server:" .. KEYS[1] .. ":topics") \
   	for i = 1, #topics do \
   		local symbols = redis.call("smembers", "topic:" .. topics[i] .. ":" .. KEYS[1] .. ":symbols") \
@@ -129,4 +129,10 @@ exports.registerCommonScripts = function () {
   		redis.call("srem", "server:" .. KEYS[1] .. ":topics", topics[i]) \
   	end \
   	';
+
+  	exports.scriptunsubscribeserver = '\
+  	local connections = redis.call("smembers", "connections:" + KEYS[1]) \
+  	for i = 1, #connections do \
+  	end \
+  	';*/
 };

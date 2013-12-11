@@ -264,7 +264,7 @@ function listen() {
           connections[userid] = conn;
 
           // keep a record
-          db.sadd("connections:users", userid);
+          db.sadd("connections:" + servertype, userid);
 
           // send a successful logon reply
           reply.success = true;
@@ -290,20 +290,24 @@ function tidy(userid) {
       delete connections[userid];
 
       // remove from database
-      db.srem("connections:users", userid);
+      db.srem("connections:" + servertype, userid);
     }
 
-    db.eval(common.scriptunsubscribeid, 2, userid, servertype, function(err, ret) {
-      if (err) throw err;
-
-      console.log(ret);
-
-      // unsubscribe returned topics
-      for (var i = 0; i < ret.length; i++) {
-        dbsub.unsubscribe(ret[i]);
-      }
-    });
+    unsubscribeUser(userid);
   }
+}
+
+function unsubscribeUser(userid) {
+  db.eval(common.scriptunsubscribeid, 2, userid, servertype, function(err, ret) {
+    if (err) throw err;
+
+    console.log(ret);
+
+    // unsubscribe returned topics
+    for (var i = 0; i < ret.length; i++) {
+      dbsub.unsubscribe(ret[i]);
+    }
+  });
 }
 
 function newPrice(topic, msg) {
@@ -1398,23 +1402,18 @@ function replySignIn(reply, conn) {
 }
 
 function initDb() {
-  // clear any connected clients
-  db.smembers("connections:users", function(err, connections) {
+  // clear any connected users
+  db.smembers("connections:" + servertype, function(err, connections) {
     if (err) {
       console.log(err);
       return;
     }
 
     connections.forEach(function(connection, i) {
-      db.srem("connections:users", connection);
+      unsubscribeUser(connection);
+
+      db.srem("connections:" + servertype, connection);
     });
-  });
-
-  // clear down any lingering subscriptions
-  db.eval(common.scriptunsubscribeserver, 1, servertype, function(err, ret) {
-    if (err) throw err;
-
-    console.log("unsubbed");
   });
 }
 
