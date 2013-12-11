@@ -69,7 +69,6 @@ var scriptgethedgebooks;
 var scriptcost;
 var scriptgetcosts;
 var scriptifa;
-var scriptnewprice;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -98,6 +97,8 @@ db.on("error", function(err) {
 });
 
 function initialise() {
+  common.registerCommonScripts();
+  registerScripts();
   initDb();
   pubsub();
   listen();
@@ -262,6 +263,9 @@ function listen() {
           userid = user.userid;
           connections[userid] = conn;
 
+          // keep a record
+          db.sadd("connections:users", userid);
+
           // send a successful logon reply
           reply.success = true;
           reply.email = signin.email;
@@ -304,37 +308,29 @@ function tidy(userid) {
 
 function newPrice(topic, msg) {
   var jsonmsg;
-  /*db.eval(scriptnewprice, 1, topic, function(err, ret) {
+
+  // which symbols are subscribed to for this topic
+  db.smembers("topic:" + topic + ":" + servertype + ":symbols", function(err, symbols) {
     if (err) throw err;
 
-    console.log(ret);
+    // for each one, build a message & send to all users subscribed
+    console.log(symbol);
 
-    //conn.write("{\"hedgebooks\":" + ret + "}");
-  });*/
+    // build the message according to the symbol
+    jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
+    console.log(jsonmsg);
 
-  db.smembers("topic:" + topic + ":symbols", function(err, symbols) {
-    if (err) throw err;
+    // get the users watching this symbol
+    db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + servertype, function(err, users) {
+      if (err) throw err;
 
-    // get the symbols covered by this topic - equity price covers cfd, spb...
-    symbols.forEach(function(symbol, i) {
-      console.log(symbol);
+      // send the message to each user
+      users.forEach(function(user, i) {
+        console.log(user);
 
-      // build the message according to the symbol
-      jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
-      console.log(jsonmsg);
-
-      // get the users watching this symbol
-      db.smembers("topic:" + topic + ":symbol:" + symbol + ":users", function(err, users) {
-        if (err) throw err;
-
-        // send the message to each user
-        users.forEach(function(user, i) {
-          console.log(user);
-
-          if (user in connections) {
-            connections[user].write(jsonmsg);
-          }
-        });
+        if (user in connections) {
+          connections[user].write(jsonmsg);
+        }
       });
     });
   });
@@ -1402,8 +1398,24 @@ function replySignIn(reply, conn) {
 }
 
 function initDb() {
-  common.registerCommonScripts();
-  registerScripts();
+  // clear any connected clients
+  db.smembers("connections:users", function(err, connections) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    connections.forEach(function(connection, i) {
+      db.srem("connections:users", connection);
+    });
+  });
+
+  // clear down any lingering subscriptions
+  db.eval(common.scriptunsubscribeserver, 1, servertype, function(err, ret) {
+    if (err) throw err;
+
+    console.log("unsubbed");
+  });
 }
 
 function registerClient(reg, conn) {
@@ -1943,16 +1955,4 @@ function registerScripts() {
   redis.call("sadd", "ifas", ifaid) \
   return {0, ifaid} \
   ';
-
-  scriptnewprice = '\
-  local symbols = redis.call("smembers", "topic:" .. KEYS[1] .. ":symbols") \
-  local voyeurs = {} \
-  for i = 1, #symbols do \
-    local users = redis.call("smembers", "topic:" .. KEYS[1] .. ":symbol:" .. symbols[i] .. ":users") \
-    for j = 1, #users do \
-      table.insert(voyeurs, {symbol = symbols[i], userid = users[j]}) \
-    end \
-  end \
-  return voyeurs \
-';
 }

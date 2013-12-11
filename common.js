@@ -19,27 +19,21 @@ exports.registerCommonScripts = function () {
     	end \
     	redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbol) \
     	redis.call("sadd", "topic:" .. topic .. ":symbol:" .. symbol .. ":" .. servertype, id) \
+    	redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":symbols", symbol) \
+    	local needtosubscribe = 0 \
       	if redis.call("scard", "topic:" .. topic .. ":" .. servertype) == 0 then \
       		redis.call("publish", "proquote", "subscribe:" .. topic) \
-     		redis.call("sadd", "topic:" .. topic .. ":" .. servertype, id) \
-    		redis.call("sadd", servertype .. ":" .. id .. ":topics", topic) \
+    		if redis.call("scard", "topic:" .. topic .. ":servers") == 0 then \
+    			redis.call("sadd", "topics", topic) \
+      			needtosubscribe = 1 \
+    		end \
     	end \
-    	local needtosubscribe = 0 \
-    	if redis.call("sismember", "topic:" .. topic .. ":servers", servertype) == 0 then \
-      		redis.call("sadd", "topic:" .. topic .. ":servers", servertype) \
-      		redis.call("sadd", "server:" .. servertype .. ":topics", topic) \
-      		needtosubscribe = 1 \
-    	end \
+      	redis.call("sadd", "topic:" .. topic .. ":servers", servertype) \
+      	redis.call("sadd", "server:" .. servertype .. ":topics", topic) \
+     	redis.call("sadd", "topic:" .. topic .. ":" .. servertype, id) \
+    	redis.call("sadd", servertype .. ":" .. id .. ":topics", topic) \
     	return {needtosubscribe, topic} \
   	end \
-  	';
-
-  	// params: symbol, id, servertype
-  	exports.scriptsubscribeinstrument = subscribeinstrument + '\
-  	redis.call("sadd", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
-  	redis.call("sadd", KEYS[3] .. ":" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
-  	local ret = subscribeinstrument(KEYS[1], KEYS[2], KEYS[3]) \
-  	return ret \
   	';
 
   	unsubscribeinstrument = '\
@@ -49,10 +43,13 @@ exports.registerCommonScripts = function () {
     	if marketext then \
       		topic = topic .. marketext \
     	end \
-    	redis.call("srem", "topic:" .. topic .. ":symbol:" .. symbol .. ":" .. servertype, id) \
-    	redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbol) \
     	local needtounsubscribe = 0 \
-    	if redis.call("scard", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols") == 0 then \
+     	redis.call("srem", "topic:" .. topic .. ":symbol:" .. symbol .. ":" .. servertype, id) \
+    	redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbol) \
+    	if redis.call("scard", "topic:" .. topic .. ":symbol:" .. symbol .. ":" .. servertype) == 0 then \
+    		redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":symbols", symbol) \
+    	end \
+   		if redis.call("scard", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols") == 0 then \
       		redis.call("srem", servertype .. ":" .. id .. ":topics", topic) \
       		redis.call("srem", "topic:" .. topic .. ":" .. servertype, id) \
       		if redis.call("scard", "topic:" .. topic .. ":" .. servertype) == 0 then \
@@ -60,6 +57,7 @@ exports.registerCommonScripts = function () {
         		redis.call("srem", "topic:" .. topic .. ":servers", servertype) \
       			redis.call("srem", "server:" .. servertype .. ":topics", topic) \
       			if redis.call("scard", "topic:" .. topic .. ":servers") == 0 then \
+      				redis.call("srem", "topics", topic) \
         			needtounsubscribe = 1 \
         		end \
       		end \
@@ -68,7 +66,21 @@ exports.registerCommonScripts = function () {
   	end \
   	';
 
-  	// params: symbol, userid
+  	//
+  	// subscribe to a new instrument
+  	// params: symbol, id, servertype
+  	//
+  	exports.scriptsubscribeinstrument = subscribeinstrument + '\
+  	redis.call("sadd", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
+  	redis.call("sadd", KEYS[3] .. ":" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
+  	local ret = subscribeinstrument(KEYS[1], KEYS[2], KEYS[3]) \
+  	return ret \
+  	';
+
+  	//
+  	// unsubscribe from an instrument
+  	// params: symbol, id, servertype
+  	//
   	exports.scriptunsubscribeinstrument = unsubscribeinstrument + '\
   	redis.call("srem", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
   	redis.call("srem", KEYS[3] .. ":" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
@@ -76,6 +88,10 @@ exports.registerCommonScripts = function () {
   	return ret \
   	';
 
+  	//
+  	// unsubscribe a user/client/other connection
+  	// params: servertype, id
+  	//
   	exports.scriptunsubscribeid = unsubscribeinstrument + '\
   	local orderbooks = redis.call("smembers", KEYS[2] .. ":" .. KEYS[1] .. ":orderbooks") \
   	local unsubscribetopics = {} \
@@ -86,5 +102,31 @@ exports.registerCommonScripts = function () {
       	end \
   	end \
   	return unsubscribetopics \
+  	';
+
+  	//
+  	// unsubscribe everything for a server type
+  	// params: servertype
+  	//
+  	exports.scriptunsubscribeserver = '\
+  	local topics = redis.call("smembers", "server:" .. KEYS[1] .. ":topics") \
+  	for i = 1, #topics do \
+  		local symbols = redis.call("smembers", "topic:" .. topics[i] .. ":" .. KEYS[1] .. ":symbols") \
+  		for j = 1, #symbols do \
+    		local users = redis.call("smembers", "topic:" .. topics[i] .. ":symbol:" .. symbols[j] .. ":" .. KEYS[1]) \
+    		for k = 1, #users do \
+     			redis.call("srem", "topic:" .. topics[i] .. ":symbol:" .. symbols[j] .. ":" .. KEYS[1], users[k]) \
+    			redis.call("srem", "topic:" .. topics[i] .. ":" .. KEYS[1] .. ":" .. users[k] .. ":symbols", symbols[j]) \
+    		end \
+    		redis.call("srem", "topic:" .. topics[i] .. ":" .. KEYS[1] .. ":symbols", symbols[j]) \
+  		end \
+  		local connections = redis.call("smembers", "topic:" .. topics[i] .. ":" .. KEYS[1]) \
+  		for j = 1, #connections do \
+  			redis.call("srem", "topic:" .. topics[i] .. ":" .. KEYS[1], connections[j]) \
+      		redis.call("srem", KEYS[1] .. ":" .. connections[j] .. ":topics", topics[i]) \
+  		end \
+  		redis.call("srem", "topic:" .. topics[i] .. ":servers", KEYS[1]) \
+  		redis.call("srem", "server:" .. KEYS[1] .. ":topics", topics[i]) \
+  	end \
   	';
 };

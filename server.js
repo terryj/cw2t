@@ -19,6 +19,7 @@ var node_static = require('node-static');
 var redis = require('redis');
 
 // cw2t libraries
+var common = require('./common.js');
 
 // globals
 var connections = {}; // added to if & when a client logs on
@@ -30,6 +31,7 @@ var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;
 var tradeserverchannel = 3;
 var clientserverchannel = 1;
+var servertype = "client";
 
 // redis
 var redishost;
@@ -53,7 +55,6 @@ if (redislocal) {
 
 // redis scripts
 var scriptmatchorder;
-var scriptordercancelrequest;
 var scriptordercancel;
 var scriptorderack;
 var scriptnewtrade;
@@ -87,6 +88,8 @@ db.on("error", function(err) {
 });
 
 function initialise() {
+  common.registerCommonScripts();
+  registerScripts();
   initDb();
   pubsub();
   listen();
@@ -95,7 +98,6 @@ function initialise() {
 // pubsub connections
 function pubsub() {
   dbsub = redis.createClient(redisport, redishost);
-  dbpub = redis.createClient(redisport, redishost);
 
   dbsub.on("subscribe", function(channel, count) {
     console.log("subscribed to:" + channel + ", num. channels:" + count);
@@ -106,7 +108,6 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    var topickey;
     console.log("channel " + channel + ": " + message);
 
     if (message.substr(0, 8) == "quoteack") {
@@ -114,59 +115,12 @@ function pubsub() {
     } else if (message.substr(0, 5) == "quote") {
       sendQuote(message.substr(6));
     } else if (message.substr(0, 5) == "order") {
-      getSendOrder(message.substr(6), true, true);
+      getSendOrder(message.substr(6));
     } else if (message.substr(0, 5) == "trade") {
       getSendTrade(message.substr(6));
+    } else {
+      newPrice(channel, message);
     }
-
-    // get the set of symbols linked to this topic (i.e. BARC.L & BARC.L.CFD are both linked to TIT.BARC.L)
-    /*db.smembers("topicsymbol:" + channel, function(err, replies) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      replies.forEach(function(symbol, i) {
-        db.smembers("proquote:" + symbol, function(err, replies) {
-          if (err) {
-            console.log(err);
-            return;
-          }
-
-          if (orgclientkey in connections) {
-            connections[orgclientkey].write(message);
-          }
-        });
-      });*/
-
-    /*db.smembers("proquote:" + channel, function(err, replies) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      topickey = "topic:" + channel;
-
-      // get the symbol from the proquote topic
-      db.hgetall(topickey, function(err, inst) {
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        if (inst == null) {
-          console.log("Topic:" + channel + " not found");
-          return;
-        }
-
-        // just send the message as is
-        replies.forEach(function(clientid, i) {
-          if (clientid in connections) {
-            connections[clientid].write(message);
-          }
-        });
-      });
-    });*/
   });
 
   dbsub.subscribe(clientserverchannel);
@@ -212,8 +166,9 @@ function listen() {
       console.log('recd:' + msg);
 
       if (msg.substr(2, 18) == "ordercancelrequest") {
-        obj = JSON.parse(msg);
-        orderCancelRequest(clientid, obj.ordercancelrequest);
+        db.publish(tradeserverchannel, msg);
+        //obj = JSON.parse(msg);
+        //orderCancelRequest(clientid, obj.ordercancelrequest);
       } else if (msg.substr(2, 16) == "orderbookrequest") {
         obj = JSON.parse(msg);
         orderBookRequest(clientid, obj.orderbookrequest, conn);
@@ -243,22 +198,9 @@ function listen() {
       }
     });
 
-    // close connection callback
     conn.on('close', function() {
-      // todo: check for existence
-      if (clientid != "0") {
-        if (clientid in connections) {
-          console.log("client:" + clientid + " logged off");
-          // remove from list
-          delete connections[clientid];
-
-          // remove from database
-          db.srem("connections:clients", clientid);
-        }
-
-        unsubscribeTopics(clientid);
-        clientid = "0";
-      }
+      tidy(clientid);
+      clientid = "0";
     });
 
     // client sign on
@@ -312,6 +254,62 @@ function listen() {
         });
       });
     }
+  });
+}
+
+function tidy(clientid) {
+  if (clientid != "0") {
+    if (clientid in connections) {
+      console.log("client:" + clientid + " logged off");
+
+      // remove from list
+      delete connections[clientid];
+
+      // remove from database
+      db.srem("connections:clients", clientid);
+    }
+
+    db.eval(common.scriptunsubscribeid, 2, clientid, servertype, function(err, ret) {
+      if (err) throw err;
+
+      console.log(ret);
+
+      // unsubscribe returned topics
+      for (var i = 0; i < ret.length; i++) {
+        dbsub.unsubscribe(ret[i]);
+      }
+    });
+  }
+}
+
+function newPrice(topic, msg) {
+  var jsonmsg;
+
+  db.smembers("topic:" + topic + ":symbols", function(err, symbols) {
+    if (err) throw err;
+
+    // get the symbols covered by this topic - equity price covers cfd, spb...
+    symbols.forEach(function(symbol, i) {
+      console.log(symbol);
+
+      // build the message according to the symbol
+      jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
+      console.log(jsonmsg);
+
+      // get the clients watching this symbol
+      db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + servertype, function(err, clients) {
+        if (err) throw err;
+
+        // send the message to each user
+        clients.forEach(function(client, i) {
+          console.log(client);
+
+          if (client in connections) {
+            connections[client].write(jsonmsg);
+          }
+        });
+      });
+    });
   });
 }
 
@@ -862,7 +860,8 @@ function sendIndex(clientid, index, conn) {
         //count--;
         //if (count <= 0) {
           //conn.write("{\"index\":" + JSON.stringify(i) + "}");
-          orderBookOut(clientid, symbol, conn);
+          //orderBookOut(clientid, symbol, conn);
+          //orderbookrequest...
         //}
       });
     });
@@ -1204,7 +1203,7 @@ function sendOrderBooksClient(clientid, conn) {
 
     // send the order book for each instrument
     instruments.forEach(function (symbol, i) {
-      orderBookOut(clientid, symbol, conn);
+      orderBookRequest(clientid, symbol, conn);
     });
   });
 }
@@ -1498,18 +1497,23 @@ function replySignIn(reply, conn) {
 
 function initDb() {
   // clear any connected clients
-  db.smembers("connections", function(err, connections) {
+  db.smembers("connections:clients", function(err, connections) {
     if (err) {
       console.log(err);
       return;
     }
 
     connections.forEach(function(connection, i) {
-      db.srem("connections", connection);
+      db.srem("connections:clients", connection);
     });
   });
 
-  registerScripts();
+  // clear down any lingering subscriptions
+  db.eval(common.scriptunsubscribeserver, 1, servertype, function(err, ret) {
+    if (err) throw err;
+
+    console.log("unsubbed");
+  });
 }
 
 function registerClient(reg, conn) {
@@ -1548,91 +1552,30 @@ function registerClient(reg, conn) {
 }
 
 function orderBookRequest(clientid, symbol, conn) {
-  // add the client to the order book set for this instrument
-  db.sadd("orderbook:" + symbol, clientid);
+  db.eval(common.scriptsubscribeinstrument, 3, symbol, clientid, servertype, function(err, ret) {
+    if (err) throw err;
 
-  // & add the instrument to the watchlist for this client
-  db.sadd(clientid + ":orderbooks", symbol);
+    console.log(ret);
 
-  orderBookOut(clientid, symbol, conn);
+    // the script tells us if we need to subscribe to a topic
+    if (ret[0]) {
+      dbsub.subscribe(ret[1]);
+    }
+
+    // send the orderbook, with the current stored prices
+    sendCurrentOrderBook(symbol, ret[1], conn);
+  });
 }
 
-function orderBookOut(clientid, symbol, conn) {
+/*function orderBookOut(clientid, symbol, conn) {
   if (outofhours) {
     broadcastLevelTwo(symbol, conn);
   } else {
     subscribeAndSend(clientid, symbol, conn);
   }
-}
+}*/
 
-function subscribeAndSend(clientid, symbol, conn) {
-  // get the proquote topic
-  db.hgetall("symbol:" + symbol, function(err, inst) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (inst == null) {
-      console.log("symbol:" + symbol + " not found");
-      return;
-    }
-
-    // get the client to check market extension - defaults to 'LD' for LSE delayed
-    db.hgetall("client:" + clientid, function(err, client) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      if (!client) {
-        console.log("client:" + clientid + " not found");
-        return;
-      }
-
-      // may need to adjust the topic to delayed
-      inst.topic += "D";
-
-      // are we subscribed to this topic?
-      db.sismember("proquote", inst.topic, function(err, instsubscribed) {
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        // if not, add it
-        if (!instsubscribed) {
-          dbsub.subscribe(inst.topic);
-
-          // let proquote know
-          dbpub.publish("cw2t", "subscribe:" + inst.topic);
-
-          // add topic to the set
-          db.sadd("proquote", inst.topic);
-        }
-
-        // is this client subscribed?
-        db.sismember("proquote:" + inst.topic, clientid, function(err, clientfound) {
-          if (err) {
-            console.log(err);
-            return;
-          }
-
-          if (!clientfound) {
-            console.log("subscribing client:" + clientid + " to " + inst.topic)
-            // add client to the set for this instrument
-            db.sadd("proquote:" + inst.topic, clientid);
-          }
-        });
-      });
-
-      // send the orderbook, with the current stored prices
-      sendCurrentOrderBook(clientid, symbol, inst.topic, conn);
-    });
-  });
-}
-
-function sendCurrentOrderBook(clientid, symbol, topic, conn) {
+function sendCurrentOrderBook(symbol, topic, conn) {
   var orderbook = {pricelevels : []};
   var pricelevel1 = {};
   var pricelevel2 = {};
@@ -1685,104 +1628,19 @@ function sendCurrentOrderBook(clientid, symbol, topic, conn) {
     if (conn != null) {
       conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
     }
-
-    /*var interval = setInterval(function() {
-      orderbook.pricelevels = [];
-
-      // 3 levels
-      pricelevel1.bid = parseFloat(pricelevel1.bid) + 0.01;//parseFloat(topicrec.bid1)+diff;
-      pricelevel1.level = 1;
-      orderbook.pricelevels.push(pricelevel1);
-      pricelevel2.offer = parseFloat(pricelevel2.offer) + 0.01;//parseFloat(topicrec.offer1)+diff;
-      pricelevel2.level = 1;
-      orderbook.pricelevels.push(pricelevel2);
-      pricelevel3.bid = parseFloat(pricelevel3.bid) + 0.01;//parseFloat(topicrec.bid2)+diff;
-      pricelevel3.level = 2;
-      orderbook.pricelevels.push(pricelevel3);
-      pricelevel4.offer = parseFloat(pricelevel4.offer) + 0.01;//parseFloat(topicrec.offer2)+diff;
-      pricelevel4.level = 2;
-      orderbook.pricelevels.push(pricelevel4);
-      pricelevel5.bid = parseFloat(pricelevel5.bid) + 0.01;//parseFloat(topicrec.bid3)+diff;
-      pricelevel5.level = 3;
-      orderbook.pricelevels.push(pricelevel5);
-      pricelevel6.offer = parseFloat(pricelevel6.offer) + 0.01;//parseFloat(topicrec.offer3)+diff;
-      pricelevel6.level = 3;
-      orderbook.pricelevels.push(pricelevel6);
-
-      conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-    }, 9000);*/
   });
 }
 
 function orderBookRemoveRequest(clientid, symbol, conn) {
-  // remove the client from the order book set for this instrument
-  db.srem("orderbook:" + symbol, clientid);
+  db.eval(common.scriptunsubscribeinstrument, 3, symbol, clientid, servertype, function(err, ret) {
+    if (err) throw err;
 
-  // & remove the instrument from the order book set for this client
-  db.srem(clientid + ":orderbooks", symbol);
+    console.log(ret);
 
-  // get the market extension for this client, as topic may need to be adjusted for live/delayed
-  db.hget("client:" + clientid, "marketext", function(err, marketext) {
-    if (err) {
-      console.log("Error in orderBookRemoveRequest:" + err);
-      return;
+    // the script will tell us if we need to unsubscribe from the topic
+    if (ret[0]) {
+      dbsub.unsubscribe(ret[1]);
     }
-
-    unsubscribeTopic(clientid, symbol, marketext);
-  });
-}
-
-function unsubscribeTopic(clientid, symbol, marketext) {
-  // get the proquote topic
-  db.hgetall("symbol:" + symbol, function(err, inst) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (inst == null) {
-      console.log("symbol:" + symbol + " not found");
-      return;
-    }
-
-    // adjust the topic for the client market extension (i.e. delayed/live)
-    inst.topic += marketext;
-
-    // remove client from set for this topic
-    db.srem("proquote:" + inst.topic, clientid);
-
-    // unsubscribe from this topic if no clients are looking at it
-    db.scard("proquote:" + inst.topic, function(err, numelements) {
-      if (numelements == 0) {
-        dbsub.unsubscribe(inst.topic);
-        db.srem("proquote", inst.topic);
-        // todo: change from dbpub?
-        dbpub.publish("cw2t", "unsubscribe:" + inst.topic);
-      }
-    });
-  });
-}
-
-function unsubscribeTopics(clientid) {
-  // get the market extension for this client, as topic may need to be adjusted for live/delayed
-  db.hget("client:" + clientid, "marketext", function(err, marketext) {
-    if (err) {
-      console.log("Error in unsubscribeTopics:" + err);
-      return;
-    }
-
-    // get all the orderbooks
-    db.smembers(clientid + ":orderbooks", function(err, orderbooks) {
-      if (err) {
-        console.log("Error in unsubscribeTopics:" + err);
-        return;
-      }
-
-      // & unsubscibe
-      orderbooks.forEach(function(symbol, i) {
-        unsubscribeTopic(clientid, symbol, marketext);
-      });
-    });
   });
 }
 
@@ -2107,53 +1965,6 @@ function registerScripts() {
    end \
    return finance \
   end \
-  ';
-
-  scriptordercancelrequest = removefromorderbook + cancelorder + getproquotesymbol + '\
-  local errorcode = 0 \
-  local ordercancelreqid = redis.call("incr", "ordercancelreqid") \
-  redis.call("hmset", "ordercancelrequest:" .. ordercancelreqid, "orgid", KEYS[1], "clientid", KEYS[2], "orderid", KEYS[3], "timestamp", KEYS[4]) \
-  local fields = {"status", "markettype", "symbol", "side", "quantity"} \
-  local vals = redis.call("hmget", "order:" .. KEYS[3], unpack(fields)) \
-  local markettype = "" \
-  local symbol = "" \
-  local side \
-  local quantity = "" \
-  if vals == nil then \
-    --[[ order not found ]] \
-    errorcode = 1009 \
-  else \
-    markettype = vals[2] \
-    symbol = vals[3] \
-    side = vals[4] \
-    quantity = vals[5] \
-    if vals[1] == "2" then \
-      --[[ already filled ]] \
-      errorcode = 1010 \
-    elseif vals[1] == "4" then \
-      --[[ already cancelled ]] \
-      errorcode = 1008 \
-    elseif vals[1] == "8" then \
-      --[[ already rejected ]] \
-      errorcode = 1012 \
-    end \
-  end \
-  --[[ process according to market type ]] \
-  local proquotesymbol = {"", "", ""} \
-  if vals[2] == "1" then \
-    if errorcode ~= 0 then \
-      redis.call("hset", "ordercancelrequest:" .. ordercancelreqid, "reason", errorcode) \
-    else \
-      removefromorderbook(symbol, KEYS[3]) \
-      cancelorder(KEYS[3], "4") \
-    end \
-  else \
-    --[[ get required instrument values for proquote ]] \
-    if errorcode == 0 then \
-      proquotesymbol = getproquotesymbol(symbol) \
-    end \
-  end \
-  return {errorcode, markettype, ordercancelreqid, symbol, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], side, quantity} \
   ';
 
   scriptordercancel = cancelorder + '\
