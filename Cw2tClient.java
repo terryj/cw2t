@@ -22,6 +22,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Properties;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 // logging
 import org.apache.log4j.Level;
@@ -87,7 +89,7 @@ class Cw2tSubscriber extends JedisPubSub {
         //tvm.put( ISDictionary.T_SYMBOL, BaseValue.value( "sym_" + topics[i] ));
         //tvm.put(ISDictionary.T_TYPE, BaseValue.value("DE"));
         
-        // to generate a message, use i.e. 'publish cw2t instrument' on a Redis connection
+        // to generate a message, use i.e. 'publish proquote instrument' on a Redis connection
         if (message.equals("instrument")) {
             // request a product list for specified market
             tvm.put(ISDictionary.T_MARKET, BaseValue.value("L"));
@@ -104,19 +106,8 @@ class Cw2tSubscriber extends JedisPubSub {
             session.Request(message, "REQ_INDEX_COMPOS_ALL", null, tvm);           
         } else if (message.substring(0, 9).equals("subscribe")) {
             TagSet s = new TagSet();
-            /*s.add(Tag.makeTag("4040"));
-            s.add(Tag.makeTag("4100"));
-            s.add(Tag.makeTag("4101"));
-            s.add(Tag.makeTag("4103"));
-            s.add(Tag.makeTag("4104"));
-            s.add(Tag.makeTag("4106"));
-            s.add(Tag.makeTag("4112"));
-            s.add(Tag.makeTag("4113"));
-            //s.add(Tag.makeTag( "4115"));
-            s.add(Tag.makeTag("4120"));
-            s.add(Tag.makeTag("4121"));
-            s.add(Tag.makeTag("4124"));
-            s.add(Tag.makeTag("4300"));*/ 
+            
+            // bid/offer price
             s.add(Tag.makeTag("4332/1"));
             s.add(Tag.makeTag("4333/1"));
             s.add(Tag.makeTag("4332/2"));
@@ -129,11 +120,25 @@ class Cw2tSubscriber extends JedisPubSub {
             s.add(Tag.makeTag("4333/5"));
             s.add(Tag.makeTag("4332/6"));
             s.add(Tag.makeTag("4333/6"));
+            
+            // bid/offer volume
+            /*s.add(Tag.makeTag("4331/1"));
+            s.add(Tag.makeTag("4334/1"));
+            s.add(Tag.makeTag("4331/2"));
+            s.add(Tag.makeTag("4334/2"));
+            s.add(Tag.makeTag("4331/3"));
+            s.add(Tag.makeTag("4334/3"));
+            s.add(Tag.makeTag("4331/4"));
+            s.add(Tag.makeTag("4334/4"));
+            s.add(Tag.makeTag("4331/5"));
+            s.add(Tag.makeTag("4334/5"));
+            s.add(Tag.makeTag("4331/6"));
+            s.add(Tag.makeTag("4334/6"));*/
 
             System.out.println("Subscribing to topic: " + message.substring(10));
             session.Subscribe(message.substring(10), SLDictionary.ReqType.REQ_SNAP_REF, s);
         } else if (message.substring(0, 11).equals("unsubscribe")) {
-            System.out.println("Unsubscribing to topic: " + message.substring(12));
+            System.out.println("Unsubscribing topic: " + message.substring(12));
             session.Subscribe(message.substring(12), SLDictionary.ReqType.REQ_FORGET, null);
         }
     }
@@ -218,7 +223,7 @@ public class Cw2tClient implements ISessionObserver {
         System.out.println("Stopping Jedis");
         
         // send message to subscribe channel to terminate thread
-        jedispublisher.publish("cw2t", "exit");
+        jedispublisher.publish("proquote", "exit");
         
         // tidy jedis
         jedispool.returnResource(jedispublisher);
@@ -544,7 +549,7 @@ public class Cw2tClient implements ISessionObserver {
         jedispublisher.sadd("instrumenttypes", insttype);
         
         // create a way to get from topic to symbol (i.e. 'TIT.VOD.L' -> 'VOD.L')
-        //topicfieldmap.put("symbol", symbol);
+        topicfieldmap.put("symbol", symbol);
         status = jedispublisher.hmset("topic:" + topic, topicfieldmap);
         jedispublisher.sadd("topic:" + topic + ":symbols", symbol);
         
@@ -585,6 +590,35 @@ public class Cw2tClient implements ISessionObserver {
         String status = jedispublisher.hmset(topickey, fieldmap);
         
         return status;
+    }
+    
+    public void subscribeCw2tTopics() {
+        TagSet s = new TagSet();
+        
+        s.add(Tag.makeTag("4332/1"));
+        s.add(Tag.makeTag("4333/1"));
+        s.add(Tag.makeTag("4332/2"));
+        s.add(Tag.makeTag("4333/2"));
+        s.add(Tag.makeTag("4332/3"));
+        s.add(Tag.makeTag("4333/3"));
+        s.add(Tag.makeTag("4332/4"));
+        s.add(Tag.makeTag("4333/4"));
+        s.add(Tag.makeTag("4332/5"));
+        s.add(Tag.makeTag("4333/5"));
+        s.add(Tag.makeTag("4332/6"));
+        s.add(Tag.makeTag("4333/6"));
+        
+        // get existing topics
+        Set<String> topics = new HashSet<String>();
+        topics = jedispublisher.smembers("topics");
+            
+        // & subscribe to them
+        Iterator<String> iter = topics.iterator();
+        while(iter.hasNext()) {
+            String topic = iter.next();
+            System.out.println("Subscribing to topic: " + topic);
+            session.Subscribe(topic, SLDictionary.ReqType.REQ_SNAP_REF, s);
+        }
     }
     
 	public String onUpdateRequest(Peer peer, String RID, TagValueMap params) {
@@ -914,7 +948,7 @@ public class Cw2tClient implements ISessionObserver {
 
 	        //props.put("Subscriptions.TIT.VOD.LD", "4040");
 	        /*props.put("Subscriptions.TIT.VOD.LD", "4040,4100,4101,4300,4301,4302,4330/1,4331/1,4332/1,4333/1,4334/1,4335/1,4330/2,4331/2,4332/2,4333/2,4334/2,4335/2");*/
-	        props.put("Subscriptions.TIT.A%.MTA", "4040,4100,4101,4300,4301,4302,4330/1,4331/1,4332/1,4333/1,4334/1,4335/1,4330/2,4331/2,4332/2,4333/2,4334/2,4335/2");
+	        //props.put("Subscriptions.TIT.A%.MTA", "4040,4100,4101,4300,4301,4302,4330/1,4331/1,4332/1,4333/1,4334/1,4335/1,4330/2,4331/2,4332/2,4333/2,4334/2,4335/2");
 	        // a long subscription. -- more than 255 tags
 	        /*props.put( "Subscriptions.TIT.S??.MTA","4040,4100,4101,4300,4301,4302,4330/1,4331/1,4332/1,4333/1,4334/1,4335/1,4330/2,4331/2,4332/2,4333/2,4334/2,4335/24100,4101,4102,4103,4104,4105,4106,4107,4108,4109,4110,4111,4112,4113,4114,4115,4116,4117,4118,4119,4120,4121,4122,4123,4124,4125,4126,4127,4128,4129,4130,4131,4132,4133,4134,4135,4136,4137,4138,4139,4140,4141,4142,4143,4144,4145,4146,4147,4148,4149,4150,4151,4152,4153,4154,4155,4156,4157,4158,4159,4160,4161,4162,4163,4164,4165,4166,4167,4168,4169,4170,4171,4172,4173,4174,4175,4176,4177,4178,4179,4180,4181,4182,4183,4184,4185,4186,4187,4188,4189,4190,4191,4192,4193,4194,4195,4196,4197,4198,4199,4200,4201,4202,4203,4204,4205,4206,4207,4208,4209,4210,4211,4212,4213,4214,4215,4216,4217,4218,4219,4220,4221,4222,4223,4224,4225,4226,4227,4228,4229,4230,4231,4232,4233,4234,4235,4236,4237,4238,4239,4240,4241,4242,4243,4244,4245,4246,4247,4248,4249,4250,4251,4252,4253,4254,4255,4256,4257,4258,4259,4260,4261,4262,4263,4264,4265,4266,4267,4268,4269,4270,4271,4272,4273,4274,4275,4276,4277,4278,4279,4280,4281,4282,4283,4284,4285,4286,4287,4288,4289,4290,4291,4292,4293,4294,4295,4296,4297,4298,4299,4300,4301,4302,4303,4304,4305,4306,4307,4308,4309,4310,4311,4312,4313,4314,4315,4316,4317,4318,4319,4320,4321,4322,4323,4324,4325,4326,4327,4328,4329,4330,4331,4332,4333,4334,4335,4336,4337,4338,4339,4340,4341,4342,4343,4344,4345,4346,4347,4348,4349" );*/
 	        
@@ -941,8 +975,10 @@ public class Cw2tClient implements ISessionObserver {
 		Cw2tClient ts = new Cw2tClient(args);
 		if (!ts.ReadSubscriptions("[Subscriptions]")) {
 			System.out.println("Sorry, subscriptions not found or incorrect in [Subscriptions] section");
-			System.exit(1);
-		}
+			//System.exit(1);
+		} else {
+			System.out.println("Read subscriptions");            
+        }
 
 		System.out.println("Starting session layer");
 		if (!ts.Setup()) {
@@ -979,6 +1015,7 @@ public class Cw2tClient implements ISessionObserver {
 							
 				case Cw2tClient.st_connected:
 					System.out.println("Connected");
+                    ts.subscribeCw2tTopics();
 					ts.DoSubscriptions();
 					break;
 										

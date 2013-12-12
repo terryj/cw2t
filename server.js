@@ -269,12 +269,12 @@ function tidy(clientid) {
       db.srem("connections:" + servertype, clientid);
     }
 
-    unsubscribeClient(clientid);
+    unsubscribeConnection(clientid);
   }
 }
 
-function unsubscribeClient(clientid) {
-  db.eval(common.scriptunsubscribeid, 2, clientid, servertype, function(err, ret) {
+function unsubscribeConnection(id) {
+  db.eval(common.scriptunsubscribeid, 2, id, servertype, function(err, ret) {
     if (err) throw err;
 
     console.log(ret);
@@ -1508,7 +1508,7 @@ function initDb() {
     }
 
     connections.forEach(function(connection, i) {
-      unsubscribeUser(connection);
+      unsubscribeConnection(connection);
 
       db.srem("connections:" + servertype, connection);
     });

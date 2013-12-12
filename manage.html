@@ -657,11 +657,10 @@
         var userid;
         var operatortype = 2; // user
         var defaultHedgebook = "999999";
+        var obj = {};
 
         var datain = function(msg) {
-            var obj = {};
-            // todo: remove
-            //console.log("."+msg);
+            //var obj = {};
 
             if (msg.substr(2, 10) == "orderbooks") {
                 obj = JSON.parse(msg);
@@ -2354,8 +2353,6 @@
         function updateOrderBook(orderbook) {
             var level;
 
-            console.log(orderbook);
-
             // create an entry in the orderbooks array for this symbol
             if (!(orderbook.symbol in orderbooks)) {
                 // 6 levels
@@ -3490,9 +3487,6 @@
         }
 
         function populateSettlPeriod(settlperiod, instrumenttype) {
-            console.log(instrumenttype);
-            console.log(settlperiod.options.length);
-
             settlperiod.options.length = 0;
 
             if (instrumenttype != "DE") {

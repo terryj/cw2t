@@ -293,12 +293,12 @@ function tidy(userid) {
       db.srem("connections:" + servertype, userid);
     }
 
-    unsubscribeUser(userid);
+    unsubscribeConnection(userid);
   }
 }
 
-function unsubscribeUser(userid) {
-  db.eval(common.scriptunsubscribeid, 2, userid, servertype, function(err, ret) {
+function unsubscribeConnection(id) {
+  db.eval(common.scriptunsubscribeid, 2, id, servertype, function(err, ret) {
     if (err) throw err;
 
     console.log(ret);
@@ -311,30 +311,24 @@ function unsubscribeUser(userid) {
 }
 
 function newPrice(topic, msg) {
-  var jsonmsg;
-
   // which symbols are subscribed to for this topic
   db.smembers("topic:" + topic + ":" + servertype + ":symbols", function(err, symbols) {
     if (err) throw err;
 
-    // for each one, build a message & send to all users subscribed
-    console.log(symbol);
+    symbols.forEach(function(symbol, i) {
+      // build the message according to the symbol
+      var jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
 
-    // build the message according to the symbol
-    jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
-    console.log(jsonmsg);
+      // get the users watching this symbol
+      db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + servertype, function(err, users) {
+        if (err) throw err;
 
-    // get the users watching this symbol
-    db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + servertype, function(err, users) {
-      if (err) throw err;
-
-      // send the message to each user
-      users.forEach(function(user, i) {
-        console.log(user);
-
-        if (user in connections) {
-          connections[user].write(jsonmsg);
-        }
+        // send the message to each user
+        users.forEach(function(user, j) {
+          if (user in connections) {
+            connections[user].write(jsonmsg);
+          }
+        });
       });
     });
   });
@@ -343,8 +337,6 @@ function newPrice(topic, msg) {
 function orderBookRequest(userid, symbol, conn) {
   db.eval(common.scriptsubscribeinstrument, 3, symbol, userid, servertype, function(err, ret) {
     if (err) throw err;
-
-    console.log(ret);
 
     // the script tells us if we need to subscribe to a topic
     if (ret[0]) {
@@ -1410,7 +1402,7 @@ function initDb() {
     }
 
     connections.forEach(function(connection, i) {
-      unsubscribeUser(connection);
+      unsubscribeConnection(connection);
 
       db.srem("connections:" + servertype, connection);
     });
