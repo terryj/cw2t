@@ -1043,8 +1043,6 @@
             selectedmenu = 0;
 
             displayOrderBooks();
-
-            //maintainClients();
         }
 
         function statusMsg(status) {
@@ -2356,7 +2354,7 @@
             // create an entry in the orderbooks array for this symbol
             if (!(orderbook.symbol in orderbooks)) {
                 // 6 levels
-                orderbooks[orderbook.symbol] = [{bid:0, offer:0},{bid:0, offer:0},{bid:0, offer:0},{bid:0, offer:0},{bid:0, offer:0},{bid:0, offer:0}];
+                orderbooks[orderbook.symbol] = [{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0}];
             }
 
             // update the prices
@@ -2386,6 +2384,12 @@
                     orderbooks[orderbook.symbol][level].offer = orderbook.prices[i].offer;
                     orderbooks[orderbook.symbol][level].offerflashcount = 3;
                     priceflash[orderbook.symbol] = true;
+                }
+                if ("bidvol" in orderbook.prices[i]) {
+                    orderbooks[orderbook.symbol][level].bidvol = orderbook.prices[i].bidvol;                    
+                }
+                if ("offervol" in orderbook.prices[i]) {
+                    orderbooks[orderbook.symbol][level].offervol = orderbook.prices[i].offervol;                    
                 }
             }
 
@@ -2630,8 +2634,8 @@
                 ordervolbidkey = symbol + "Buy" + orderbooks[symbol][y].bid;
                 ordervolofferkey = symbol + "Sell" + orderbooks[symbol][y].offer;
 
-                bidquantity.innerHTML = 0; //orderbooks[symbol][y].bidsize;
-                offerquantity.innerHTML = 0; //orderbooks[symbol][y].offersize;
+                bidquantity.innerHTML = orderbooks[symbol][y].bidvol;
+                offerquantity.innerHTML = orderbooks[symbol][y].offervol;
 
                 if (ordervolbidkey in ordervol) {
                     mybidquantity.innerHTML = ordervol[ordervolbidkey];

@@ -122,7 +122,7 @@ class Cw2tSubscriber extends JedisPubSub {
             s.add(Tag.makeTag("4333/6"));
             
             // bid/offer volume
-            /*s.add(Tag.makeTag("4331/1"));
+            s.add(Tag.makeTag("4331/1"));
             s.add(Tag.makeTag("4334/1"));
             s.add(Tag.makeTag("4331/2"));
             s.add(Tag.makeTag("4334/2"));
@@ -133,7 +133,7 @@ class Cw2tSubscriber extends JedisPubSub {
             s.add(Tag.makeTag("4331/5"));
             s.add(Tag.makeTag("4334/5"));
             s.add(Tag.makeTag("4331/6"));
-            s.add(Tag.makeTag("4334/6"));*/
+            s.add(Tag.makeTag("4334/6"));
 
             System.out.println("Subscribing to topic: " + message.substring(10));
             session.Subscribe(message.substring(10), SLDictionary.ReqType.REQ_SNAP_REF, s);
@@ -327,10 +327,11 @@ public class Cw2tClient implements ISessionObserver {
             return;
         }*/
         //{\"orderbook\":{\"symbol\":\"" + symbol + "\",\"
+        
         String jsonmsg = "\"prices\":[";
         boolean firstprice = true;
         String level = "";
-        String bidoffer = "";
+        String desc = "";
         
         // iterate through the tag map
         TagValueIterator tvi = tvm.getIterator();
@@ -342,10 +343,14 @@ public class Cw2tClient implements ISessionObserver {
             // get the tag description and level
             int slash = tag.indexOf("/");
             if (slash > 0) {
-                if (tag.substring(0, slash).equals("4332")) {
-                    bidoffer = "bid";
-                } else {
-                    bidoffer = "offer";
+                if (tag.substring(0, slash).equals("4331")) {
+                    desc = "bidvol";
+                } else if (tag.substring(0, slash).equals("4332")) {
+                    desc = "bid";
+                } else if (tag.substring(0, slash).equals("4333")) {
+                    desc = "offer";
+                } else if (tag.substring(0, slash).equals("4334")) {
+                    desc = "offervol";
                 }
                 level = tag.substring(slash+1);
             }
@@ -356,13 +361,12 @@ public class Cw2tClient implements ISessionObserver {
             if (value.getType() == value.DOUBLE) {
                 double d = value.getDoubleValue();
                 
-                // will produce 2dp - todo: check & vary this?
-                s = String.format("%.2f", d);
-
-                /*d = d * 10000;
-                d = (double) ((long) d);
-                d = d / 10000;
-                s = Double.toString(d);*/
+                if (desc.equals("bid") || desc.equals("offer")) {
+                    // will produce 2dp - todo: check & vary this?
+                    s = String.format("%.2f", d);
+                } else {
+                    s = Double.toString(d);
+                }
             } else if (value.getType() == value.STRING) {
                 s = value.getStringValue();
             } else if (value.getType() == value.BOOL) {
@@ -377,15 +381,15 @@ public class Cw2tClient implements ISessionObserver {
             }
             
             // add a price level to the message
-            jsonmsg = jsonmsg + "{\"level\":" + level +  ",\"" + bidoffer + "\":" + s + "}";
+            jsonmsg = jsonmsg + "{\"level\":" + level +  ",\"" + desc + "\":" + s + "}";
             
             // add to map
-            fieldmap.put(bidoffer+level, s);
+            fieldmap.put(desc+level, s);
         }
         
         // complete the message
         jsonmsg = jsonmsg + "]";
-        //System.out.println(jsonmsg);
+        System.out.println(fieldmap);
         
         // publish message to channel
         jedispublisher.publish(Tpc, jsonmsg);
@@ -394,18 +398,69 @@ public class Cw2tClient implements ISessionObserver {
         String status = jedispublisher.hmset("topic:" + Tpc, fieldmap);
 	}
     
-    /* try for subscribe...
-     new Thread(new Runnable() {
-        @Override
-        public void run() {
-            Jedis subscriberJedis = new Jedis("localhost");
-            try {
-                subscriberJedis.subscribe(new JedisPubSub() …..,"CC");
-            } catch (Exception e) {
-                e.printStackTrace();
+    // old
+    
+    /*String jsonmsg = "\"prices\":[";
+    boolean firstprice = true;
+    String level = "";
+    String bidoffer = "";
+    
+    // iterate through the tag map
+    TagValueIterator tvi = tvm.getIterator();
+    while (tvi.hasNext()) {
+        // get the tag
+        int i = tvi.next();
+        String tag = Tag.toString(i);
+        
+        // get the tag description and level
+        int slash = tag.indexOf("/");
+        if (slash > 0) {
+            if (tag.substring(0, slash).equals("4332")) {
+                bidoffer = "bid";
+            } else {
+                bidoffer = "offer";
             }
+            level = tag.substring(slash+1);
         }
-    }).start();*/
+        
+        // get the value
+        String s = "";
+        Value value = tvi.getValue();
+        if (value.getType() == value.DOUBLE) {
+            double d = value.getDoubleValue();
+            
+            // will produce 2dp - todo: check & vary this?
+            s = String.format("%.2f", d);
+            
+        } else if (value.getType() == value.STRING) {
+            s = value.getStringValue();
+        } else if (value.getType() == value.BOOL) {
+            boolean b = value.getBooleanValue();
+            s = Boolean.toString(b);
+        }
+        
+        if (!firstprice) {
+            jsonmsg = jsonmsg + ",";
+        } else {
+            firstprice = false;
+        }
+        
+        // add a price level to the message
+        jsonmsg = jsonmsg + "{\"level\":" + level +  ",\"" + bidoffer + "\":" + s + "}";
+        
+        // add to map
+        fieldmap.put(bidoffer+level, s);
+    }
+    
+    // complete the message
+    jsonmsg = jsonmsg + "]";
+    //System.out.println(jsonmsg);
+    
+    // publish message to channel
+    jedispublisher.publish(Tpc, jsonmsg);
+    
+    // store prices
+    String status = jedispublisher.hmset("topic:" + Tpc, fieldmap);*/
     
     public void updateIndex(String index, TagValueMap tvm) {
         String symbol = "";
