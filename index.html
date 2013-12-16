@@ -78,21 +78,6 @@
             color: gray;
             cursor: pointer;
         }
-        .mybidquantity {
-            display: inline-block;
-            width: 60px;
-            font-size: 21px;
-            text-align: right;
-            color: gray;
-            cursor: pointer;
-        }
-        .myofferquantity {
-            display: inline-block;
-            width: 60px;
-            font-size: 21px;
-            color: gray;
-            cursor: pointer;
-        }
         .bidquantityheading {
             display: inline-block;
             width: 80px;
@@ -103,19 +88,6 @@
         .offerquantityheading {
             display: inline-block;
             width: 80px;
-            font-size: 12px;
-            color: gray;
-        }
-        .mybidquantityheading {
-            display: inline-block;
-            width: 60px;
-            font-size: 12px;
-            text-align: right;
-            color: gray;
-        }
-        .myofferquantityheading {
-            display: inline-block;
-            width: 60px;
             font-size: 12px;
             color: gray;
         }
@@ -2103,13 +2075,9 @@
             var offerprice;
             var bidquantity;
             var offerquantity;
-            var mybidquantity;
-            var myofferquantity;
             var level2;
             var stock;
             var slash;
-            var ordervolbidkey;
-            var ordervolofferkey;
             var y;
             var removestock;
             var orderdiv;
@@ -2145,8 +2113,6 @@
                     offerprice = document.getElementById("offerprice:" + symbol + ":" + y);
                     bidquantity = document.getElementById("bidquantity:" + symbol + ":" + y);
                     offerquantity = document.getElementById("offerquantity:" + symbol + ":" + y);
-                    mybidquantity = document.getElementById("mybidquantity:" + symbol + ":" + y);
-                    myofferquantity = document.getElementById("myofferquantity:" + symbol + ":" + y);
                 } else {
                     // first time through, so create elements
                     strip = document.createElement('div');
@@ -2174,17 +2140,11 @@
                     bidquantity.id = "bidquantity:" + symbol + ":" + y;
                     bidquantity.title = "Place a new sell order";
                     bidquantity.onclick = function() {setOrderQuantity(this, "2", symbol);}
-                    mybidquantity = document.createElement('span');
-                    mybidquantity.className = "mybidquantity";
-                    mybidquantity.id = "mybidquantity:" + symbol + ":" + y;
                     offerquantity = document.createElement('span');
                     offerquantity.className = "offerquantity";
                     offerquantity.id = "offerquantity:" + symbol + ":" + y;
                     offerquantity.title = "Place a new buy order";
                     offerquantity.onclick = function() {setOrderQuantity(this, "1", symbol);}
-                    myofferquantity = document.createElement('span');
-                    myofferquantity.className = "myofferquantity";
-                    myofferquantity.id = "myofferquantity:" + symbol + ":" + y;
                     slash = document.createElement('span');
                     slash.className = "slash";
                     slash.innerHTML = "/";
@@ -2253,13 +2213,11 @@
 
                     strip.appendChild(level2);
                     strip.appendChild(stock);
-                    strip.appendChild(mybidquantity);
                     strip.appendChild(bidquantity);
                     strip.appendChild(bidprice);
                     strip.appendChild(slash);
                     strip.appendChild(offerprice);
                     strip.appendChild(offerquantity);
-                    strip.appendChild(myofferquantity);
                     strip.appendChild(removestock);
 
                     if (y == 0) {
@@ -2283,26 +2241,8 @@
                 bidprice.innerHTML = orderbooks[symbol][y].bid;
                 offerprice.innerHTML = orderbooks[symbol][y].offer;                    
 
-                ordervolbidkey = symbol + "Buy" + orderbooks[symbol][y].bid;
-                ordervolofferkey = symbol + "Sell" + orderbooks[symbol][y].offer;
-
-                bidquantity.innerHTML = 0; //orderbooks[symbol][y].bidsize;
-                offerquantity.innerHTML = 0; //orderbooks[symbol][y].offersize;
-
-                if (ordervolbidkey in ordervol) {
-                    mybidquantity.innerHTML = ordervol[ordervolbidkey];
-                    mybidquantity.title = "Cancel buy order quantity";
-                    mybidquantity.onclick = function() {cancelOrderQuantity(this, "1", symbol);}
-                } else {
-                    mybidquantity.innerHTML = 0;
-                }
-                if (ordervolofferkey in ordervol) {
-                    myofferquantity.innerHTML = ordervol[ordervolofferkey];
-                    myofferquantity.title = "Cancel sell order quantity";
-                    myofferquantity.onclick = function() {cancelOrderQuantity(this, "2", symbol);}
-                } else {
-                    myofferquantity.innerHTML = 0;
-                }
+                bidquantity.innerHTML = orderbooks[symbol][y].bidsize;
+                offerquantity.innerHTML = orderbooks[symbol][y].offersize;
 
                 if (!obdisplay[symbol].level2) {break;}
             }
@@ -2393,11 +2333,9 @@
             var headinglevel2;
             var headingstock;
             var headingbidquantity;
-            var headingmybidquantity;
             var headingbidprice;
             var headingofferprice;
             var headingofferquantity;
-            var headingmyofferquantity;
             var headingslash;
 
             if (Object.keys(orderbooks).length == 0) {
@@ -2420,9 +2358,6 @@
             headingbidquantity = document.createElement('span');
             headingbidquantity.innerHTML = "Bid Vol";
             headingbidquantity.className = "bidquantityheading";
-            headingmybidquantity = document.createElement('span');
-            headingmybidquantity.innerHTML = "My Vol";
-            headingmybidquantity.className = "mybidquantityheading"
             headingbidprice = document.createElement('span');
             headingbidprice.innerHTML = "Bid Price";
             headingbidprice.className = "bidheading";
@@ -2432,22 +2367,17 @@
             headingofferquantity = document.createElement('span');
             headingofferquantity.innerHTML = "Offer Vol";
             headingofferquantity.className = "offerquantityheading"
-            headingmyofferquantity = document.createElement('span');
-            headingmyofferquantity.innerHTML = "My Vol";
-            headingmyofferquantity.className = "myofferquantityheading";
             headingslash = document.createElement('span');
             headingslash.innerHTML = "/";
             headingslash.className = "slashheading";
 
             headingstrip.appendChild(headinglevel2);
             headingstrip.appendChild(headingstock);
-            headingstrip.appendChild(headingmybidquantity);
             headingstrip.appendChild(headingbidquantity);
             headingstrip.appendChild(headingbidprice);
             headingstrip.appendChild(headingslash);
             headingstrip.appendChild(headingofferprice);
             headingstrip.appendChild(headingofferquantity);
-            headingstrip.appendChild(headingmyofferquantity);
 
             main.appendChild(headingstrip);
         }
@@ -3268,29 +3198,9 @@
         }
 
         function cancelOrderQuantity(elem, side, symbol) {
-            var quantityelem;
             var price;
 
-            var quantity = document.getElementById(elem.id);
-
-            for (var i = 0; i < orderbooks[symbol].length; ++i) {
-                if (side == "1") {
-                    quantityelem = document.getElementById("mybidquantity:" + symbol + ":" + i);
-                } else {
-                    quantityelem = document.getElementById("myofferquantity:" + symbol + ":" + i);                    
-                }
-
-                if (quantityelem == quantity) {
-                    if (side == "1") {
-                        priceelem = document.getElementById("bidprice:" + symbol + ":" + i);
-                    } else {
-                        priceelem = document.getElementById("offerprice:" + symbol + ":" + i);                    
-                    }
-                    price = priceelem.innerHTML;
-                    break;                    
-                }
-            }
-
+            // todo: fix
             for (var i in orders) {
                 if ((orders[i].status == "0" || orders[i].status == "1") && orders[i].price == price && orders[i].side == side) {
                     confirmOrderCancel(orders[i].orderid);

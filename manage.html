@@ -30,7 +30,7 @@
             color: #666666;
         }
         .cw2t {
-            width: 740px;
+            width: 620px;
             font-size: 33px;
             color: #C0C0C0;
             white-space: nowrap;
@@ -38,7 +38,7 @@
         }
         .yellowstrip {
             background-color: yellow;
-            width: 740px;
+            width: 620px;
             white-space: nowrap;
             margin: 3px;
         }
@@ -54,12 +54,12 @@
             text-decoration: underline;
         }
         .depthstrip {
-            width: 740px;
+            width: 620px;
             white-space: nowrap;
             margin: 3px;
         }
         .headingstrip {
-            width: 740px;
+            width: 620px;
             white-space: nowrap;
             margin: 3px;
         }
@@ -78,21 +78,6 @@
             color: gray;
             cursor: pointer;
         }
-        .mybidquantity {
-            display: inline-block;
-            width: 60px;
-            font-size: 21px;
-            text-align: right;
-            color: gray;
-            cursor: pointer;
-        }
-        .myofferquantity {
-            display: inline-block;
-            width: 60px;
-            font-size: 21px;
-            color: gray;
-            cursor: pointer;
-        }
         .bidquantityheading {
             display: inline-block;
             width: 80px;
@@ -103,19 +88,6 @@
         .offerquantityheading {
             display: inline-block;
             width: 80px;
-            font-size: 12px;
-            color: gray;
-        }
-        .mybidquantityheading {
-            display: inline-block;
-            width: 60px;
-            font-size: 12px;
-            text-align: right;
-            color: gray;
-        }
-        .myofferquantityheading {
-            display: inline-block;
-            width: 60px;
             font-size: 12px;
             color: gray;
         }
@@ -412,7 +384,7 @@
             font-size: 12px;
         }
         .forminstrument {
-            width: 740px;
+            width: 620px;
             white-space: nowrap;            
         }
         .orderquantity {
@@ -2451,13 +2423,9 @@
             var offerprice;
             var bidquantity;
             var offerquantity;
-            var mybidquantity;
-            var myofferquantity;
             var level2;
             var stock;
             var slash;
-            var ordervolbidkey;
-            var ordervolofferkey;
             var y;
             var removestock;
             var orderdiv;
@@ -2493,8 +2461,6 @@
                     offerprice = document.getElementById("offerprice:" + symbol + ":" + y);
                     bidquantity = document.getElementById("bidquantity:" + symbol + ":" + y);
                     offerquantity = document.getElementById("offerquantity:" + symbol + ":" + y);
-                    mybidquantity = document.getElementById("mybidquantity:" + symbol + ":" + y);
-                    myofferquantity = document.getElementById("myofferquantity:" + symbol + ":" + y);
                 } else {
                     // first time through, so create elements
                     strip = document.createElement('div');
@@ -2522,17 +2488,11 @@
                     bidquantity.id = "bidquantity:" + symbol + ":" + y;
                     bidquantity.title = "Place a new sell order";
                     bidquantity.onclick = function() {setOrderQuantity(this, "2", symbol);}
-                    mybidquantity = document.createElement('span');
-                    mybidquantity.className = "mybidquantity";
-                    mybidquantity.id = "mybidquantity:" + symbol + ":" + y;
                     offerquantity = document.createElement('span');
                     offerquantity.className = "offerquantity";
                     offerquantity.id = "offerquantity:" + symbol + ":" + y;
                     offerquantity.title = "Place a new buy order";
                     offerquantity.onclick = function() {setOrderQuantity(this, "1", symbol);}
-                    myofferquantity = document.createElement('span');
-                    myofferquantity.className = "myofferquantity";
-                    myofferquantity.id = "myofferquantity:" + symbol + ":" + y;
                     slash = document.createElement('span');
                     slash.className = "slash";
                     slash.innerHTML = "/";
@@ -2601,13 +2561,11 @@
 
                     strip.appendChild(level2);
                     strip.appendChild(stock);
-                    strip.appendChild(mybidquantity);
                     strip.appendChild(bidquantity);
                     strip.appendChild(bidprice);
                     strip.appendChild(slash);
                     strip.appendChild(offerprice);
                     strip.appendChild(offerquantity);
-                    strip.appendChild(myofferquantity);
                     strip.appendChild(removestock);
 
                     if (y == 0) {
@@ -2631,26 +2589,8 @@
                 bidprice.innerHTML = orderbooks[symbol][y].bid;
                 offerprice.innerHTML = orderbooks[symbol][y].offer;                    
 
-                ordervolbidkey = symbol + "Buy" + orderbooks[symbol][y].bid;
-                ordervolofferkey = symbol + "Sell" + orderbooks[symbol][y].offer;
-
                 bidquantity.innerHTML = orderbooks[symbol][y].bidvol;
                 offerquantity.innerHTML = orderbooks[symbol][y].offervol;
-
-                if (ordervolbidkey in ordervol) {
-                    mybidquantity.innerHTML = ordervol[ordervolbidkey];
-                    mybidquantity.title = "Cancel buy order quantity";
-                    mybidquantity.onclick = function() {cancelOrderQuantity(this, "1", symbol);}
-                } else {
-                    mybidquantity.innerHTML = 0;
-                }
-                if (ordervolofferkey in ordervol) {
-                    myofferquantity.innerHTML = ordervol[ordervolofferkey];
-                    myofferquantity.title = "Cancel sell order quantity";
-                    myofferquantity.onclick = function() {cancelOrderQuantity(this, "2", symbol);}
-                } else {
-                    myofferquantity.innerHTML = 0;
-                }
 
                 if (!obdisplay[symbol].level2) {break;}
             }
@@ -2741,11 +2681,9 @@
             var headinglevel2;
             var headingstock;
             var headingbidquantity;
-            var headingmybidquantity;
             var headingbidprice;
             var headingofferprice;
             var headingofferquantity;
-            var headingmyofferquantity;
             var headingslash;
 
             if (Object.keys(orderbooks).length == 0) {
@@ -2768,9 +2706,6 @@
             headingbidquantity = document.createElement('span');
             headingbidquantity.innerHTML = "Bid Vol";
             headingbidquantity.className = "bidquantityheading";
-            headingmybidquantity = document.createElement('span');
-            headingmybidquantity.innerHTML = "My Vol";
-            headingmybidquantity.className = "mybidquantityheading"
             headingbidprice = document.createElement('span');
             headingbidprice.innerHTML = "Bid Price";
             headingbidprice.className = "bidheading";
@@ -2780,22 +2715,17 @@
             headingofferquantity = document.createElement('span');
             headingofferquantity.innerHTML = "Offer Vol";
             headingofferquantity.className = "offerquantityheading"
-            headingmyofferquantity = document.createElement('span');
-            headingmyofferquantity.innerHTML = "My Vol";
-            headingmyofferquantity.className = "myofferquantityheading";
             headingslash = document.createElement('span');
             headingslash.innerHTML = "/";
             headingslash.className = "slashheading";
 
             headingstrip.appendChild(headinglevel2);
             headingstrip.appendChild(headingstock);
-            headingstrip.appendChild(headingmybidquantity);
             headingstrip.appendChild(headingbidquantity);
             headingstrip.appendChild(headingbidprice);
             headingstrip.appendChild(headingslash);
             headingstrip.appendChild(headingofferprice);
             headingstrip.appendChild(headingofferquantity);
-            headingstrip.appendChild(headingmyofferquantity);
 
             main.appendChild(headingstrip);
         }
@@ -3091,8 +3021,6 @@
             var msg;
             var sellmsg;
             var buymsg;
-            var positionopenclose = 1;
-            var positioncloseid = "";
 
             quotes[quote.quoteid] = quote;
 
@@ -3133,7 +3061,7 @@
             sellbutton.value = sellmsg;
 
             sellbutton.onclick = function() {
-                sendOrder(quote.clientid, quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', positionopenclose, quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", positioncloseid);
+                sendOrder(quote.clientid, quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
                 disable();
             }
 
@@ -3143,7 +3071,7 @@
             buybutton.value = buymsg;
 
             buybutton.onclick = function() {
-                sendOrder(quote.clientid, quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', positionopenclose, quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", positioncloseid);
+                sendOrder(quote.clientid, quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
                 disable();
             }
 
@@ -3447,9 +3375,6 @@
 
             function sendIt() {
                 var settdate;
-                // todo: client to choose
-                var positionopenclose = 1;
-                var positioncloseid = "";
 
                 if ((!validateNumeric(quantityinput, getQuantityDesc(qtyascashorshares))) || (!validateNumeric(priceinput, pricedesc))) {
                     return;
@@ -3465,7 +3390,7 @@
 
                 settdate = formatToUTCDate(settday[settday.selectedIndex].value, settmonth[settmonth.selectedIndex].value, settyear[settyear.selectedIndex].value);
 
-                sendOrder(symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, positionopenclose, nosettdays, settlcurrency, settdate, null, timeinforce, expiredate, expiretime, positioncloseid);
+                sendOrder(symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, nosettdays, settlcurrency, settdate, null, timeinforce, expiredate, expiretime);
 
                 disable();
                 //pricedisable();
@@ -3510,7 +3435,7 @@
             }
         }
 
-        function sendOrder(clientid, symbol, side, quantity, price, ordertype, positionopenclose, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime, positioncloseid) {
+        function sendOrder(clientid, symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
             var neworder = {};
             var msg;
 
@@ -3523,7 +3448,6 @@
                 neworder.price = price;
             }
             neworder.ordertype = ordertype;
-            neworder.positionopenclose = positionopenclose;
             neworder.settlcurrency = settlcurrency;
             neworder.nosettdays = nosettdays;
             neworder.futsettdate = settdate;
@@ -3533,7 +3457,6 @@
             neworder.timeinforce = timeinforce;
             neworder.expiredate = expiredate;
             neworder.expiretime = expiretime;
-            neworder.positioncloseid = positioncloseid;
             neworder.operatortype = operatortype;
             neworder.operatorid = userid;            
 
@@ -3623,12 +3546,13 @@
         }
 
         function cancelOrderQuantity(elem, side, symbol) {
-            var quantityelem;
             var price;
 
-            var quantity = document.getElementById(elem.id);
+            // todo: fix
 
-            for (var i = 0; i < orderbooks[symbol].length; ++i) {
+            //var quantity = document.getElementById(elem.id);
+
+            /*for (var i = 0; i < orderbooks[symbol].length; ++i) {
                 if (side == "1") {
                     quantityelem = document.getElementById("mybidquantity:" + symbol + ":" + i);
                 } else {
@@ -3644,7 +3568,7 @@
                     price = priceelem.innerHTML;
                     break;                    
                 }
-            }
+            }*/
 
             for (var i in orders) {
                 if ((orders[i].status == "0" || orders[i].status == "1") && orders[i].price == price && orders[i].side == side) {
