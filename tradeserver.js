@@ -2101,14 +2101,19 @@ function registerScripts() {
         poscost = tonumber(vals[2]) - tonumber(tradecost) \
         posinitialmargin = tonumber(vals[3]) - tonumber(initialmargin) \
       end \
-      redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "initialmargin", posinitialmargin) \
+      if posqty == 0 then \
+        redis.call("hdel", positionkey, "clientid", "symbol", "longshort", "quantity", "cost", "currency", "settldate", "initialmargin") \
+        redis.call("srem", positionskey, poskey) \
+      else \
+        redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "initialmargin", posinitialmargin) \
+      end \
     else \
       posqty = tradequantity \
       poscost = tradecost \
       posinitialmargin = initialmargin \
       redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "longshort", side, "quantity", posqty, "cost", poscost, "currency", currency, "settldate", settldate, "initialmargin", posinitialmargin) \
+      redis.call("sadd", positionskey, poskey) \
     end \
-    redis.call("sadd", positionskey, poskey) \
   end \
   ';
 
@@ -2152,7 +2157,7 @@ function registerScripts() {
   end \
   ';
 
-  creditcheck = getinitialmargin + rejectorder + updateordermargin + updatereserve + '\
+  creditcheck = getinitialmargin + getposition + getreserve + rejectorder + updateordermargin + updatereserve + '\
   local creditcheck = function(orderid, clientid, symbol, side, quantity, price, currency, settldate, instrumenttype) \
     --[[ see if client is allowed to trade this product ]] \
     if redis.call("sismember", clientid .. ":instrumenttypes", instrumenttype) == 0 then \
@@ -2164,7 +2169,7 @@ function registerScripts() {
     --[[ todo: always allow closing trades ]] \
     local position = getposition(clientid, symbol, currency, settldate) \
     if position[1] then \
-      if tonumber(side) ~= tonumber(position[3]) then
+      if tonumber(side) ~= tonumber(position[3]) then \
         if tonumber(quantity) > tonumber(position[1]) then \
           --[[ trying to close quantity greater than position ]] \
           rejectorder(orderid, 1019, "") \
