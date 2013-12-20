@@ -179,7 +179,6 @@ function logout(text) {
 }
 
 function heartbeat() {
-	console.log('sending heartbeat');
 	sendMessage('0', "", "", "", false, null, null);
 }
 
