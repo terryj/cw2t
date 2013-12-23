@@ -17,11 +17,11 @@ var ptpclient = require('./ptpclient.js'); // Proquote API connection
 
 // globals
 var outofhours = false; // in or out of market hours - todo: replace with markettype?
-var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var tradeserverchannel = 3;
 var userserverchannel = 2;
 var clientserverchannel = 1;
+var holidays = {};
 
 // redis
 var redishost;
@@ -84,8 +84,19 @@ db.on("error", function(err) {
 
 function initialise() {
   initDb();
+  getHolidays();
   pubsub();
   connectToTrading();
+}
+
+function getHolidays() {
+  db.eval(scriptgetholidays, 0, function(err, ret) {
+    if (err) throw err;
+
+    for (i = 0; i < ret.length; i++) {
+      holidays[ret[i]] = i;
+    }
+  });
 }
 
 // pubsub connections
@@ -155,7 +166,7 @@ function quoteRequest(quoterequest) {
   // store the quote request & get an id
   db.eval(scriptquoterequest, 11, quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, function(err, ret) {
     if (err) throw err;
-  
+
     if (ret[0] != 0) {
       // todo: send a quote ack to client
 
@@ -184,21 +195,42 @@ function quoteRequest(quoterequest) {
 // roll date forwards by T+n number of days
 function getSettDate(nosettdays) {
   var today = new Date();
+  var days = 0;
 
-  for (i = 0; i < nosettdays; i++) {
-    today.setDate(today.getDate() + 1);
-
-    // ignore weekends
+  while (true) {
+    // ignore weekends & holidays
     if (today.getDay() == 6) {
       today.setDate(today.getDate() + 2);
     } else if (today.getDay() == 0) {
       today.setDate(today.getDate() + 1);
+    } else if (isHoliday(today)) {
+      today.setDate(today.getDate() + 1);
+    } else {
+      today.setDate(today.getDate() + 1);
+      days++;
     }
 
-    // todo: add holidays
+    if (days >= nosettdays) {
+      break;
+    }
   }
 
   return today;
+}
+
+function isHoliday(datetocheck) {
+  var found = false;
+  var datetocheckstr = "";
+
+  datetocheckstr += datetocheck.getFullYear();
+  datetocheckstr += datetocheck.getMonth() + 1;
+  datetocheckstr += datetocheck.getDate();
+
+  if (datetocheckstr in holidays) {
+    found = true;
+  }
+
+  return found;
 }
 
 /*
@@ -284,7 +316,6 @@ function newOrder(order) {
   // store the order, get an id & credit check it
   db.eval(scriptneworder, 23, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
 
     // credit check failed
     if (ret[0] == 0) {
@@ -658,101 +689,6 @@ function getValue(trade) {
   }
 }
 
-/*function sendInstruments(conn) {
-  console.log("sending Instruments");
-
-  db.sort("instruments", "ALPHA", function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (replies.length == 0) {
-      console.log("Error: no instruments in database");
-      return;
-    }
-
-    replies.forEach(function(symbol, j) {
-      db.hgetall("symbol:" + symbol, function(err, inst) {
-        var instrument = {};
-
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        if (inst == null) {
-          console.log("symbol " + symbol + " not found");
-          return;
-        }
-
-        // todo: reinstate/choice
-        if (inst.instrumenttype != "DE") {
-          return;
-        }
-
-        instrument.symbol = symbol;
-        instrument.currency = inst.currency;
-
-        if ("description" in inst) {
-          instrument.description = inst.description;
-        } else {
-          console.log("no desc for "+symbol);
-          instrument.description = "";
-        }
-
-        conn.write("{\"instrument\":" + JSON.stringify(instrument) + "}");
-      });
-    });
-  });
-}*/
-
-function sendInstruments(orgclientkey, conn) {
-  // get sorted subset of instruments for this client
-  db.eval(scriptgetinst, 1, orgclientkey, function(err, ret) {
-    conn.write("{\"instruments\":" + ret + "}");
-  });
-}
-
-function sendOrderTypes(conn) {
-  var o = {ordertypes: []};
-  var count;
-
-  db.smembers("ordertypes", function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = replies.length;
-    if (count == 0) {
-      console.log("Error: no order types in database");
-      return;
-    }
-
-    replies.forEach(function(ordertypeid, i) {
-      db.get("ordertype:" + ordertypeid, function(err, description) {
-        var ordertype = {};
-
-        ordertype.id = ordertypeid;
-        ordertype.description = description;
-
-        // add the order to the array
-        o.ordertypes.push(ordertype);
-
-        // our own global
-        ordertypes[ordertypeid] = description;
-
-        // send array if we have added the last item
-        count--;
-        if (count <= 0) {
-          conn.write(JSON.stringify(o));
-        }
-      });
-    });
-  });
-}
-
 function sendIndex(orgclientkey, index, conn) {
   var i = {symbols: []};
   var count;
@@ -808,40 +744,6 @@ function sendOrder(order, conn) {
   }
 }
 
-function sendOrders(orgclientkey, conn) {
-  var o = {orders: []};
-  var count;
-
-  db.smembers(orgclientkey + ":orders", function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = replies.length;
-    if (count == 0) {
-      return;
-    }
-
-    replies.forEach(function (orderid, i) {
-      db.hgetall("order:" + orderid, function(err, order) {
-        // only active orders
-        // todo: check statii
-        if (order.status == "0" || order.status == "1") {
-          // add the order to the array
-          o.orders.push(order);
-        }
-
-        // send array if we have added the last item
-        count--;
-        if (count <= 0) {
-          conn.write(JSON.stringify(o));
-        }
-      });
-    });
-  });
-}
-
 function sendTrade(trade, conn) {
   if (conn != null) {
     conn.write("{\"trade\":" + JSON.stringify(trade) + "}");
@@ -881,161 +783,16 @@ function sendPosition(position, conn) {
   conn.write("{\"position\":" + JSON.stringify(position) + "}");
 }
 
-function sendPositions(orgclientkey, conn) {
-  var posarray = {positions: []};
-  var count;
-
-  db.smembers(orgclientkey + ":positions", function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = replies.length;
-    if (count == 0) {
-      return;
-    }
-
-    replies.forEach(function(poskey, i) {
-      db.hgetall("position:" + poskey, function(err, position) {
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        posarray.positions.push(position);
-
-        // send array if we have added the last item
-        count--;
-        console.log(count);
-        if (count <= 0) {
-          conn.write(JSON.stringify(posarray));
-        }
-      });
-    });
-  });
-}
-
 function sendCashItem(cash, conn) {
   conn.write("{\"cashitem\":" + JSON.stringify(cash) + "}");
-}
-
-function sendCash(orgclientkey, conn) {
-  var arr = {cash: []};
-  var count;
-
-  db.smembers(orgclientkey + ":cash", function(err, replies) {
-    if (err) {
-      console.log("sendCash:" + err);
-      return;
-    }
-
-    count = replies.length;
-    if (count == 0) {
-      return;
-    }
-
-    replies.forEach(function (currency, i) {
-      db.get(orgclientkey + ":cash:" + currency, function(err, amount) {
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        var cash = {};
-        cash.currency = currency;
-        cash.amount = amount;
-
-        arr.cash.push(cash);
-
-        // send array if we have added the last item
-        count--;
-        if (count <= 0) {
-          conn.write(JSON.stringify(arr));
-        }
-      });
-    });
-  });
 }
 
 function sendMargin(margin, conn) {
   conn.write("{\"margin\":" + JSON.stringify(margin) + "}");
 }
 
-function sendMargins(orgclientkey, conn) {
-  var arr = {margins: []};
-  var count;
-
-  db.smembers(orgclientkey + ":margins", function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = replies.length;
-    if (count == 0) {
-      return;
-    }
-
-    replies.forEach(function (currency, i) {
-      db.get(orgclientkey + ":margin:" + currency, function(err, amount) {
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        var margin = {};
-        margin.currency = currency;
-        margin.amount = amount;
-
-        arr.margins.push(margin);
-
-        // send array if we have added the last item
-        count--;
-        if (count <= 0) {
-          conn.write(JSON.stringify(arr));
-        }
-      });
-    });
-  });
-}
-
 function sendReserve(reserve, conn) {
   conn.write("{\"reserve\":" + JSON.stringify(reserve) + "}");
-}
-
-function sendReserves(orgclientkey, conn) {
-  var arr = {reserves: []};
-  var count;
-
-  db.smembers(orgclientkey + ":reserves", function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = replies.length;
-    if (count == 0) {
-      return;
-    }
-
-    replies.forEach(function (reskey, i) {
-      db.hgetall(orgclientkey + ":reserve:" + reskey, function(err, reserve) {
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        arr.reserves.push(reserve);
-
-        // send array if we have added the last item
-        count--;
-        if (count <= 0) {
-          conn.write(JSON.stringify(arr));
-        }
-      });
-    });
-  });
 }
 
 function sendAllOrderBooks(conn) {
@@ -1111,24 +868,6 @@ function sendOrderBook(symbol, level1arr, send, conn) {
           conn.write("{\"orderbooks\":" + JSON.stringify(level1arr) +"}");
         }
       }
-    });
-  });
-}
-
-//
-// send all the orderbooks for a single client
-//
-function sendOrderBooksClient(orgclientkey, conn) {
-  // get all the instruments in the order book for this client
-  db.smembers(orgclientkey + ":orderbooks", function(err, instruments) {
-    if (err) {
-      console.log("error in sendOrderBooksClient:" + err);
-      return;
-    }
-
-    // send the order book for each instrument
-    instruments.forEach(function (symbol, i) {
-      orderBookOut(orgclientkey, symbol, conn);
     });
   });
 }
@@ -1401,65 +1140,8 @@ function getReasonDesc(reason) {
   return desc;
 }
 
-function start(orgclientkey, conn) {
-  sendOrderBooksClient(orgclientkey, conn);
-  sendInstruments(orgclientkey, conn);
-  sendOrderTypes(conn);
-  sendPositions(orgclientkey, conn);
-  sendOrders(orgclientkey, conn);
-  sendCash(orgclientkey, conn);
-  sendMargins(orgclientkey, conn);
-  sendReserves(orgclientkey, conn);
-
-  // may not be last, but...
-  sendReadyToTrade(conn);
-}
-
-function sendReadyToTrade(conn) {
-  conn.write("{\"status\":\"readytotrade\"}");
-}
-
-function replySignIn(reply, conn) {
-    conn.write("{\"signinreply\":" + JSON.stringify(reply) + "}");
-}
-
 function initDb() {
   registerScripts();
-}
-
-function registerClient(reg, conn) {
-  var reply = {};
-
-  db.sismember("clients", reg.email, function(err, found) {
-    if (found) {
-      reply.success = "false";
-      reply.email = reg.email;
-      reply.reason = "Email address already exists";
-      conn.write("{\"registerreply\":" + JSON.stringify(reply) + "}");
-      return;
-    }
-
-    // get the current client id
-    db.get("clientid", function(err, nextclientid) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      db.sadd("clients", reg.email);
-
-      db.hmset(reg.email, "password", "cw2t", "clientid", nextclientid);
-
-      reply.success = "true";
-      reply.email = reg.email;
-      reply.password = "cw2t";
-
-      conn.write("{\"registerreply\":" + JSON.stringify(reply) + "}");
-    });
-
-    // increment client id
-    db.incr("clientid");
-  });
 }
 
 function orderBookRequest(orgclientkey, symbol, conn) {
@@ -2735,5 +2417,10 @@ function registerScripts() {
     end \
   end \
   return cjson.encode(inst) \
+  ';
+
+  scriptgetholidays = '\
+  local holidays = redis.call("smembers", "holidays") \
+  return holidays \
   ';
 }

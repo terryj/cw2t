@@ -224,7 +224,6 @@ function disconnect() {
 
 Ptp.prototype.quoteRequest = function(quoterequest) {
 	var msg;
-	console.log("sending quote request");
 
 	msg = '131=' + quoterequest.quotereqid + SOH
 		+ '146=' + norelatedsym + SOH
@@ -263,8 +262,6 @@ Ptp.prototype.quoteRequest = function(quoterequest) {
 Ptp.prototype.newOrder = function(order) {
 	var msg;
 	var delivertocompid = "";
-
-	console.log("sending new order single, id:" + order.orderid);
 
 	msg = '11=' + order.orderid + SOH
 		+ '21=' + handinst + SOH
@@ -311,8 +308,6 @@ Ptp.prototype.newOrder = function(order) {
 }
 
 Ptp.prototype.orderCancelRequest = function(ocr) {
-	console.log("sending order cancel request");
-
 	var msg = '11=' + ocr.ordercancelreqid + SOH
 			+ '41=' + ocr.orderid + SOH
 			+ '55=' + ocr.proquotesymbol + SOH

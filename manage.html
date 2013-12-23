@@ -522,6 +522,7 @@
         .clientlist {
             position: absolute;
             border: 1px solid grey;
+            z-index: 1;
             /*list-style: none;*/
             width: 600px;
             height: 300px;
@@ -544,6 +545,13 @@
         .formlabel {
             display: inline-block;
             width: 150px;
+            font-size: 21px;
+            text-align: right;
+            color: gray;
+        }
+        .formlabelshort {
+            display: inline-block;
+            width: 127px;
             font-size: 21px;
             text-align: right;
             color: gray;
@@ -1268,6 +1276,7 @@
             clearOrderBookHeadings();
             clearLists();
             clearForms();
+            clearDivs();
             clearStrips();
             clearSelectDivs();
             clearAllSymbolDivs();
@@ -1291,6 +1300,11 @@
             clearForm("frmhedge", true);
             clearForm("frmcosts", true);
             clearForm("frmifa", true);
+        }
+
+        function clearDivs() {
+            clearDiv("clientbox");
+            clearDiv("stockbox");
         }
 
         function addElement(msg, list, index) {
@@ -1334,7 +1348,7 @@
         }
 
         function displayOrderBooks() {
-            selectStock(0);
+            selectStock("watchlist", false, true, null);
 
             displayOrderBookHeadings();
 
@@ -1453,11 +1467,13 @@
             //addElement(msg, list1, orders[x].orderid);
         }
 
-        function selectStock(callerid) {
+        function selectStock(frm, displayname, focus, focusfield) {
             var stockbox;
             var stockboxinput;
             var stocklist;
             var searchtext;
+            var inpsymboldesc;
+            var inpsymbol;
 
             stockbox = document.createElement("div");
             stockbox.id = "stockbox";
@@ -1466,7 +1482,7 @@
             stockboxinput = document.createElement("input");
             stockboxinput.className = "stockboxinput";
             stockboxinput.id = "stockboxinput";
-            stockboxinput.placeholder = "Enter Symbol";
+            stockboxinput.placeholder = "Symbol";
 
             stockboxinput.onkeyup = function() {
                 clearList(stocklist);
@@ -1507,7 +1523,7 @@
                 firstspace = element.innerHTML.indexOf(' ');
                 symbol = element.innerHTML.substr(0, firstspace);
 
-                if (callerid == 0) {
+                if (frm == "watchlist") {
                     if (symbol in obdisplay) {
                         alert(symbol + " already in Watch List");
                         e.stopPropagation();
@@ -1517,16 +1533,30 @@
                         stockboxinput.value = "";
                         stockboxinput.focus();
                     }
-                } else {
+                } else if (frm == "frmproduct") {
                     displayProduct(instruments[symbol]);
+                } else if (frm == "orderdiv") {
+                    inpsymboldesc.value = instruments[symbol].description;
+                    inpsymbol = document.getElementById("inpsymbol");
+                    inpsymbol.value = symbol;
                 }
 
                 stocklist.style.visibility = "hidden";
                 stockboxinput.value = "";
-                stockboxinput.focus();
+
+                if (focusfield) {
+                    focusfield.focus();
+                } else {
+                    stockboxinput.focus();
+                }
             }
 
             stockbox.appendChild(stockboxinput);
+
+            if (displayname) {
+                inpsymboldesc = newinput("inpsymboldesc", "forminput", stockbox);
+            }
+
             stockbox.appendChild(stocklist);
 
             main.appendChild(stockbox);
@@ -1544,10 +1574,12 @@
                 stocklist.style.visibility = "hidden";
             }
 
-            stockboxinput.focus();
+            if (focus) {
+                stockboxinput.focus();
+            }
         }
 
-        function selectClientStock(frm) {
+        /*function selectClientStock(frm) {
             var clientstockbox;
             var stockboxinput;
             var stocklist;
@@ -1563,7 +1595,7 @@
             clientboxinput = document.createElement("input");
             clientboxinput.className = "clientboxinput";
             clientboxinput.id = "clientboxinput";
-            clientboxinput.placeholder = "Enter Client Name";
+            clientboxinput.placeholder = "Client Name";
 
             clientboxinput.onkeyup = function() {
                 clearList(clientlist);
@@ -1614,7 +1646,7 @@
             stockboxinput = document.createElement("input");
             stockboxinput.className = "clientstockboxinput";
             stockboxinput.id = "stockboxinput";
-            stockboxinput.placeholder = "Enter Symbol";
+            stockboxinput.placeholder = "Symbol";
 
             stockboxinput.onkeyup = function() {
                 clearList(stocklist);
@@ -1686,7 +1718,7 @@
             }
 
             clientboxinput.focus();            
-        }
+        }*/
 
         function displayTrades() {
             var firsttrade = true;
@@ -2730,7 +2762,7 @@
             main.appendChild(headingstrip);
         }
 
-        function requestQuote() {
+        function requestQuote(symbol) {
             var quotereqbutton;
             var quotereqqty;
             var orderdiv;
@@ -2739,37 +2771,41 @@
             var currencysel;
             var qtyascashorshares = 1;
             var settlperiod;
-            var lblclient;
             var lblquantity;
-            var lblsymbol;
             var lblsettle;
-            var inpclient;
-            var inpsymbol;
             var inpclientid;
             var lblcurrency;
+            var inpsymbol;
+            var focusfield;
 
-            selectClientStock("orderdiv");
+            quotereqqty = document.createElement("input");
+            quotereqqty.id = "quotereqquantity";
+            quotereqqty.className = "quotereqquantity";
+            quotereqqty.placeholder = getQuantityDesc(qtyascashorshares);
+            inpsymbol = document.createElement("input");
+            inpsymbol.type = "hidden";
+            inpsymbol.id = "inpsymbol";
 
-            lblclient = document.createElement("label");
-            lblclient.innerHTML = "Client:";
-            lblclient.className = "formlabel";
-            inpclient = document.createElement("input");
-            inpclient.id = "inpclient";
-            inpclient.className = "forminput";
+            if (symbol == null) {
+                selectClient("orderdiv", true, "stockboxinput");
+                selectStock("orderdiv", true, false, quotereqqty);
+                orderdiv = getDiv("orderdiv", null);
+            } else {
+                clearDiv("clientbox");
+                clearSymbolDiv(symbol);
+                selectClient("orderdiv:" + symbol, true, "quotereqquantity");
+                orderdiv = getDiv("orderdiv:" + symbol, symbol);
+                inpsymbol.value = symbol;
+            }
+
             lblquantity = document.createElement("label");
             lblquantity.innerHTML = "Quantity:";
-            lblquantity.className = "formlabel";
-            lblsymbol = document.createElement("label");
-            lblsymbol.className = "formlabel";
-            lblsymbol.innerHTML = "Symbol:";
-            inpsymbol = document.createElement("input");
-            inpsymbol.id = "inpsymbol";
-            inpsymbol.className = "forminput";
+            lblquantity.className = "formlabelshort";
             lblcurrency = document.createElement("label");
-            lblcurrency.className = "formlabel";
+            lblcurrency.className = "formlabelshort";
             lblcurrency.innerHTML = "Currency:";
             lblsettle = document.createElement("label");
-            lblsettle.className = "formlabel";
+            lblsettle.className = "formlabelshort";
             lblsettle.innerHTML = "Settlement:";
             inpclientid = document.createElement("input");
             inpclientid.type = "hidden";
@@ -2787,11 +2823,6 @@
                 quotereqqty.placeholder = getQuantityDesc(qtyascashorshares);
                 quotereqqty.focus();
             }
-
-            quotereqqty = document.createElement("input");
-            quotereqqty.id = "quotereqquantity";
-            quotereqqty.className = "quotereqquantity";
-            quotereqqty.placeholder = getQuantityDesc(qtyascashorshares);
 
             quotereqqty.onkeypress = function(event) {
                 if (event.keyCode == 13) {
@@ -2822,14 +2853,6 @@
                 sendIt();
             }
 
-            orderdiv = getDiv("orderdiv");
-
-            orderdiv.appendChild(lblclient);
-            orderdiv.appendChild(inpclient);
-            addNewLine(orderdiv);
-            orderdiv.appendChild(lblsymbol);
-            orderdiv.appendChild(inpsymbol);
-            addNewLine(orderdiv);
             orderdiv.appendChild(lblquantity);
             orderdiv.appendChild(quantitycashsel);
             orderdiv.appendChild(quotereqqty);
@@ -2842,8 +2865,23 @@
             addNewLine(orderdiv);
             orderdiv.appendChild(quotereqbutton);
             orderdiv.appendChild(inpclientid);
+            orderdiv.appendChild(inpsymbol);
 
             function sendIt() {
+                if (inpclientid.value == "") {
+                    alert("Enter a client");
+                    focusfield = document.getElementById("clientboxinput");
+                    focusfield.focus();
+                    return;
+                }
+
+                if (inpsymbol.value == "") {
+                    alert("Enter a symbol");
+                    focusfield = document.getElementById("stockboxinput");
+                    focusfield.focus();
+                    return;
+                }
+
                 if (validateNumeric(quotereqqty, getQuantityDesc(qtyascashorshares))) {
                     if (qtyascashorshares == 1) {
                         quantity = quotereqqty.value;
@@ -2904,13 +2942,24 @@
             return (formatUTCDate(utcdatetime) + utcdatetime.substr(8));
         }
 
-        function getDiv(divid) {
+        function displayElement(element, symbol) {
+            var nextsymbol;
+
+            if (obdisplay[symbol].insertbefore == null) {
+                main.appendChild(element);
+            } else {
+                nextsymbol = document.getElementById("strip:" + obdisplay[symbol].insertbefore + ":0");
+                main.insertBefore(element, nextsymbol);
+            }
+        }
+
+        function getDiv(divid, symbol) {
             var div = document.getElementById(divid);
 
             if (div == null) {
                 div = document.createElement("div");
                 div.id = divid;
-                main.appendChild(div);
+                displayElement(div, symbol);
             }
 
             return div;
@@ -3093,7 +3142,11 @@
             }, 1000);
             // todo: clear if form is closed
 
-            orderdiv = getDiv("orderdiv");
+            if (selectedmenu == 0) {
+                orderdiv = getDiv("orderdiv:" + quote.symbol, quote.symbol);
+            } else {
+                orderdiv = getDiv("orderdiv", null);                
+            }
 
             addNewLine(orderdiv);
             orderdiv.appendChild(sellbutton);
@@ -3309,7 +3362,7 @@
 
             populateSettlPeriod(settlperiod, 3);
 
-            orderdiv = getDiv("orderdiv");
+            orderdiv = getDiv("orderdiv:" + symbol, symbol);
 
             orderdiv.appendChild(btn);
             orderdiv.appendChild(quantityinput);
@@ -3760,7 +3813,7 @@
                     displayPositions();
                     break;
                 case 8:
-                    requestQuote();
+                    requestQuote(null);
                     break;
                 case 9:
                     displayCash();
@@ -3777,12 +3830,14 @@
             }
         }
 
-        function selectClient(frm) {
+        function selectClient(frm, displayname, focusfldstr) {
             var clientbox;
             var clientboxinput;
             var clientlist;
             var searchtext;
             var arrnames;
+            var inpclient;
+            var focusfld;
 
             clientbox = document.createElement("div");
             clientbox.id = "clientbox";
@@ -3791,7 +3846,7 @@
             clientboxinput = document.createElement("input");
             clientboxinput.className = "clientboxinput";
             clientboxinput.id = "clientboxinput";
-            clientboxinput.placeholder = "Enter Client Name";
+            clientboxinput.placeholder = "Client Name";
 
             clientboxinput.onkeyup = function() {
                 clearList(clientlist);
@@ -3833,12 +3888,23 @@
 
                 clientlist.style.visibility = "hidden";
                 clientboxinput.value = "";
-                clientboxinput.focus();
 
                 displayClient(clients[element.value], frm, "");
+
+                if (focusfldstr != "") {
+                    focusfld = document.getElementById(focusfldstr);
+                    focusfld.focus();
+                } else {
+                    clientboxinput.focus();
+                }
             }
 
             clientbox.appendChild(clientboxinput);
+
+            if (displayname) {
+                inpclient = newinput("inpclient", "forminput", clientbox);
+            }
+
             clientbox.appendChild(clientlist);
 
             main.appendChild(clientbox);
@@ -3995,7 +4061,7 @@
             displayClient(null, "frmclient", "");
         }
 
-        function displayClient(client, frm, msg, focusfld) {
+        function displayClient(client, frm, msg) {
             var inpclient;
             var inpname;
             var inpmobile;
@@ -4275,7 +4341,7 @@
             var inpsymbol;
             var lblinstconf;
 
-            selectStock(1);
+            selectStock("frmproduct", false, true, null);
 
             frmproduct = document.getElementById("frmproduct");
             if (frmproduct == null) {
@@ -4329,7 +4395,7 @@
                 }
 
                 if (inpmargin.value > 100) {
-                    alert("Enter a Margin < 100");
+                    alert("Enter a Margin less than 100");
                     return;
                 }
 
@@ -4645,10 +4711,10 @@
             inpname.focus();
         }
 
-        function addNewLine(frmclient) {
+        function addNewLine(frm) {
             var newline = document.createElement("label");
             newline.innerHTML = "<br>";
-            frmclient.appendChild(newline);
+            frm.appendChild(newline);
         }
 
         function newform(id) {

@@ -600,27 +600,6 @@ function getSendInst(symbol, conn) {
   });
 }
 
-// roll date forwards by T+n number of days
-function getSettDate(nosettdays) {
-  var today = new Date();
-
-  for (i = 0; i < nosettdays; i++) {
-    today.setDate(today.getDate() + 1);
-
-    // ignore weekends
-    if (today.getDay() == 6) {
-      today.setDate(today.getDate() + 2);
-    } else if (today.getDay() == 0) {
-      today.setDate(today.getDate() + 1);
-    }
-
-    // todo: add holidays
-  }
-  console.log(today);
-
-  return today;
-}
-
 /*
 // Convert dd-mmm-yyyy to FIX date format 'yyyymmdd'
 */
