@@ -213,6 +213,9 @@ function listen() {
       } else if (msg.substr(2, 3) == "ifa") {
         obj = JSON.parse(msg);
         newIfa(obj.ifa, conn);
+      } else if (msg.substr(2, 19) == "tradehistoryrequest") {
+        obj = JSON.parse(msg);
+        tradeHistory(obj.tradehistoryrequest, conn);
       } else if (msg.substr(0, 4) == "ping") {
         conn.write("pong");
       } else {
@@ -972,11 +975,13 @@ function sendTrade(trade, conn) {
   }
 }
 
-function sendTrades(orgclientkey, conn) {
+function tradeHistory(req, conn) {
   var t = {trades: []};
   var count;
 
-  db.smembers(orgclientkey + ":trades", function(err, replies) {
+  console.log(req);
+
+  db.smembers(req.clientid + ":trades", function(err, replies) {
     if (err) {
       console.log(err);
       return;
@@ -987,7 +992,7 @@ function sendTrades(orgclientkey, conn) {
       return;
     }
 
-    replies.forEach(function (tradeid, i) {
+    replies.forEach(function(tradeid, i) {
       db.hgetall("trade:" + tradeid, function(err, trade) {
         t.trades.push(trade);
 

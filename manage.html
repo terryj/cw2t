@@ -592,6 +592,7 @@
         <div id="cw2t" class="cw2t">Thomas Grant & Company</div>
     </div>
     <div id="main">
+    <ul id="list1" class="list"></ul>
     </div>
 
     <script>
@@ -662,7 +663,8 @@
                 updateOrder(obj.order);
             } else if (msg.substr(2, 6) == "trades") {
                 obj = JSON.parse(msg);   
-                loadTrades(obj.trades);             
+                loadTrades(obj.trades);
+                displayTrades();
             } else if (msg.substr(2, 5) == "trade") {
                 obj = JSON.parse(msg);
                 updateTrade(obj.trade);
@@ -825,6 +827,7 @@
         }
 
         function loadTrades(tradearr) {
+            console.log("trades");
             for (var i = 0; i < tradearr.length; ++i) {
                 trades[tradearr[i].tradeid] = tradearr[i];
             }                                    
@@ -1293,6 +1296,7 @@
             clearForm("frmhedge", true);
             clearForm("frmcosts", true);
             clearForm("frmifa", true);
+            clearForm("frmhistory", true);
         }
 
         function clearDivs() {
@@ -3642,7 +3646,8 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "Portfolio", "Request Quote"];
+            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Request Quote"];
+
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -3695,20 +3700,22 @@
                     maintainIfas();
                     break;
                 case 7:
-                    displayPositions();
+                    requestHistory();
                     break;
                 case 8:
-                    requestQuote(null);
+                    displayPositions();
                     break;
                 case 9:
+                    requestQuote(null);
+                    break;
+                case 10:
                     displayCash();
                     displayMargins();
                     displayReserves();
                     break;
-                case 10:
-                    requestHistory();
-                    break;
                 case 11:
+                    break;
+                case 12:
                     settings();
                     break;
                 }
@@ -3782,6 +3789,8 @@
 
                 clientlist.style.visibility = "hidden";
                 clientboxinput.value = "";
+
+                console.log(idfld);
 
                 displayClient(clients[element.value], frm, "", namefld, idfld);
 
@@ -4060,7 +4069,9 @@
             } else {
                 inpclient = document.getElementById(namefld);
                 inpclient.value = client.name;
+                console.log(idfld);
                 inpclientid = document.getElementById(idfld);
+                console.log(inpclientid);
                 inpclientid.value = client.clientid;
             }
         }
@@ -4814,7 +4825,32 @@
         }
 
         function requestHistory() {
-            addElement("Not done yet", list1, "");
+            var inpclientid;
+            var historyrequest = {};
+
+            selectClient("frmhistory", null, "", true, "", "inpclientid", "");
+
+            var frmhistory = newform("frmhistory");
+
+            addNewLine(frmhistory);
+            var lnkquoterequests = newlink("lnkquotereqs", "Quote Requests", "", frmhistory);
+            var lnkquotes = newlink("lnkquotes", "Quotes", "", frmhistory);
+            var lnkorders = newlink("lnkorders", "Orders", "", frmhistory);
+            var lnktrades = newlink("lnktrades", "Trades", "", frmhistory);
+
+            lnktrades.onclick = function() {
+                console.log(inpclientid.value);
+                historyrequest.clientid = inpclientid.value;
+                sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            inpclientid = document.createElement("input");
+            inpclientid.type = "hidden";
+            inpclientid.id = "inpclientid";
+
+            frmhistory.appendChild(inpclientid);
+            
+            main.appendChild(frmhistory);
         }
 
         function settings () {
