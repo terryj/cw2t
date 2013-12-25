@@ -592,7 +592,6 @@
         <div id="cw2t" class="cw2t">Thomas Grant & Company</div>
     </div>
     <div id="main">
-    <ul id="list1" class="list"></ul>
     </div>
 
     <script>
@@ -1202,8 +1201,12 @@
         }
 
         function clearList(list) {
-            while(list.hasChildNodes()){
-                list.removeChild(list.childNodes[0])
+            var list = document.getElementById(list);
+            if (list != null) {
+                while(list.hasChildNodes()){
+                    list.removeChild(list.childNodes[0])
+                }
+                main.removeChild(list);
             }
         }
 
@@ -1279,11 +1282,11 @@
         }
 
         function clearLists() {
-            /*clearList(list1);
-            clearList(list2);
-            clearList(list3);
-            clearList(list4);
-            clearList(list5);*/
+            clearList("list1");
+            clearList("list2");
+            clearList("list3");
+            clearList("list4");
+            clearList("list5");
         }
 
         function clearForms() {
@@ -1581,6 +1584,13 @@
         function displayTrades() {
             var firsttrade = true;
             var msg;
+            var list1;
+
+            list1 = document.createElement("list");
+            list1.className = "list";
+            list1.id = "list1";
+
+            main.appendChild(list1);
 
             for (var x in trades) {
                 msg = tradeMsg(trades[x]);
