@@ -45,13 +45,16 @@
         a {
             font-size: 18px;
             margin: 10px;
-            color: #666666;
+            color: #C0C0C0;
         }
         a:link {
             text-decoration: none;
         }
         a:hover {
             text-decoration: underline;
+        }
+        a:visited {
+            color: red;
         }
         .depthstrip {
             width: 620px;
@@ -638,6 +641,7 @@
         var operatortype = 2; // user
         var defaultHedgebook = "999999";
         var obj = {};
+        var quoterequests = {};
 
         var datain = function(msg) {
             //var obj = {};
@@ -650,7 +654,9 @@
                 updateOrderBook(obj.orderbook);
             } else if (msg.substr(2, 6) == "orders") {
                 obj = JSON.parse(msg);
+                clearOrders();
                 loadOrders(obj.orders);
+                displayOrders();
             } else if (msg.substr(2, 17) == "ordercancelreject") {
                 obj = JSON.parse(msg);
                 orderCancelReject(obj.ordercancelreject);
@@ -661,15 +667,23 @@
                 obj = JSON.parse(msg);
                 updateOrder(obj.order);
             } else if (msg.substr(2, 6) == "trades") {
-                obj = JSON.parse(msg);   
+                obj = JSON.parse(msg);
+                clearTrades();
                 loadTrades(obj.trades);
                 displayTrades();
             } else if (msg.substr(2, 5) == "trade") {
                 obj = JSON.parse(msg);
                 updateTrade(obj.trade);
+            } else if (msg.substr(2, 13) == "quoterequests") {
+                obj = JSON.parse(msg);
+                clearQuoteRequests();
+                loadQuoteRequests(obj.quoterequests);
+                displayQuoteRequests();
             } else if (msg.substr(2, 6) == "quotes") {
                 obj = JSON.parse(msg);
+                clearQuotes();
                 loadQuotes(obj.quotes);
+                displayQuotes();
             } else if (msg.substr(2, 8) == "quoteack") {
                 obj = JSON.parse(msg);
                 quoteAck(obj.quoteack);
@@ -826,10 +840,25 @@
         }
 
         function loadTrades(tradearr) {
-            console.log("trades");
             for (var i = 0; i < tradearr.length; ++i) {
                 trades[tradearr[i].tradeid] = tradearr[i];
             }                                    
+        }
+
+        function clearQuoteRequests() {
+            quoterequests = [];
+        }
+
+        function clearQuotes() {
+            quotes = [];
+        }
+
+        function clearOrders() {
+            orders = [];
+        }
+
+        function clearTrades() {
+            trades = [];
         }
 
         function loadInstruments(instrumentarr) {
@@ -861,6 +890,12 @@
             timeinforces[0] = "Good For Day";
             timeinforces[1] = "Good Till Date";
             timeinforces[2] = "Good Till Cancelled";
+        }
+
+        function loadQuoteRequests(quotereqarr) {
+            for (var i = 0; i < quotereqarr.length; ++i) {
+                quoterequests[quotereqarr[i].quotereqid] = quotereqarr[i];
+            }                                    
         }
 
         function loadQuotes(quotearr) {
@@ -1366,6 +1401,19 @@
             var firstordercancelled = true;
             var msg;
             var listelement;
+            var list1;
+            var list2;
+            var list3;
+            var list4;
+            var list5;
+
+            clearLists();
+
+            list1 = getList("list1");
+            list2 = getList("list2");
+            list3 = getList("list3");
+            list4 = getList("list4");
+            list5 = getList("list5");
 
             displayOrderHeadings();
 
@@ -1581,27 +1629,39 @@
             }
         }
 
+        function getList(liststr) {
+            var list = document.getElementById(liststr);
+
+            if (list == null) {
+                list = document.createElement("list");
+                list.className = "list";
+                list.id = liststr;
+            }
+
+            main.appendChild(list);
+
+            return list;
+        }
+
         function displayTrades() {
             var firsttrade = true;
             var msg;
-            var list1;
+            var list;
 
-            list1 = document.createElement("list");
-            list1.className = "list";
-            list1.id = "list1";
+            clearLists();
 
-            main.appendChild(list1);
+            list = getList("list1");
 
             for (var x in trades) {
                 msg = tradeMsg(trades[x]);
-                addElement(msg, list1, trades[x].tradeid);
+                addElement(msg, list, trades[x].tradeid);
                 firsttrade = false;
             }
 
             if (firsttrade) {
-                addElement("No fills this session", list1, 0);                
+                addElement("No trades", list, 0);                
             } else {
-                 list1.onclick = function(e) {
+                 list.onclick = function(e) {
                     var element;
                     
                     if (!e) e = window.event;
@@ -1612,18 +1672,52 @@
             }
         }
 
+        function displayQuoteRequests() {
+            var firstquoterequest = true;
+            var msg;
+            var list;
+
+            clearLists();
+
+            list = getList("list1");
+
+            for (var x in quoterequests) {
+                //msg = quoteMsg(quoterequests[x]);
+                addElement(quoterequests[x], list, quoterequests[x].quotereqid);
+                firstquoterequest = false;
+            }
+
+            if (firstquoterequest) {
+                addElement("No quote requests", list, 0);                
+            } else {
+                list1.onclick = function(e) {
+                    var element;
+
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewQuoteRequest(element.value);
+                }
+            }
+        }
+
         function displayQuotes() {
             var firstquote = true;
             var msg;
+            var list;
+
+            clearLists();
+
+            list = getList("list1");
 
             for (var x in quotes) {
                 msg = quoteMsg(quotes[x]);
-                addElement(msg, list1, quotes[x].quoteid);
+                addElement(msg, list, quotes[x].quoteid);
                 firstquote = false;
             }
 
             if (firstquote) {
-                addElement("No quotes this session", list1, 0);                
+                addElement("No quotes", list, 0);                
             } else {
                 list1.onclick = function(e) {
                     var element;
@@ -1808,6 +1902,17 @@
             }
 
             alert(msg);
+        }
+
+        function viewQuoteRequest(quotereqid) {
+            var msg;
+            var quoterequest;
+
+            quoterequest = quoterequests[quotereqid];
+
+            for (var field in quoterequest) {
+                msg += field + ": " + quoterequest[field] + "\n";
+            }
         }
 
         function viewQuote(quoteid) {
@@ -2073,9 +2178,9 @@
                 msg += " (" + trade.settlcurrency + ")"
             }
 
-            if (trade.clientid in clients) {
+            /*if (trade.clientid in clients) {
                 msg += " for " + clients[trade.clientid].name;
-            }
+            }*/
 
             msg += ", trade id: " + trade.tradeid + ", order id: " + trade.orderid + ", executed " + formatUTCDateTime(trade.timestamp);
 
@@ -3537,8 +3642,6 @@
             var email;
             var password;
             var btn;
-            var newline1;
-            var newline2;
 
             clearMenu();
             clearScreen();
@@ -3584,17 +3687,14 @@
                 signin();
             }
 
-            newline1 = document.createElement("label");
-            newline1.innerHTML = "<br>";
-            newline2 = document.createElement("label");
-            newline2.innerHTML = "<br><br>";
-
+            addNewLine(frm);
             frm.appendChild(emaillabel);
             frm.appendChild(email);
-            frm.appendChild(newline1);
+            addNewLine(frm);
             frm.appendChild(passwordlabel);
             frm.appendChild(password);
-            frm.appendChild(newline2);
+            addNewLine(frm);
+            addNewLine(frm);
             frm.appendChild(dummylabel);
             frm.appendChild(btn);
 
@@ -3799,8 +3899,6 @@
 
                 clientlist.style.visibility = "hidden";
                 clientboxinput.value = "";
-
-                console.log(idfld);
 
                 displayClient(clients[element.value], frm, "", namefld, idfld);
 
@@ -4079,9 +4177,7 @@
             } else {
                 inpclient = document.getElementById(namefld);
                 inpclient.value = client.name;
-                console.log(idfld);
                 inpclientid = document.getElementById(idfld);
-                console.log(inpclientid);
                 inpclientid.value = client.clientid;
             }
         }
@@ -4842,14 +4938,27 @@
 
             var frmhistory = newform("frmhistory");
 
-            addNewLine(frmhistory);
-            var lnkquoterequests = newlink("lnkquotereqs", "Quote Requests", "", frmhistory);
+            var lnkquoterequests = newlink("lnkquoterequests", "Quote Requests", "", frmhistory);
             var lnkquotes = newlink("lnkquotes", "Quotes", "", frmhistory);
             var lnkorders = newlink("lnkorders", "Orders", "", frmhistory);
             var lnktrades = newlink("lnktrades", "Trades", "", frmhistory);
 
+            lnkquoterequests.onclick = function() {
+                historyrequest.clientid = inpclientid.value;
+                sockjs.send("{\"quoterequesthistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            lnkquotes.onclick = function() {
+                historyrequest.clientid = inpclientid.value;
+                sockjs.send("{\"quotehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            lnkorders.onclick = function() {
+                historyrequest.clientid = inpclientid.value;
+                sockjs.send("{\"orderhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
             lnktrades.onclick = function() {
-                console.log(inpclientid.value);
                 historyrequest.clientid = inpclientid.value;
                 sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
             }
@@ -4859,6 +4968,9 @@
             inpclientid.id = "inpclientid";
 
             frmhistory.appendChild(inpclientid);
+
+            addNewLine(frmhistory);
+            addNewLine(frmhistory);
             
             main.appendChild(frmhistory);
         }

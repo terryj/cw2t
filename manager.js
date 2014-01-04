@@ -69,6 +69,10 @@ var scriptgethedgebooks;
 var scriptcost;
 var scriptgetcosts;
 var scriptifa;
+var scriptgetquoterequests;
+var scriptgetquotes;
+var scriptgetorders;
+var scriptgettrades;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -179,8 +183,14 @@ function listen() {
       } else if (msg.substr(2, 22) == "orderbookremoverequest") {
         obj = JSON.parse(msg);
         orderBookRemoveRequest(userid, obj.orderbookremoverequest, conn);
+      } else if (msg.substr(2, 19) == "orderhistoryrequest") {
+        obj = JSON.parse(msg);
+        orderHistory(obj.orderhistoryrequest, conn);
       } else if (msg.substr(2, 5) == "order") {
         db.publish(tradeserverchannel, msg);
+      } else if (msg.substr(2, 26) == "quoterequesthistoryrequest") {
+        obj = JSON.parse(msg);
+        quoteRequestHistory(obj.quoterequesthistoryrequest, conn);
       } else if (msg.substr(2, 12) == "quoterequest") {
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 8) == "register") {
@@ -216,6 +226,9 @@ function listen() {
       } else if (msg.substr(2, 19) == "tradehistoryrequest") {
         obj = JSON.parse(msg);
         tradeHistory(obj.tradehistoryrequest, conn);
+      } else if (msg.substr(2, 19) == "quotehistoryrequest") {
+        obj = JSON.parse(msg);
+        quoteHistory(obj.quotehistoryrequest, conn);
       } else if (msg.substr(0, 4) == "ping") {
         conn.write("pong");
       } else {
@@ -929,17 +942,38 @@ function sendIndex(orgclientkey, index, conn) {
   });
 }
 
+function quoteRequestHistory(req, conn) {
+  db.eval(scriptgetquoterequests, 1, req.clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"quoterequests\":" + ret + "}");
+  });
+}
+
+function quoteHistory(req, conn) {
+  db.eval(scriptgetquotes, 1, req.clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"quotes\":" + ret + "}");
+  });
+}
+
 function sendOrder(order, conn) {
   if (conn != null) {
     conn.write("{\"order\":" + JSON.stringify(order) + "}");
   }
 }
 
-function sendOrders(orgclientkey, conn) {
+function orderHistory(req, conn) {
+  db.eval(scriptgetorders, 1, req.clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"orders\":" + ret + "}");
+  });
+}
+
+/*function sendOrders(req, conn) {
   var o = {orders: []};
   var count;
 
-  db.smembers(orgclientkey + ":orders", function(err, replies) {
+  db.smembers(req.clientid + ":orders", function(err, replies) {
     if (err) {
       console.log(err);
       return;
@@ -952,12 +986,7 @@ function sendOrders(orgclientkey, conn) {
 
     replies.forEach(function (orderid, i) {
       db.hgetall("order:" + orderid, function(err, order) {
-        // only active orders
-        // todo: check statii
-        if (order.status == "0" || order.status == "1") {
-          // add the order to the array
-          o.orders.push(order);
-        }
+        o.orders.push(order);
 
         // send array if we have added the last item
         count--;
@@ -967,7 +996,7 @@ function sendOrders(orgclientkey, conn) {
       });
     });
   });
-}
+}*/
 
 function sendTrade(trade, conn) {
   if (conn != null) {
@@ -976,33 +1005,9 @@ function sendTrade(trade, conn) {
 }
 
 function tradeHistory(req, conn) {
-  var t = {trades: []};
-  var count;
-
-  console.log(req);
-
-  db.smembers(req.clientid + ":trades", function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = replies.length;
-    if (count == 0) {
-      return;
-    }
-
-    replies.forEach(function(tradeid, i) {
-      db.hgetall("trade:" + tradeid, function(err, trade) {
-        t.trades.push(trade);
-
-        // send array if we have added the last item
-        count--;
-        if (count <= 0) {
-          conn.write(JSON.stringify(t));
-        }
-      });
-    });
+  db.eval(scriptgettrades, 1, req.clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"trades\":" + ret + "}");
   });
 }
 
@@ -1929,5 +1934,65 @@ function registerScripts() {
   end \
   redis.call("sadd", "ifas", ifaid) \
   return {0, ifaid} \
+  ';
+
+  //
+  // pass client id
+  //
+  scriptgetquoterequests = '\
+  local tblresults = {} \
+  local quoterequests = redis.call("smembers", KEYS[1] .. ":quoterequests") \
+  local fields = {"clientid","symbol","quantity","cashorderqty","currency","settlcurrency","nosettdays","futsettdate","quotestatus","timestamp","quoteid","quoterejectreason","quotereqid","operatortype","operatorid"} \
+  local vals \
+  for index = 1, #quoterequests do \
+    vals = redis.call("hmget", "quoterequest:" .. quoterequests[index], unpack(fields)) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cashorderqty=vals[4],currency=vals[5],settlcurrency=vals[6],nosettdays=vals[7],futsettdate=vals[8],quotestatus=vals[9],timestamp=vals[10],quoteid=vals[11],quoterejectreason=vals[12],quotereqid=vals[13],operatortype=vals[14],operatorid=vals[15]}) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // pass client id
+  //
+  scriptgetquotes = '\
+  local tblresults = {} \
+  local quotes = redis.call("smembers", KEYS[1] .. ":quotes") \
+  local fields = {"quotereqid","clientid","quoteid","bidquoteid","offerquoteid","symbol","bestbid","bestoffer","bidpx","offerpx","bidquantity","offerquantity","bidsize","offersize","validuntiltime","transacttime","currency","settlcurrency","bidqbroker","offerqbroker","nosettdays","futsettdate","bidfinance","offerfinance","orderid"} \
+  local vals \
+  for index = 1, #quotes do \
+    vals = redis.call("hmget", "quote:" .. quotes[index], unpack(fields)) \
+    table.insert(tblresults, {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],bidquoteid=vals[4],offerquoteid=vals[5],symbol=vals[6],bestbid=vals[7],bestoffer=vals[8],bidpx=vals[9],offerpx=vals[10],bidquantity=vals[11],offerquantity=vals[12],bidsize=vals[13],offersize=vals[14],validuntiltime=vals[15],transacttime=vals[16],currency=vals[17],settlcurrency=vals[18],bidqbroker=vals[19],offerqbroker=vals[20],nosettdays=vals[21],futsettdate=vals[22],bidfinance=vals[23],offerfinance=vals[24],orderid=vals[25]}) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // pass client id
+  //
+  scriptgetorders = '\
+  local tblresults = {} \
+  local orders = redis.call("smembers", KEYS[1] .. ":orders") \
+  local fields = {"clientid","symbol","side","quantity","price","ordertype","remquantity","status","markettype","futsettdate","partfill","quoteid","currency","currencyratetoorg","currencyindtoorg","timestamp","margin","timeinforce","expiredate","expiretime","settlcurrency","settlcurrfxrate","settlcurrfxratecalc","orderid","externalorderid","execid","nosettdays","operatortype","operatorid","hedgeorderid","reason","text"} \
+  local vals \
+  for index = 1, #orders do \
+    vals = redis.call("hmget", "order:" .. orders[index], unpack(fields)) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],price=vals[5],ordertype=vals[6],remquantity=vals[7],status=vals[8],markettype=vals[9],futsettdate=vals[10],partfill=vals[11],quoteid=vals[12],currency=vals[13],currencyratetoorg=vals[14],currencyindtoorg=vals[15],timestamp=vals[16],margin=vals[17],timeinforce=vals[18],expiredate=vals[19],expiretime=vals[20],settlcurrency=vals[21],settlcurrfxrate=vals[22],settlcurrfxratecalc=vals[23],orderid=vals[24],externalorderid=vals[25],execid=vals[26],nosettdays=vals[27],operatortype=vals[28],operatorid=vals[29],hedgeorderid=vals[30],reason=vals[31],text=vals[32]}) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // pass client id
+  //
+  scriptgettrades = '\
+  local tblresults = {} \
+  local trades = redis.call("smembers", KEYS[1] .. ":trades") \
+  local fields = {"clientid","orderid","symbol","side","quantity","price","currency","currencyratetoorg","currencyindtoorg","commission","ptmlevy","stampduty","contractcharge","counterpartyid","markettype","externaltradeid","futsettdate","timestamp","lastmkt","externalorderid","tradeid","settlcurrency","settlcurramt","settlcurrfxrate","settlcurrfxratecalc","nosettdays","margin"} \
+  local vals \
+  for index = 1, #trades do \
+    vals = redis.call("hmget", "trade:" .. trades[index], unpack(fields)) \
+    table.insert(tblresults, {clientid=vals[1],orderid=vals[2],symbol=vals[3],side=vals[4],quantity=vals[5],price=vals[6],currency=vals[7],currencyratetoorg=vals[8],currencyindtoorg=vals[9],commission=vals[10],ptmlevy=vals[11],stampduty=vals[12],contractcharge=vals[13],counterpartyid=vals[14],markettype=vals[15],externaltradeid=vals[16],futsettdate=vals[17],timestamp=vals[18],lastmkt=vals[19],externalorderid=vals[20],tradeid=vals[21],settlcurrency=vals[22],settlcurramt=vals[23],settlcurrfxrate=vals[24],settlcurrfxratecalc=vals[25],nosettdays=vals[26],margin=vals[27]}) \
+  end \
+  return cjson.encode(tblresults) \
   ';
 }
