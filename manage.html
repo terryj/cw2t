@@ -1406,13 +1406,18 @@
             var list3;
             var list4;
             var list5;
+            var lblnopartfilled;
 
             clearLists();
 
             list1 = getList("list1");
+            addNewLine(main);
             list2 = getList("list2");
+            addNewLine(main);
             list3 = getList("list3");
+            addNewLine(main);
             list4 = getList("list4");
+            addNewLine(main);
             list5 = getList("list5");
 
             displayOrderHeadings();
@@ -1433,7 +1438,6 @@
 
                     msg = orderFillMsg(orders[x]);
                     listelement = addElement(msg, list2, orders[x].orderid);
-                    optionToViewCancel(listelement, true);
                 } else if (orders[x].status == "2") { // filled
                     if (firstorderfilled) {
                         firstorderfilled = false;
@@ -1441,7 +1445,6 @@
 
                     msg = orderFillMsg(orders[x]);
                     listelement = addElement(msg, list3, orders[x].orderid);
-                    optionToViewCancel(listelement, false);
                 } else if (orders[x].status == "8") { // rejected
                     if (firstorderrejected) {
                         firstorderrejected = false;
@@ -1449,7 +1452,6 @@
 
                     msg = orderRejectMsg(orders[x]);
                     listelement = addElement(msg, list4, orders[x].orderid);
-                    optionToViewCancel(listelement, false);
                 } else if (orders[x].status == "4") { // cancelled
                     if (firstordercancelled) {
                         firstordercancelled = false;
@@ -1457,7 +1459,6 @@
 
                     msg = orderCancelMsg(orders[x]);
                     listelement = addElement(msg, list5, orders[x].orderid);
-                    optionToViewCancel(listelement, false);
                 }
             }
 
@@ -1466,19 +1467,60 @@
             }
 
             if (firstorderpartfilled) {
-                addElement("No part-filled orders", list2, 0);
+                //addElement("No part-filled orders", list2, 0);
+                //lblnopartfilled = newlabel("lblnopartfilled", "No part-filled orders", "", null);
+                //main.appendChild(lblnopartfilled);
+                addHeading("No part-filled orders", list2);
+
+
+            } else {
+                list2.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                
             }
 
             if (firstorderfilled) {
                 addElement("No filled orders", list3, 0);
+            } else {
+                list3.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                                
             }
 
             if (firstorderrejected) {
                 addElement("No rejected orders", list4, 0);
+            } else {
+                list4.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                                
             }
 
             if (firstordercancelled) {
                 addElement("No cancelled orders", list5, 0);
+            } else {
+                list5.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                                
             }
         }
 
@@ -1661,7 +1703,7 @@
             if (firsttrade) {
                 addElement("No trades", list, 0);                
             } else {
-                 list.onclick = function(e) {
+                list.onclick = function(e) {
                     var element;
                     
                     if (!e) e = window.event;
