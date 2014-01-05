@@ -1724,15 +1724,15 @@
             list = getList("list1");
 
             for (var x in quoterequests) {
-                //msg = quoteMsg(quoterequests[x]);
-                addElement(quoterequests[x], list, quoterequests[x].quotereqid);
+                msg = quoteRequestMsg(quoterequests[x]);
+                addElement(msg, list, quoterequests[x].quotereqid);
                 firstquoterequest = false;
             }
 
             if (firstquoterequest) {
                 addElement("No quote requests", list, 0);                
             } else {
-                list1.onclick = function(e) {
+                list.onclick = function(e) {
                     var element;
 
                     if (!e) e = window.event;
@@ -1761,7 +1761,7 @@
             if (firstquote) {
                 addElement("No quotes", list, 0);                
             } else {
-                list1.onclick = function(e) {
+                list.onclick = function(e) {
                     var element;
 
                     if (!e) e = window.event;
@@ -1947,7 +1947,7 @@
         }
 
         function viewQuoteRequest(quotereqid) {
-            var msg;
+            var msg = "";
             var quoterequest;
 
             quoterequest = quoterequests[quotereqid];
@@ -1955,6 +1955,8 @@
             for (var field in quoterequest) {
                 msg += field + ": " + quoterequest[field] + "\n";
             }
+
+            alert(msg);
         }
 
         function viewQuote(quoteid) {
@@ -2131,6 +2133,20 @@
                     break;
                 }
             }
+        }
+
+        function quoteRequestMsg(quoterequest) {
+            var msg;
+
+            if (quoterequest.quantity != "") {
+                msg = quoterequest.quantity;
+            } else {
+                msg = quoterequest.cashorderqty + " (value)";                
+            }
+
+            msg += " " + quoterequest.symbol + " in " + quoterequest.settlcurrency + ", T+" + quoterequest.nosettdays + " at " + quoterequest.timestamp;
+
+            return msg;
         }
 
         function quoteMsg(quote) {
