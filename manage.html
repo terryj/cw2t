@@ -655,144 +655,109 @@
         var quoterequests = {};
 
         var datain = function(msg) {
-            //var obj = {};
+            try {
+                var obj = JSON.parse(msg);
 
-            if (msg.substr(2, 10) == "orderbooks") {
-                obj = JSON.parse(msg);
-                loadOrderBooks(obj.orderbooks);
-            } else if (msg.substr(2, 9) == "orderbook") {
-                obj = JSON.parse(msg);
-                updateOrderBook(obj.orderbook);
-            } else if (msg.substr(2, 6) == "orders") {
-                obj = JSON.parse(msg);
-                clearOrders();
-                loadOrders(obj.orders);
-                displayOrders();
-            } else if (msg.substr(2, 17) == "ordercancelreject") {
-                obj = JSON.parse(msg);
-                orderCancelReject(obj.ordercancelreject);
-            } else if (msg.substr(2, 10) == "ordertypes") {
-                obj = JSON.parse(msg);
-                loadOrderTypes(obj.ordertypes);
-            } else if (msg.substr(2, 5) == "order") {
-                obj = JSON.parse(msg);
-                updateOrder(obj.order);
-            } else if (msg.substr(2, 6) == "trades") {
-                obj = JSON.parse(msg);
-                clearTrades();
-                loadTrades(obj.trades);
-                displayTrades();
-            } else if (msg.substr(2, 5) == "trade") {
-                obj = JSON.parse(msg);
-                updateTrade(obj.trade);
-            } else if (msg.substr(2, 13) == "quoterequests") {
-                obj = JSON.parse(msg);
-                clearQuoteRequests();
-                loadQuoteRequests(obj.quoterequests);
-                displayQuoteRequests();
-            } else if (msg.substr(2, 6) == "quotes") {
-                obj = JSON.parse(msg);
-                clearQuotes();
-                loadQuotes(obj.quotes);
-                displayQuotes();
-            } else if (msg.substr(2, 8) == "quoteack") {
-                obj = JSON.parse(msg);
-                quoteAck(obj.quoteack);
-            } else if (msg.substr(2, 5) == "quote") {
-                obj = JSON.parse(msg);
-                quoteReceived(obj.quote);
-            } else if (msg.substr(2, 9) == "positions") {
-                obj = JSON.parse(msg);
-                clearPositions();
-                loadPositions(obj.positions);
-                displayPositions();
-            } else if (msg.substr(2, 8) == "position") {
-                obj = JSON.parse(msg);
-                updatePosition(obj.position);            
-            } else if (msg.substr(2, 8) == "cashitem") {
-                obj = JSON.parse(msg);
-                updateCash(obj.cashitem);
-            } else if (msg.substr(2, 14) == "cashtranstypes") {
-                obj = JSON.parse(msg);
-                loadCashtransTypes(obj.cashtranstypes);
-            } else if (msg.substr(2, 9) == "cashtrans") {
-                obj = JSON.parse(msg);
-                updateCashtrans(obj.cashtrans);
-            } else if (msg.substr(2, 4) == "cash") {
-                obj = JSON.parse(msg);
-                loadCash(obj.cash);
-            } else if (msg.substr(2, 15) == "instrumenttypes") {
-                obj = JSON.parse(msg);
-                loadInstrumenttypes(obj.instrumenttypes);
-            } else if (msg.substr(2, 11) == "instruments") {
-                obj = JSON.parse(msg);
-                loadInstruments(obj.instruments);
-            } else if (msg.substr(2, 10) == "instrument") {
-                obj = JSON.parse(msg);
-                updateInstrument(obj.instrument);
-            } else if (msg.substr(2, 7) == "margins") {
-                obj = JSON.parse(msg);
-                loadMargins(obj.margins);
-            } else if (msg.substr(2, 6) == "margin") {
-                obj = JSON.parse(msg);
-                updateMargin(obj.margin);
-            } else if (msg.substr(2, 8) == "reserves") {
-                obj = JSON.parse(msg);
-                loadReserves(obj.reserves);
-            } else if (msg.substr(2, 7) == "reserve") {
-                obj = JSON.parse(msg);
-                updateReserve(obj.reserve);
-            } else if (msg.substr(2, 11) == "signinreply") {
-                obj = JSON.parse(msg);
-                replySignIn(obj.signinreply);
-            } else if (msg.substr(2, 5) == "index") {
-                obj = JSON.parse(msg);
-                loadIndex(obj.index);
-            } else if (msg.substr(2, 7) == "clients") {
-                obj = JSON.parse(msg);
-                loadClients(obj.clients);
-            } else if (msg.substr(2, 11) == "clienttypes") {
-                obj = JSON.parse(msg);
-                loadClienttypes(obj.clienttypes);
-            } else if (msg.substr(2, 6) == "client") {
-                obj = JSON.parse(msg);
-                updateClient(obj.client);
-            } else if (msg.substr(2, 7) == "brokers") {
-                obj = JSON.parse(msg);
-                loadBrokers(obj.brokers);
-            } else if (msg.substr(2, 4) == "ifas") {
-                obj = JSON.parse(msg);
-                loadIfas(obj.ifas);
-            } else if (msg.substr(2, 3) == "ifa") {
-                obj = JSON.parse(msg);
-                updateIfa(obj.ifa);
-            } else if (msg.substr(2, 10) == "currencies") {
-                obj = JSON.parse(msg);
-                loadCurrencies(obj.currencies);
-            } else if (msg.substr(2, 10) == "hedgebooks") {
-                obj = JSON.parse(msg);
-                loadHedgebooks(obj.hedgebooks);
-            } else if (msg.substr(2, 9) == "hedgebook") {
-                obj = JSON.parse(msg);
-                updateHedgebook(obj.hedgebook);
-            } else if (msg.substr(2, 5) == "costs") {
-                obj = JSON.parse(msg);
-                loadCosts(obj.costs);
-            } else if (msg.substr(2, 4) == "cost") {
-                obj = JSON.parse(msg);
-                updateCost(obj.cost);
-            } else if (msg.substr(2, 6) == "userid") {
-                obj = JSON.parse(msg);
-                userid = obj.userid;
-                start();
-            } else if (msg.substr(2,6) == "status") {
-                obj = JSON.parse(msg);
-                statusMsg(obj.status);
-            } else if (msg.substr(0, 4) == "pong") {
-                console.log("received pong");
-                inconnectiontest = false;
-            } else {
-                console.log("Unknown message:" + msg);
+                if ("orderbooks" in obj) {
+                    loadOrderBooks(obj.orderbooks);
+                } else if ("orderbook" in obj) {
+                    updateOrderBook(obj.orderbook);
+                } else if ("orders" in obj) {
+                    clearOrders();
+                    loadOrders(obj.orders);
+                    displayOrders();
+                } else if ("ordercancelreject" in obj) {
+                    orderCancelReject(obj.ordercancelreject);
+                } else if ("ordertypes" in obj) {
+                    loadOrderTypes(obj.ordertypes);
+                } else if ("order" in obj) {
+                    updateOrder(obj.order);
+                } else if ("trades" in obj) {
+                    clearTrades();
+                    loadTrades(obj.trades);
+                    displayTrades();
+                } else if ("trade" in obj) {
+                    updateTrade(obj.trade);
+                } else if ("quoterequests" in obj) {
+                    clearQuoteRequests();
+                    loadQuoteRequests(obj.quoterequests);
+                    displayQuoteRequests();
+                } else if ("quotes" in obj) {
+                    clearQuotes();
+                    loadQuotes(obj.quotes);
+                    displayQuotes();
+                } else if ("quoteack" in obj) {
+                    quoteAck(obj.quoteack);
+                } else if ("quote" in obj) {
+                    quoteReceived(obj.quote);
+                } else if ("positions" in obj) {
+                    clearPositions();
+                    loadPositions(obj.positions);
+                    displayPositions();
+                } else if ("position" in obj) {
+                    updatePosition(obj.position);            
+                } else if ("cashitem" in obj) {
+                    updateCash(obj.cashitem);
+                } else if ("cashtranstypes" in obj) {
+                    loadCashtransTypes(obj.cashtranstypes);
+                } else if ("cashtrans" in obj) {
+                    updateCashtrans(obj.cashtrans);
+                } else if ("cash" in obj) {
+                    loadCash(obj.cash);
+                } else if ("instrumenttypes" in obj) {
+                    loadInstrumenttypes(obj.instrumenttypes);
+                } else if ("instruments" in obj) {
+                    loadInstruments(obj.instruments);
+                } else if ("instrument" in obj) {
+                    updateInstrument(obj.instrument);
+                } else if ("margins" in obj) {
+                    loadMargins(obj.margins);
+                } else if ("margin" in obj) {
+                    updateMargin(obj.margin);
+                } else if ("reserves" in obj) {
+                    loadReserves(obj.reserves);
+                } else if ("reserve" in obj) {
+                    updateReserve(obj.reserve);
+                } else if ("signinreply" in obj) {
+                    replySignIn(obj.signinreply);
+                } else if ("index" in obj) {
+                    loadIndex(obj.index);
+                } else if ("clients" in obj) {
+                    loadClients(obj.clients);
+                } else if ("clienttypes" in obj) {
+                    loadClienttypes(obj.clienttypes);
+                } else if ("client" in obj) {
+                    updateClient(obj.client);
+                } else if ("brokers" in obj) {
+                    loadBrokers(obj.brokers);
+                } else if ("ifas" in obj) {
+                    loadIfas(obj.ifas);
+                } else if ("ifa" in obj) {
+                    updateIfa(obj.ifa);
+                } else if ("currencies" in obj) {
+                    loadCurrencies(obj.currencies);
+                } else if ("hedgebooks" in obj) {
+                    loadHedgebooks(obj.hedgebooks);
+                } else if ("hedgebook" in obj) {
+                    updateHedgebook(obj.hedgebook);
+                } else if ("costs" in obj) {
+                    loadCosts(obj.costs);
+                } else if ("cost" in obj) {
+                    updateCost(obj.cost);
+                } else if ("userid" in obj) {
+                    userid = obj.userid;
+                    start();
+                } else if ("status" in obj) {
+                    statusMsg(obj.status);
+                } else if ("pong" in obj) {
+                    console.log("received pong");
+                    inconnectiontest = false;
+                } else {
+                    console.log("Unknown message:" + msg);
+                }
+            } catch(e) {
+                console.log(e);
+                return;
             }
         };
 

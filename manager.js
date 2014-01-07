@@ -171,136 +171,62 @@ function listen() {
     conn.on('data', function(msg) {
       console.log('recd:' + msg);
 
-      try {
-        var obj = JSON.parse(msg);
-
-        if ("ordercancelrequest" in obj) {
-          // todo: test
-          db.publish(tradeserverchannel, msg);
-        } else if (msg.substr(2, 16) == "orderbookrequest") {
-          obj = JSON.parse(msg);
-          orderBookRequest(userid, obj.orderbookrequest, conn);
-        } else if (msg.substr(2, 22) == "orderbookremoverequest") {
-          obj = JSON.parse(msg);
-          orderBookRemoveRequest(userid, obj.orderbookremoverequest, conn);
-        } else if (msg.substr(2, 19) == "orderhistoryrequest") {
-          obj = JSON.parse(msg);
-          orderHistory(obj.orderhistoryrequest, conn);
-        } else if (msg.substr(2, 5) == "order") {
-          db.publish(tradeserverchannel, msg);
-        } else if (msg.substr(2, 26) == "quoterequesthistoryrequest") {
-          obj = JSON.parse(msg);
-          quoteRequestHistory(obj.quoterequesthistoryrequest, conn);
-        } else if (msg.substr(2, 12) == "quoterequest") {
-          db.publish(tradeserverchannel, msg);
-        } else if (msg.substr(2, 8) == "register") {
-          obj = JSON.parse(msg);
-          registerClient(obj.register, conn);
-        } else if (msg.substr(2, 6) == "signin") {
-          obj = JSON.parse(msg);
-          signIn(obj.signin);
-        } else if (msg.substr(2, 15) == "positionrequest") {
-          obj = JSON.parse(msg);
-          positionRequest(obj.positionrequest, conn);
-        } else if (msg.substr(2, 5) == "index") {
-          obj = JSON.parse(msg);
-          sendIndex(orgclientkey, obj.index, conn);        
-        } else if (msg.substr(2, 9) == "newclient") {
-          obj = JSON.parse(msg);
-          newClient(obj.newclient, conn);
-        } else if (msg.substr(2, 9) == "cashtrans") {
-          obj = JSON.parse(msg);
-          cashTrans(obj.cashtrans, userid, conn);
-        } else if (msg.substr(2, 10) == "instupdate") {
-          obj = JSON.parse(msg);
-          instUpdate(obj.instupdate, userid, conn);
-        } else if (msg.substr(2, 15) == "hedgebookupdate") {
-          obj = JSON.parse(msg);
-          hedgebookUpdate(obj.hedgebookupdate, userid, conn);
-        } else if (msg.substr(2, 4) == "cost") {
-          obj = JSON.parse(msg);
-          costUpdate(obj.cost, conn);
-        } else if (msg.substr(2, 3) == "ifa") {
-          obj = JSON.parse(msg);
-          newIfa(obj.ifa, conn);
-        } else if (msg.substr(2, 19) == "tradehistoryrequest") {
-          obj = JSON.parse(msg);
-          tradeHistory(obj.tradehistoryrequest, conn);
-        } else if (msg.substr(2, 19) == "quotehistoryrequest") {
-          obj = JSON.parse(msg);
-          quoteHistory(obj.quotehistoryrequest, conn);
-        } else if (msg.substr(0, 4) == "ping") {
-          conn.write("pong");
-        } else {
-          console.log("unknown msg received:" + msg);
-        }
-      } catch(e){
-          console.log(e);
-          return;
-      }
-
-      // todo: no orgclientkey
-
-      /*if (msg.substr(2, 18) == "ordercancelrequest") {
+      // may be able to just forward to trade server
+      if (msg.substr(2, 13) == "quoterequest\"") {
+        db.publish(tradeserverchannel, msg);
+      } else if (msg.substr(2, 18) == "ordercancelrequest") {
         // todo: test
         db.publish(tradeserverchannel, msg);
-      } else if (msg.substr(2, 16) == "orderbookrequest") {
-        obj = JSON.parse(msg);
-        orderBookRequest(userid, obj.orderbookrequest, conn);
-      } else if (msg.substr(2, 22) == "orderbookremoverequest") {
-        obj = JSON.parse(msg);
-        orderBookRemoveRequest(userid, obj.orderbookremoverequest, conn);
-      } else if (msg.substr(2, 19) == "orderhistoryrequest") {
-        obj = JSON.parse(msg);
-        orderHistory(obj.orderhistoryrequest, conn);
-      } else if (msg.substr(2, 5) == "order") {
+      } else if (msg.substr(2, 6) == "order\"") {
         db.publish(tradeserverchannel, msg);
-      } else if (msg.substr(2, 26) == "quoterequesthistoryrequest") {
-        obj = JSON.parse(msg);
-        quoteRequestHistory(obj.quoterequesthistoryrequest, conn);
-      } else if (msg.substr(2, 12) == "quoterequest") {
-        db.publish(tradeserverchannel, msg);
-      } else if (msg.substr(2, 8) == "register") {
-        obj = JSON.parse(msg);
-        registerClient(obj.register, conn);
-      } else if (msg.substr(2, 6) == "signin") {
-        obj = JSON.parse(msg);
-        signIn(obj.signin);
-      } else if (msg.substr(2, 15) == "positionrequest") {
-        obj = JSON.parse(msg);
-        positionRequest(obj.positionrequest, conn);
-      } else if (msg.substr(2, 5) == "index") {
-        obj = JSON.parse(msg);
-        sendIndex(orgclientkey, obj.index, conn);        
-      } else if (msg.substr(2, 9) == "newclient") {
-        obj = JSON.parse(msg);
-        newClient(obj.newclient, conn);
-      } else if (msg.substr(2, 9) == "cashtrans") {
-        obj = JSON.parse(msg);
-        cashTrans(obj.cashtrans, userid, conn);
-      } else if (msg.substr(2, 10) == "instupdate") {
-        obj = JSON.parse(msg);
-        instUpdate(obj.instupdate, userid, conn);
-      } else if (msg.substr(2, 15) == "hedgebookupdate") {
-        obj = JSON.parse(msg);
-        hedgebookUpdate(obj.hedgebookupdate, userid, conn);
-      } else if (msg.substr(2, 4) == "cost") {
-        obj = JSON.parse(msg);
-        costUpdate(obj.cost, conn);
-      } else if (msg.substr(2, 3) == "ifa") {
-        obj = JSON.parse(msg);
-        newIfa(obj.ifa, conn);
-      } else if (msg.substr(2, 19) == "tradehistoryrequest") {
-        obj = JSON.parse(msg);
-        tradeHistory(obj.tradehistoryrequest, conn);
-      } else if (msg.substr(2, 19) == "quotehistoryrequest") {
-        obj = JSON.parse(msg);
-        quoteHistory(obj.quotehistoryrequest, conn);
-      } else if (msg.substr(0, 4) == "ping") {
-        conn.write("pong");
       } else {
-        console.log("unknown msg received:" + msg);
-      }*/
+        // need to parse
+        try {
+          var obj = JSON.parse(msg);
+
+          if ("orderbookrequest" in obj) {
+            orderBookRequest(userid, obj.orderbookrequest, conn);
+          } else if ("orderbookremoverequest" in obj) {
+            orderBookRemoveRequest(userid, obj.orderbookremoverequest, conn);
+          } else if ("orderhistoryrequest" in obj) {
+            orderHistory(obj.orderhistoryrequest, conn);
+          } else if ("quoterequesthistoryrequest" in obj) {
+            quoteRequestHistory(obj.quoterequesthistoryrequest, conn);
+          } else if ("register" in obj) {
+            registerClient(obj.register, conn);
+          } else if ("signin" in obj) {
+            signIn(obj.signin);
+          } else if ("positionrequest" in obj) {
+            positionRequest(obj.positionrequest, conn);
+          } else if ("index" in obj) {
+            sendIndex(obj.index, conn);        
+          } else if ("newclient" in obj) {
+            newClient(obj.newclient, conn);
+          } else if ("cashtrans" in obj) {
+            cashTrans(obj.cashtrans, userid, conn);
+          } else if ("instupdate" in obj) {
+            instUpdate(obj.instupdate, userid, conn);
+          } else if ("hedgebookupdate" in obj) {
+            hedgebookUpdate(obj.hedgebookupdate, userid, conn);
+          } else if ("cost" in obj) {
+            costUpdate(obj.cost, conn);
+          } else if ("ifa" in obj) {
+            newIfa(obj.ifa, conn);
+          } else if ("tradehistoryrequest" in obj) {
+            tradeHistory(obj.tradehistoryrequest, conn);
+          } else if ("quotehistoryrequest" in obj) {
+            quoteHistory(obj.quotehistoryrequest, conn);
+          } else if ("ping" in obj) {
+            conn.write("pong");
+          } else {
+            console.log("unknown msg received:" + msg);
+          }
+        } catch(e) {
+          console.log(e);
+          return;
+        }
+      }
+      // todo: no orgclientkey
     });
 
     // close connection callback
