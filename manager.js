@@ -169,12 +169,79 @@ function listen() {
     // data callback
     // todo: multiple messages in one data event
     conn.on('data', function(msg) {
-      var obj;
       console.log('recd:' + msg);
+
+      try {
+        var obj = JSON.parse(msg);
+
+        if ("ordercancelrequest" in obj) {
+          // todo: test
+          db.publish(tradeserverchannel, msg);
+        } else if (msg.substr(2, 16) == "orderbookrequest") {
+          obj = JSON.parse(msg);
+          orderBookRequest(userid, obj.orderbookrequest, conn);
+        } else if (msg.substr(2, 22) == "orderbookremoverequest") {
+          obj = JSON.parse(msg);
+          orderBookRemoveRequest(userid, obj.orderbookremoverequest, conn);
+        } else if (msg.substr(2, 19) == "orderhistoryrequest") {
+          obj = JSON.parse(msg);
+          orderHistory(obj.orderhistoryrequest, conn);
+        } else if (msg.substr(2, 5) == "order") {
+          db.publish(tradeserverchannel, msg);
+        } else if (msg.substr(2, 26) == "quoterequesthistoryrequest") {
+          obj = JSON.parse(msg);
+          quoteRequestHistory(obj.quoterequesthistoryrequest, conn);
+        } else if (msg.substr(2, 12) == "quoterequest") {
+          db.publish(tradeserverchannel, msg);
+        } else if (msg.substr(2, 8) == "register") {
+          obj = JSON.parse(msg);
+          registerClient(obj.register, conn);
+        } else if (msg.substr(2, 6) == "signin") {
+          obj = JSON.parse(msg);
+          signIn(obj.signin);
+        } else if (msg.substr(2, 15) == "positionrequest") {
+          obj = JSON.parse(msg);
+          positionRequest(obj.positionrequest, conn);
+        } else if (msg.substr(2, 5) == "index") {
+          obj = JSON.parse(msg);
+          sendIndex(orgclientkey, obj.index, conn);        
+        } else if (msg.substr(2, 9) == "newclient") {
+          obj = JSON.parse(msg);
+          newClient(obj.newclient, conn);
+        } else if (msg.substr(2, 9) == "cashtrans") {
+          obj = JSON.parse(msg);
+          cashTrans(obj.cashtrans, userid, conn);
+        } else if (msg.substr(2, 10) == "instupdate") {
+          obj = JSON.parse(msg);
+          instUpdate(obj.instupdate, userid, conn);
+        } else if (msg.substr(2, 15) == "hedgebookupdate") {
+          obj = JSON.parse(msg);
+          hedgebookUpdate(obj.hedgebookupdate, userid, conn);
+        } else if (msg.substr(2, 4) == "cost") {
+          obj = JSON.parse(msg);
+          costUpdate(obj.cost, conn);
+        } else if (msg.substr(2, 3) == "ifa") {
+          obj = JSON.parse(msg);
+          newIfa(obj.ifa, conn);
+        } else if (msg.substr(2, 19) == "tradehistoryrequest") {
+          obj = JSON.parse(msg);
+          tradeHistory(obj.tradehistoryrequest, conn);
+        } else if (msg.substr(2, 19) == "quotehistoryrequest") {
+          obj = JSON.parse(msg);
+          quoteHistory(obj.quotehistoryrequest, conn);
+        } else if (msg.substr(0, 4) == "ping") {
+          conn.write("pong");
+        } else {
+          console.log("unknown msg received:" + msg);
+        }
+      } catch(e){
+          console.log(e);
+          return;
+      }
 
       // todo: no orgclientkey
 
-      if (msg.substr(2, 18) == "ordercancelrequest") {
+      /*if (msg.substr(2, 18) == "ordercancelrequest") {
         // todo: test
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 16) == "orderbookrequest") {
@@ -199,9 +266,9 @@ function listen() {
       } else if (msg.substr(2, 6) == "signin") {
         obj = JSON.parse(msg);
         signIn(obj.signin);
-      } else if (msg.substr(2, 22) == "positionhistoryrequest") {
+      } else if (msg.substr(2, 15) == "positionrequest") {
         obj = JSON.parse(msg);
-        positionHistory(clientid, obj.positionhistoryrequest, conn);
+        positionRequest(obj.positionrequest, conn);
       } else if (msg.substr(2, 5) == "index") {
         obj = JSON.parse(msg);
         sendIndex(orgclientkey, obj.index, conn);        
@@ -233,7 +300,7 @@ function listen() {
         conn.write("pong");
       } else {
         console.log("unknown msg received:" + msg);
-      }
+      }*/
     });
 
     // close connection callback
@@ -1048,6 +1115,11 @@ function sendPositions(orgclientkey, conn) {
       });
     });
   });
+}
+
+function positionRequest(posreq, conn) {
+  console.log("position request");
+  console.log(posreq);
 }
 
 function sendCashItem(cash, conn) {

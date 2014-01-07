@@ -25,6 +25,7 @@
         }
         .menu li:hover {
             color: #666666;
+            text-decoration: underline;
         }
         .menu .menuitemselected {
             color: #666666;
@@ -52,9 +53,11 @@
         }
         a:hover {
             text-decoration: underline;
+            color: #666666;
         }
-        a:visited {
-            color: red;
+        .linkselected {
+            color: #666666;
+            text-decoration: underline;
         }
         .depthstrip {
             width: 620px;
@@ -443,13 +446,21 @@
             font-size: 15px;
             color: gray;
         }
-        .formsigninbutton {
+        .formbutton {
             border-style: none;
             background-color: #C0C0C0;
             font-size: 15px;
             cursor: pointer;
             height: 24px;
             width: 80px;
+        }
+        .formbuttonwide {
+            border-style: none;
+            background-color: #C0C0C0;
+            font-size: 15px;
+            cursor: pointer;
+            height: 24px;
+            width: 140px;
         }
         .quotebuybutton {
             font-size: 21px;
@@ -692,13 +703,12 @@
                 quoteReceived(obj.quote);
             } else if (msg.substr(2, 9) == "positions") {
                 obj = JSON.parse(msg);
+                clearPositions();
                 loadPositions(obj.positions);
+                displayPositions();
             } else if (msg.substr(2, 8) == "position") {
                 obj = JSON.parse(msg);
                 updatePosition(obj.position);            
-            } else if (msg.substr(2, 8) == "positionhistory") {
-                obj = JSON.parse(msg);
-                positionHistory(obj.positionhistory);            
             } else if (msg.substr(2, 8) == "cashitem") {
                 obj = JSON.parse(msg);
                 updateCash(obj.cashitem);
@@ -859,6 +869,10 @@
 
         function clearTrades() {
             trades = [];
+        }
+
+        function clearPositions() {
+            positions = [];
         }
 
         function loadInstruments(instrumentarr) {
@@ -1337,6 +1351,7 @@
             clearForm("frmcosts", true);
             clearForm("frmifa", true);
             clearForm("frmhistory", true);
+            clearForm("frmpositions", true);
         }
 
         function clearDivs() {
@@ -2104,14 +2119,31 @@
             }
         }
 
-        function requestPositionHistory(event) {
-            var element = ((window.event)?(event.srcElement):(event.target));
-            var poskey = element.value;
+        function requestPositions(event) {
+            var inpclientid;
 
-            sockjs.send("{\"positionhistoryrequest\":\"" + poskey + "\"}");
-        }
+            var frmpositions = getForm("frmpositions");
 
-        function positionHistory(trades) {
+            selectClient("frmpositions", null, null, true, "", "inpclientid", "");
+
+            var btnrequest = newbutton("btnrequest", "Request Positions", "formbuttonwide", frmpositions);
+
+            inpclientid = document.createElement("input");
+            inpclientid.type = "hidden";
+            inpclientid.id = "inpclientid";
+            inpclientid.value = "";
+
+            frmpositions.appendChild(inpclientid);
+
+            main.appendChild(frmpositions);
+
+            btnrequest.onclick = function() {
+                var positionrequest = {};
+
+                positionrequest.clientid = inpclientid.value;
+
+                sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
+            }
         }
 
         function updateElement(msg, list, index) {
@@ -3745,7 +3777,7 @@
             btn = document.createElement("input");
             btn.type = "button";
             btn.value = "Sign In";
-            btn.className = "formsigninbutton";
+            btn.className = "formbutton";
             btn.onclick = function() {
                 disable();
                 signin();
@@ -3877,7 +3909,7 @@
                     requestHistory();
                     break;
                 case 8:
-                    displayPositions();
+                    requestPositions();
                     break;
                 case 9:
                     requestQuote(null);
@@ -4078,7 +4110,7 @@
             var inpclientid = newinput("inpclientid", "forminput", frmclient, true);
 
             addNewLine(frmclient);
-            var btnupdate = newbutton("btnupdate", "Add", "formsigninbutton", frmclient);
+            var btnupdate = newbutton("btnupdate", "Add", "formbutton", frmclient);
             var lnknewclient = newlink("lnknewclient", "New Client", "", frmclient);
 
             addNewLine(frmclient);
@@ -4326,7 +4358,7 @@
             btnupdate = document.createElement("input");
             btnupdate.type = "button";
             btnupdate.value = "Add";
-            btnupdate.className = "formsigninbutton";
+            btnupdate.className = "formbutton";
 
             btnupdate.onclick = function() {
                 var cashtrans = {};
@@ -4462,7 +4494,7 @@
             opthedgeno = newoption("opthedgeno", "opthedge", "formcheckbox", frmproduct);
             lblhedgeno = newlabel("lblhedgeno", "No", "", frmproduct);
             addNewLine(frmproduct);
-            btnupdate = newbutton("btnupdate", "Update", "formsigninbutton", frmproduct);
+            btnupdate = newbutton("btnupdate", "Update", "formbutton", frmproduct);
             addNewLine(frmproduct);
             lblinstconf = newlabel("lblinstconf", "", "", frmproduct);
 
@@ -4540,7 +4572,7 @@
             var lblhedgebook = newlabel("lblhedgebook", "Hedge Book:", "formlabel", frmhedge);
             var selhedgebook = newselect("selhedgebook", "formselect", frmhedge);
             addNewLine(frmhedge);
-            var btnupdate = newbutton("btnupdate", "Update", "formsigninbutton", frmhedge);
+            var btnupdate = newbutton("btnupdate", "Update", "formbutton", frmhedge);
             addNewLine(frmhedge);
             var lblhedgeconf = newlabel("lblhedgeconf", "", "", frmhedge);
 
@@ -4622,7 +4654,7 @@
             var lblfinance = newlabel("lblfinance", "Finance %:", "formlabel", frmcosts);
             var inpfinance = newinput("inpfinance", "forminput", frmcosts, false);
             addNewLine(frmcosts);
-            var btnupdate = newbutton("btnupdate", "Update", "formsigninbutton", frmcosts);
+            var btnupdate = newbutton("btnupdate", "Update", "formbutton", frmcosts);
             addNewLine(frmcosts);
             var lblcostsconf = newlabel("lblcostsconf", "", "", frmcosts);
 
@@ -4734,7 +4766,7 @@
             var lblifaid = newlabel("lblifaid", "Id:", "formlabel", frmifa);
             var inpifaid = newinput("inpifaid", "forminput", frmifa, true);
             addNewLine(frmifa);
-            var btnupdate = newbutton("btnupdate", "Update", "formsigninbutton", frmifa);
+            var btnupdate = newbutton("btnupdate", "Update", "formbutton", frmifa);
             addNewLine(frmifa);
             var lblifaconf = newlabel("lblifaconf", "", "", frmifa);
 
@@ -5010,24 +5042,32 @@
 
             lnkquoterequests.onclick = function() {
                 if (!validateClientid()) {return;}
+
+                setSelected(lnkquoterequests);
                 historyrequest.clientid = inpclientid.value;
                 sockjs.send("{\"quoterequesthistoryrequest\":" + JSON.stringify(historyrequest) + "}");
             }
 
             lnkquotes.onclick = function() {
                 if (!validateClientid()) {return;}
+
+                setSelected(lnkquotes);
                 historyrequest.clientid = inpclientid.value;
                 sockjs.send("{\"quotehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
             }
 
             lnkorders.onclick = function() {
                 if (!validateClientid()) {return;}
+
+                setSelected(lnkorders);
                 historyrequest.clientid = inpclientid.value;
                 sockjs.send("{\"orderhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
             }
 
             lnktrades.onclick = function() {
                 if (!validateClientid()) {return;}
+
+                setSelected(lnktrades);
                 historyrequest.clientid = inpclientid.value;
                 sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
             }
@@ -5055,6 +5095,15 @@
                 }
 
                 return validclient;
+            }
+
+            function setSelected(link) {
+                lnkquoterequests.className = "";
+                lnkquotes.className = "";
+                lnkorders.className = "";
+                lnktrades.className = "";
+
+                link.className = "linkselected";
             }
         }
 

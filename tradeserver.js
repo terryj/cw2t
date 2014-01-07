@@ -2359,6 +2359,8 @@ function registerScripts() {
     quoteid = redis.call("incr", "quoteid") \
     --[[ store the quote ]] \
     redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "clientid", vals[1], "quoteid", quoteid, "bidquoteid", KEYS[2], "offerquoteid", KEYS[3], "symbol", vals[3], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", KEYS[5], "offerpx", KEYS[6], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", KEYS[7], "offersize", KEYS[8], "validuntiltime", KEYS[9], "transacttime", KEYS[10], "currency", KEYS[11], "settlcurrency", KEYS[12], "bidqbroker", KEYS[13], "offerqbroker", KEYS[14], "nosettdays", vals[6], "futsettdate", vals[9], "bidfinance", bidfinance, "offerfinance", offerfinance) \
+    --[[ keep a list ]] \
+    redis.call("sadd", vals[1] .. ":quotes", quoteid) \
     --[[ quoterequest status - 0=new, 1=quoted, 2=rejected ]] \
     local status \
     --[[ bid or offer size needs to be non-zero ]] \
