@@ -73,6 +73,7 @@ var scriptgetquoterequests;
 var scriptgetquotes;
 var scriptgetorders;
 var scriptgettrades;
+var scriptgetpositions;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -1045,7 +1046,11 @@ function sendPositions(orgclientkey, conn) {
 
 function positionRequest(posreq, conn) {
   console.log("position request");
-  console.log(posreq);
+
+  db.eval(scriptgetpositions, 1, posreq.clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"positions\":" + ret + "}");
+  });
 }
 
 function sendCashItem(cash, conn) {
@@ -1990,6 +1995,21 @@ function registerScripts() {
   for index = 1, #trades do \
     vals = redis.call("hmget", "trade:" .. trades[index], unpack(fields)) \
     table.insert(tblresults, {clientid=vals[1],orderid=vals[2],symbol=vals[3],side=vals[4],quantity=vals[5],price=vals[6],currency=vals[7],currencyratetoorg=vals[8],currencyindtoorg=vals[9],commission=vals[10],ptmlevy=vals[11],stampduty=vals[12],contractcharge=vals[13],counterpartyid=vals[14],markettype=vals[15],externaltradeid=vals[16],futsettdate=vals[17],timestamp=vals[18],lastmkt=vals[19],externalorderid=vals[20],tradeid=vals[21],settlcurrency=vals[22],settlcurramt=vals[23],settlcurrfxrate=vals[24],settlcurrfxratecalc=vals[25],nosettdays=vals[26],margin=vals[27]}) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // pass client id
+  //
+  scriptgetpositions = '\
+  local tblresults = {} \
+  local positions = redis.call("smembers", KEYS[1] .. ":positions") \
+  local fields = {"clientid","symbol","longshort","quantity","cost","currency","settldate","initialmargin","positionid"} \
+  local vals \
+  for index = 1, #positions do \
+    vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],longshort=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],settldate=vals[7],initialmargin=vals[8],positionid=vals[9]}) \
   end \
   return cjson.encode(tblresults) \
   ';

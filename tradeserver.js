@@ -1822,7 +1822,8 @@ function registerScripts() {
       posqty = tradequantity \
       poscost = tradecost \
       posinitialmargin = initialmargin \
-      redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "longshort", side, "quantity", posqty, "cost", poscost, "currency", currency, "settldate", settldate, "initialmargin", posinitialmargin) \
+      local positionid = redis.call("incr", "positionid") \
+      redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "longshort", side, "quantity", posqty, "cost", poscost, "currency", currency, "settldate", settldate, "initialmargin", posinitialmargin, "positionid", positionid) \
       redis.call("sadd", positionskey, poskey) \
     end \
   end \

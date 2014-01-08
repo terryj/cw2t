@@ -651,7 +651,6 @@
         var userid;
         var operatortype = 2; // user
         var defaultHedgebook = "999999";
-        var obj = {};
         var quoterequests = {};
 
         var datain = function(msg) {
@@ -784,12 +783,8 @@
         }
 
         function loadPositions(positionarr) {
-            var poskey;
-
             for (var i = 0; i < positionarr.length; ++i) {
-                poskey = positionarr[i].positionid;
-                //poskey = positionarr[i].symbol + ":" + positionarr[i].currency;
-                positions[poskey] = positionarr[i];
+                positions[positionarr[i].positionid] = positionarr[i];
             }            
         }
 
@@ -1295,6 +1290,7 @@
             clearForms();
             clearStrips();
             clearAllSymbolDivs();
+            clearEmptyLines();
         }
 
         function clearLists() {
@@ -1525,27 +1521,35 @@
         function displayPositions() {
             var firstposition = true;
             var msg;
-            var poskey;
+            var list;
+            var emptyline1;
+
+            clearLists();
+            clearEmptyLines();
+
+            var emptyline1 = addNewLine(main);
+            emptyline1.id = "emptyline1";
+
+            list = getList("list1");
 
             for (var x in positions) {
-                if (firstposition) {
-                    list1.onclick = requestPositionHistory;
-                    firstposition = false;
-                }
-
                 msg = positionMsg(positions[x]);
-                //poskey = positions[x].symbol + ":" + positions[x].currency;
-                poskey = positions[x].positionid;
-                addElement(msg, list1, poskey);
+                addElement(msg, list, x);
+                firstposition = false;
             }
 
             if (firstposition) {
-                addElement("No positions", list1, "");
-            }
-        }
+                addElement("No positions", list, "");
+            } else {
+                list.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
 
-        function displayPrices() {
-            //addElement(msg, list1, orders[x].orderid);
+                    viewPosition(element.value);
+                }                
+            }
         }
 
         function selectStock(frm, stockbox, displayname, focus, focusfield) {
@@ -2011,6 +2015,31 @@
             alert(msg);
         }
 
+        function viewPosition(positionid) {
+            var msg = "";
+            var position;
+            var fieldcontents;
+            var fielddesc;
+
+            position = positions[positionid];
+
+            for (var field in position) {
+                fieldcontents = position[field];
+
+                switch (field) {
+                    case 'settldate':
+                        fielddesc = formatUTCDate(fieldcontents);
+                        break;
+                    default:
+                        fielddesc = fieldcontents;
+                }
+
+                msg += field + ": " + fielddesc + "\n";
+           }
+
+            alert(msg);
+        }
+
         function getOrderStatusDesc(status) {
             var desc;
 
@@ -2104,6 +2133,12 @@
 
             btnrequest.onclick = function() {
                 var positionrequest = {};
+
+                if (inpclientid.value == "") {
+                    alert("Please select a client");
+                    selectClientFocus("clientboxinput");
+                    return;
+                }
 
                 positionrequest.clientid = inpclientid.value;
 
@@ -2267,12 +2302,12 @@
         function positionMsg(position) {
             var msg;
 
-            if (position.quantity > 0) {
+            if (position.longshort == "1") {
                 msg = "Long ";
             } else {
                 msg = "Short ";
             }
-            msg += position.quantity + " " + position.symbol + " cost " + parseFloat(position.cost).toFixed(2) + " " + position.currency;
+            msg += position.quantity + " " + position.symbol + " in " + position.currency + ", cost " + parseFloat(position.cost).toFixed(2) + ", for settlement " + formatUTCDate(position.settldate);
 
             return msg;
         }
