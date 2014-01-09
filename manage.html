@@ -652,6 +652,7 @@
         var operatortype = 2; // user
         var defaultHedgebook = "999999";
         var quoterequests = {};
+        var connections = {};
 
         //
         // incoming data function
@@ -750,6 +751,10 @@
                 } else if ("userid" in obj) {
                     userid = obj.userid;
                     start();
+                } else if ("connections" in obj) {
+                    clearConnections();
+                    loadConnections(obj.connections);
+                    displayConnections();
                 } else if ("status" in obj) {
                     statusMsg(obj.status);
                 } else if ("pong" in obj) {
@@ -911,6 +916,12 @@
             }
         }
 
+        function loadConnections(connarr) {
+            for (var i = 0; i < connarr.length; ++i) {
+                connections[connarr[i].clientid] = connarr[i];
+            }            
+        }
+
         // clear array routines
 
         function clearQuoteRequests() {
@@ -931,6 +942,10 @@
 
         function clearPositions() {
             positions = [];
+        }
+
+        function clearConnections() {
+            connections = [];
         }
 
         //
@@ -1230,6 +1245,20 @@
                     ordervol[key] -= parseInt(orders[order.orderid].remquantity);
                 }
             }
+        }
+
+        function updateElement(msg, list, index) {
+            var listelement = null;
+
+            for (var i = 0; i < list.childNodes.length; ++i) {
+                if (list.childNodes[i].value == index) {
+                    listelement = list.childNodes[i];
+                    listelement.innerHTML = msg;
+                    break;
+                }
+            }
+
+            return listelement;
         }
 
         function start() {
@@ -1560,6 +1589,10 @@
             }
         }
 
+        //
+        // add an element to a list
+        // msg = message content, list = list, index = element value (should be numeric)
+        //
         function addElement(msg, list, index) {
             var listelem;
 
@@ -2085,6 +2118,7 @@
             }
 
             removeElementFromList(orderid, list);
+
             if (list.childNodes.length == 0) {
                 addElement(headingtext, list, 0);
             }
@@ -2301,18 +2335,48 @@
             }
         }
 
-        function updateElement(msg, list, index) {
-            var listelement = null;
+        function requestConnections() {
+            sockjs.send("{\"connectionrequest\":\"client\"}");
+        }
 
-            for (var i = 0; i < list.childNodes.length; ++i) {
-                if (list.childNodes[i].value == index) {
-                    listelement = list.childNodes[i];
-                    listelement.innerHTML = msg;
-                    break;
-                }
+        function displayConnections() {
+            var firstconnection = true;
+            var list;
+
+            clearLists();
+
+            list = getList("list1");
+
+            for (var x in connections) {
+                addElement(connections[x].name, list, connections[x].clientid);
+                firstconnection = false;
             }
 
-            return listelement;
+            if (firstconnection) {
+                addElement("No connections", list, 0);                
+            } else {
+                list.onclick = function(e) {
+                    var element;
+
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    chatConnection(element);
+                }
+            }
+        }
+
+        //
+        // start/end a chat conversation
+        //
+        function chatConnection(elem) {
+            var chatout = document.createElement("textarea");
+            var chatdiv = document.createElement("div");
+            chatdiv.appendChild(chatout);
+
+            var btnrequest = newbutton("btnchat", "Send", "formbutton", chatdiv);
+
+            elem.appendChild(chatdiv);
         }
 
         function addHeading(text, list) {
@@ -3855,7 +3919,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Request Quote"];
+            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Request Quote", "Connections"];
 
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
@@ -3918,14 +3982,7 @@
                     requestQuote(null);
                     break;
                 case 10:
-                    displayCash();
-                    displayMargins();
-                    displayReserves();
-                    break;
-                case 11:
-                    break;
-                case 12:
-                    settings();
+                    requestConnections();
                     break;
                 }
             }

@@ -74,6 +74,7 @@ var scriptgetquotes;
 var scriptgetorders;
 var scriptgettrades;
 var scriptgetpositions;
+var scriptgetconnections;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -217,6 +218,8 @@ function listen() {
             tradeHistory(obj.tradehistoryrequest, conn);
           } else if ("quotehistoryrequest" in obj) {
             quoteHistory(obj.quotehistoryrequest, conn);
+          } else if ("connectionrequest" in obj) {
+            sendConnections(obj.connectionrequest, conn);
           } else if ("ping" in obj) {
             conn.write("pong");
           } else {
@@ -1626,6 +1629,13 @@ function sendQuote(quoteid) {
   });
 }
 
+function sendConnections(connectionreq, conn) {
+  db.eval(scriptgetconnections, 0, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"connections\":" + ret + "}");
+  });      
+}
+
 //
 // todo: make common
 //
@@ -2010,6 +2020,18 @@ function registerScripts() {
   for index = 1, #positions do \
     vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
     table.insert(tblresults, {clientid=vals[1],symbol=vals[2],longshort=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],settldate=vals[7],initialmargin=vals[8],positionid=vals[9]}) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  scriptgetconnections = '\
+  local tblresults = {} \
+  local connections = redis.call("smembers", "connections:client") \
+  local fields = {"clientid","name"} \
+  local vals \
+  for index = 1, #connections do \
+    vals = redis.call("hmget", "client:" .. connections[index], unpack(fields)) \
+    table.insert(tblresults, {clientid=vals[1],name=vals[2]}) \
   end \
   return cjson.encode(tblresults) \
   ';
