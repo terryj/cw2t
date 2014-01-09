@@ -29,6 +29,7 @@ var defaultnosettdays = 3;
 var operatortype = 2;
 var tradeserverchannel = 3;
 var userserverchannel = 2;
+var clientserverchannel = 1;
 var servertype = "user";
 
 // redis
@@ -75,6 +76,7 @@ var scriptgetorders;
 var scriptgettrades;
 var scriptgetpositions;
 var scriptgetconnections;
+var scriptnewchat;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -220,6 +222,9 @@ function listen() {
             quoteHistory(obj.quotehistoryrequest, conn);
           } else if ("connectionrequest" in obj) {
             sendConnections(obj.connectionrequest, conn);
+          } else if ("chat" in obj) {
+            newChat(obj.chat, conn);
+            db.publish(clientserverchannel, msg);
           } else if ("ping" in obj) {
             conn.write("pong");
           } else {
@@ -1636,6 +1641,16 @@ function sendConnections(connectionreq, conn) {
   });      
 }
 
+function newChat(chat, conn) {
+  console.log(chat);
+
+  chat.timestamp = getUTCTimeStamp();
+
+  db.eval(scriptnewchat, 3, chat.clientid, chat.text, chat.timestamp, function(err, ret) {
+    if (err) throw err;
+  });      
+}
+
 //
 // todo: make common
 //
@@ -2034,5 +2049,13 @@ function registerScripts() {
     table.insert(tblresults, {clientid=vals[1],name=vals[2]}) \
   end \
   return cjson.encode(tblresults) \
+  ';
+
+  scriptnewchat = '\
+  local chatid = redis.call("incr", "chatid") \
+  --[[ store the chat ]] \
+  redis.call("hmset", "chat:" .. chatid, "chatid", chatid, "clientid", KEYS[1], "text", KEYS[2], "timestamp", KEYS[3]) \
+  --[[ add to set of chat for this client ]] \
+  redis.call("sadd", KEYS[1] .. ":chat", chatid) \
   ';
 }

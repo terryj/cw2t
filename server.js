@@ -118,6 +118,8 @@ function pubsub() {
       getSendOrder(message.substr(6));
     } else if (message.substr(0, 5) == "trade") {
       getSendTrade(message.substr(6));
+    } else if (message.substr(2, 4) == "chat") {
+      newChat(message);
     } else {
       newPrice(channel, message);
     }
@@ -162,39 +164,39 @@ function listen() {
     // data callback
     // todo: multiple messages in one data event
     conn.on('data', function(msg) {
-      var obj;
       console.log('recd:' + msg);
 
       if (msg.substr(2, 18) == "ordercancelrequest") {
         db.publish(tradeserverchannel, msg);
-        //obj = JSON.parse(msg);
-        //orderCancelRequest(clientid, obj.ordercancelrequest);
-      } else if (msg.substr(2, 16) == "orderbookrequest") {
-        obj = JSON.parse(msg);
-        orderBookRequest(clientid, obj.orderbookrequest, conn);
-      } else if (msg.substr(2, 22) == "orderbookremoverequest") {
-        obj = JSON.parse(msg);
-        orderBookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
       } else if (msg.substr(2, 5) == "order") {
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 12) == "quoterequest") {
         db.publish(tradeserverchannel, msg);
-      } else if (msg.substr(2, 8) == "register") {
-        obj = JSON.parse(msg);
-        registerClient(obj.register, conn);
-      } else if (msg.substr(2, 6) == "signin") {
-        obj = JSON.parse(msg);
-        signIn(obj.signin);
-      } else if (msg.substr(2, 22) == "positionhistoryrequest") {
-        obj = JSON.parse(msg);
-        positionHistory(clientid, obj.positionhistoryrequest, conn);
-      } else if (msg.substr(2, 5) == "index") {
-        obj = JSON.parse(msg);
-        sendIndex(clientid, obj.index, conn);   
-      } else if (msg.substr(0, 4) == "ping") {
-        conn.write("pong");
       } else {
-        console.log("unknown msg received:" + msg);
+        try {
+          var obj = JSON.parse(msg);
+
+          if ("orderbookrequest" in obj) {
+            orderBookRequest(clientid, obj.orderbookrequest, conn);
+          } else if ("orderbookremoverequest" in obj) {
+            orderBookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
+          } else if ("register" in obj) {
+            registerClient(obj.register, conn);
+          } else if ("signin" in obj) {
+            signIn(obj.signin);
+          } else if ("positionhistoryrequest" in obj) {
+            positionHistory(clientid, obj.positionhistoryrequest, conn);
+          } else if ("index" in obj) {
+            sendIndex(clientid, obj.index, conn);
+          } else if ("ping" in obj) {
+            conn.write("pong");
+          } else {
+            console.log("unknown msg received:" + msg);
+          }
+        } catch (e) {
+          console.log(e);
+          return;
+        }
       }
     });
 
@@ -1851,6 +1853,10 @@ function sendQuote(quoteid) {
       }
     });
   });
+}
+
+function newChat(chat) {
+  consol.log(chat);
 }
 
 /*

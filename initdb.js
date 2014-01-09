@@ -53,6 +53,7 @@ function initdb() {
   db.set("cashtransid", 0);
   db.set("ifaid", 0);
   db.set("positionid", 0);
+  db.set("chatid", 0);
 
   // brokers
   db.hmset("broker:1", "brokerid", 1, "name", "Thomas Grant & Company");

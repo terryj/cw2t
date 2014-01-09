@@ -656,7 +656,7 @@
 
         //
         // incoming data function
-        // JSON data is parsed into an object & then processed from there
+        // JSON data is parsed into an object & then processed
         //
         var datain = function(msg) {
             try {
@@ -2372,11 +2372,21 @@
         function chatConnection(elem) {
             var chatout = document.createElement("textarea");
             var chatdiv = document.createElement("div");
+
             chatdiv.appendChild(chatout);
 
-            var btnrequest = newbutton("btnchat", "Send", "formbutton", chatdiv);
+            var btnchat = newbutton("btnchat", "Send", "formbutton", chatdiv);
 
             elem.appendChild(chatdiv);
+
+            btnchat.onclick = function() {
+                var chat = {};
+
+                chat.clientid = elem.value;
+                chat.text = chatout.value;
+
+                sockjs.send("{\"chat\":" + JSON.stringify(chat) + "}");
+            }
         }
 
         function addHeading(text, list) {
