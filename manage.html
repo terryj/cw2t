@@ -653,6 +653,10 @@
         var defaultHedgebook = "999999";
         var quoterequests = {};
 
+        //
+        // incoming data function
+        // JSON data is parsed into an object & then processed from there
+        //
         var datain = function(msg) {
             try {
                 var obj = JSON.parse(msg);
@@ -760,6 +764,12 @@
             }
         };
 
+        //
+        // various load routines
+        // these receive incoming data & store it in various objects as arrays
+        // each element of the array stores a number of fields in a record format and is indexed
+        //
+
         function loadIndex(index) {
             indices[index.name] = index.symbols;
             displayIndex(index.name);
@@ -815,40 +825,9 @@
             }                                    
         }
 
-        function clearQuoteRequests() {
-            quoterequests = [];
-        }
-
-        function clearQuotes() {
-            quotes = [];
-        }
-
-        function clearOrders() {
-            orders = [];
-        }
-
-        function clearTrades() {
-            trades = [];
-        }
-
-        function clearPositions() {
-            positions = [];
-        }
-
         function loadInstruments(instrumentarr) {
             for (var i = 0; i < instrumentarr.length; ++i) {
                 instruments[instrumentarr[i].symbol] = instrumentarr[i];
-            }
-        }
-
-        function updateInstrument(instrument) {
-            var lblinstconf;
-
-            instruments[instrument.symbol] = instrument;
-
-            lblinstconf = document.getElementById("lblinstconf");
-            if (lblinstconf != null) {
-                lblinstconf.innerHTML = instrument.symbol + " updated ok";
             }
         }
 
@@ -896,17 +875,6 @@
             }                                                
         }
 
-        function updateIfa(ifa) {
-            var lblifaconf;
-
-            ifas[ifa.ifaid] = ifa;
-
-            lblifaconf = document.getElementById("lblifaconf");
-            if (lblifaconf != null) {
-                lblifaconf.innerHTML = ifa.name + " updated ok";
-            }
-        }
-
         function loadInstrumenttypes(insttypearr) {
             for (var i = 0; i < insttypearr.length; ++i) {
                 instrumenttypes[insttypearr[i].instrumenttypeid] = insttypearr[i];
@@ -937,1388 +905,38 @@
             }
         }
 
-        function updateHedgebook(hedgebook) {
-            var lblhedgeconf;
-
-            hedgebooks[hedgebook.hedgebookkey] = hedgebook;
-
-            lblhedgeconf = document.getElementById("lblhedgeconf");
-            if (lblhedgeconf != null) {
-                lblhedgeconf.innerHTML = "Hedgebook updated Ok";
-            }
-        }
-
         function loadCosts(costsarr) {
             for (var i = 0; i < costsarr.length; ++i) {
                 costs[costsarr[i].costkey] = costsarr[i];
             }
         }
 
-        function updateCost(cost) {
-            var lblcostsconf;
+        // clear array routines
 
-            costs[cost.costkey] = cost;
-
-            lblcostsconf = document.getElementById("lblcostsconf");
-            lblcostsconf.innerHTML = "Updated ok";
-        }
-
-        function displayIndex(index) {
-            var s;
-            var sym;
-
-            if (!(index in indices)) {return};
-
-            for (var i = 0; i < indices[index].length; ++i) {
-                sym = indices[index][i].symbol;
-                if (sym in instruments) {
-                    s = instruments[sym].symbol + ' ' + instruments[sym].description;
-                    addElement(s, list1, sym);
-                }
-            }
-        }
-
-        function updateClient(client) {
-            var frmclient;
-            var inpclientid;
-            var msg;
-            var lblclientconf;
-
-            clients[client.clientid] = client;
-
-            if (selectedmenu != 0) {return};
-
-            frmclient = document.getElementById("frmclient");
-            if (frmclient != null) {
-                inpclientid = document.getElementById("inpclientid");
-                if (inpclientid != null) {
-                    if (inpclientid.value == "") {
-                        msg = client.name + " added";
-                    } else {
-                        msg = client.name + " updated";
-                    }
-
-                    displayClient(null, "frmclient", msg);
-                }
-            }
-        }
-
-        function updateCashtrans(cashtrans) {
-            var lblcashconf;
-            var msg = "";
-
-            lblcashconf = document.getElementById("lblcashconf");
-            if (lblcashconf != null) {
-                msg += cashtranstypes[cashtrans.transtype].description;
-                msg += " of " + cashtrans.amount + " " + cashtrans.currency;
-                msg += " added for " + clients[cashtrans.clientid].name;
-                lblcashconf.innerHTML = msg;
-            }
-
-            clearField(inpclient);
-            clearField(inpamount);
-            clearField(inpdesc);
-        }
-
-        function clearField(fldname) {
-            var fld = document.getElementById(fldname);
-            if (fld != null) {
-                fld.value = "";
-            }
-        }
-
-        function start() {
-            clearScreen();
-            displayMenu();
-
-            selectedmenu = 0;
-
-            displayOrderBooks();
-        }
-
-        function statusMsg(status) {
-        }
-
-        function startHeartbeatTimer() {
-            stopHeartbeatTimer();
-            heartbeattimer = setTimeout(connectionTest, 30000);            
-        }
-
-        function stopHeartbeatTimer() {
-            clearTimeout(heartbeattimer);
-        }
-
-        function startPriceTimer() {
-            pricetimer = setInterval(flashText, 1000);
-        }
-
-        function stopPriceTimer() {
-            clearInterval(pricetimer);
-        }
-
-        function startRestartTimer() {
-            // attempt restart after 1-10 seconds
-            var randomonetoten = Math.floor((Math.random()*10)+1);
-            console.log("attempt restart after " + randomonetoten + " seconds");
-            restarttimer = setTimeout(newconn, randomonetoten * 1000);
-        }
-
-        function stopRestartTimer() {
-            clearTimeout(restarttimer);
-        }
-
-        function connectionTest() {
-            if (inconnectiontest) {
-                console.log("need to reconnect");
-                return;
-            }
-
-            console.log("sending ping");
-            sockjs.send("ping");
-            startHeartbeatTimer();
-            inconnectiontest = true;
-        }
-
-        newconn();
-
-        function newconn() {
-            sockjs = new SockJS(sockjs_url);
-
-            sockjs.onopen = function()  {
-                console.log("connection open");
-                stopRestartTimer();
-                startPriceTimer();
-                startHeartbeatTimer();
-                displayFormSignin();
-            };
-
-            sockjs.onmessage = function(e) {
-                datain(e.data);
-            };
-
-            sockjs.onclose = function()  {
-                console.log("connection closed");
-                stopRestartTimer();
-                stopPriceTimer();
-                stopHeartbeatTimer();
-                startRestartTimer();
-                signedin = false;
-            };
-
-            sockjs.onheartbeat = function() {
-                startHeartbeatTimer();
-            };
-        }
-
-        function flashText() {
-            var bidprice;
-            var offerprice;
-            var removesymbol;
-
-            for (var symbol in priceflash) {
-                removesymbol = true;
-
-                for (i = 0; i < orderbooks[symbol].length; i++) {
-                    // bid prices
-                    orderbooks[symbol][i].bidflashcount--;
-                    if (orderbooks[symbol][i].bidflashcount == 0) {
-                        bidprice = document.getElementById("bidprice:" + symbol + ":" + i);
-                        if (bidprice != null) {
-                            if (i == 0) {
-                                if (orderbooks[symbol][i].lastbidchange == 1) {
-                                    bidprice.className = "yellowstripbidup";
-                                } else if (orderbooks[symbol][i].lastbidchange == 2) {
-                                    bidprice.className = "yellowstripbiddn";
-                                } else {
-                                    bidprice.className = "yellowstripbidnochange";
-                                }
-                            } else {
-                                if (orderbooks[symbol][i].lastbidchange == 1) {
-                                    bidprice.className = "bidup";
-                                } else if (orderbooks[symbol][i].lastbidchange == 2) {
-                                    bidprice.className = "biddn";
-                                } else {
-                                    bidprice.className = "bidnochange";
-                                }
-                            }
-                        }
-                    }
-
-                    // offer prices
-                    orderbooks[symbol][i].offerflashcount--;
-                    if (orderbooks[symbol][i].offerflashcount == 0) {
-                        offerprice = document.getElementById("offerprice:" + symbol + ":" + i);
-                        if (offerprice != null) {
-                            if (i == 0) {
-                                if (orderbooks[symbol][i].lastofferchange == 1) {
-                                    offerprice.className = "yellowstripofferup";
-                                } else if (orderbooks[symbol][i].lastofferchange == 2) {
-                                    offerprice.className = "yellowstripofferdn";
-                                } else {
-                                    offerprice.className = "yellowstripoffernochange";           
-                                }
-                            } else {
-                                if (orderbooks[symbol][i].lastofferchange == 1) {
-                                    offerprice.className = "offerup";
-                                } else if (orderbooks[symbol][i].lastofferchange == 2) {
-                                    offerprice.className = "offerdn";
-                                } else {
-                                    offerprice.className = "offernochange";
-                                }
-                            }
-                        }
-                    }
-
-                    // keep track of whether we can remove this symbol
-                    if (orderbooks[symbol][i].bidflashcount > 0 || orderbooks[symbol][i].offerflashcount > 0) {
-                        removesymbol = false;
-                    }
-                }
-
-                if (removesymbol) {
-                    delete priceflash[symbol];
-                }
-            }
-        }
-
-        function clearMenu() {
-            var menu = document.getElementById("menu");
-            if (menu != null) {
-                for (var i = 0; i < menu.childNodes.length; ++i) {
-                    menu.removeChild(menu.childNodes[i]);
-                }
-                heading.removeChild(menu);
-            }
-        }
-
-        function clearHeadings() {
-            for (var i = 0; i < main.childNodes.length; ++i) {
-                if (main.childNodes[i].nodeType == Node.TEXT_NODE) {
-                    main.removeChild(main.childNodes[i]);
-                }
-            }
-        }
-
-        function clearOrderBookHeadings() {
-            var headingstrip = document.getElementById("headingstrip");
-            if (headingstrip != null) {
-                while(headingstrip.hasChildNodes()){
-                    headingstrip.removeChild(headingstrip.childNodes[0]);
-                }
-                main.removeChild(headingstrip);
-            }
-        }
-
-        function clearList(liststr, remove) {
-            var list = document.getElementById(liststr);
-            if (list != null) {
-                while(list.hasChildNodes()){
-                    list.removeChild(list.childNodes[0])
-                }
-                if (remove) {
-                    main.removeChild(list);
-                }
-            }
-        }
-
-        function clearForm(formid, remove) {
-            var frm = document.getElementById(formid);
-            if (frm != null) {
-                while(frm.hasChildNodes()){
-                    frm.removeChild(frm.childNodes[0]);
-                }
-                if (remove) {
-                    main.removeChild(frm);
-                }
-            }
-        }
-
-        function clearSymbolDiv(symbol) {
-            clearDiv("orderdiv:" + symbol);
-        }
-
-        function clearAllSymbolDivs() {
-            for (var symbol in orderbooks) {
-                clearSymbolDiv(symbol);
-            }
-        }
-
-        function clearStrip(stripid) {
-            var strip = document.getElementById(stripid);
-            if (strip != null) {
-                while(strip.hasChildNodes()){
-                    strip.removeChild(strip.childNodes[0]);
-                }
-                main.removeChild(strip);
-            }            
-        }
-
-        function clearStrips() {
-            clearStrip("headingstrip");
-
-            for (var symbol in orderbooks) {
-                for (var i = 0; i < orderbooks[symbol].length; ++i) {
-                    clearStrip("strip:" + symbol + ":" + i);
-                    if (symbol in obdisplay) {
-                        if (!(obdisplay[symbol].level2)) {
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        function clearAllStrips(symbol) {
-            var depth;
-
-            if (obdisplay[symbol].level2) {
-                depth = orderbooks[symbol].length;
-            } else {
-                depth = 1;
-            }
-
-            for (var i = 0; i < depth; ++i) {
-                clearStrip("strip:" + symbol + ":" + i);
-            }
-        }
-
-        function clearScreen() {
-            clearHeadings();
-            clearOrderBookHeadings();
-            clearLists();
-            clearDivs();
-            clearForms();
-            clearStrips();
-            clearAllSymbolDivs();
-            clearEmptyLines();
-        }
-
-        function clearLists() {
-            clearList("list1", true);
-            clearList("list2", true);
-            clearList("list3", true);
-            clearList("list4", true);
-            clearList("list5", true);
-        }
-
-        function clearForms() {
-            clearForm("frmsignin", true);
-            clearForm("frminstrument", true);
-            clearForm("frmclient", true);
-            clearForm("frmcash", true);
-            clearForm("frmhedge", true);
-            clearForm("frmproduct", true);
-            clearForm("frmhedge", true);
-            clearForm("frmcosts", true);
-            clearForm("frmifa", true);
-            clearForm("frmhistory", true);
-            clearForm("frmpositions", true);
-        }
-
-        function clearDivs() {
-            clearDiv("clientbox");
-            clearDiv("stockbox");
-            clearDiv("orderdiv");
-        }
-
-        function addElement(msg, list, index) {
-            var listelem;
-
-            listelem = document.createElement("li");
-            listelem.setAttribute('value', index);
-            listelem.innerHTML = msg;
-
-            list.appendChild(listelem);
-
-            return listelem;
-        }
-
-        /*function orderCancel(event) {
-            console.log(this);
-            console.log(event);
-            var element = ((window.event)?(event.srcElement):(event.target));
-            var orderid = element.value;
-            confirmOrderCancel(orderid);
-        }*/
-
-        function confirmOrderCancel(orderid) {
-            var msg;
-            var ordercancelrequest = {};
-
-            msg = "Cancel order #" + orderid;
-            msg += " to " + getSideDesc(orders[orderid].side);
-            msg += " " + orders[orderid].remquantity;
-            msg += " " + orders[orderid].symbol;
-            if ('price' in orders[orderid]) {
-                msg += " @ " + orders[orderid].price;
-            }
-            msg += " " + getOrdertypeDesc(orders[orderid].ordertype);
-
-            var result = confirm(msg);
-            if (result == true) {
-                ordercancelrequest.orderid = orderid;
-                sockjs.send("{\"ordercancelrequest\":" + JSON.stringify(ordercancelrequest) + "}");
-            }
-        }
-
-        function displayOrderBooks() {
-            selectStock("watchlist", null, false, true, null);
-
-            displayOrderBookHeadings();
-
-            for (var symbol in orderbooks) {
-                displayOrderBook(symbol);
-            }
-        }
-
-        function displayOrders() {
-            var firstorder = true;
-            var firstorderpartfilled = true;
-            var firstorderfilled = true;
-            var firstorderrejected = true;
-            var firstordercancelled = true;
-            var msg;
-            var listelement;
-            var list1;
-            var list2;
-            var list3;
-            var list4;
-            var list5;
-            var lblnopartfilled;
-
-            clearLists();
-            clearHeadings();
-            clearEmptyLines();
-
-            list1 = getList("list1");
-            var emptyline1 = addNewLine(main);
-            emptyline1.id = "emptyline1";
-            list2 = getList("list2");
-            var emptyline2 = addNewLine(main);
-            emptyline2.id = "emptyline2";
-            list3 = getList("list3");
-            var emptyline3 = addNewLine(main);
-            emptyline3.id = "emptyline3";
-            list4 = getList("list4");
-            var emptyline4 = addNewLine(main);
-            emptyline4.id = "emptyline4";
-            list5 = getList("list5");
-
-            displayOrderHeadings();
-
-            for (var x in orders) {
-                if (orders[x].status == "0") { // new
-                    if (firstorder) {
-                        firstorder = false;
-                    }
-
-                    msg = orderNewMsg(orders[x]);
-                    listelement = addElement(msg, list1, orders[x].orderid);
-                    optionToViewCancel(listelement, true);
-                } else if (orders[x].status == "1") { // part-filled
-                    if (firstorderpartfilled) {
-                        firstorderpartfilled = false;
-                    }
-
-                    msg = orderFillMsg(orders[x]);
-                    listelement = addElement(msg, list2, orders[x].orderid);
-                } else if (orders[x].status == "2") { // filled
-                    if (firstorderfilled) {
-                        firstorderfilled = false;
-                    }
-
-                    msg = orderFillMsg(orders[x]);
-                    listelement = addElement(msg, list3, orders[x].orderid);
-                } else if (orders[x].status == "8") { // rejected
-                    if (firstorderrejected) {
-                        firstorderrejected = false;
-                    }
-
-                    msg = orderRejectMsg(orders[x]);
-                    listelement = addElement(msg, list4, orders[x].orderid);
-                } else if (orders[x].status == "4") { // cancelled
-                    if (firstordercancelled) {
-                        firstordercancelled = false;
-                    }
-
-                    msg = orderCancelMsg(orders[x]);
-                    listelement = addElement(msg, list5, orders[x].orderid);
-                }
-            }
-
-            if (firstorder) {
-                addElement("No new orders", list1, 0)
-            }
-
-            if (firstorderpartfilled) {
-                addElement("No part-filled orders", list2, 0)
-            } else {
-                list2.onclick = function(e) {
-                    var element;
-                    
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
-
-                    viewOrder(element.value);
-                }                
-            }
-
-            if (firstorderfilled) {
-                addElement("No filled orders", list3, 0)
-            } else {
-                list3.onclick = function(e) {
-                    var element;
-                    
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
-
-                    viewOrder(element.value);
-                }                                
-            }
-
-            if (firstorderrejected) {
-                addElement("No rejected orders", list4, 0)
-            } else {
-                list4.onclick = function(e) {
-                    var element;
-                    
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
-
-                    viewOrder(element.value);
-                }                                
-            }
-
-            if (firstordercancelled) {
-                addElement("No cancelled orders", list5, 0)
-            } else {
-                list5.onclick = function(e) {
-                    var element;
-                    
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
-
-                    viewOrder(element.value);
-                }                                
-            }
-        }
-
-        function clearEmptyLines() {
-            clearElementById("emptyline1");
-            clearElementById("emptyline2");
-            clearElementById("emptyline3");
-            clearElementById("emptyline4");
-        }
-
-        function displayOrderHeadings() {
-            addHeading("New", list1);
-            addHeading("Part-filled", list2);
-            addHeading("Filled", list3);
-            addHeading("Rejected", list4);
-            addHeading("Cancelled", list5);
-        }
-
-        function displayPositions() {
-            var firstposition = true;
-            var msg;
-            var list;
-            var emptyline1;
-
-            clearLists();
-            clearEmptyLines();
-
-            var emptyline1 = addNewLine(main);
-            emptyline1.id = "emptyline1";
-
-            list = getList("list1");
-
-            for (var x in positions) {
-                msg = positionMsg(positions[x]);
-                addElement(msg, list, x);
-                firstposition = false;
-            }
-
-            if (firstposition) {
-                addElement("No positions", list, "");
-            } else {
-                list.onclick = function(e) {
-                    var element;
-                    
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
-
-                    viewPosition(element.value);
-                }                
-            }
-        }
-
-        function selectStock(frm, stockbox, displayname, focus, focusfield) {
-            var stockboxinput;
-            var stocklist;
-            var searchtext;
-            var inpsymboldesc;
-            var inpsymbol;
-
-            if (stockbox == null) {
-                stockbox = document.createElement("div");
-                stockbox.id = "stockbox";
-                stockbox.className = "stockbox";
-
-                main.appendChild(stockbox);
-            }
-
-            stockboxinput = document.createElement("input");
-            stockboxinput.className = "stockboxinput";
-            stockboxinput.id = "stockboxinput";
-            stockboxinput.placeholder = "Symbol";
-
-            stockboxinput.onkeyup = function() {
-                clearList(stocklist.id, false);
-
-                if (stockboxinput.value.length == 0) {
-                    stocklist.style.visibility = "hidden";
-                    return;
-                }
-
-                searchtext = stockboxinput.value.toLowerCase();
-
-                for (var i in instruments) {
-                    if (i.toLowerCase().indexOf(searchtext) == 0 || instruments[i].description.toLowerCase().indexOf(searchtext) == 0) {
-                        addElement(i + " " + instruments[i].description, stocklist, i);
-                    }
-                }
-
-                if (stocklist.getElementsByTagName('li').length > 0) {
-                    stocklist.style.visibility = "visible";
-                } else {
-                    stocklist.style.visibility = "hidden";
-                }
-            }
-
-            stocklist = document.createElement('ul');
-            stocklist.id = "stocklist";
-            stocklist.className = "stocklist";
-            stocklist.style.visibility = "hidden";
-
-            stocklist.onclick = function(e) {
-                var firstspace;
-                var symbol;
-                var element;
-                
-                if (!e) e = window.event;
-                element = e.target || e.srcElement;
-
-                firstspace = element.innerHTML.indexOf(' ');
-                symbol = element.innerHTML.substr(0, firstspace);
-
-                if (frm == "watchlist") {
-                    if (symbol in obdisplay) {
-                        alert(symbol + " already in Watch List");
-                        e.stopPropagation();
-                    } else {
-                        sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
-                        stocklist.style.visibility = "hidden";
-                        stockboxinput.value = "";
-                        stockboxinput.focus();
-                    }
-                } else if (frm == "frmproduct") {
-                    displayProduct(instruments[symbol]);
-                } else if (frm == "orderdiv") {
-                    inpsymboldesc.value = instruments[symbol].description;
-                    inpsymbol = document.getElementById("inpsymbol");
-                    inpsymbol.value = symbol;
-                }
-
-                stocklist.style.visibility = "hidden";
-                stockboxinput.value = "";
-
-                if (focusfield) {
-                    focusfield.focus();
-                } else {
-                    stockboxinput.focus();
-                }
-            }
-
-            stockbox.appendChild(stockboxinput);
-
-            if (displayname) {
-                inpsymboldesc = newinput("inpsymboldesc", "forminput", stockbox, true);
-            }
-
-            stockbox.appendChild(stocklist);
-
-            main.onclick = function(e) {
-                var elem;
-
-                if (!e) e = window.event;
-                elem = e.target || e.srcElement;
-
-                if (elem.id == "stocklist" || elem.id == "stockboxinput") {
-                    return;
-                }
-
-                stocklist.style.visibility = "hidden";
-            }
-
-            if (focus) {
-                stockboxinput.focus();
-            }
-        }
-
-        function getList(liststr) {
-            var list = document.getElementById(liststr);
-
-            if (list == null) {
-                list = document.createElement("list");
-                list.className = "list";
-                list.id = liststr;
-            }
-
-            main.appendChild(list);
-
-            return list;
-        }
-
-        function displayTrades() {
-            var firsttrade = true;
-            var msg;
-            var list;
-
-            clearLists();
-            clearHeadings();
-            clearEmptyLines();
-
-            list = getList("list1");
-
-            for (var x in trades) {
-                msg = tradeMsg(trades[x]);
-                addElement(msg, list, trades[x].tradeid);
-                firsttrade = false;
-            }
-
-            if (firsttrade) {
-                addElement("No trades", list, 0);                
-            } else {
-                list.onclick = function(e) {
-                    var element;
-                    
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
-
-                    viewTrade(element.value);
-                }
-            }
-        }
-
-        function displayQuoteRequests() {
-            var firstquoterequest = true;
-            var msg;
-            var list;
-
-            clearLists();
-            clearHeadings();
-            clearEmptyLines();
-
-            list = getList("list1");
-
-            for (var x in quoterequests) {
-                msg = quoteRequestMsg(quoterequests[x]);
-                addElement(msg, list, quoterequests[x].quotereqid);
-                firstquoterequest = false;
-            }
-
-            if (firstquoterequest) {
-                addElement("No quote requests", list, 0);                
-            } else {
-                list.onclick = function(e) {
-                    var element;
-
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
-
-                    viewQuoteRequest(element.value);
-                }
-            }
-        }
-
-        function displayQuotes() {
-            var firstquote = true;
-            var msg;
-            var list;
-
-            clearLists();
-            clearHeadings();
-            clearEmptyLines();
-
-            list = getList("list1");
-
-            for (var x in quotes) {
-                msg = quoteMsg(quotes[x]);
-                addElement(msg, list, quotes[x].quoteid);
-                firstquote = false;
-            }
-
-            if (firstquote) {
-                addElement("No quotes", list, 0);                
-            } else {
-                list.onclick = function(e) {
-                    var element;
-
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
-
-                    viewQuote(element.value);
-                }
-            }
-        }
-
-        function displayCash() {
-            var firstCash = true;
-
-            addHeading("Cash", list1);
-
-            for (var x in cash) {
-                addElement(cashMsg(cash[x]), list1, cash[x].currency);
-                firstCash = false;
-            }
-
-            if (firstCash) {
-                addElement("No cash", list1, "");                
-            }
-        }
-
-        function displayMargins() {
-            var firstMargin = true;
-
-            addHeading("Margin", list2);
-
-            for (var x in margins) {
-                addElement(marginMsg(margins[x]), list2, margins[x].currency);
-                firstMargin = false;
-            }
-
-            if (firstMargin) {
-                addElement("No margins", list2, "");                
-            }
-        }
-
-        function displayReserves() {
-            var reskey;
-            var msg;
-            var firstReserve = true;
-
-            addHeading("Stock Reserved", list3);
-
-            for (var x in reserves) {
-                reskey = reserves[x].symbol + " " + reserves[x].currency;
-                msg = reserveMsg(reserves[x]);
-                addElement(msg, list3, reskey);
-                firstReserve = false;
-            }
-
-            if (firstReserve) {
-                addElement("No reserves", list3, "");
-            }
-        }
-
-        function updateOrder(order) {
-            var msg;
-            var listelement;
-
-            if (order.status == "0") {
-                msg = "Order acknowledged, id: " + order.orderid;
-                if ('text' in order && order.text != "") {
-                    msg += ", " + order.text;
-                }
-            } else if (order.status == "1") {
-                msg = "Order part-filled, order id: " + order.orderid;
-            } else if (order.status == "2") {
-                msg = "Order filled, order id: " + order.orderid;
-            } else if (order.status == "8") {
-                msg = "Order rejected, reason: " + getReasonDesc(order.reason);
-                if (order.text != "") {
-                    msg += " " + order.text;
-                }
-                msg += ", order id: " + order.orderid;
-            } else if (order.status == "4") {
-                msg = "Order cancelled";
-            }
-
-            if (selectedmenu == 0) {
-                addMessageToDiv(msg, "orderdiv:" + order.symbol);
-            } else {
-                addMessageToDiv(msg, "orderdiv");
-            }
-        }
-
-        function removeOrderAndTidy(orderid, list) {
-            var headingtext;
-
-            if (list == list1) {
-                headingtext = "No new orders";
-            } else {
-                headingtext = "No part-filled orders";
-            }
-
-            removeElementFromList(orderid, list);
-            if (list.childNodes.length == 0) {
-                addElement(headingtext, list, 0);
-            }
-        }
-
-        function optionToViewCancel(listelement, cancelorder) {
-            var addfuncdiv;
-            var vieworderlnk;
-            var cancelorderlnk;
-
-            listelement.onmouseover = function() {
-                addfuncdiv.style.visibility = "visible";
-            }
-            listelement.onmouseout = function() {
-                addfuncdiv.style.visibility = "hidden";
-            }
-
-            addfuncdiv = document.createElement('div');
-            addfuncdiv.style.visibility = "hidden";
-
-            vieworderlnk = document.createElement('a');
-            vieworderlnk.innerHTML = "View Order";
-            vieworderlnk.href = "javascript:void(0);";
-
-            vieworderlnk.onclick = function() {
-                viewOrder(listelement.value);
-            }
-
-            addfuncdiv.appendChild(vieworderlnk);
-
-            if (cancelorder) {
-                cancelorderlnk = document.createElement('a');
-                cancelorderlnk.innerHTML = "Cancel Order";
-                cancelorderlnk.href = "javascript:void(0);";
-
-                cancelorderlnk.onclick = function() {
-                    confirmOrderCancel(listelement.value);
-                }
-
-                addfuncdiv.appendChild(cancelorderlnk);
-            }
-
-            listelement.appendChild(addfuncdiv);
-        }
-
-        function viewOrder(orderid) {
-            var msg = "";
-            var order;
-            var fieldcontents;
-            var fielddesc;
-
-            order = orders[orderid];
-
-            for (var field in order) {
-                fieldcontents = order[field];
-
-                switch (field) {
-                    case 'side':
-                        fielddesc = getSideDesc(fieldcontents);
-                        break;
-                    case 'status':
-                        fielddesc = getOrderStatusDesc(fieldcontents);
-                        break;
-                    case 'ordertype':
-                        fielddesc = getOrdertypeDesc(fieldcontents);                        
-                        break;
-                    case 'futsettdate':
-                        fielddesc = formatUTCDate(fieldcontents);
-                        break;
-                    case 'timestamp':
-                        fielddesc = formatUTCDateTime(fieldcontents);
-                        break;
-                    case 'reason':
-                        fielddesc = getReasonDesc(fieldcontents);
-                        break;
-                    default:
-                        fielddesc = fieldcontents;
-                }
-
-                msg += field + ": " + fielddesc + "\n";
-            }
-
-            alert(msg);
-        }
-
-        function viewQuoteRequest(quotereqid) {
-            var msg = "";
-            var quoterequest;
-
-            quoterequest = quoterequests[quotereqid];
-
-            for (var field in quoterequest) {
-                msg += field + ": " + quoterequest[field] + "\n";
-            }
-
-            alert(msg);
-        }
-
-        function viewQuote(quoteid) {
-            var msg = "";
-            var quote;
-            var fieldcontents;
-            var fielddesc;
-
-            quote = quotes[quoteid];
-
-            for (var field in quote) {
-                fieldcontents = quote[field];
-
-                switch (field) {
-                    case 'futsettdate':
-                        fielddesc = formatUTCDate(fieldcontents);
-                        break;
-                    case 'timestamp':
-                        fielddesc = formatUTCDateTime(fieldcontents);
-                        break;
-                    default:
-                        fielddesc = fieldcontents;
-                }
-
-                msg += field + ": " + fielddesc + "\n";
-            }
-
-            alert(msg);
-        }
-
-        function viewTrade(tradeid) {
-            var msg = "";
-            var trade;
-            var fieldcontents;
-            var fielddesc;
-
-            trade = trades[tradeid];
-
-            for (var field in trade) {
-                fieldcontents = trade[field];
-
-                switch (field) {
-                    case 'futsettdate':
-                        fielddesc = formatUTCDate(fieldcontents);
-                        break;
-                    case 'timestamp':
-                        fielddesc = formatUTCDateTime(fieldcontents);
-                        break;
-                    default:
-                        fielddesc = fieldcontents;
-                }
-
-                msg += field + ": " + fielddesc + "\n";
-            }
-
-            alert(msg);
-        }
-
-        function viewPosition(positionid) {
-            var msg = "";
-            var position;
-            var fieldcontents;
-            var fielddesc;
-
-            position = positions[positionid];
-
-            for (var field in position) {
-                fieldcontents = position[field];
-
-                switch (field) {
-                    case 'settldate':
-                        fielddesc = formatUTCDate(fieldcontents);
-                        break;
-                    default:
-                        fielddesc = fieldcontents;
-                }
-
-                msg += field + ": " + fielddesc + "\n";
-           }
-
-            alert(msg);
-        }
-
-        function getOrderStatusDesc(status) {
-            var desc;
-
-            switch (status) {
-            case '0':
-                desc = "New";
-                break;
-            case '1':
-                desc = "Partially filled";
-                break;
-            case '2':
-                desc = "Filled";
-                break;
-            case '3':
-                desc = "Done for day";
-                break;
-            case '4':
-                desc = "Cancelled";
-                break;
-            case '5':
-                desc = "Replaced";
-                break;
-            case '6':
-                desc = "Pending Cancel"; // (e.g. result of Order Cancel Request <F>) 7 = Stopped
-                break;
-            case '8':
-                desc = "Rejected";
-                break;
-            case '9':
-                desc = "Suspended";
-                break;
-            case 'A':
-                desc = "Pending New";
-                break;
-            case 'B':
-                desc = "Calculated";
-                break;
-            case 'C':
-                desc = "Expired";
-                break;
-            case 'D':
-                desc = "Accepted for bidding";
-                break;
-            case 'E':
-                desc = "Pending Replace";
-                break;
-            default:
-                desc = "Unknown status";
-            }
-
-            return desc;
-        }
-
-        function updateOrderVol(order) {
-            var key = order.symbol + order.side + order.price;
- 
-            if (order.status == "0" || order.status == "1") {
-                if (order.orderid in orders) {
-                    ordervol[key] -= parseInt(orders[order.orderid].remquantity);
-                }
-
-                if (key in ordervol) {
-                    ordervol[key] += parseInt(order.remquantity);
-                } else {
-                    ordervol[key] = parseInt(order.remquantity);
-                }
-            } else if (order.status == "2" || order.status == "4") {
-                if (order.orderid in orders) {
-                    ordervol[key] -= parseInt(orders[order.orderid].remquantity);
-                }
-            }
-        }
-
-        function requestPositions(event) {
-            var inpclientid;
-
-            var frmpositions = getForm("frmpositions");
-
-            selectClient("frmpositions", null, null, true, "", "inpclientid", "");
-
-            var btnrequest = newbutton("btnrequest", "Request Positions", "formbuttonwide", frmpositions);
-
-            inpclientid = document.createElement("input");
-            inpclientid.type = "hidden";
-            inpclientid.id = "inpclientid";
-            inpclientid.value = "";
-
-            frmpositions.appendChild(inpclientid);
-
-            main.appendChild(frmpositions);
-
-            btnrequest.onclick = function() {
-                var positionrequest = {};
-
-                if (inpclientid.value == "") {
-                    alert("Please select a client");
-                    selectClientFocus("clientboxinput");
-                    return;
-                }
-
-                positionrequest.clientid = inpclientid.value;
-
-                sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
-            }
-        }
-
-        function updateElement(msg, list, index) {
-            var listelement = null;
-
-            for (var i = 0; i < list.childNodes.length; ++i) {
-                if (list.childNodes[i].value == index) {
-                    listelement = list.childNodes[i];
-                    listelement.innerHTML = msg;
-                    break;
-                }
-            }
-
-            return listelement;
-        }
-
-        function addHeading(text, list) {
-            var newtext = document.createTextNode(text);
-            main.insertBefore(newtext, list);
-        }
-
-        function removeHeading(text) {
-            for (var i = 0; i < main.childNodes.length; ++i) {
-                if (main.childNodes[i].nodeType == 3 && main.childNodes[i].nodeValue == text) {
-                    main.removeChild(main.childNodes[i]);
-                    break;
-                }
-            }
-        }
-
-        function removeElementFromList(index, list) {
-            for (var i = 0; i < list.childNodes.length; ++i) {
-                if (list.childNodes[i].value == index) {
-                    list.removeChild(list.childNodes[i]);
-                    break;
-                }
-            }
-        }
-
-        function quoteRequestMsg(quoterequest) {
-            var msg;
-
-            if (quoterequest.quantity != "") {
-                msg = quoterequest.quantity;
-            } else {
-                msg = quoterequest.cashorderqty + " (value)";                
-            }
-
-            msg += " " + quoterequest.symbol + " requested in " + quoterequest.settlcurrency + ", T+" + quoterequest.nosettdays + " at " + quoterequest.timestamp;
-
-            return msg;
-        }
-
-        function quoteMsg(quote) {
-            var msg;
-
-            msg = quote.symbol + " in " + quote.settlcurrency + ", T+" + quote.nosettdays + ", quoted " + quote.bidpx + " to Sell, " + quote.offerpx + " to Buy, at " + formatUTCDateTime(quote.transacttime) + ", quote id " + quote.quoteid;
-
-            if ('orderid' in quote) {
-                msg += ", order id " + quote.orderid;
-            } else {
-                msg += ", no order placed";
-            }
-
-            return msg;
-        }
-
-        function orderNewMsg(order) {
-            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbol;
-
-            if ('price' in order) {
-                msg += " @ " + order.price;
-            }
-            msg += " " + getOrdertypeDesc(order.ordertype) + ", order id " + order.orderid + ", placed at " + formatUTCDateTime(order.timestamp);
-
-            return msg;
-        }
-
-        function orderFillMsg(order) {
-            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbol;
-
-            if ('price' in order) {
-                msg += " @ " + order.price;
-            }
-            msg += " " + getOrdertypeDesc(order.ordertype);
-            if (order.remquantity > 0) {
-                msg += ", " + order.remquantity  + " remaining";
-            }
-            msg += ", order id " + order.orderid + ", at " + formatUTCDateTime(order.timestamp);
-
-            return msg;
-        }
-
-        function orderRejectMsg(order) {
-            var msg = getSideDesc(order.side) + " " + order.remquantity + " " + order.symbol;
-
-            if ('price' in order) {
-                msg += " @ " + order.price;
-            }
-
-            msg +=  " " + getOrdertypeDesc(order.ordertype) + ", rejected, reason: " + getReasonDesc(order.reason);
-
-            if (order.text != "") {
-                msg += " " + order.text;
-            }
-
-            msg += ", order id " + order.orderid + ", at " + formatUTCDateTime(order.timestamp);
-
-            return msg;
-        }
-
-        function orderCancelMsg(order) {
-            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbol + ", " + order.remquantity + " remaining";
-
-            if ('price' in order) {
-                msg += " @ " + order.price;
-            }
-
-            msg += " " + getOrdertypeDesc(order.ordertype) + ", cancelled, order id " + order.orderid + ", at " + formatUTCDateTime(order.timestamp);
-
-            return msg;
-        }
-
-        function tradeMsg(trade) {
-            var msg;
-
-            msg = getSideDescTrade(trade.side) + " " + trade.quantity + " " + trade.symbol + ", T+" + trade.nosettdays;
-
-            msg += " @ " + trade.price;
-
-            if (trade.settlcurrency != "GBP" || trade.settlcurrency != trade.currency) {
-                msg += " (" + trade.settlcurrency + ")"
-            }
-
-            msg += ", trade id: " + trade.tradeid + ", order id: " + trade.orderid + ", executed " + formatUTCDateTime(trade.timestamp);
-
-            return msg;
+        function clearQuoteRequests() {
+            quoterequests = [];
         }
 
-        function cashMsg(cash) {
-            return parseFloat(cash.amount).toFixed(2) + " " + cash.currency;
+        function clearQuotes() {
+            quotes = [];
         }
 
-        function marginMsg(margin) {
-            return parseFloat(margin.amount).toFixed(2) + " " + margin.currency;            
+        function clearOrders() {
+            orders = [];
         }
 
-        function getSideDescTrade(side) {
-            if (side == "1") {
-                return "Bought ";
-            } else {
-                return "Sold ";
-            }
+        function clearTrades() {
+            trades = [];
         }
 
-        function positionMsg(position) {
-            var msg;
-
-            if (position.longshort == "1") {
-                msg = "Long ";
-            } else {
-                msg = "Short ";
-            }
-            msg += position.quantity + " " + position.symbol + " in " + position.currency + ", cost " + parseFloat(position.cost).toFixed(2) + ", for settlement " + formatUTCDate(position.settldate);
-
-            return msg;
+        function clearPositions() {
+            positions = [];
         }
 
-        function reserveMsg(reserve) {
-            return reserve.quantity + " " + reserve.symbol + " " + reserve.currency;
-        }
-
-        function orderCancelReject(ordercancelreject) {
-            alert("Request to cancel order #" + ordercancelreject.orderid + " rejected, reason: " + ordercancelreject.reasondesc);
-        }
+        //
+        // various update routines
+        // these take a single data item & update the item based on its index
+        //
 
         function updateTrade(trade) {
             var msg;
@@ -2479,6 +1097,1388 @@
                 displayOrderBook(orderbook.symbol);
             }
         }
+
+        function updateInstrument(instrument) {
+            var lblinstconf;
+
+            instruments[instrument.symbol] = instrument;
+
+            lblinstconf = document.getElementById("lblinstconf");
+            if (lblinstconf != null) {
+                lblinstconf.innerHTML = instrument.symbol + " updated ok";
+            }
+        }
+
+        function updateCost(cost) {
+            var lblcostsconf;
+
+            costs[cost.costkey] = cost;
+
+            lblcostsconf = document.getElementById("lblcostsconf");
+            lblcostsconf.innerHTML = "Updated ok";
+        }
+
+        function updateHedgebook(hedgebook) {
+            var lblhedgeconf;
+
+            hedgebooks[hedgebook.hedgebookkey] = hedgebook;
+
+            lblhedgeconf = document.getElementById("lblhedgeconf");
+            if (lblhedgeconf != null) {
+                lblhedgeconf.innerHTML = "Hedgebook updated Ok";
+            }
+        }
+
+        function updateIfa(ifa) {
+            var lblifaconf;
+
+            ifas[ifa.ifaid] = ifa;
+
+            lblifaconf = document.getElementById("lblifaconf");
+            if (lblifaconf != null) {
+                lblifaconf.innerHTML = ifa.name + " updated ok";
+            }
+        }
+
+        function updateClient(client) {
+            var frmclient;
+            var inpclientid;
+            var msg;
+            var lblclientconf;
+
+            clients[client.clientid] = client;
+
+            if (selectedmenu != 0) {return};
+
+            frmclient = document.getElementById("frmclient");
+            if (frmclient != null) {
+                inpclientid = document.getElementById("inpclientid");
+                if (inpclientid != null) {
+                    if (inpclientid.value == "") {
+                        msg = client.name + " added";
+                    } else {
+                        msg = client.name + " updated";
+                    }
+
+                    displayClient(null, "frmclient", msg);
+                }
+            }
+        }
+
+        function updateCashtrans(cashtrans) {
+            var lblcashconf;
+            var msg = "";
+
+            lblcashconf = document.getElementById("lblcashconf");
+            if (lblcashconf != null) {
+                msg += cashtranstypes[cashtrans.transtype].description;
+                msg += " of " + cashtrans.amount + " " + cashtrans.currency;
+                msg += " added for " + clients[cashtrans.clientid].name;
+                lblcashconf.innerHTML = msg;
+            }
+
+            clearField(inpclient);
+            clearField(inpamount);
+            clearField(inpdesc);
+        }
+
+        function updateOrder(order) {
+            var msg;
+            var listelement;
+
+            if (order.status == "0") {
+                msg = "Order acknowledged, id: " + order.orderid;
+                if ('text' in order && order.text != "") {
+                    msg += ", " + order.text;
+                }
+            } else if (order.status == "1") {
+                msg = "Order part-filled, order id: " + order.orderid;
+            } else if (order.status == "2") {
+                msg = "Order filled, order id: " + order.orderid;
+            } else if (order.status == "8") {
+                msg = "Order rejected, reason: " + getReasonDesc(order.reason);
+                if (order.text != "") {
+                    msg += " " + order.text;
+                }
+                msg += ", order id: " + order.orderid;
+            } else if (order.status == "4") {
+                msg = "Order cancelled";
+            }
+
+            if (selectedmenu == 0) {
+                addMessageToDiv(msg, "orderdiv:" + order.symbol);
+            } else {
+                addMessageToDiv(msg, "orderdiv");
+            }
+        }
+
+        function updateOrderVol(order) {
+            var key = order.symbol + order.side + order.price;
+ 
+            if (order.status == "0" || order.status == "1") {
+                if (order.orderid in orders) {
+                    ordervol[key] -= parseInt(orders[order.orderid].remquantity);
+                }
+
+                if (key in ordervol) {
+                    ordervol[key] += parseInt(order.remquantity);
+                } else {
+                    ordervol[key] = parseInt(order.remquantity);
+                }
+            } else if (order.status == "2" || order.status == "4") {
+                if (order.orderid in orders) {
+                    ordervol[key] -= parseInt(orders[order.orderid].remquantity);
+                }
+            }
+        }
+
+        function start() {
+            clearScreen();
+            displayMenu();
+
+            selectedmenu = 0;
+
+            displayOrderBooks();
+        }
+
+        function statusMsg(status) {
+        }
+
+        function startHeartbeatTimer() {
+            stopHeartbeatTimer();
+            heartbeattimer = setTimeout(connectionTest, 30000);            
+        }
+
+        function stopHeartbeatTimer() {
+            clearTimeout(heartbeattimer);
+        }
+
+        function startPriceTimer() {
+            pricetimer = setInterval(flashText, 1000);
+        }
+
+        function stopPriceTimer() {
+            clearInterval(pricetimer);
+        }
+
+        function startRestartTimer() {
+            // attempt restart after 1-10 seconds
+            var randomonetoten = Math.floor((Math.random()*10)+1);
+            console.log("attempt restart after " + randomonetoten + " seconds");
+            restarttimer = setTimeout(newconn, randomonetoten * 1000);
+        }
+
+        function stopRestartTimer() {
+            clearTimeout(restarttimer);
+        }
+
+        function connectionTest() {
+            if (inconnectiontest) {
+                console.log("need to reconnect");
+                return;
+            }
+
+            console.log("sending ping");
+            sockjs.send("ping");
+            startHeartbeatTimer();
+            inconnectiontest = true;
+        }
+
+        newconn();
+
+        /*
+        * this is the start...
+        * set-up a sockjs connection & display the sign-in form
+        * if the connection is lost, try to reconnect periodically
+        */
+        function newconn() {
+            sockjs = new SockJS(sockjs_url);
+
+            sockjs.onopen = function()  {
+                console.log("connection open");
+                stopRestartTimer();
+                startPriceTimer();
+                startHeartbeatTimer();
+                displayFormSignin();
+            };
+
+            sockjs.onmessage = function(e) {
+                datain(e.data);
+            };
+
+            sockjs.onclose = function()  {
+                console.log("connection closed");
+                stopRestartTimer();
+                stopPriceTimer();
+                stopHeartbeatTimer();
+                startRestartTimer();
+                signedin = false;
+            };
+
+            sockjs.onheartbeat = function() {
+                startHeartbeatTimer();
+            };
+        }
+
+        //
+        // handles the flashing of colours on receiving prices
+        //
+        function flashText() {
+            var bidprice;
+            var offerprice;
+            var removesymbol;
+
+            for (var symbol in priceflash) {
+                removesymbol = true;
+
+                for (i = 0; i < orderbooks[symbol].length; i++) {
+                    // bid prices
+                    orderbooks[symbol][i].bidflashcount--;
+                    if (orderbooks[symbol][i].bidflashcount == 0) {
+                        bidprice = document.getElementById("bidprice:" + symbol + ":" + i);
+                        if (bidprice != null) {
+                            if (i == 0) {
+                                if (orderbooks[symbol][i].lastbidchange == 1) {
+                                    bidprice.className = "yellowstripbidup";
+                                } else if (orderbooks[symbol][i].lastbidchange == 2) {
+                                    bidprice.className = "yellowstripbiddn";
+                                } else {
+                                    bidprice.className = "yellowstripbidnochange";
+                                }
+                            } else {
+                                if (orderbooks[symbol][i].lastbidchange == 1) {
+                                    bidprice.className = "bidup";
+                                } else if (orderbooks[symbol][i].lastbidchange == 2) {
+                                    bidprice.className = "biddn";
+                                } else {
+                                    bidprice.className = "bidnochange";
+                                }
+                            }
+                        }
+                    }
+
+                    // offer prices
+                    orderbooks[symbol][i].offerflashcount--;
+                    if (orderbooks[symbol][i].offerflashcount == 0) {
+                        offerprice = document.getElementById("offerprice:" + symbol + ":" + i);
+                        if (offerprice != null) {
+                            if (i == 0) {
+                                if (orderbooks[symbol][i].lastofferchange == 1) {
+                                    offerprice.className = "yellowstripofferup";
+                                } else if (orderbooks[symbol][i].lastofferchange == 2) {
+                                    offerprice.className = "yellowstripofferdn";
+                                } else {
+                                    offerprice.className = "yellowstripoffernochange";           
+                                }
+                            } else {
+                                if (orderbooks[symbol][i].lastofferchange == 1) {
+                                    offerprice.className = "offerup";
+                                } else if (orderbooks[symbol][i].lastofferchange == 2) {
+                                    offerprice.className = "offerdn";
+                                } else {
+                                    offerprice.className = "offernochange";
+                                }
+                            }
+                        }
+                    }
+
+                    // keep track of whether we can remove this symbol
+                    if (orderbooks[symbol][i].bidflashcount > 0 || orderbooks[symbol][i].offerflashcount > 0) {
+                        removesymbol = false;
+                    }
+                }
+
+                if (removesymbol) {
+                    delete priceflash[symbol];
+                }
+            }
+        }
+
+        //
+        // various clear routines
+        // clears & removes parts of the display
+        //
+
+        function clearMenu() {
+            var menu = document.getElementById("menu");
+            if (menu != null) {
+                for (var i = 0; i < menu.childNodes.length; ++i) {
+                    menu.removeChild(menu.childNodes[i]);
+                }
+                heading.removeChild(menu);
+            }
+        }
+
+        function clearHeadings() {
+            for (var i = 0; i < main.childNodes.length; ++i) {
+                if (main.childNodes[i].nodeType == Node.TEXT_NODE) {
+                    main.removeChild(main.childNodes[i]);
+                }
+            }
+        }
+
+        function clearOrderBookHeadings() {
+            var headingstrip = document.getElementById("headingstrip");
+            if (headingstrip != null) {
+                while(headingstrip.hasChildNodes()){
+                    headingstrip.removeChild(headingstrip.childNodes[0]);
+                }
+                main.removeChild(headingstrip);
+            }
+        }
+
+        function clearList(liststr, remove) {
+            var list = document.getElementById(liststr);
+            if (list != null) {
+                while(list.hasChildNodes()){
+                    list.removeChild(list.childNodes[0])
+                }
+                if (remove) {
+                    main.removeChild(list);
+                }
+            }
+        }
+
+        function clearForm(formid, remove) {
+            var frm = document.getElementById(formid);
+            if (frm != null) {
+                while(frm.hasChildNodes()){
+                    frm.removeChild(frm.childNodes[0]);
+                }
+                if (remove) {
+                    main.removeChild(frm);
+                }
+            }
+        }
+
+        function clearSymbolDiv(symbol) {
+            clearDiv("orderdiv:" + symbol);
+        }
+
+        function clearAllSymbolDivs() {
+            for (var symbol in orderbooks) {
+                clearSymbolDiv(symbol);
+            }
+        }
+
+        function clearStrip(stripid) {
+            var strip = document.getElementById(stripid);
+            if (strip != null) {
+                while(strip.hasChildNodes()){
+                    strip.removeChild(strip.childNodes[0]);
+                }
+                main.removeChild(strip);
+            }            
+        }
+
+        function clearStrips() {
+            clearStrip("headingstrip");
+
+            for (var symbol in orderbooks) {
+                for (var i = 0; i < orderbooks[symbol].length; ++i) {
+                    clearStrip("strip:" + symbol + ":" + i);
+                    if (symbol in obdisplay) {
+                        if (!(obdisplay[symbol].level2)) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        function clearAllStrips(symbol) {
+            var depth;
+
+            if (obdisplay[symbol].level2) {
+                depth = orderbooks[symbol].length;
+            } else {
+                depth = 1;
+            }
+
+            for (var i = 0; i < depth; ++i) {
+                clearStrip("strip:" + symbol + ":" + i);
+            }
+        }
+
+        function clearScreen() {
+            clearHeadings();
+            clearOrderBookHeadings();
+            clearLists();
+            clearDivs();
+            clearForms();
+            clearStrips();
+            clearAllSymbolDivs();
+            clearEmptyLines();
+        }
+
+        function clearLists() {
+            clearList("list1", true);
+            clearList("list2", true);
+            clearList("list3", true);
+            clearList("list4", true);
+            clearList("list5", true);
+        }
+
+        function clearForms() {
+            clearForm("frmsignin", true);
+            clearForm("frminstrument", true);
+            clearForm("frmclient", true);
+            clearForm("frmcash", true);
+            clearForm("frmhedge", true);
+            clearForm("frmproduct", true);
+            clearForm("frmhedge", true);
+            clearForm("frmcosts", true);
+            clearForm("frmifa", true);
+            clearForm("frmhistory", true);
+            clearForm("frmpositions", true);
+        }
+
+        function clearDivs() {
+            clearDiv("clientbox");
+            clearDiv("stockbox");
+            clearDiv("orderdiv");
+        }
+
+        function clearEmptyLines() {
+            clearElementById("emptyline1");
+            clearElementById("emptyline2");
+            clearElementById("emptyline3");
+            clearElementById("emptyline4");
+        }
+
+        function clearField(fldname) {
+            var fld = document.getElementById(fldname);
+            if (fld != null) {
+                fld.value = "";
+            }
+        }
+
+        function clearElementById(element) {
+            var elem = document.getElementById(element);
+            if (elem != null) {
+                elem.parentNode.removeChild(elem);
+            }
+        }
+
+        function addElement(msg, list, index) {
+            var listelem;
+
+            listelem = document.createElement("li");
+            listelem.setAttribute('value', index);
+            listelem.innerHTML = msg;
+
+            list.appendChild(listelem);
+
+            return listelem;
+        }
+
+        /*function orderCancel(event) {
+            console.log(this);
+            console.log(event);
+            var element = ((window.event)?(event.srcElement):(event.target));
+            var orderid = element.value;
+            confirmOrderCancel(orderid);
+        }*/
+
+        function confirmOrderCancel(orderid) {
+            var msg;
+            var ordercancelrequest = {};
+
+            msg = "Cancel order #" + orderid;
+            msg += " to " + getSideDesc(orders[orderid].side);
+            msg += " " + orders[orderid].remquantity;
+            msg += " " + orders[orderid].symbol;
+            if ('price' in orders[orderid]) {
+                msg += " @ " + orders[orderid].price;
+            }
+            msg += " " + getOrdertypeDesc(orders[orderid].ordertype);
+
+            var result = confirm(msg);
+            if (result == true) {
+                ordercancelrequest.orderid = orderid;
+                sockjs.send("{\"ordercancelrequest\":" + JSON.stringify(ordercancelrequest) + "}");
+            }
+        }
+
+        //
+        // routine to display an selection box for products
+        //
+        function selectStock(frm, stockbox, displayname, focus, focusfield) {
+            var stockboxinput;
+            var stocklist;
+            var searchtext;
+            var inpsymboldesc;
+            var inpsymbol;
+
+            if (stockbox == null) {
+                stockbox = document.createElement("div");
+                stockbox.id = "stockbox";
+                stockbox.className = "stockbox";
+
+                main.appendChild(stockbox);
+            }
+
+            stockboxinput = document.createElement("input");
+            stockboxinput.className = "stockboxinput";
+            stockboxinput.id = "stockboxinput";
+            stockboxinput.placeholder = "Symbol";
+
+            stockboxinput.onkeyup = function() {
+                clearList(stocklist.id, false);
+
+                if (stockboxinput.value.length == 0) {
+                    stocklist.style.visibility = "hidden";
+                    return;
+                }
+
+                searchtext = stockboxinput.value.toLowerCase();
+
+                for (var i in instruments) {
+                    if (i.toLowerCase().indexOf(searchtext) == 0 || instruments[i].description.toLowerCase().indexOf(searchtext) == 0) {
+                        addElement(i + " " + instruments[i].description, stocklist, i);
+                    }
+                }
+
+                if (stocklist.getElementsByTagName('li').length > 0) {
+                    stocklist.style.visibility = "visible";
+                } else {
+                    stocklist.style.visibility = "hidden";
+                }
+            }
+
+            stocklist = document.createElement('ul');
+            stocklist.id = "stocklist";
+            stocklist.className = "stocklist";
+            stocklist.style.visibility = "hidden";
+
+            stocklist.onclick = function(e) {
+                var firstspace;
+                var symbol;
+                var element;
+                
+                if (!e) e = window.event;
+                element = e.target || e.srcElement;
+
+                firstspace = element.innerHTML.indexOf(' ');
+                symbol = element.innerHTML.substr(0, firstspace);
+
+                if (frm == "watchlist") {
+                    if (symbol in obdisplay) {
+                        alert(symbol + " already in Watch List");
+                        e.stopPropagation();
+                    } else {
+                        sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
+                        stocklist.style.visibility = "hidden";
+                        stockboxinput.value = "";
+                        stockboxinput.focus();
+                    }
+                } else if (frm == "frmproduct") {
+                    displayProduct(instruments[symbol]);
+                } else if (frm == "orderdiv") {
+                    inpsymboldesc.value = instruments[symbol].description;
+                    inpsymbol = document.getElementById("inpsymbol");
+                    inpsymbol.value = symbol;
+                }
+
+                stocklist.style.visibility = "hidden";
+                stockboxinput.value = "";
+
+                if (focusfield) {
+                    focusfield.focus();
+                } else {
+                    stockboxinput.focus();
+                }
+            }
+
+            stockbox.appendChild(stockboxinput);
+
+            if (displayname) {
+                inpsymboldesc = newinput("inpsymboldesc", "forminput", stockbox, true);
+            }
+
+            stockbox.appendChild(stocklist);
+
+            main.onclick = function(e) {
+                var elem;
+
+                if (!e) e = window.event;
+                elem = e.target || e.srcElement;
+
+                if (elem.id == "stocklist" || elem.id == "stockboxinput") {
+                    return;
+                }
+
+                stocklist.style.visibility = "hidden";
+            }
+
+            if (focus) {
+                stockboxinput.focus();
+            }
+        }
+
+        function getList(liststr) {
+            var list = document.getElementById(liststr);
+
+            if (list == null) {
+                list = document.createElement("list");
+                list.className = "list";
+                list.id = liststr;
+            }
+
+            main.appendChild(list);
+
+            return list;
+        }
+
+        //
+        // various display routines to display incoming data
+        //
+
+        function displayOrderBooks() {
+            selectStock("watchlist", null, false, true, null);
+
+            displayOrderBookHeadings();
+
+            for (var symbol in orderbooks) {
+                displayOrderBook(symbol);
+            }
+        }
+
+        function displayOrderHeadings() {
+            addHeading("New", list1);
+            addHeading("Part-filled", list2);
+            addHeading("Filled", list3);
+            addHeading("Rejected", list4);
+            addHeading("Cancelled", list5);
+        }
+
+        function displayPositions() {
+            var firstposition = true;
+            var msg;
+            var list;
+            var emptyline1;
+
+            clearLists();
+            clearEmptyLines();
+
+            var emptyline1 = addNewLine(main);
+            emptyline1.id = "emptyline1";
+
+            list = getList("list1");
+
+            for (var x in positions) {
+                msg = positionMsg(positions[x]);
+                addElement(msg, list, x);
+                firstposition = false;
+            }
+
+            if (firstposition) {
+                addElement("No positions", list, "");
+            } else {
+                list.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewPosition(element.value);
+                }                
+            }
+        }
+
+        function displayOrders() {
+            var firstorder = true;
+            var firstorderpartfilled = true;
+            var firstorderfilled = true;
+            var firstorderrejected = true;
+            var firstordercancelled = true;
+            var msg;
+            var listelement;
+            var list1;
+            var list2;
+            var list3;
+            var list4;
+            var list5;
+            var lblnopartfilled;
+
+            clearLists();
+            clearHeadings();
+            clearEmptyLines();
+
+            list1 = getList("list1");
+            var emptyline1 = addNewLine(main);
+            emptyline1.id = "emptyline1";
+            list2 = getList("list2");
+            var emptyline2 = addNewLine(main);
+            emptyline2.id = "emptyline2";
+            list3 = getList("list3");
+            var emptyline3 = addNewLine(main);
+            emptyline3.id = "emptyline3";
+            list4 = getList("list4");
+            var emptyline4 = addNewLine(main);
+            emptyline4.id = "emptyline4";
+            list5 = getList("list5");
+
+            displayOrderHeadings();
+
+            for (var x in orders) {
+                if (orders[x].status == "0") { // new
+                    if (firstorder) {
+                        firstorder = false;
+                    }
+
+                    msg = orderNewMsg(orders[x]);
+                    listelement = addElement(msg, list1, orders[x].orderid);
+                    optionToViewCancel(listelement, true);
+                } else if (orders[x].status == "1") { // part-filled
+                    if (firstorderpartfilled) {
+                        firstorderpartfilled = false;
+                    }
+
+                    msg = orderFillMsg(orders[x]);
+                    listelement = addElement(msg, list2, orders[x].orderid);
+                } else if (orders[x].status == "2") { // filled
+                    if (firstorderfilled) {
+                        firstorderfilled = false;
+                    }
+
+                    msg = orderFillMsg(orders[x]);
+                    listelement = addElement(msg, list3, orders[x].orderid);
+                } else if (orders[x].status == "8") { // rejected
+                    if (firstorderrejected) {
+                        firstorderrejected = false;
+                    }
+
+                    msg = orderRejectMsg(orders[x]);
+                    listelement = addElement(msg, list4, orders[x].orderid);
+                } else if (orders[x].status == "4") { // cancelled
+                    if (firstordercancelled) {
+                        firstordercancelled = false;
+                    }
+
+                    msg = orderCancelMsg(orders[x]);
+                    listelement = addElement(msg, list5, orders[x].orderid);
+                }
+            }
+
+            if (firstorder) {
+                addElement("No new orders", list1, 0)
+            }
+
+            if (firstorderpartfilled) {
+                addElement("No part-filled orders", list2, 0)
+            } else {
+                list2.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                
+            }
+
+            if (firstorderfilled) {
+                addElement("No filled orders", list3, 0)
+            } else {
+                list3.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                                
+            }
+
+            if (firstorderrejected) {
+                addElement("No rejected orders", list4, 0)
+            } else {
+                list4.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                                
+            }
+
+            if (firstordercancelled) {
+                addElement("No cancelled orders", list5, 0)
+            } else {
+                list5.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                                
+            }
+        }
+
+        function displayIndex(index) {
+            var s;
+            var sym;
+
+            if (!(index in indices)) {return};
+
+            for (var i = 0; i < indices[index].length; ++i) {
+                sym = indices[index][i].symbol;
+                if (sym in instruments) {
+                    s = instruments[sym].symbol + ' ' + instruments[sym].description;
+                    addElement(s, list1, sym);
+                }
+            }
+        }
+
+        function displayTrades() {
+            var firsttrade = true;
+            var msg;
+            var list;
+
+            clearLists();
+            clearHeadings();
+            clearEmptyLines();
+
+            list = getList("list1");
+
+            for (var x in trades) {
+                msg = tradeMsg(trades[x]);
+                addElement(msg, list, trades[x].tradeid);
+                firsttrade = false;
+            }
+
+            if (firsttrade) {
+                addElement("No trades", list, 0);                
+            } else {
+                list.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewTrade(element.value);
+                }
+            }
+        }
+
+        function displayQuoteRequests() {
+            var firstquoterequest = true;
+            var msg;
+            var list;
+
+            clearLists();
+            clearHeadings();
+            clearEmptyLines();
+
+            list = getList("list1");
+
+            for (var x in quoterequests) {
+                msg = quoteRequestMsg(quoterequests[x]);
+                addElement(msg, list, quoterequests[x].quotereqid);
+                firstquoterequest = false;
+            }
+
+            if (firstquoterequest) {
+                addElement("No quote requests", list, 0);                
+            } else {
+                list.onclick = function(e) {
+                    var element;
+
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewQuoteRequest(element.value);
+                }
+            }
+        }
+
+        function displayQuotes() {
+            var firstquote = true;
+            var msg;
+            var list;
+
+            clearLists();
+            clearHeadings();
+            clearEmptyLines();
+
+            list = getList("list1");
+
+            for (var x in quotes) {
+                msg = quoteMsg(quotes[x]);
+                addElement(msg, list, quotes[x].quoteid);
+                firstquote = false;
+            }
+
+            if (firstquote) {
+                addElement("No quotes", list, 0);                
+            } else {
+                list.onclick = function(e) {
+                    var element;
+
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewQuote(element.value);
+                }
+            }
+        }
+
+        function displayCash() {
+            var firstCash = true;
+
+            addHeading("Cash", list1);
+
+            for (var x in cash) {
+                addElement(cashMsg(cash[x]), list1, cash[x].currency);
+                firstCash = false;
+            }
+
+            if (firstCash) {
+                addElement("No cash", list1, "");                
+            }
+        }
+
+        function displayMargins() {
+            var firstMargin = true;
+
+            addHeading("Margin", list2);
+
+            for (var x in margins) {
+                addElement(marginMsg(margins[x]), list2, margins[x].currency);
+                firstMargin = false;
+            }
+
+            if (firstMargin) {
+                addElement("No margins", list2, "");                
+            }
+        }
+
+        function displayReserves() {
+            var reskey;
+            var msg;
+            var firstReserve = true;
+
+            addHeading("Stock Reserved", list3);
+
+            for (var x in reserves) {
+                reskey = reserves[x].symbol + " " + reserves[x].currency;
+                msg = reserveMsg(reserves[x]);
+                addElement(msg, list3, reskey);
+                firstReserve = false;
+            }
+
+            if (firstReserve) {
+                addElement("No reserves", list3, "");
+            }
+        }
+
+        function removeOrderAndTidy(orderid, list) {
+            var headingtext;
+
+            if (list == list1) {
+                headingtext = "No new orders";
+            } else {
+                headingtext = "No part-filled orders";
+            }
+
+            removeElementFromList(orderid, list);
+            if (list.childNodes.length == 0) {
+                addElement(headingtext, list, 0);
+            }
+        }
+
+        function optionToViewCancel(listelement, cancelorder) {
+            var addfuncdiv;
+            var vieworderlnk;
+            var cancelorderlnk;
+
+            listelement.onmouseover = function() {
+                addfuncdiv.style.visibility = "visible";
+            }
+            listelement.onmouseout = function() {
+                addfuncdiv.style.visibility = "hidden";
+            }
+
+            addfuncdiv = document.createElement('div');
+            addfuncdiv.style.visibility = "hidden";
+
+            vieworderlnk = document.createElement('a');
+            vieworderlnk.innerHTML = "View Order";
+            vieworderlnk.href = "javascript:void(0);";
+
+            vieworderlnk.onclick = function() {
+                viewOrder(listelement.value);
+            }
+
+            addfuncdiv.appendChild(vieworderlnk);
+
+            if (cancelorder) {
+                cancelorderlnk = document.createElement('a');
+                cancelorderlnk.innerHTML = "Cancel Order";
+                cancelorderlnk.href = "javascript:void(0);";
+
+                cancelorderlnk.onclick = function() {
+                    confirmOrderCancel(listelement.value);
+                }
+
+                addfuncdiv.appendChild(cancelorderlnk);
+            }
+
+            listelement.appendChild(addfuncdiv);
+        }
+
+        //
+        // various view routines to display a single list element in an alert box
+        //
+
+        function viewOrder(orderid) {
+            var msg = "";
+            var order;
+            var fieldcontents;
+            var fielddesc;
+
+            order = orders[orderid];
+
+            for (var field in order) {
+                fieldcontents = order[field];
+
+                switch (field) {
+                    case 'side':
+                        fielddesc = getSideDesc(fieldcontents);
+                        break;
+                    case 'status':
+                        fielddesc = getOrderStatusDesc(fieldcontents);
+                        break;
+                    case 'ordertype':
+                        fielddesc = getOrdertypeDesc(fieldcontents);                        
+                        break;
+                    case 'futsettdate':
+                        fielddesc = formatUTCDate(fieldcontents);
+                        break;
+                    case 'timestamp':
+                        fielddesc = formatUTCDateTime(fieldcontents);
+                        break;
+                    case 'reason':
+                        fielddesc = getReasonDesc(fieldcontents);
+                        break;
+                    default:
+                        fielddesc = fieldcontents;
+                }
+
+                msg += field + ": " + fielddesc + "\n";
+            }
+
+            alert(msg);
+        }
+
+        function viewQuoteRequest(quotereqid) {
+            var msg = "";
+            var quoterequest;
+
+            quoterequest = quoterequests[quotereqid];
+
+            for (var field in quoterequest) {
+                msg += field + ": " + quoterequest[field] + "\n";
+            }
+
+            alert(msg);
+        }
+
+        function viewQuote(quoteid) {
+            var msg = "";
+            var quote;
+            var fieldcontents;
+            var fielddesc;
+
+            quote = quotes[quoteid];
+
+            for (var field in quote) {
+                fieldcontents = quote[field];
+
+                switch (field) {
+                    case 'futsettdate':
+                        fielddesc = formatUTCDate(fieldcontents);
+                        break;
+                    case 'timestamp':
+                        fielddesc = formatUTCDateTime(fieldcontents);
+                        break;
+                    default:
+                        fielddesc = fieldcontents;
+                }
+
+                msg += field + ": " + fielddesc + "\n";
+            }
+
+            alert(msg);
+        }
+
+        function viewTrade(tradeid) {
+            var msg = "";
+            var trade;
+            var fieldcontents;
+            var fielddesc;
+
+            trade = trades[tradeid];
+
+            for (var field in trade) {
+                fieldcontents = trade[field];
+
+                switch (field) {
+                    case 'futsettdate':
+                        fielddesc = formatUTCDate(fieldcontents);
+                        break;
+                    case 'timestamp':
+                        fielddesc = formatUTCDateTime(fieldcontents);
+                        break;
+                    default:
+                        fielddesc = fieldcontents;
+                }
+
+                msg += field + ": " + fielddesc + "\n";
+            }
+
+            alert(msg);
+        }
+
+        function viewPosition(positionid) {
+            var msg = "";
+            var position;
+            var fieldcontents;
+            var fielddesc;
+
+            position = positions[positionid];
+
+            for (var field in position) {
+                fieldcontents = position[field];
+
+                switch (field) {
+                    case 'settldate':
+                        fielddesc = formatUTCDate(fieldcontents);
+                        break;
+                    default:
+                        fielddesc = fieldcontents;
+                }
+
+                msg += field + ": " + fielddesc + "\n";
+           }
+
+            alert(msg);
+        }
+
+        function requestPositions(event) {
+            var inpclientid;
+
+            var frmpositions = getForm("frmpositions");
+
+            selectClient("frmpositions", null, null, true, "", "inpclientid", "");
+
+            var btnrequest = newbutton("btnrequest", "Request Positions", "formbuttonwide", frmpositions);
+
+            inpclientid = document.createElement("input");
+            inpclientid.type = "hidden";
+            inpclientid.id = "inpclientid";
+            inpclientid.value = "";
+
+            frmpositions.appendChild(inpclientid);
+
+            main.appendChild(frmpositions);
+
+            btnrequest.onclick = function() {
+                var positionrequest = {};
+
+                if (inpclientid.value == "") {
+                    alert("Please select a client");
+                    selectClientFocus("clientboxinput");
+                    return;
+                }
+
+                positionrequest.clientid = inpclientid.value;
+
+                sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
+            }
+        }
+
+        function updateElement(msg, list, index) {
+            var listelement = null;
+
+            for (var i = 0; i < list.childNodes.length; ++i) {
+                if (list.childNodes[i].value == index) {
+                    listelement = list.childNodes[i];
+                    listelement.innerHTML = msg;
+                    break;
+                }
+            }
+
+            return listelement;
+        }
+
+        function addHeading(text, list) {
+            var newtext = document.createTextNode(text);
+            main.insertBefore(newtext, list);
+        }
+
+        function removeHeading(text) {
+            for (var i = 0; i < main.childNodes.length; ++i) {
+                if (main.childNodes[i].nodeType == 3 && main.childNodes[i].nodeValue == text) {
+                    main.removeChild(main.childNodes[i]);
+                    break;
+                }
+            }
+        }
+
+        function removeElementFromList(index, list) {
+            for (var i = 0; i < list.childNodes.length; ++i) {
+                if (list.childNodes[i].value == index) {
+                    list.removeChild(list.childNodes[i]);
+                    break;
+                }
+            }
+        }
+
+        //
+        // various message routines to display formatted messages
+        //
+
+        function quoteRequestMsg(quoterequest) {
+            var msg;
+
+            if (quoterequest.quantity != "") {
+                msg = quoterequest.quantity;
+            } else {
+                msg = quoterequest.cashorderqty + " (value)";                
+            }
+
+            msg += " " + quoterequest.symbol + " requested in " + quoterequest.settlcurrency + ", T+" + quoterequest.nosettdays + " at " + quoterequest.timestamp;
+
+            return msg;
+        }
+
+        function quoteMsg(quote) {
+            var msg;
+
+            msg = quote.symbol + " in " + quote.settlcurrency + ", T+" + quote.nosettdays + ", quoted " + quote.bidpx + " to Sell, " + quote.offerpx + " to Buy, at " + formatUTCDateTime(quote.transacttime) + ", quote id " + quote.quoteid;
+
+            if ('orderid' in quote) {
+                msg += ", order id " + quote.orderid;
+            } else {
+                msg += ", no order placed";
+            }
+
+            return msg;
+        }
+
+        function orderNewMsg(order) {
+            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbol;
+
+            if ('price' in order) {
+                msg += " @ " + order.price;
+            }
+            msg += " " + getOrdertypeDesc(order.ordertype) + ", order id " + order.orderid + ", placed at " + formatUTCDateTime(order.timestamp);
+
+            return msg;
+        }
+
+        function orderFillMsg(order) {
+            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbol;
+
+            if ('price' in order) {
+                msg += " @ " + order.price;
+            }
+            msg += " " + getOrdertypeDesc(order.ordertype);
+            if (order.remquantity > 0) {
+                msg += ", " + order.remquantity  + " remaining";
+            }
+            msg += ", order id " + order.orderid + ", at " + formatUTCDateTime(order.timestamp);
+
+            return msg;
+        }
+
+        function orderRejectMsg(order) {
+            var msg = getSideDesc(order.side) + " " + order.remquantity + " " + order.symbol;
+
+            if ('price' in order) {
+                msg += " @ " + order.price;
+            }
+
+            msg +=  " " + getOrdertypeDesc(order.ordertype) + ", rejected, reason: " + getReasonDesc(order.reason);
+
+            if (order.text != "") {
+                msg += " " + order.text;
+            }
+
+            msg += ", order id " + order.orderid + ", at " + formatUTCDateTime(order.timestamp);
+
+            return msg;
+        }
+
+        function orderCancelMsg(order) {
+            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbol + ", " + order.remquantity + " remaining";
+
+            if ('price' in order) {
+                msg += " @ " + order.price;
+            }
+
+            msg += " " + getOrdertypeDesc(order.ordertype) + ", cancelled, order id " + order.orderid + ", at " + formatUTCDateTime(order.timestamp);
+
+            return msg;
+        }
+
+        function tradeMsg(trade) {
+            var msg;
+
+            msg = getSideDescTrade(trade.side) + " " + trade.quantity + " " + trade.symbol + ", T+" + trade.nosettdays;
+
+            msg += " @ " + trade.price;
+
+            if (trade.settlcurrency != "GBP" || trade.settlcurrency != trade.currency) {
+                msg += " (" + trade.settlcurrency + ")"
+            }
+
+            msg += ", trade id: " + trade.tradeid + ", order id: " + trade.orderid + ", executed " + formatUTCDateTime(trade.timestamp);
+
+            return msg;
+        }
+
+        function cashMsg(cash) {
+            return parseFloat(cash.amount).toFixed(2) + " " + cash.currency;
+        }
+
+        function marginMsg(margin) {
+            return parseFloat(margin.amount).toFixed(2) + " " + margin.currency;            
+        }
+
+        function getSideDescTrade(side) {
+            if (side == "1") {
+                return "Bought ";
+            } else {
+                return "Sold ";
+            }
+        }
+
+        function positionMsg(position) {
+            var msg;
+
+            if (position.longshort == "1") {
+                msg = "Long ";
+            } else {
+                msg = "Short ";
+            }
+            msg += position.quantity + " " + position.symbol + " in " + position.currency + ", cost " + parseFloat(position.cost).toFixed(2) + ", for settlement " + formatUTCDate(position.settldate);
+
+            return msg;
+        }
+
+        function reserveMsg(reserve) {
+            return reserve.quantity + " " + reserve.symbol + " " + reserve.currency;
+        }
+
+        function orderCancelReject(ordercancelreject) {
+            alert("Request to cancel order #" + ordercancelreject.orderid + " rejected, reason: " + ordercancelreject.reasondesc);
+        }
+
 
         function removeOrderBook(symbol) {
             var stockboxinput;
@@ -3069,13 +3069,6 @@
             }
 
             return div;
-        }
-
-        function clearElementById(element) {
-            var elem = document.getElementById(element);
-            if (elem != null) {
-                elem.parentNode.removeChild(elem);
-            }
         }
 
         function sendRequestQuote(clientid, symbol, quantity, cashorderqty, currency, settlcurrency, nosettdays, orderdivstr) {
@@ -3730,6 +3723,9 @@
             }
         }
 
+        //
+        // sign-in form
+        //
         function displayFormSignin() {
             var frm;
             var emaillabel;
@@ -3814,6 +3810,10 @@
             email.focus();
         }
 
+        //
+        // reply from sign-in
+        // if successful, data will start arriving
+        //
         function replySignIn(reply) {
             var frm;
             var lblreason;
@@ -3842,6 +3842,9 @@
             }
         }
 
+        //
+        // main menu
+        //
         function displayMenu() {
             var menu;
             var menuarr;
@@ -4822,6 +4825,10 @@
             inpname.focus();
         }
 
+        //
+        // various routines to create presentation elements
+        //
+
         function addNewLine(frm) {
             var newline = document.createElement("label");
             newline.innerHTML = "<br>";
@@ -4909,6 +4916,10 @@
             form.appendChild(link);
             return link;
         }
+
+        //
+        // various populate routines to populate selection boxes
+        //
 
         function populateBrokers(brokerselect, defaultid) {
             var i = 0;
@@ -5039,8 +5050,6 @@
             var lnkquotes = newlink("lnkquotes", "Quotes", "", frmhistory);
             var lnkorders = newlink("lnkorders", "Orders", "", frmhistory);
             var lnktrades = newlink("lnktrades", "Trades", "", frmhistory);
-
-            console.log("just testing");
 
             lnkquoterequests.onclick = function() {
                 if (!validateClientid()) {return;}
@@ -5181,6 +5190,59 @@
             }
 
             return today;
+        }
+
+        function getOrderStatusDesc(status) {
+            var desc;
+
+            switch (status) {
+            case '0':
+                desc = "New";
+                break;
+            case '1':
+                desc = "Partially filled";
+                break;
+            case '2':
+                desc = "Filled";
+                break;
+            case '3':
+                desc = "Done for day";
+                break;
+            case '4':
+                desc = "Cancelled";
+                break;
+            case '5':
+                desc = "Replaced";
+                break;
+            case '6':
+                desc = "Pending Cancel"; // (e.g. result of Order Cancel Request <F>) 7 = Stopped
+                break;
+            case '8':
+                desc = "Rejected";
+                break;
+            case '9':
+                desc = "Suspended";
+                break;
+            case 'A':
+                desc = "Pending New";
+                break;
+            case 'B':
+                desc = "Calculated";
+                break;
+            case 'C':
+                desc = "Expired";
+                break;
+            case 'D':
+                desc = "Accepted for bidding";
+                break;
+            case 'E':
+                desc = "Pending Replace";
+                break;
+            default:
+                desc = "Unknown status";
+            }
+
+            return desc;
         }
 
         function getMonthDays(year, month) {
