@@ -29,8 +29,9 @@ var outofhours = false; // in or out of market hours - todo: replace with market
 var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;
-var tradeserverchannel = 3;
 var clientserverchannel = 1;
+var userserverchannel = 2;
+var tradeserverchannel = 3;
 var servertype = "client";
 
 // redis
@@ -172,6 +173,8 @@ function listen() {
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 12) == "quoterequest") {
         db.publish(tradeserverchannel, msg);
+      } else if (msg.substr(2, 4) == "chat") {
+        db.publish(userserverchannel, msg);
       } else {
         try {
           var obj = JSON.parse(msg);
@@ -1855,8 +1858,25 @@ function sendQuote(quoteid) {
   });
 }
 
+//
+// this is chat received from a user that needs to be forwarded to a client
+//
 function newChat(chat) {
-  consol.log(chat);
+  console.log(chat);
+
+  // we need to parse the message to find out which client to forward it to
+  try {
+    var chatobj = JSON.parse(chat);
+    console.log(chatobj);
+
+    if ('chat' in chatobj && chatobj.chat.clientid in connections) {
+      console.log('sending');
+        connections[chatobj.chat.clientid].write(chat);
+    }
+  } catch (e) {
+    console.log(e);
+    return;
+  }
 }
 
 /*

@@ -53,6 +53,16 @@
         a:hover {
             text-decoration: underline;
         }
+        div, textarea {
+            display: inline-block;
+            border: 1px solid #aacfe4;
+            font-size: 18px;
+            width: 450px;
+            height: 120px;
+            /*padding: 4px 2px;*/
+            margin: 2px 0 10px 10px;
+            vertical-align: top;
+        }
         .depthstrip {
             width: 740px;
             white-space: nowrap;
@@ -569,90 +579,70 @@
         var clientid;
 
         var datain = function(msg) {
-            var obj = {};
-            // todo: remove
-            //console.log("."+msg);
+            try {
+                var obj = JSON.parse(msg);
 
-            if (msg.substr(2, 10) == "orderbooks") {
-                obj = JSON.parse(msg);
-                loadOrderBooks(obj.orderbooks);
-            } else if (msg.substr(2, 9) == "orderbook") {
-                obj = JSON.parse(msg);
-                updateOrderBook(obj.orderbook);
-            } else if (msg.substr(2, 6) == "orders") {
-                obj = JSON.parse(msg);
-                loadOrders(obj.orders);
-            } else if (msg.substr(2, 17) == "ordercancelreject") {
-                obj = JSON.parse(msg);
-                orderCancelReject(obj.ordercancelreject);
-            } else if (msg.substr(2, 10) == "ordertypes") {
-                obj = JSON.parse(msg);
-                loadOrderTypes(obj.ordertypes);
-            } else if (msg.substr(2, 5) == "order") {
-                obj = JSON.parse(msg);
-                updateOrder(obj.order);
-            } else if (msg.substr(2, 6) == "trades") {
-                obj = JSON.parse(msg);   
-                loadTrades(obj.trades);             
-            } else if (msg.substr(2, 5) == "trade") {
-                obj = JSON.parse(msg);
-                updateTrade(obj.trade);
-            } else if (msg.substr(2, 6) == "quotes") {
-                obj = JSON.parse(msg);
-                loadQuotes(obj.quotes);
-            } else if (msg.substr(2, 8) == "quoteack") {
-                obj = JSON.parse(msg);
-                quoteAck(obj.quoteack);
-            } else if (msg.substr(2, 5) == "quote") {
-                obj = JSON.parse(msg);
-                quoteReceived(obj.quote);
-            } else if (msg.substr(2, 9) == "positions") {
-                obj = JSON.parse(msg);
-                loadPositions(obj.positions);
-            } else if (msg.substr(2, 8) == "position") {
-                obj = JSON.parse(msg);
-                updatePosition(obj.position);            
-            } else if (msg.substr(2, 8) == "positionhistory") {
-                obj = JSON.parse(msg);
-                positionHistory(obj.positionhistory);            
-            } else if (msg.substr(2, 8) == "cashitem") {
-                obj = JSON.parse(msg);
-                updateCash(obj.cashitem);
-            } else if (msg.substr(2, 4) == "cash") {
-                obj = JSON.parse(msg);
-                loadCash(obj.cash);
-            } else if (msg.substr(2, 11) == "instruments") {
-                obj = JSON.parse(msg);
-                loadInstruments(obj.instruments);
-            } else if (msg.substr(2, 10) == "instrument") {
-                obj = JSON.parse(msg);
-                loadInstrument(obj.instrument);
-            } else if (msg.substr(2, 7) == "margins") {
-                obj = JSON.parse(msg);
-                loadMargins(obj.margins);
-            } else if (msg.substr(2, 6) == "margin") {
-                obj = JSON.parse(msg);
-                updateMargin(obj.margin);
-            } else if (msg.substr(2, 8) == "reserves") {
-                obj = JSON.parse(msg);
-                loadReserves(obj.reserves);
-            } else if (msg.substr(2, 7) == "reserve") {
-                obj = JSON.parse(msg);
-                updateReserve(obj.reserve);
-            } else if (msg.substr(2, 11) == "signinreply") {
-                obj = JSON.parse(msg);
-                replySignIn(obj.signinreply);
-            } else if (msg.substr(2, 5) == "index") {
-                obj = JSON.parse(msg);
-                loadIndex(obj.index);
-            } else if (msg.substr(2,6) == "status") {
-                obj = JSON.parse(msg);
-                statusMsg(obj.status);
-            } else if (msg.substr(0, 4) == "pong") {
-                console.log("received pong");
-                inconnectiontest = false;
-            } else {
-                console.log("Unknown message:" + msg);
+                if ("orderbooks" in obj) {
+                    loadOrderBooks(obj.orderbooks);
+                } else if ("orderbook" in obj) {
+                    updateOrderBook(obj.orderbook);
+                } else if ("orders" in obj) {
+                    loadOrders(obj.orders);
+                } else if ("ordercancelreject" in obj) {
+                    orderCancelReject(obj.ordercancelreject);
+                } else if ("ordertypes" in obj) {
+                    loadOrderTypes(obj.ordertypes);
+                } else if ("order" in obj) {
+                    updateOrder(obj.order);
+                } else if ("trades" in obj) {
+                    loadTrades(obj.trades);             
+                } else if ("trade" in obj) {
+                    updateTrade(obj.trade);
+                } else if ("quotes" in obj) {
+                    loadQuotes(obj.quotes);
+                } else if ("quoteack" in obj) {
+                    quoteAck(obj.quoteack);
+                } else if ("quote" in obj) {
+                    quoteReceived(obj.quote);
+                } else if ("positions" in obj) {
+                    loadPositions(obj.positions);
+                } else if ("position" in obj) {
+                    updatePosition(obj.position);            
+                } else if ("positionhistory" in obj) {
+                    positionHistory(obj.positionhistory);            
+                } else if ("cashitem" in obj) {
+                    updateCash(obj.cashitem);
+                } else if ("cash" in obj) {
+                    loadCash(obj.cash);
+                } else if ("instruments" in obj) {
+                    loadInstruments(obj.instruments);
+                } else if ("instrument" in obj) {
+                    loadInstrument(obj.instrument);
+                } else if ("margins" in obj) {
+                    loadMargins(obj.margins);
+                } else if ("margin" in obj) {
+                    updateMargin(obj.margin);
+                } else if ("reserves" in obj) {
+                    loadReserves(obj.reserves);
+                } else if ("reserve" in obj) {
+                    updateReserve(obj.reserve);
+                } else if ("signinreply" in obj) {
+                    replySignIn(obj.signinreply);
+                } else if ("index" in obj) {
+                    loadIndex(obj.index);
+                } else if ("status" in obj) {
+                    statusMsg(obj.status);
+                } else if ("chat" in obj) {
+                    newChat(obj.chat);
+                } else if ("pong" in obj) {
+                    console.log("received pong");
+                    inconnectiontest = false;
+                } else {
+                    console.log("Unknown message:" + msg);
+                }
+            } catch (e) {
+                console.log(e);
+                return;
             }
         };
 
@@ -680,6 +670,8 @@
 
         function loadPositions(positionarr) {
             var poskey;
+            // todo: remove
+            return;
 
             for (var i = 0; i < positionarr.length; ++i) {
                 poskey = positionarr[i].positionid;
@@ -2068,6 +2060,92 @@
             }
         }
 
+        function newbutton(id, value, classname, form) {
+            var button = document.createElement("input");
+            button.type = "button";
+            button.id = id;
+            button.value = value;
+            if (classname != "") {
+                button.className = classname;
+            }
+            form.appendChild(button);   
+            return button;
+        }
+
+        function displayChat() {
+            var chattext;
+            var chatbtn;
+            var chattextlen;
+            var chatid;
+
+            var chatdiv = getDiv("chatdiv", null);
+
+            chattext = document.createElement("textarea");
+            chattext.id = "chattext";
+
+            chatdiv.appendChild(chattext);
+
+            chatbtn = newbutton("chatbtn", "Send", "", chatdiv);
+
+            chatbtn.onclick = function() {
+                var newchat = {};
+
+                newchat.chatid = chatid.value;
+                newchat.clientid = clientid;
+                newchat.text = chattext.value.substr(chattextlen.value);
+
+                sockjs.send("{\"chat\":" + JSON.stringify(newchat) + "}");
+
+                chattext.focus();
+            }
+
+            chattextlen = document.createElement("input");
+            chattextlen.type = "hidden";
+            chattextlen.id = "chattextlen";
+
+            chatid = document.createElement("input");
+            chatid.type = "hidden";
+            chatid.id = "chatid";
+
+            chatdiv.appendChild(chattextlen);
+            chatdiv.appendChild(chatid);
+
+            main.appendChild(chatdiv);
+
+            chattext.focus();
+            chattext.value = ">>";
+            chattextlen.value = 2;
+        }
+
+        function newChat(chat) {
+            var chattext;
+            var chattextlen;
+            var chatid;
+
+            console.log('newchat');
+
+            console.log(chat);
+
+            chattext = document.getElementById("chattext");
+            if (chattext != null) {
+                chattext.focus();
+
+                chattext.value += "\n" + chat.text + "\n" + ">>";
+
+                chattextlen = document.getElementById("chattextlen");
+                if (chattextlen != null) {
+                    chattextlen.value = chattext.value.length;
+                }
+
+                //chattext.focus();
+            }
+
+            chatid = document.getElementById("chatid");
+            if (chatid != null) {
+                chatid.value = chat.chatid;
+            }
+        }
+
         function displayOrderBook(symbol) {
             var strip;
             var display = {};
@@ -2461,7 +2539,7 @@
 
             populateSettlPeriod(settlperiod, instruments[symbol].instrumenttype);
 
-            orderdiv = createDiv("orderdiv:" + symbol, symbol);
+            orderdiv = getDiv("orderdiv:" + symbol, symbol);
 
             orderdiv.appendChild(quotereqbutton);
             orderdiv.appendChild(quantitycashsel);
@@ -2537,7 +2615,7 @@
             return (formatUTCDate(utcdatetime) + utcdatetime.substr(8));
         }
 
-        function createDiv(divid, symbol) {
+        function getDiv(divid, symbol) {
             var div = document.getElementById(divid);
 
             if (div == null) {
@@ -2552,7 +2630,7 @@
         function displayElement(element, symbol) {
             var nextsymbol;
 
-            if (obdisplay[symbol].insertbefore == null) {
+            if (symbol == null || obdisplay[symbol].insertbefore == null) {
                 main.appendChild(element);
             } else {
                 nextsymbol = document.getElementById("strip:" + obdisplay[symbol].insertbefore + ":0");
@@ -2640,7 +2718,7 @@
 
             div = document.getElementById(divid);
             if (div == null) {
-                div = createDiv(divid, symbol);
+                div = getDiv(divid, symbol);
             }
 
             msglabel = document.createElement("label");
@@ -2743,7 +2821,7 @@
             }, 1000);
             // todo: clear if form is closed
 
-            orderdiv = createDiv("orderdiv:" + quote.symbol, quote.symbol);
+            orderdiv = getDiv("orderdiv:" + quote.symbol, quote.symbol);
 
             orderdiv.appendChild(sellbutton);
             orderdiv.appendChild(timerlabel);
@@ -2958,7 +3036,7 @@
 
             populateSettlPeriod(settlperiod, 3);
 
-            orderdiv = createDiv("orderdiv:" + symbol, symbol);
+            orderdiv = getDiv("orderdiv:" + symbol, symbol);
 
             orderdiv.appendChild(btn);
             orderdiv.appendChild(quantityinput);
@@ -3338,7 +3416,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Watch List", "Quotes", "Orders", "Fills", "Positions", "Cash/Margin", "History", "Settings"];
+            menuarr = ["Watch List", "Quotes", "Orders", "Fills", "Positions", "Cash/Margin", "History", "Settings", "Chat"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -3394,6 +3472,9 @@
                     break;
                 case 7:
                     settings();
+                    break;
+                case 8:
+                    displayChat();
                     break;
                 }
             }

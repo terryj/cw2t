@@ -755,6 +755,8 @@
                     clearConnections();
                     loadConnections(obj.connections);
                     displayConnections();
+                } else if ("chat" in obj) {
+                    newChat(obj.chat);
                 } else if ("status" in obj) {
                     statusMsg(obj.status);
                 } else if ("pong" in obj) {
@@ -2367,25 +2369,71 @@
         }
 
         //
-        // start/end a chat conversation
+        // start a chat conversation
         //
         function chatConnection(elem) {
-            var chatout = document.createElement("textarea");
-            var chatdiv = document.createElement("div");
+            var chatid;
+            var chattext;
+            var chattextlen;
 
-            chatdiv.appendChild(chatout);
+            var chatdiv = getDiv("chatdiv:" + elem.value);
+
+            chattext = document.getElementById("chattext:" + elem.value);
+            if (chattext != null) {
+                return;
+            }
+
+            chattext = document.createElement("textarea");
+            chattext.id = "chattext:" + elem.value;
+
+            chatdiv.appendChild(chattext);
 
             var btnchat = newbutton("btnchat", "Send", "formbutton", chatdiv);
+
+            chatid = document.createElement("input");
+            chatid.type = "hidden";
+            chatid.value = "0";
+
+            chattextlen = document.createElement("input");
+            chattextlen.type = "hidden";
+            chattextlen.id = "chattextlen:" + elem.value;
+
+            chatdiv.appendChild(chatid);
+            chatdiv.appendChild(chattextlen);
 
             elem.appendChild(chatdiv);
 
             btnchat.onclick = function() {
                 var chat = {};
 
+                chat.chatid = chatid.value;
                 chat.clientid = elem.value;
-                chat.text = chatout.value;
+                chat.text = chattext.value.substr(chattextlen.value);
 
                 sockjs.send("{\"chat\":" + JSON.stringify(chat) + "}");
+            }
+
+            chattext.focus();
+            chattext.value = ">>";
+            chattextlen.value = 2;
+        }
+
+        function newChat(chat) {
+            var chattext;
+            var chattextlen;
+
+            console.log(chat);
+
+            chattext = document.getElementById("chattext:" + chat.clientid);
+            if (chattext != null) {
+                chattext.focus();
+
+                chattext.value += "\n" + chat.text + "\n" + ">>";
+
+                chattextlen = document.getElementById("chattextlen:" + chat.clientid);
+                if (chattextlen != null) {
+                    chattextlen.value = chattext.value.length;
+                }
             }
         }
 
@@ -3929,7 +3977,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Request Quote", "Connections"];
+            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Request Quote", "Chat"];
 
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");

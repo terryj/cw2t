@@ -135,6 +135,8 @@ function pubsub() {
       getSendOrder(message.substr(6));
     } else if (message.substr(0, 5) == "trade") {
       getSendTrade(message.substr(6));
+    } else if (message.substr(2, 4) == "chat") {
+      newChatClient(message);
     } else {
       newPrice(channel, message);
     }
@@ -223,8 +225,7 @@ function listen() {
           } else if ("connectionrequest" in obj) {
             sendConnections(obj.connectionrequest, conn);
           } else if ("chat" in obj) {
-            newChat(obj.chat, conn);
-            db.publish(clientserverchannel, msg);
+            newChat(obj.chat, userid);
           } else if ("ping" in obj) {
             conn.write("pong");
           } else {
@@ -1641,14 +1642,52 @@ function sendConnections(connectionreq, conn) {
   });      
 }
 
-function newChat(chat, conn) {
+//
+// chat from a user
+//
+function newChat(chat, userid) {
   console.log(chat);
 
   chat.timestamp = getUTCTimeStamp();
 
-  db.eval(scriptnewchat, 3, chat.clientid, chat.text, chat.timestamp, function(err, ret) {
+  db.eval(scriptnewchat, 5, chat.clientid, chat.text, chat.timestamp, chat.chatid, userid, function(err, ret) {
     if (err) throw err;
+
+    // add chat id, so we can identify any chat coming back
+    chat.chatid = ret[0];
+
+    // send it to the client server to forward to client
+    db.publish(clientserverchannel, "{\"chat\":" + JSON.stringify(chat) + "}");
   });      
+}
+
+//
+// chat from a client
+//
+function newChatClient(msg) {
+  var userid = "0";
+
+  console.log(msg);
+
+  try {    
+    var obj = JSON.parse(msg);
+    console.log(obj);
+
+    obj.chat.timestamp = getUTCTimeStamp();
+
+    db.eval(scriptnewchat, 5, obj.chat.clientid, obj.chat.text, obj.chat.timestamp, obj.chat.chatid, userid, function(err, ret) {
+      if (err) throw err;
+
+      userid = ret[1];
+
+      if (userid in connections) {
+        connections[userid].write(msg);
+      }
+    });
+  } catch (e) {
+    console.log(e);
+    return;
+  }
 }
 
 //
@@ -2052,10 +2091,24 @@ function registerScripts() {
   ';
 
   scriptnewchat = '\
-  local chatid = redis.call("incr", "chatid") \
-  --[[ store the chat ]] \
-  redis.call("hmset", "chat:" .. chatid, "chatid", chatid, "clientid", KEYS[1], "text", KEYS[2], "timestamp", KEYS[3]) \
-  --[[ add to set of chat for this client ]] \
-  redis.call("sadd", KEYS[1] .. ":chat", chatid) \
+  local chatid \
+  local userid \
+  if redis.call("sismember", KEYS[1] .. ":chat", KEYS[4]) == 1 then \
+    chatid = KEYS[4] \
+    --[[ add to the chat ]] \
+    local key = "chat:" .. chatid \
+    local chattext = redis.call("hget", key, "text") \
+    chattext = chattext .. KEYS[2] \
+    redis.call("hset", key, "text", chattext) \
+    userid = redis.call("hget", key, "userid") \
+  else \
+    chatid = redis.call("incr", "chatid") \
+    --[[ store the chat ]] \
+    redis.call("hmset", "chat:" .. chatid, "chatid", chatid, "clientid", KEYS[1], "text", KEYS[2], "timestamp", KEYS[3], "userid", KEYS[5]) \
+    --[[ add to set of chat for this client ]] \
+    redis.call("sadd", KEYS[1] .. ":chat", chatid) \
+    userid = KEYS[5] \
+  end \
+  return {chatid, userid} \
   ';
 }
