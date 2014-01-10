@@ -77,6 +77,7 @@ var scriptgettrades;
 var scriptgetpositions;
 var scriptgetconnections;
 var scriptnewchat;
+var scriptgetchat;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -222,6 +223,8 @@ function listen() {
             tradeHistory(obj.tradehistoryrequest, conn);
           } else if ("quotehistoryrequest" in obj) {
             quoteHistory(obj.quotehistoryrequest, conn);
+          } else if ("chathistoryrequest" in obj) {
+            chatHistory(obj.chathistoryrequest, conn);
           } else if ("connectionrequest" in obj) {
             sendConnections(obj.connectionrequest, conn);
           } else if ("chat" in obj) {
@@ -1014,6 +1017,13 @@ function tradeHistory(req, conn) {
   });
 }
 
+function chatHistory(req, conn) {
+  db.eval(scriptgetchat, 1, req.clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"chathistory\":" + ret + "}");
+  });  
+}
+
 function sendPosition(position, conn) {
   conn.write("{\"position\":" + JSON.stringify(position) + "}");
 }
@@ -1646,8 +1656,6 @@ function sendConnections(connectionreq, conn) {
 // chat from a user
 //
 function newChat(chat, userid) {
-  console.log(chat);
-
   chat.timestamp = getUTCTimeStamp();
 
   db.eval(scriptnewchat, 5, chat.clientid, chat.text, chat.timestamp, chat.chatid, userid, function(err, ret) {
@@ -1667,12 +1675,8 @@ function newChat(chat, userid) {
 function newChatClient(msg) {
   var userid = "0";
 
-  console.log(msg);
-
   try {    
     var obj = JSON.parse(msg);
-    console.log(obj);
-
     obj.chat.timestamp = getUTCTimeStamp();
 
     db.eval(scriptnewchat, 5, obj.chat.clientid, obj.chat.text, obj.chat.timestamp, obj.chat.chatid, userid, function(err, ret) {
@@ -1695,7 +1699,6 @@ function newChatClient(msg) {
 //
 function getPTPQuoteRejectReason(reason) {
   var desc;
-  console.log(reason);
 
   switch (parseInt(reason)) {
   case 1:
@@ -2098,7 +2101,7 @@ function registerScripts() {
     --[[ add to the chat ]] \
     local key = "chat:" .. chatid \
     local chattext = redis.call("hget", key, "text") \
-    chattext = chattext .. KEYS[2] \
+    chattext = chattext .. string.char(10) .. KEYS[2] \
     redis.call("hset", key, "text", chattext) \
     userid = redis.call("hget", key, "userid") \
   else \
@@ -2110,5 +2113,17 @@ function registerScripts() {
     userid = KEYS[5] \
   end \
   return {chatid, userid} \
+  ';
+
+  scriptgetchat = '\
+  local tblresults = {} \
+  local chathistory = redis.call("smembers", KEYS[1] .. ":chat") \
+  local fields = {"clientid","chatid","text","timestamp"} \
+  local vals \
+  for index = 1, #chathistory do \
+    vals = redis.call("hmget", "chat:" .. chathistory[index], unpack(fields)) \
+    table.insert(tblresults, {clientid=vals[1],chatid=vals[2],text=vals[3],timestamp=vals[4]}) \
+  end \
+  return cjson.encode(tblresults) \
   ';
 }

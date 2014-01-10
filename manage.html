@@ -573,7 +573,6 @@
         .forminput {
             display: inline-block;
             font-size: 18px;
-            /*padding: 4px 2px;*/
             border: solid 1px #aacfe4;
             width: 450px;
             margin: 2px 0 15px 10px;
@@ -581,23 +580,27 @@
         div, textarea {
             display: inline-block;
             border: 1px solid #aacfe4;
-            font-size: 18px;
+            font-size: 15px;
             width: 450px;
             height: 120px;
-            /*padding: 4px 2px;*/
-            margin: 2px 0 10px 10px;
+            margin: 2px 2px 10px 10px;
             vertical-align: top;
         }
         .formselect {
             display: inline-block;
             font-size: 18px;            
-            /*padding: 4px 2px;*/
             margin: 2px 0 15px 10px;
         }
         .formcheckbox {
             display: inline-block;
             font-size: 15px;
             margin: 2px 4px 15px 10px;           
+        }
+        .chatbtn {
+            font-size: 21px;
+            background-color: #ddd;
+            color: #666666;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -653,6 +656,7 @@
         var defaultHedgebook = "999999";
         var quoterequests = {};
         var connections = {};
+        var chathistory = {};
 
         //
         // incoming data function
@@ -757,6 +761,10 @@
                     displayConnections();
                 } else if ("chat" in obj) {
                     newChat(obj.chat);
+                } else if ("chathistory" in obj) {
+                    clearChatHistory();
+                    loadChatHistory(obj.chathistory);
+                    displayChatHistory();
                 } else if ("status" in obj) {
                     statusMsg(obj.status);
                 } else if ("pong" in obj) {
@@ -830,6 +838,12 @@
             for (var i = 0; i < tradearr.length; ++i) {
                 trades[tradearr[i].tradeid] = tradearr[i];
             }                                    
+        }
+
+        function loadChatHistory(chathistarr) {
+            for (var i = 0; i < chathistarr.length; ++i) {
+                chathistory[chathistarr[i].chatid] = chathistarr[i];
+            }                                                
         }
 
         function loadInstruments(instrumentarr) {
@@ -948,6 +962,10 @@
 
         function clearConnections() {
             connections = [];
+        }
+
+        function clearChatHistory() {
+            chathistory = [];
         }
 
         //
@@ -1999,6 +2017,37 @@
             }
         }
 
+        function displayChatHistory() {
+            var firstchat = true;
+            var msg;
+            var list;
+
+            clearLists();
+            clearHeadings();
+            clearEmptyLines();
+
+            list = getList("list1");
+
+            for (var x in chathistory) {
+                msg = chatMsg(chathistory[x]);
+                addElement(msg, list, chathistory[x].chatid);
+                firstchat = false;
+            }
+
+            if (firstchat) {
+                addElement("No chat", list, 0);                
+            } else {
+                list.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    alert(chathistory[element.value].text)
+                }
+            }
+        }
+
         function displayQuoteRequests() {
             var firstquoterequest = true;
             var msg;
@@ -2388,10 +2437,11 @@
 
             chatdiv.appendChild(chattext);
 
-            var btnchat = newbutton("btnchat", "Send", "formbutton", chatdiv);
+            var chatbtn = newbutton("btnchat", "Send", "chatbtn", chatdiv);
 
             chatid = document.createElement("input");
             chatid.type = "hidden";
+            chatid.id = "chatid:" + elem.value;
             chatid.value = "0";
 
             chattextlen = document.createElement("input");
@@ -2403,7 +2453,7 @@
 
             elem.appendChild(chatdiv);
 
-            btnchat.onclick = function() {
+            chatbtn.onclick = function() {
                 var chat = {};
 
                 chat.chatid = chatid.value;
@@ -2421,8 +2471,7 @@
         function newChat(chat) {
             var chattext;
             var chattextlen;
-
-            console.log(chat);
+            var chatid;
 
             chattext = document.getElementById("chattext:" + chat.clientid);
             if (chattext != null) {
@@ -2434,6 +2483,11 @@
                 if (chattextlen != null) {
                     chattextlen.value = chattext.value.length;
                 }
+            }
+
+            chatid = document.getElementById("chatid:" + chat.clientid);
+            if (chatid != null) {
+                chatid.value = chat.chatid;
             }
         }
 
@@ -2560,6 +2614,14 @@
             }
 
             msg += ", trade id: " + trade.tradeid + ", order id: " + trade.orderid + ", executed " + formatUTCDateTime(trade.timestamp);
+
+            return msg;
+        }
+
+        function chatMsg(chat) {
+            var msg;
+
+            msg = "Chat id:" + chat.chatid + " started at " + formatUTCDateTime(chat.timestamp);
 
             return msg;
         }
@@ -5165,6 +5227,7 @@
             var lnkquotes = newlink("lnkquotes", "Quotes", "", frmhistory);
             var lnkorders = newlink("lnkorders", "Orders", "", frmhistory);
             var lnktrades = newlink("lnktrades", "Trades", "", frmhistory);
+            var lnkchat = newlink("lnkchat", "Chat", "", frmhistory);
 
             lnkquoterequests.onclick = function() {
                 if (!validateClientid()) {return;}
@@ -5197,6 +5260,15 @@
                 historyrequest.clientid = inpclientid.value;
                 sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
             }
+
+            lnkchat.onclick = function() {
+                if (!validateClientid()) {return;}
+
+                setSelected(lnkchat);
+                historyrequest.clientid = inpclientid.value;
+                sockjs.send("{\"chathistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
 
             inpclientid = document.createElement("input");
             inpclientid.type = "hidden";

@@ -53,15 +53,20 @@
         a:hover {
             text-decoration: underline;
         }
-        div, textarea {
+        textarea {
             display: inline-block;
             border: 1px solid #aacfe4;
-            font-size: 18px;
-            width: 450px;
-            height: 120px;
-            /*padding: 4px 2px;*/
-            margin: 2px 0 10px 10px;
+            font-size: 12px;
+            width: 600px;
+            height: 150px;
+            margin: 2px 2px 10px 10px;
             vertical-align: top;
+        }
+        .chatbtn {
+            font-size: 21px;
+            background-color: #ddd;
+            color: #666666;
+            cursor: pointer;
         }
         .depthstrip {
             width: 740px;
@@ -1013,6 +1018,7 @@
             clearStrips();
             clearSelectStockDivs();
             clearAllSymbolDivs();
+            clearDivs();
         }
 
         function clearLists() {
@@ -1026,6 +1032,10 @@
         function clearForms() {
             clearForm("frmsignin", true);
             clearForm("frminstrument", true);
+        }
+
+        function clearDivs() {
+            clearDiv("chatdiv");
         }
 
         function addElement(msg, list, index) {
@@ -2085,7 +2095,7 @@
 
             chatdiv.appendChild(chattext);
 
-            chatbtn = newbutton("chatbtn", "Send", "", chatdiv);
+            chatbtn = newbutton("chatbtn", "Send", "chatbtn", chatdiv);
 
             chatbtn.onclick = function() {
                 var newchat = {};
@@ -2106,6 +2116,7 @@
             chatid = document.createElement("input");
             chatid.type = "hidden";
             chatid.id = "chatid";
+            chatid.value = "0";
 
             chatdiv.appendChild(chattextlen);
             chatdiv.appendChild(chatid);
@@ -2122,10 +2133,6 @@
             var chattextlen;
             var chatid;
 
-            console.log('newchat');
-
-            console.log(chat);
-
             chattext = document.getElementById("chattext");
             if (chattext != null) {
                 chattext.focus();
@@ -2136,8 +2143,6 @@
                 if (chattextlen != null) {
                     chattextlen.value = chattext.value.length;
                 }
-
-                //chattext.focus();
             }
 
             chatid = document.getElementById("chatid");
