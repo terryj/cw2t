@@ -1676,15 +1676,24 @@ function newChatClient(msg) {
   var userid = "0";
 
   try {    
-    var obj = JSON.parse(msg);
-    obj.chat.timestamp = getUTCTimeStamp();
+    var chatobj = JSON.parse(msg);
 
-    db.eval(scriptnewchat, 5, obj.chat.clientid, obj.chat.text, obj.chat.timestamp, obj.chat.chatid, userid, function(err, ret) {
+    chatobj.chat.timestamp = getUTCTimeStamp();
+
+    db.eval(scriptnewchat, 5, chatobj.chat.clientid, chatobj.chat.text, chatobj.chat.timestamp, chatobj.chat.chatid, userid, function(err, ret) {
       if (err) throw err;
 
+      // update chat id as may be new
+      chatobj.chat.chatid = ret[0];
       userid = ret[1];
+      msg = JSON.stringify(chatobj);
 
-      if (userid in connections) {
+      if (userid == 0) {
+        // no specified user, so send to all users
+        for (var x in connections) {
+          connections[x].write(msg);
+        }
+      } else if (userid in connections) {
         connections[userid].write(msg);
       }
     });
@@ -2102,7 +2111,7 @@ function registerScripts() {
     local key = "chat:" .. chatid \
     local chattext = redis.call("hget", key, "text") \
     chattext = chattext .. string.char(10) .. KEYS[2] \
-    redis.call("hset", key, "text", chattext) \
+    redis.call("hmset", key, "text", chattext, "userid", KEYS[5]) \
     userid = redis.call("hget", key, "userid") \
   else \
     chatid = redis.call("incr", "chatid") \
@@ -2118,11 +2127,12 @@ function registerScripts() {
   scriptgetchat = '\
   local tblresults = {} \
   local chathistory = redis.call("smembers", KEYS[1] .. ":chat") \
-  local fields = {"clientid","chatid","text","timestamp"} \
+  local fields = {"clientid","chatid","text","timestamp","userid"} \
   local vals \
   for index = 1, #chathistory do \
     vals = redis.call("hmget", "chat:" .. chathistory[index], unpack(fields)) \
-    table.insert(tblresults, {clientid=vals[1],chatid=vals[2],text=vals[3],timestamp=vals[4]}) \
+    local username = redis.call("hget", "user:" .. vals[5], "name") \
+    table.insert(tblresults, {clientid=vals[1],chatid=vals[2],text=vals[3],timestamp=vals[4],user=username}) \
   end \
   return cjson.encode(tblresults) \
   ';

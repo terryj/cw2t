@@ -30,6 +30,9 @@
         .menu .menuitemselected {
             color: #666666;
         }
+        .menu .menuitemchat {
+            color: yellow;
+        }
         .cw2t {
             width: 620px;
             font-size: 33px;
@@ -657,6 +660,7 @@
         var quoterequests = {};
         var connections = {};
         var chathistory = {};
+        var tempchat = {};
 
         //
         // incoming data function
@@ -2393,13 +2397,20 @@
         function displayConnections() {
             var firstconnection = true;
             var list;
+            var msg;
 
             clearLists();
 
             list = getList("list1");
 
             for (var x in connections) {
-                addElement(connections[x].name, list, connections[x].clientid);
+                msg = connections[x].name;
+
+                if (connections[x].clientid in tempchat) {
+                    msg += " - chat pending";
+                }
+                
+                addElement(msg, list, connections[x].clientid);
                 firstconnection = false;
             }
 
@@ -2472,17 +2483,40 @@
             var chattext;
             var chattextlen;
             var chatid;
+            var menuitemchat;
+
+            console.log(chat);
+
+            // if chat not selected, just store the chat & highlight the menu
+            if (selectedmenu != 10) {
+                // store the chat
+                tempchat[chat.clientid] = chat;
+
+                // highlight menu option
+                menuitemchat = document.getElementById("menuitemchat");
+                if (menuitemchat != null) {
+                    console.log('mif');
+                    menuitemchat.className = "menuitemchat";
+                }
+                return;
+            }
 
             chattext = document.getElementById("chattext:" + chat.clientid);
-            if (chattext != null) {
-                chattext.focus();
+            if (chattext == null) {
+                console.log('notfnd');
+                // highlight menu option
+                menuitemchat = document.getElementById("menuitemchat");
+                menuitemchat.className = "menuitemchat";
+                return;
+            }
 
-                chattext.value += "\n" + chat.text + "\n" + ">>";
+            chattext.focus();
 
-                chattextlen = document.getElementById("chattextlen:" + chat.clientid);
-                if (chattextlen != null) {
-                    chattextlen.value = chattext.value.length;
-                }
+            chattext.value += "\n" + chat.text + "\n" + ">>";
+
+            chattextlen = document.getElementById("chattextlen:" + chat.clientid);
+            if (chattextlen != null) {
+                chattextlen.value = chattext.value.length;
             }
 
             chatid = document.getElementById("chatid:" + chat.clientid);
@@ -2621,7 +2655,7 @@
         function chatMsg(chat) {
             var msg;
 
-            msg = "Chat id:" + chat.chatid + " started at " + formatUTCDateTime(chat.timestamp);
+            msg = "Chat id:" + chat.chatid + " with " + chat.user + ", started at " + formatUTCDateTime(chat.timestamp);
 
             return msg;
         }
@@ -4049,6 +4083,8 @@
                 if (i == 0) {
                     menuitem.className = "menuitemselected";
                     lastElement = menuitem;
+                } else if (i == 10) { // change if menu changed
+                    menuitem.id = "menuitemchat";
                 }
                 menu.appendChild(menuitem);
             }
