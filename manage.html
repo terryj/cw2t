@@ -1594,10 +1594,9 @@
         }
 
         function clearEmptyLines() {
-            clearElementById("emptyline1");
-            clearElementById("emptyline2");
-            clearElementById("emptyline3");
-            clearElementById("emptyline4");
+            for (var i = 1; i < 6; ++i) {
+                clearElementById("emptyline:" + i);
+            }
         }
 
         function clearField(fldname) {
@@ -1811,27 +1810,40 @@
         }
 
         function displayPositions() {
-            var firstposition = true;
-            var msg;
             var list;
-            var emptyline1;
+            var listid = 1;
 
             clearLists();
             clearEmptyLines();
 
-            var emptyline1 = addNewLine(main);
-            emptyline1.id = "emptyline1";
+            for (var i in instrumenttypes) {
+                var emptyline = addNewLine(main);
+                emptyline.id = "emptyline:" + listid;
+                displayPositionsType(i, "list" + listid);
+                listid++;
+            }
+        }
 
-            list = getList("list1");
+        function displayPositionsType(type, liststr) {
+            var list;
+            var firstposition = true;
+            var msg;
+
+            list = getList(liststr);
 
             for (var x in positions) {
-                msg = positionMsg(positions[x]);
-                addElement(msg, list, x);
-                firstposition = false;
+                if (instruments[positions[x].symbol].instrumenttype == type) {
+                    if (firstposition) {
+                        addElement(instrumenttypes[type].description, list, "");
+                        firstposition = false;
+                    }
+                    msg = positionMsg(positions[x]);
+                    addElement(msg, list, x);
+                }
             }
 
             if (firstposition) {
-                addElement("No positions", list, "");
+                addElement("No " + instrumenttypes[type].description, list, "");
             } else {
                 list.onclick = function(e) {
                     var element;
@@ -1864,17 +1876,18 @@
             clearEmptyLines();
 
             list1 = getList("list1");
+
             var emptyline1 = addNewLine(main);
-            emptyline1.id = "emptyline1";
+            emptyline1.id = "emptyline:1";
             list2 = getList("list2");
             var emptyline2 = addNewLine(main);
-            emptyline2.id = "emptyline2";
+            emptyline2.id = "emptyline:2";
             list3 = getList("list3");
             var emptyline3 = addNewLine(main);
-            emptyline3.id = "emptyline3";
+            emptyline3.id = "emptyline:3";
             list4 = getList("list4");
             var emptyline4 = addNewLine(main);
-            emptyline4.id = "emptyline4";
+            emptyline4.id = "emptyline:4";
             list5 = getList("list5");
 
             displayOrderHeadings();
@@ -2700,7 +2713,7 @@
             } else {
                 msg = "Short ";
             }
-            msg += position.quantity + " " + position.symbol + " in " + position.currency + ", cost " + parseFloat(position.cost).toFixed(2) + ", for settlement " + formatUTCDate(position.settldate);
+            msg += position.quantity + " " + position.symbol + ", cost " + parseFloat(position.cost).toFixed(2) + " " + position.currency + ", for settlement " + formatUTCDate(position.settldate);
 
             return msg;
         }
