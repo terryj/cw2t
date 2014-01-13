@@ -2082,6 +2082,12 @@
             return button;
         }
 
+        function addNewLine(frm) {
+            var newline = document.createElement("label");
+            newline.innerHTML = "<br>";
+            frm.appendChild(newline);
+        }
+
         function displayChat() {
             var chattext;
             var chatbtn;
@@ -2094,6 +2100,8 @@
             chattext.id = "chattext";
 
             chatdiv.appendChild(chattext);
+
+            addNewLine(chatdiv);
 
             chatbtn = newbutton("chatbtn", "Send", "chatbtn", chatdiv);
 

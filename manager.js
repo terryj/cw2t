@@ -78,6 +78,7 @@ var scriptgetpositions;
 var scriptgetconnections;
 var scriptnewchat;
 var scriptgetchat;
+var scriptgetpendingchat;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -229,6 +230,8 @@ function listen() {
             sendConnections(obj.connectionrequest, conn);
           } else if ("chat" in obj) {
             newChat(obj.chat, userid);
+          } else if ("pendingchatrequest" in obj) {
+            pendingChatRequest(obj.pendingchatrequest, conn);
           } else if ("ping" in obj) {
             conn.write("pong");
           } else {
@@ -1405,6 +1408,11 @@ function replySignIn(reply, conn) {
 }
 
 function initDb() {
+  clearConnections();
+  clearPendingChat();
+}
+
+function clearConnections() {
   // clear any connected users
   db.smembers("connections:" + servertype, function(err, connections) {
     if (err) {
@@ -1416,6 +1424,19 @@ function initDb() {
       unsubscribeConnection(connection);
 
       db.srem("connections:" + servertype, connection);
+    });
+  });
+}
+
+function clearPendingChat() {
+  db.smembers("pendingchatclients", function(err, pendingchat) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    pendingchat.forEach(function(clientid, i) {
+      db.srem("pendingchatclients", clientid);
     });
   });
 }
@@ -1701,6 +1722,38 @@ function newChatClient(msg) {
     console.log(e);
     return;
   }
+}
+
+function pendingChatRequest(req, conn) {
+  var pendingchat;
+
+  db.eval(scriptgetpendingchat, 1, req.clientid, function(err, ret) {
+    if (err) throw err;
+
+    // check for no pending chat
+    if (ret[0] == 0) {
+      // todo: send a message?
+      return;
+    }
+
+    sendChat(ret[1], conn);
+  });
+}
+
+function sendChat(chatid, conn) {
+  db.hgetall("chat:" + chatid, function(err, chat) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (chat == null) {
+      console.log("Chat not found, id:" + chatid);
+      return;
+    }
+
+    conn.write("{\"chat\":" + JSON.stringify(chat) + "}");
+  });
 }
 
 //
@@ -2097,7 +2150,12 @@ function registerScripts() {
   local vals \
   for index = 1, #connections do \
     vals = redis.call("hmget", "client:" .. connections[index], unpack(fields)) \
-    table.insert(tblresults, {clientid=vals[1],name=vals[2]}) \
+    --[[ see if there is pending chat for this client ]] \
+    local pendingchat = 0 \
+    if redis.call("sismember", "pendingchatclients", connections[index]) == 1 then \
+      pendingchat = 1 \
+    end \
+    table.insert(tblresults, {clientid=vals[1],name=vals[2], pendingchat=pendingchat}) \
   end \
   return cjson.encode(tblresults) \
   ';
@@ -2105,13 +2163,17 @@ function registerScripts() {
   scriptnewchat = '\
   local chatid \
   local userid \
+  --[[ see if this chat already exists ]] \
   if redis.call("sismember", KEYS[1] .. ":chat", KEYS[4]) == 1 then \
     chatid = KEYS[4] \
     --[[ add to the chat ]] \
     local key = "chat:" .. chatid \
     local chattext = redis.call("hget", key, "text") \
     chattext = chattext .. string.char(10) .. KEYS[2] \
-    redis.call("hmset", key, "text", chattext, "userid", KEYS[5]) \
+    redis.call("hset", key, "text", chattext) \
+    if KEYS[5] ~= "0" then \
+      redis.call("hset", key, "userid", KEYS[5]) \
+    end \
     userid = redis.call("hget", key, "userid") \
   else \
     chatid = redis.call("incr", "chatid") \
@@ -2119,6 +2181,13 @@ function registerScripts() {
     redis.call("hmset", "chat:" .. chatid, "chatid", chatid, "clientid", KEYS[1], "text", KEYS[2], "timestamp", KEYS[3], "userid", KEYS[5]) \
     --[[ add to set of chat for this client ]] \
     redis.call("sadd", KEYS[1] .. ":chat", chatid) \
+    --[[ keep track of pending chat ]] \
+    if KEYS[5] == "0" then \
+      --[[ add to pending ]] \
+      redis.call("sadd", "pendingchatclients", KEYS[1]) \
+      --[[ create a way to get from clientid to chatid ]] \
+      redis.call("set", "client:" .. KEYS[1] .. "chat", chatid) \
+    end \
     userid = KEYS[5] \
   end \
   return {chatid, userid} \
@@ -2135,5 +2204,19 @@ function registerScripts() {
     table.insert(tblresults, {clientid=vals[1],chatid=vals[2],text=vals[3],timestamp=vals[4],user=username}) \
   end \
   return cjson.encode(tblresults) \
+  ';
+
+  //
+  // returns 0 as no pending chat, 1 & chat id if there is pending chat & clears as pending
+  //
+  scriptgetpendingchat = '\
+  if redis.call("sismember", "pendingchatclients", KEYS[1]) ~= 1 then \
+    return {0} \
+  end \
+  --[[ clear item as pending ]] \
+  redis.call("srem", "pendingchatclients", KEYS[1]) \
+  --[[ get chat id for this client ]] \
+  local chatid = redis.call("get", "client:" .. KEYS[1] .. "chat") \
+  return {1, chatid} \
   ';
 }

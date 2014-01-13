@@ -584,7 +584,7 @@
             display: inline-block;
             border: 1px solid #aacfe4;
             font-size: 15px;
-            width: 450px;
+            width: 600px;
             height: 120px;
             margin: 2px 2px 10px 10px;
             vertical-align: top;
@@ -660,7 +660,6 @@
         var quoterequests = {};
         var connections = {};
         var chathistory = {};
-        var tempchat = {};
 
         //
         // incoming data function
@@ -765,6 +764,8 @@
                     displayConnections();
                 } else if ("chat" in obj) {
                     newChat(obj.chat);
+                /*} else if ("pendingchat" in obj) {
+                    pendingChat(obj.pendingchat);*/
                 } else if ("chathistory" in obj) {
                     clearChatHistory();
                     loadChatHistory(obj.chathistory);
@@ -2406,10 +2407,10 @@
             for (var x in connections) {
                 msg = connections[x].name;
 
-                if (connections[x].clientid in tempchat) {
-                    msg += " - chat pending";
+                if ('pendingchat' in connections[x] && connections[x].pendingchat) {
+                    msg += " *** chat pending ***";
                 }
-                
+
                 addElement(msg, list, connections[x].clientid);
                 firstconnection = false;
             }
@@ -2435,6 +2436,12 @@
             var chatid;
             var chattext;
             var chattextlen;
+            var pendingchatrequest = {};
+
+            if ('pendingchat' in connections[elem.value] && connections[elem.value].pendingchat) {
+                pendingchatrequest.clientid = elem.value;
+                sockjs.send("{\"pendingchatrequest\":" + JSON.stringify(pendingchatrequest) + "}");
+            }
 
             var chatdiv = getDiv("chatdiv:" + elem.value);
 
@@ -2447,6 +2454,8 @@
             chattext.id = "chattext:" + elem.value;
 
             chatdiv.appendChild(chattext);
+
+            addNewLine(chatdiv);
 
             var chatbtn = newbutton("btnchat", "Send", "chatbtn", chatdiv);
 
@@ -2475,8 +2484,8 @@
             }
 
             chattext.focus();
-            chattext.value = ">>";
-            chattextlen.value = 2;
+            chattext.value = ">>";;
+            chattextlen.value = chattext.value.length;
         }
 
         function newChat(chat) {
@@ -2484,35 +2493,42 @@
             var chattextlen;
             var chatid;
             var menuitemchat;
+            var list;
+            var items;
 
-            console.log(chat);
-
-            // if chat not selected, just store the chat & highlight the menu
+            // if chat not selected, just highlight the menu option
             if (selectedmenu != 10) {
-                // store the chat
-                tempchat[chat.clientid] = chat;
-
-                // highlight menu option
                 menuitemchat = document.getElementById("menuitemchat");
                 if (menuitemchat != null) {
-                    console.log('mif');
                     menuitemchat.className = "menuitemchat";
                 }
                 return;
             }
 
+            // is the relevant client selected?
             chattext = document.getElementById("chattext:" + chat.clientid);
             if (chattext == null) {
-                console.log('notfnd');
-                // highlight menu option
-                menuitemchat = document.getElementById("menuitemchat");
-                menuitemchat.className = "menuitemchat";
+                // highlight client connection
+                list = document.getElementById("list1");
+                if (list != null) {
+                    items = list.getElementsByTagName("li");
+
+                    for (var i = 0; i < items.length; ++i) {
+                        if (items[i].value == chat.clientid) {
+                            items[i].innerHTML += " *** chat pending ***";
+                            break;
+                        }
+                    }
+                }
                 return;
             }
 
             chattext.focus();
 
-            chattext.value += "\n" + chat.text + "\n" + ">>";
+            if (chattext.value != "") {
+                chattext.value += "\n";
+            }
+            chattext.value += chat.text + "\n" + ">>";
 
             chattextlen = document.getElementById("chattextlen:" + chat.clientid);
             if (chattextlen != null) {
