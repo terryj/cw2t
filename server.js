@@ -55,11 +55,6 @@ if (redislocal) {
 }
 
 // redis scripts
-var scriptmatchorder;
-var scriptordercancel;
-var scriptorderack;
-var scriptnewtrade;
-var scriptrejectorder;
 var scriptgetinst;
 
 // set-up a redis client
@@ -408,73 +403,6 @@ function getSideDesc(side) {
   }
 }
 
-function matchOrder(orderid) {
-  db.eval(scriptmatchorder, 1, orderid, function(err, ret) {
-    if (err) throw err;
-
-    /*if (orderid == 2000 || orderid == 4000) {
-      var now = new Date().getTime();
-      var elapsed = now-startms;
-      console.log("done,"+elapsed);
-    }*/
-
-    // todo: replace with getsendorder?
-
-    // todo: check ret value
-
-    // get order here as we need a number of order values
-    db.hgetall("order:" + orderid, function(err, order) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      // send to client, if connected
-      if (order.clientid in connections) {
-        sendOrder(order, connections[order.clientid]);
-      }
-
-      // broadcast market - todo: timer based? - pubsub?
-      broadcastLevelTwo(order.symbol, null);
-
-      // send any trades for active order client
-      for (var i = 0; i < ret[1].length; ++i) {
-        getSendTrade(ret[1][i]);
-      }
-
-      // send cash
-      if (ret[1].length > 0) {
-        getSendCash(order.clientid, order.settlcurrency);
-      }
-
-      // send margin/reserve
-      if (parseInt(order.side) == 1) {
-        getSendMargin(order.clientid, order.settlcurrency);
-      } else {
-        getSendReserve(order.clientid, order.symbol, order.settlcurrency);
-      }
-
-      // send any matched orders
-      for (var i = 0; i < ret[0].length; ++i) {
-        // todo: send margin/reserve/cash
-        getSendOrder(ret[0][i], false, false);
-      }
-
-      // send any matched trades
-      for (var i = 0; i < ret[2].length; ++i) {
-        getSendTrade(ret[2][i]);
-      }
-
-      // send cash/position/margin/reserve for matched clients
-      for (var i = 0; i < ret[3].length; ++i) {
-        getSendCash(ret[3][i], order.settlcurrency);
-        getSendMargin(ret[3][i], order.settlcurrency);
-        getSendReserve(ret[3][i], order.symbol, order.settlcurrency);
-      }
-    });
-  });
-}
-
 function getSendOrder(orderid, sendmarginreserve, sendcash) {
   db.hgetall("order:" + orderid, function(err, order) {
     if (err) {
@@ -573,7 +501,7 @@ function getSendCash(clientid, currency) {
 
     // send to client, if connected
     if (clientid in connections) {
-      sendCashItem(cash, connections[clientid]);
+      connections[clientid].write("{\"cashitem\":" + JSON.stringify(cash) + "}");
     }
   });
 }
@@ -626,87 +554,6 @@ function getSendReserve(clientid, symbol, currency) {
     }
   });
 }
-
-/*function orderCancelRequest(clientid, ocr) {
-  console.log("Order cancel request received for order#" + ocr.orderid);
-
-  ocr.timestamp = getUTCTimeStamp();
-
-  db.eval(scriptordercancelrequest, 4, orgid, clientid, ocr.orderid, ocr.timestamp, function(err, ret) {
-    if (err) throw err;
-
-    console.log(ret);
-
-    var orgclientkey = orgid + ":" + clientid;
-
-    // error, so send a cancel reject message
-    if (ret[0] != 0) {
-      orderCancelReject(orgclientkey, ocr, ret[0]);
-      return;
-    }
-
-    // forward to Proquote
-    if (ret[1] == "0") {
-      ocr.ordercancelreqid = ret[2];
-      ocr.symbol = ret[3];
-      ocr.isin = ret[4];
-      ocr.proquotesymbol = ret[5];
-      ocr.exchange = ret[6];
-      ocr.side = ret[7];
-      ocr.quantity = ret[8];
-
-      ptp.orderCancelRequest(ocr);
-      return;
-    }
-
-    // ok, so send confirmation
-    getSendOrder(ocr.orderid, true, false);
-
-    // send margin & reserve
-    //getSendMargin(orgclientkey, ret[1][31]); // for this currency
-    //getSendReserve(orgclientkey, ret[1][5]); // for this symbol
-
-    // distribute any changes to the order book
-    broadcastLevelTwo(ret[3], null);
-  });
-}*/
-
-function orderCancelReject(clientid, ocr, reason) {
-  var ordercancelreject = {};
-
-  ordercancelreject.orderid = ocr.orderid;
-
-  console.log("Order cancel request #" + ordercancelreject.orderid + " rejected, reason: " + getReasonDesc(reason));
-
-  if (clientid in connections) {
-    connections[clientid].write("{\"ordercancelreject\":" + JSON.stringify(ordercancelreject) + "}");
-  }
-}
-
-/*function processOrder(order, hedgeorderid, tradeid, hedgetradeid, conn) {
-  // either forward to Proquote or trade immediately or attempt to match the order, depending on the type of instrument & whether the market is open
-  if (order.markettype == 1) {
-    matchOrder(order.orderid, conn);
-  } else {
-    // forward client equity orders to the market
-    if (order.instrumenttype == "DE") {
-      ptp.newOrder(order);
-    } else {
-      // the trade has been done, so send the order & trade to the client
-      getSendOrder(order.orderid, true, true);
-      getSendTrade(tradeid);
-
-      // & send the other side to the hedge book
-      getSendTrade(hedgetradeid);
-
-      // if we are hedging, change the order id to that of the hedge & forward to proquote
-      if (hedgeorderid != "") {
-        order.orderid = hedgeorderid;
-        ptp.newOrder(order);
-      }
-    }
-  }
-}*/
 
 function displayOrderBook(symbol, lowerbound, upperbound) {
   db.zrangebyscore(symbol, lowerbound, upperbound, function(err, matchorders) {
@@ -988,10 +835,6 @@ function sendPositions(clientid, conn) {
       });
     });
   });
-}
-
-function sendCashItem(cash, conn) {
-  conn.write("{\"cashitem\":" + JSON.stringify(cash) + "}");
 }
 
 function sendCash(clientid, conn) {
@@ -1381,26 +1224,6 @@ function publishMessage(message) {
   }
 }
 
-// todo: don't think we need this
-/*function cancelOrder(order, conn) {
-  // update stored order status
-  order.status = "4";
-  db.hset("order:" + order.orderid, "status", order.status);
-
-  console.log("Order #" + order.orderid + " cancelled");
-
-  // send to client, if connected
-  if (conn == null) {
-    if (order.clientid in connections) {
-        conn = connections[order.clientid];
-    }
-  }
-
-  if (conn != null) {
-    conn.write("{\"order\":" + JSON.stringify(order) + "}");
-  }
-}*/
-
 function getTimeInForceDesc(timeinforce) {
 /*0 = Day
 
@@ -1703,102 +1526,6 @@ function getUTCDateString(date) {
     return utcdate;
 }
 
-/*ptp.on("orderReject", function(exereport) {
-  var text = "";
-  var ordrejreason = "";
-  console.log(exereport);
-
-  console.log("order rejected, id:" + exereport.clordid);
-
-  // execution reports vary as to whether they contain a reject reason &/or text
-  if ('ordrejreason' in exereport) {
-    ordrejreason = exereport.ordrejreason;
-  }
-  if ('text' in exereport) {
-    text = exereport.text;
-  }
-
-  db.eval(scriptrejectorder, 3, exereport.clordid, ordrejreason, text, function(err, ret) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (ret != 0) {
-      // todo: message to client
-      console.log("Error in scriptrejectorder, reason:" + getReasonDesc(ret));
-      return;
-    }
-
-    // send to client if connected
-    getSendOrder(exereport.clordid, false, false);
-  });
-});*/
-
-//
-// Limit order acknowledgement
-//
-/*ptp.on("orderAck", function(exereport) {
-  var text = "";
-  console.log("Order acknowledged, id:" + exereport.clordid);
-  console.log(exereport);
-
-  if ('text' in exereport) {
-    text = exereport.text;
-  }
-
-  db.eval(scriptorderack, 5, exereport.clordid, exereport.orderid, exereport.ordstatus, exereport.execid, text, function(err, ret) {
-    if (err) throw err;
-
-    // ok, so send confirmation
-    getSendOrder(exereport.clordid, true, false);
-  });
-});*/
-
-/*ptp.on("orderCancel", function(exereport) {
-  console.log("Order cancelled by Proquote, ordercancelrequest id:" + exereport.clordid);
-
-  db.eval(scriptordercancel, 1, exereport.clordid, function(err, ret) {
-    if (err) throw err;
-
-    if (ret[0] != 0) {
-      // todo: send to client
-      console.log("Error in scriptordercancel, reason:" + getReasonDesc(ret[0]));
-      return;
-    }
-
-    //var orgclientkey = ret[1][1] + ":" + ret[1][3];
-
-    // send confirmation
-    getSendOrder(ret[1], true, false);
-
-    // send margin & reserve
-    // todo: wrap these in send order?
-    //getSendMargin(orgclientkey, ret[1][31]); // orgclientkey, currency
-    //getSendReserve(orgclientkey, ret[1][5]); // orgclientkey, symbol
-  });
-});*/
-
-/*ptp.on("orderExpired", function(exereport) {
-  console.log(exereport);
-  console.log("order expired, id:" + exereport.clordid);
-
-  db.eval(scriptorderexpire, 1, exereport.clordid, function(err, ret) {
-    if (err) {
-      console.log(err);
-      return
-    }
-
-    if (ret != 0) {
-      // todo: send to client
-      console.log("Error in scriptorderexpire, reason:" + getReasonDesc(ret));
-      return;
-    }
-
-    getSendOrder(exereport.clordid, true, false);
-  });
-});*/
-
 function sendQuoteack(quotereqid) {
   var quoteack = {};
 
@@ -1896,15 +1623,7 @@ function getDateString(utcdatetime) {
 }
 
 function registerScripts() {
-  var updateposition;
-  var updatecash;
-  var updateordermargin;
-  var updatereserve;
-  var removefromorderbook;
-  var cancelorder;
-  var newtrade;
   var round;
-  var rejectorder;
   var adjustmarginreserve;
   var creditcheck;
   var getproquotesymbol;
@@ -1915,12 +1634,6 @@ function registerScripts() {
   local round = function(num, dp) \
     local mult = 10 ^ (dp or 0) \
     return math.floor(num * mult + 0.5) / mult \
-  end \
-  ';
-
-  rejectorder = '\
-  local rejectorder = function(orderid, reason, text) \
-    redis.call("hmset", "order:" .. orderid, "status", "8", "reason", reason, "text", text) \
   end \
   ';
 
@@ -1970,15 +1683,6 @@ function registerScripts() {
   end \
   ';
 
-  removefromorderbook = '\
-  local removefromorderbook = function(symbol, orderid) \
-    redis.call("zrem", symbol, orderid) \
-    if (redis.call("zcount", symbol, "-inf", "+inf") == 0) then \
-      redis.call("srem", "orderbooks", symbol) \
-    end \
-  end \
-  ';
-
   calcfinance = round + '\
   local calcfinance = function(consid, currency, longshort, nosettdays) \
     local finance = 0 \
@@ -1990,31 +1694,6 @@ function registerScripts() {
    end \
    return finance \
   end \
-  ';
-
-  scriptordercancel = cancelorder + '\
-  local errorcode = 0 \
-  local orderid = redis.call("hget", "ordercancelrequest:" .. KEYS[1], "orderid") \
-  if not orderid then \
-    errorcode = 1013 \
-  else \
-    errorcode = cancelorder(orderid, "4") \
-    if errorcode ~= 0 then \
-      redis.call("hset", "order:" .. orderid, "ordercancelrequestid", KEYS[1]) \
-    end \
-  end \
-  return {errorcode, orderid} \
-  ';
-
-  scriptorderack = '\
-  --[[ update external limit reference ]] \
-  redis.call("hmset", "order:" .. KEYS[1], "externalorderid", KEYS[2], "status", KEYS[3], "execid", KEYS[4], "text", KEYS[5]) \
-  return \
-  ';
-
-  scriptorderexpire = cancelorder + '\
-  local ret = cancelorder(KEYS[1], "C") \
-  return ret \
   ';
 
   //

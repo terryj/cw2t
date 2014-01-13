@@ -714,7 +714,9 @@
                 } else if ("cashtrans" in obj) {
                     updateCashtrans(obj.cashtrans);
                 } else if ("cash" in obj) {
+                    clearCash();
                     loadCash(obj.cash);
+                    displayCash();
                 } else if ("instrumenttypes" in obj) {
                     loadInstrumenttypes(obj.instrumenttypes);
                 } else if ("instruments" in obj) {
@@ -973,6 +975,10 @@
             chathistory = [];
         }
 
+        function clearCash() {
+            cash = [];
+        }
+
         //
         // various update routines
         // these take a single data item & update the item based on its index
@@ -1184,23 +1190,22 @@
             var frmclient;
             var inpclientid;
             var msg;
-            var lblclientconf;
 
             clients[client.clientid] = client;
 
-            if (selectedmenu != 0) {return};
+            if (selectedmenu != 1) {return};
 
             frmclient = document.getElementById("frmclient");
             if (frmclient != null) {
                 inpclientid = document.getElementById("inpclientid");
                 if (inpclientid != null) {
                     if (inpclientid.value == "") {
-                        msg = client.name + " added";
+                        msg = client.name + " added ok";
                     } else {
-                        msg = client.name + " updated";
+                        msg = client.name + " updated ok";
                     }
 
-                    displayClient(null, "frmclient", msg);
+                    displayClient(null, "frmclient", msg, "", "", "clientboxinput");
                 }
             }
         }
@@ -2131,15 +2136,21 @@
         function displayCash() {
             var firstCash = true;
 
-            addHeading("Cash", list1);
+            clearLists();
+            clearEmptyLines();
+
+            var emptyline = addNewLine(main);
+            emptyline.id = "emptyline:1";
+
+            var list = getList("list1");
 
             for (var x in cash) {
-                addElement(cashMsg(cash[x]), list1, cash[x].currency);
+                addElement(cashMsg(cash[x]), list, cash[x].currency);
                 firstCash = false;
             }
 
             if (firstCash) {
-                addElement("No cash", list1, "");                
+                addElement("No cash", list, "");                
             }
         }
 
@@ -2378,7 +2389,28 @@
 
             selectClient("frmpositions", null, null, true, "", "inpclientid", "");
 
-            var btnrequest = newbutton("btnrequest", "Request Positions", "formbuttonwide", frmpositions);
+            var lnkpositions = newlink("lnkpositions", "Positions", "", frmpositions);
+            var lnkcash = newlink("lnkcash", "Cash", "", frmpositions);
+
+            lnkpositions.onclick = function() {
+                var positionrequest = {};
+
+                if (!validateClientid()) {return;}
+
+                setSelected(lnkpositions);
+                positionrequest.clientid = inpclientid.value;
+                sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
+            }
+
+            lnkcash.onclick = function() {
+                var cashrequest = {};
+
+                if (!validateClientid()) {return;}
+
+                setSelected(lnkcash);
+                cashrequest.clientid = inpclientid.value;
+                sockjs.send("{\"cashrequest\":" + JSON.stringify(cashrequest) + "}");
+            }
 
             inpclientid = document.createElement("input");
             inpclientid.type = "hidden";
@@ -2389,18 +2421,21 @@
 
             main.appendChild(frmpositions);
 
-            btnrequest.onclick = function() {
-                var positionrequest = {};
-
+            function validateClientid() {
                 if (inpclientid.value == "") {
                     alert("Please select a client");
                     selectClientFocus("clientboxinput");
-                    return;
+                    return false;
                 }
 
-                positionrequest.clientid = inpclientid.value;
+                return true;
+            }
 
-                sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
+            function setSelected(link) {
+                lnkpositions.className = "";
+                lnkcash.className = "";
+
+                link.className = "linkselected";
             }
         }
 
@@ -4241,7 +4276,7 @@
                 clientlist.style.visibility = "hidden";
                 clientboxinput.value = "";
 
-                displayClient(clients[element.value], frm, "", namefld, idfld);
+                displayClient(clients[element.value], frm, "", namefld, idfld, "");
 
                 if (focusfldstr != "") {
                     focusfld = document.getElementById(focusfldstr);
@@ -4385,11 +4420,13 @@
                 client.clientid = inpclientid.value;
                 client.address = inpaddress.value;
                 client.email = inpemail.value;
+
                 if (selifa.selectedIndex == 0) {
                     client.ifaid = "";
                 } else {
                     client.ifaid = selifa[selifa.selectedIndex].value;
                 }
+
                 client.type = seltype[seltype.selectedIndex].value;
 
                 if (opthedgeyes.checked) {
@@ -4412,7 +4449,7 @@
             }
 
             lnknewclient.onclick = function() {
-                displayClient(null, "frmclient", "");
+                displayClient(null, "frmclient", "", "inpname", "inpclientid", "");
                 inpname.focus();
             }
 
@@ -4420,10 +4457,10 @@
 
             inpclientid.disabled = true;
 
-            displayClient(null, "frmclient", "");
+            displayClient(null, "frmclient", "", "", "", "");
         }
 
-        function displayClient(client, frm, msg, namefld, idfld) {
+        function displayClient(client, frm, msg, namefld, idfld, focusfldstr) {
             var inpclient;
             var inpname;
             var inpmobile;
@@ -4442,6 +4479,7 @@
             var btnupdate;
             var lnknewclient;
             var inpclientid;
+            var focusfld;
 
             if (frm == "frmclient") {
                 inpname = document.getElementById("inpname");
@@ -4527,6 +4565,13 @@
                 inpclient.value = client.name;
                 inpclientid = document.getElementById(idfld);
                 inpclientid.value = client.clientid;
+            }
+
+            if (focusfldstr != "") {
+                focusfld = document.getElementById(focusfldstr);
+                if (focusfld != null) {
+                    focusfld.focus();
+                }
             }
         }
 

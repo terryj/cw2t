@@ -79,6 +79,7 @@ var scriptgetconnections;
 var scriptnewchat;
 var scriptgetchat;
 var scriptgetpendingchat;
+var scriptgetcash;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -206,6 +207,8 @@ function listen() {
             signIn(obj.signin);
           } else if ("positionrequest" in obj) {
             positionRequest(obj.positionrequest, conn);
+          } else if ("cashrequest" in obj) {
+            cashRequest(obj.cashrequest, conn);
           } else if ("index" in obj) {
             sendIndex(obj.index, conn);        
           } else if ("newclient" in obj) {
@@ -443,9 +446,6 @@ function orderBookRemoveRequest(userid, symbol, conn) {
 }
 
 function newClient(client, conn) {
-  console.log("new client");
-  console.log(client);
-
   // maybe a new client or an updated client
   if (client.clientid == "") {
     db.eval(scriptnewclient, 10, client.brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, function(err, ret) {
@@ -497,8 +497,6 @@ function getSendIfa(ifaid, conn) {
 }
 
 function cashTrans(cashtrans, userid, conn) {
-  console.log("cashtrans");
-
   cashtrans.timestamp = getUTCTimeStamp();
 
   db.eval(scriptcashtrans, 8, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.desc, cashtrans.timestamp, operatortype, userid, function(err, ret) {
@@ -1073,6 +1071,14 @@ function positionRequest(posreq, conn) {
     if (err) throw err;
     conn.write("{\"positions\":" + ret + "}");
   });
+}
+
+function cashRequest(cashreq, conn) {
+  db.eval(scriptgetcash, 1, cashreq.clientid, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+    conn.write("{\"cash\":" + ret + "}");
+  });  
 }
 
 function sendCashItem(cash, conn) {
@@ -2139,6 +2145,19 @@ function registerScripts() {
   for index = 1, #positions do \
     vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
     table.insert(tblresults, {clientid=vals[1],symbol=vals[2],longshort=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],settldate=vals[7],initialmargin=vals[8],positionid=vals[9]}) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // pass client id
+  //
+  scriptgetcash = '\
+  local tblresults = {} \
+  local cash = redis.call("smembers", KEYS[1] .. ":cash") \
+  for index = 1, #cash do \
+    local amount = redis.call("get", KEYS[1] .. ":cash:" .. cash[index]) \
+    table.insert(tblresults, {currency=cash[index],amount=amount}) \
   end \
   return cjson.encode(tblresults) \
   ';
