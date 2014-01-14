@@ -2826,7 +2826,6 @@
             var reqquotelnk;
             var placebuyorderlnk;
             var placesellorderlnk;
-            var clearquotelnk;
 
             if (!(symbol in orderbooks)) {
                 return;
@@ -2898,7 +2897,15 @@
                         reqquotelnk = document.createElement('a');
                         reqquotelnk.innerHTML = "Request Quote";
                         reqquotelnk.href = "javascript:void(0);";
-                        reqquotelnk.onclick = function() {requestQuote(symbol);}
+                        reqquotelnk.onclick = function() {
+                            if (reqquotelnk.innerHTML == "Request Quote") {
+                                requestQuote(symbol);
+                                reqquotelnk.innerHTML = "Clear Quote";
+                            } else {
+                                clearQuote(symbol);
+                                reqquotelnk.innerHTML = "Request Quote";
+                            }
+                        }
 
                         placebuyorderlnk = document.createElement('a');
                         placebuyorderlnk.innerHTML = "Buy Order";
@@ -2910,17 +2917,11 @@
                         placesellorderlnk.href = "javascript:void(0);";
                         placesellorderlnk.onclick = function() {placeOrder(symbol, '2', 0, 0);}
 
-                        clearquotelnk = document.createElement('a');
-                        clearquotelnk.innerHTML = "Clear Quote";
-                        clearquotelnk.href = "javascript:void(0);";
-                        clearquotelnk.onclick = function() {clearQuote(symbol);}
-
                         links = document.createElement('div');
                         links.style.visibility = "hidden";
                         links.appendChild(reqquotelnk);
                         links.appendChild(placebuyorderlnk);
                         links.appendChild(placesellorderlnk);
-                        links.appendChild(clearquotelnk);
 
                         level2.onclick = function() {
                             clearAllStrips(symbol);
