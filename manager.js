@@ -473,9 +473,6 @@ function newClient(client, conn) {
 }
 
 function newIfa(ifa, conn) {
-  console.log("new ifa");
-  console.log(ifa);
-
   db.eval(scriptifa, 5, ifa.ifaid, ifa.name, ifa.email, ifa.address, ifa.mobile, function(err, ret) {
     if (err) throw err;
 
@@ -512,9 +509,6 @@ function cashTrans(cashtrans, userid, conn) {
 }
 
 function instUpdate(inst, userid, conn) {
-  console.log("instUpdate");
-  console.log(inst);
-
   db.eval(scriptinstupdate, 3, inst.symbol, inst.marginpercent, inst.hedge, function(err, ret) {
     if (err) throw err;
 
@@ -523,9 +517,6 @@ function instUpdate(inst, userid, conn) {
 }
 
 function hedgebookUpdate(hedgebook, userid, conn) {
-  console.log("hedgebookUpdate");
-  console.log(hedgebook);
-
   db.eval(scripthedgeupdate, 3, hedgebook.insttype, hedgebook.currency, hedgebook.hedgebookid, function(err, ret) {
     if (err) throw err;
 
@@ -545,9 +536,6 @@ function getSendHedgebook(hedgebook, conn) {
 }
 
 function costUpdate(cost, conn) {
-  console.log("costUpdate");
-  console.log(cost);
-
   db.eval(scriptcost, 11, cost.insttype, cost.currency, cost.side, cost.commissionpercent, cost.commissionmin, cost.ptmlevylimit, cost.ptmlevy, cost.stampdutylimit, cost.stampdutypercent, cost.contractcharge, cost.finance, function(err, ret) {
     if (err) throw err;
 
@@ -1055,7 +1043,6 @@ function sendPositions(orgclientkey, conn) {
 
         // send array if we have added the last item
         count--;
-        console.log(count);
         if (count <= 0) {
           conn.write(JSON.stringify(posarray));
         }
@@ -1065,8 +1052,6 @@ function sendPositions(orgclientkey, conn) {
 }
 
 function positionRequest(posreq, conn) {
-  console.log("position request");
-
   db.eval(scriptgetpositions, 1, posreq.clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"positions\":" + ret + "}");
@@ -1076,7 +1061,6 @@ function positionRequest(posreq, conn) {
 function cashRequest(cashreq, conn) {
   db.eval(scriptgetcash, 1, cashreq.clientid, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
     conn.write("{\"cash\":" + ret + "}");
   });  
 }

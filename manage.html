@@ -2625,7 +2625,7 @@
                 msg = quoterequest.cashorderqty + " (value)";                
             }
 
-            msg += " " + quoterequest.symbol + " requested in " + quoterequest.settlcurrency + ", T+" + quoterequest.nosettdays + " at " + quoterequest.timestamp;
+            msg += " " + quoterequest.symbol + " requested in " + quoterequest.settlcurrency + ", T+" + quoterequest.nosettdays + " at " + formatUTCDateTime(quoterequest.timestamp);
 
             return msg;
         }
@@ -4228,22 +4228,30 @@
             clientboxinput.className = "clientboxinput";
             clientboxinput.placeholder = "Client Name";
 
-            clientboxinput.onkeyup = function() {
+            clientboxinput.onkeyup = function(e) {
                 clearList(clientlist.id, false);
 
                 if (clientboxinput.value.length == 0) {
-                    clientlist.style.visibility = "hidden";
-                    return;
-                }
+                    if (e.keyCode != 13) {
+                        clientlist.style.visibility = "hidden";
+                        return;
+                    } else {
+                        searchtext = "";
 
-                searchtext = clientboxinput.value.toLowerCase();
-
-                for (var i in clients) {
-                    arrnames = clients[i].name.split(' ');
-
-                    for (var j = 0; j < arrnames.length; j++) {
-                        if (arrnames[j].toLowerCase().indexOf(searchtext) == 0) {
+                        for (var i in clients) {
                             addElement(clients[i].name, clientlist, i);
+                        }
+                    }
+                } else {
+                    searchtext = clientboxinput.value.toLowerCase();
+
+                    for (var i in clients) {
+                        arrnames = clients[i].name.split(' ');
+
+                        for (var j = 0; j < arrnames.length; j++) {
+                            if (arrnames[j].toLowerCase().indexOf(searchtext) == 0) {
+                                addElement(clients[i].name, clientlist, i);
+                            }
                         }
                     }
                 }
