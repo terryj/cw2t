@@ -605,6 +605,10 @@
             color: #666666;
             cursor: pointer;
         }
+        .heading {
+            font-size: 18px;
+            color: #666666;
+        }
     </style>
 </head>
 <body lang="en">
@@ -1568,6 +1572,8 @@
             clearStrips();
             clearAllSymbolDivs();
             clearEmptyLines();
+
+            main.className = "";
         }
 
         function clearLists() {
@@ -1820,6 +1826,7 @@
 
             clearLists();
             clearEmptyLines();
+            removeHeadings();
 
             for (var i in instrumenttypes) {
                 var emptyline = addNewLine(main);
@@ -1836,10 +1843,11 @@
 
             list = getList(liststr);
 
+            addHeading(instrumenttypes[type].description, list);
+
             for (var x in positions) {
                 if (instruments[positions[x].symbol].instrumenttype == type) {
                     if (firstposition) {
-                        addElement(instrumenttypes[type].description, list, "");
                         firstposition = false;
                     }
                     msg = positionMsg(positions[x]);
@@ -2592,6 +2600,7 @@
         function addHeading(text, list) {
             var newtext = document.createTextNode(text);
             main.insertBefore(newtext, list);
+            main.className = "heading";
         }
 
         function removeHeading(text) {
@@ -2599,6 +2608,14 @@
                 if (main.childNodes[i].nodeType == 3 && main.childNodes[i].nodeValue == text) {
                     main.removeChild(main.childNodes[i]);
                     break;
+                }
+            }
+        }
+
+        function removeHeadings() {
+            for (var i = 0; i < main.childNodes.length; ++i) {
+                if (main.childNodes[i].nodeType == 3) {
+                    main.removeChild(main.childNodes[i]);
                 }
             }
         }
@@ -2748,7 +2765,7 @@
             } else {
                 msg = "Short ";
             }
-            msg += position.quantity + " " + position.symbol + ", cost " + parseFloat(position.cost).toFixed(2) + " " + position.currency + ", for settlement " + formatUTCDate(position.settldate);
+            msg += position.quantity + " " + position.symbol + ", cost " + parseFloat(position.cost).toFixed(2) + " " + position.currency + ", for settlement" + formatUTCDate(position.settldate);
 
             return msg;
         }
@@ -3223,7 +3240,7 @@
             settlperiod.id = "settlperiod";
             settlperiod.className = "formselect";
 
-            populateSettlPeriod(settlperiod, "DE");
+            populateSettlPeriod(settlperiod, instruments[symbol].instrumenttype);
 
             quotereqbutton = document.createElement("input");
             quotereqbutton.type = "button";

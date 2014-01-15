@@ -164,7 +164,7 @@ function listen() {
 
       if (msg.substr(2, 18) == "ordercancelrequest") {
         db.publish(tradeserverchannel, msg);
-      } else if (msg.substr(2, 5) == "order") {
+      } else if (msg.substr(2, 6) == "order\"") {
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 12) == "quoterequest") {
         db.publish(tradeserverchannel, msg);
@@ -1379,6 +1379,7 @@ function registerClient(reg, conn) {
 }
 
 function orderBookRequest(clientid, symbol, conn) {
+  console.log('orderBookRequest');
   db.eval(common.scriptsubscribeinstrument, 3, symbol, clientid, servertype, function(err, ret) {
     if (err) throw err;
 
