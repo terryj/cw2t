@@ -9,100 +9,139 @@
 exports.registerCommonScripts = function () {
 	var subscribeinstrument;
 	var unsubscribeinstrument;
+  var updatecash;
+
+  updatecash = '\
+  local updatecash = function(clientid, currency, transtype, amount, desc, timestamp, operatortype, operatorid) \
+    local cashtransid = redis.call("incr", "cashtransid") \
+    if not cashtransid then return {1005} end \
+    redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currency", currency, "transtype", transtype, "amount", amount, "desc", desc, "timestamp", timestamp, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
+    local cashkey = clientid .. ":cash:" .. currency \
+    local cashskey = clientid .. ":cash" \
+    local cash = redis.call("get", cashkey) \
+    --[[ take account of +/- transaction type ]] \
+    if transtype == "TB" or transtype == "CO" or transtype == "JO" then \
+      amount = -tonumber(amount) \
+    end \
+    if not cash then \
+      redis.call("set", cashkey, amount) \
+      redis.call("sadd", cashskey, currency) \
+    else \
+      local adjamount = tonumber(cash) + tonumber(amount) \
+      if adjamount == 0 then \
+        redis.call("del", cashkey) \
+        redis.call("srem", cashskey, currency) \
+      else \
+        redis.call("set", cashkey, adjamount) \
+      end \
+    end \
+    return {0, cashtransid} \
+  end \
+  ';
+
+  exports.updatecash = updatecash;
 
 	subscribeinstrument = '\
-  	local subscribeinstrument = function(symbol, id, servertype) \
-    	local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
-    	local marketext = redis.call("hget", servertype .. ":" .. id, "marketext") \
-    	if marketext then \
-      		topic = topic .. marketext \
-    	end \
-    	redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbol) \
-    	redis.call("sadd", "topic:" .. topic .. ":symbol:" .. symbol .. ":" .. servertype, id) \
-    	redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":symbols", symbol) \
-    	local needtosubscribe = 0 \
-      	if redis.call("scard", "topic:" .. topic .. ":" .. servertype) == 0 then \
-      		redis.call("publish", "proquote", "subscribe:" .. topic) \
-    		if redis.call("scard", "topic:" .. topic .. ":servers") == 0 then \
-    			redis.call("sadd", "topics", topic) \
-      			needtosubscribe = 1 \
-    		end \
-    	end \
-      	redis.call("sadd", "topic:" .. topic .. ":servers", servertype) \
-      	redis.call("sadd", "server:" .. servertype .. ":topics", topic) \
-     	redis.call("sadd", "topic:" .. topic .. ":" .. servertype, id) \
-    	redis.call("sadd", servertype .. ":" .. id .. ":topics", topic) \
-    	return {needtosubscribe, topic} \
-  	end \
-  	';
+  local subscribeinstrument = function(symbol, id, servertype) \
+    local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
+    local marketext = redis.call("hget", servertype .. ":" .. id, "marketext") \
+    if marketext then \
+      	topic = topic .. marketext \
+    end \
+    redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbol) \
+    redis.call("sadd", "topic:" .. topic .. ":symbol:" .. symbol .. ":" .. servertype, id) \
+    redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":symbols", symbol) \
+    local needtosubscribe = 0 \
+    if redis.call("scard", "topic:" .. topic .. ":" .. servertype) == 0 then \
+      redis.call("publish", "proquote", "subscribe:" .. topic) \
+      if redis.call("scard", "topic:" .. topic .. ":servers") == 0 then \
+    		redis.call("sadd", "topics", topic) \
+      	needtosubscribe = 1 \
+      end \
+    end \
+    redis.call("sadd", "topic:" .. topic .. ":servers", servertype) \
+    redis.call("sadd", "server:" .. servertype .. ":topics", topic) \
+    redis.call("sadd", "topic:" .. topic .. ":" .. servertype, id) \
+    redis.call("sadd", servertype .. ":" .. id .. ":topics", topic) \
+    return {needtosubscribe, topic} \
+  end \
+  ';
 
-  	unsubscribeinstrument = '\
-  	local unsubscribeinstrument = function(symbol, id, servertype) \
-    	local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
-    	local marketext = redis.call("hget", servertype .. ":" .. id, "marketext") \
-    	if marketext then \
-      		topic = topic .. marketext \
-    	end \
-    	local needtounsubscribe = 0 \
-     	redis.call("srem", "topic:" .. topic .. ":symbol:" .. symbol .. ":" .. servertype, id) \
-    	redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbol) \
-    	if redis.call("scard", "topic:" .. topic .. ":symbol:" .. symbol .. ":" .. servertype) == 0 then \
-    		redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":symbols", symbol) \
-    	end \
-   		if redis.call("scard", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols") == 0 then \
-      		redis.call("srem", servertype .. ":" .. id .. ":topics", topic) \
-      		redis.call("srem", "topic:" .. topic .. ":" .. servertype, id) \
-      		if redis.call("scard", "topic:" .. topic .. ":" .. servertype) == 0 then \
-        		redis.call("publish", "proquote", "unsubscribe:" .. topic) \
-        		redis.call("srem", "topic:" .. topic .. ":servers", servertype) \
-      			redis.call("srem", "server:" .. servertype .. ":topics", topic) \
-      			if redis.call("scard", "topic:" .. topic .. ":servers") == 0 then \
-      				redis.call("srem", "topics", topic) \
-        			needtounsubscribe = 1 \
-        		end \
-      		end \
-    	end \
-    	return {needtounsubscribe, topic} \
-  	end \
-  	';
+  unsubscribeinstrument = '\
+  local unsubscribeinstrument = function(symbol, id, servertype) \
+    local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
+    local marketext = redis.call("hget", servertype .. ":" .. id, "marketext") \
+    if marketext then \
+      topic = topic .. marketext \
+    end \
+    local needtounsubscribe = 0 \
+    redis.call("srem", "topic:" .. topic .. ":symbol:" .. symbol .. ":" .. servertype, id) \
+    redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbol) \
+    if redis.call("scard", "topic:" .. topic .. ":symbol:" .. symbol .. ":" .. servertype) == 0 then \
+    	redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":symbols", symbol) \
+    end \
+   	if redis.call("scard", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols") == 0 then \
+      redis.call("srem", servertype .. ":" .. id .. ":topics", topic) \
+      redis.call("srem", "topic:" .. topic .. ":" .. servertype, id) \
+      if redis.call("scard", "topic:" .. topic .. ":" .. servertype) == 0 then \
+        redis.call("publish", "proquote", "unsubscribe:" .. topic) \
+        redis.call("srem", "topic:" .. topic .. ":servers", servertype) \
+      	redis.call("srem", "server:" .. servertype .. ":topics", topic) \
+      	if redis.call("scard", "topic:" .. topic .. ":servers") == 0 then \
+      		redis.call("srem", "topics", topic) \
+        	needtounsubscribe = 1 \
+        end \
+      end \
+    end \
+    return {needtounsubscribe, topic} \
+  end \
+  ';
 
-  	//
-  	// subscribe to a new instrument
-  	// params: symbol, id, servertype
-  	//
-  	exports.scriptsubscribeinstrument = subscribeinstrument + '\
-  	redis.call("sadd", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
-  	redis.call("sadd", KEYS[3] .. ":" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
-  	local ret = subscribeinstrument(KEYS[1], KEYS[2], KEYS[3]) \
-  	return ret \
-  	';
+  //
+  // a cash transaction
+  //
+  exports.scriptcashtrans = updatecash + '\
+  local ret = updatecash(KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[7], KEYS[8]) \
+  return ret \
+  ';
 
-  	//
-  	// unsubscribe from an instrument
-  	// params: symbol, id, servertype
-  	//
-  	exports.scriptunsubscribeinstrument = unsubscribeinstrument + '\
-  	redis.call("srem", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
-  	redis.call("srem", KEYS[3] .. ":" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
-  	local ret = unsubscribeinstrument(KEYS[1], KEYS[2], KEYS[3]) \
-  	return ret \
-  	';
+  //
+  // subscribe to a new instrument
+  // params: symbol, id, servertype
+  //
+  exports.scriptsubscribeinstrument = subscribeinstrument + '\
+  redis.call("sadd", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
+  redis.call("sadd", KEYS[3] .. ":" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
+  local ret = subscribeinstrument(KEYS[1], KEYS[2], KEYS[3]) \
+  return ret \
+  ';
 
-  	//
-  	// unsubscribe a user/client/other connection
-  	// params: servertype, id
-  	//
-  	exports.scriptunsubscribeid = unsubscribeinstrument + '\
-  	local orderbooks = redis.call("smembers", KEYS[2] .. ":" .. KEYS[1] .. ":orderbooks") \
-  	local unsubscribetopics = {} \
-  	for i = 1, #orderbooks do \
-    	local ret = unsubscribeinstrument(orderbooks[i], KEYS[1], KEYS[2]) \
-    	if ret[1] == 1 then \
-      		table.insert(unsubscribetopics, ret[2]) \
-      	end \
-  	end \
-  	return unsubscribetopics \
-  	';
+  //
+  // unsubscribe from an instrument
+  // params: symbol, id, servertype
+  //
+  exports.scriptunsubscribeinstrument = unsubscribeinstrument + '\
+  redis.call("srem", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
+  redis.call("srem", KEYS[3] .. ":" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
+  local ret = unsubscribeinstrument(KEYS[1], KEYS[2], KEYS[3]) \
+  return ret \
+  ';
+
+  //
+  // unsubscribe a user/client/other connection
+  // params: servertype, id
+  //
+  exports.scriptunsubscribeid = unsubscribeinstrument + '\
+  local orderbooks = redis.call("smembers", KEYS[2] .. ":" .. KEYS[1] .. ":orderbooks") \
+  local unsubscribetopics = {} \
+  for i = 1, #orderbooks do \
+    local ret = unsubscribeinstrument(orderbooks[i], KEYS[1], KEYS[2]) \
+    if ret[1] == 1 then \
+      table.insert(unsubscribetopics, ret[2]) \
+    end \
+  end \
+  return unsubscribetopics \
+  ';
 
   	//
   	// unsubscribe everything for a server type

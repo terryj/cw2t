@@ -14,6 +14,7 @@ var redis = require('redis');
 // cw2t libraries
 //var winnclient = require('./winnclient.js'); // Winner API connection
 var ptpclient = require('./ptpclient.js'); // Proquote API connection
+var common = require('./common.js');
 
 // globals
 var outofhours = false; // in or out of market hours - todo: replace with markettype?
@@ -1141,6 +1142,7 @@ function getReasonDesc(reason) {
 }
 
 function initDb() {
+  common.registerCommonScripts();
   registerScripts();
 }
 
@@ -1559,7 +1561,7 @@ string luaScript = "local tDecoded = redis.call('GET', KEYS[1]);\n"
 
 function registerScripts() {
   var updateposition;
-  var updatecash;
+  var updatecash = common.updatecash;
   var updateordermargin;
   var updatereserve;
   var removefromorderbook;
@@ -1737,26 +1739,6 @@ function registerScripts() {
         redis.call("srem", reserveskey, poskey) \
       else \
         redis.call("set", reservekey, adjquantity) \
-      end \
-    end \
-  end \
-  ';
-
-  updatecash = '\
-  local updatecash = function(clientid, currency, amount) \
-    local cashkey = clientid .. ":cash:" .. currency \
-    local cashskey = clientid .. ":cash" \
-    local cash = redis.call("get", cashkey) \
-    if not cash then \
-      redis.call("set", cashkey, amount) \
-      redis.call("sadd", cashskey, currency) \
-    else \
-      local adjamount = tonumber(cash) + tonumber(amount) \
-      if adjamount == 0 then \
-        redis.call("del", cashkey) \
-        redis.call("srem", cashskey, currency) \
-      else \
-        redis.call("set", cashkey, adjamount) \
       end \
     end \
   end \
@@ -2007,7 +1989,7 @@ function registerScripts() {
   ';
 
   newtrade = updateposition + updatecash + '\
-  local newtrade = function(clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin) \
+  local newtrade = function(clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, operatortype, operatorid) \
     local tradeid = redis.call("incr", "tradeid") \
     if not tradeid then return 0 end \
     local tradekey = "trade:" .. tradeid \
@@ -2017,12 +1999,11 @@ function registerScripts() {
     redis.call("sadd", "order:" .. orderid .. ":trades", tradeid) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
     local tradecost \
+    updatecash(clientid, settlcurrency, "TC", -totalcost, "trade costs", timestamp, operatortype, operatorid) \
     if tonumber(side) == 1 then \
       tradecost = settlcurramt + totalcost \
-      updatecash(clientid, settlcurrency, -tradecost) \
     else \
       tradecost = settlcurramt - totalcost \
-      updatecash(clientid, settlcurrency, tradecost) \
     end \
     updateposition(clientid, symbol, side, quantity, price, tradecost, settlcurrency, futsettdate, initialmargin) \
     return tradeid \
@@ -2213,7 +2194,7 @@ function registerScripts() {
   local price = tonumber(KEYS[5]) \
   local instrumenttype = redis.call("hget", "symbol:" .. vals[2], "instrumenttype") \
   local initialmargin = getinitialmargin(vals[2], instrumenttype, quantity, price, KEYS[17], vals[3], vals[8]) \
-  local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], initialmargin[2], KEYS[9], 0, KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin[1]) \
+  local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], initialmargin[2], KEYS[9], 0, KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin[1], vals[9]) \
   --[[ adjust order related margin/reserve ]] \
   adjustmarginreserve(KEYS[1], vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[17], vals[7], KEYS[15], KEYS[11], vals[8]) \
   --[[ adjust order ]] \

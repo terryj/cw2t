@@ -144,11 +144,18 @@ function initdb() {
   db.sadd("cashtranstypes", "CO");
   db.sadd("cashtranstypes", "JI");
   db.sadd("cashtranstypes", "JO");
+  db.sadd("cashtranstypes", "BT");
+  db.sadd("cashtranstypes", "ST");
+  db.sadd("cashtranstypes", "FI");
+  db.sadd("cashtranstypes", "IN");
 
   db.set("cashtranstype:CI", "Cash In");
   db.set("cashtranstype:CO", "Cash Out");
   db.set("cashtranstype:JI", "Journal In");
   db.set("cashtranstype:JO", "Journal Out");
+  db.set("cashtranstype:TC", "Trade Costs");
+  db.set("cashtranstype:FI", "Finance");
+  db.set("cashtranstype:IN", "Interest");
 
   // currencies
   db.sadd("currencies", "GBP");

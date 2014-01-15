@@ -60,7 +60,6 @@ var scriptgetifas;
 var scriptgetinstrumenttypes;
 var scriptgetcashtranstypes;
 var scriptgetcurrencies;
-var scriptcashtrans;
 var scriptupdateclient;
 var scriptgetinst;
 var scriptgetclienttypes;
@@ -496,7 +495,7 @@ function getSendIfa(ifaid, conn) {
 function cashTrans(cashtrans, userid, conn) {
   cashtrans.timestamp = getUTCTimeStamp();
 
-  db.eval(scriptcashtrans, 8, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.desc, cashtrans.timestamp, operatortype, userid, function(err, ret) {
+  db.eval(common.scriptcashtrans, 8, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.desc, cashtrans.timestamp, operatortype, userid, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
@@ -1787,7 +1786,6 @@ function getPTPQuoteRejectReason(reason) {
 
 function registerScripts() {
   var stringsplit;
-  var updatecash;
 
   //
   // function to split a string into an array of substrings, based on a character
@@ -1806,37 +1804,6 @@ function registerScripts() {
     end \
     table.insert(outResults, string.sub(str, theStart)) \
     return outResults \
-  end \
-  ';
-
-  //
-  // todo: tie in with server
-  //
-  updatecash = '\
-  local updatecash = function(clientid, currency, transtype, amount, desc, timestamp, operatortype, operatorid) \
-    local cashtransid = redis.call("incr", "cashtransid") \
-    if not cashtransid then return {1005} end \
-    redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currency", currency, "transtype", transtype, "amount", amount, "desc", desc, "timestamp", timestamp, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
-    local cashkey = clientid .. ":cash:" .. currency \
-    local cashskey = clientid .. ":cash" \
-    local cash = redis.call("get", cashkey) \
-    --[[ take account of +/- transaction type ]] \
-    if transtype == "TB" or transtype == "CO" or transtype == "JO" then \
-      amount = -tonumber(amount) \
-    end \
-    if not cash then \
-      redis.call("set", cashkey, amount) \
-      redis.call("sadd", cashskey, currency) \
-    else \
-      local adjamount = tonumber(cash) + tonumber(amount) \
-      if adjamount == 0 then \
-        redis.call("del", cashkey) \
-        redis.call("srem", cashskey, currency) \
-      else \
-        redis.call("set", cashkey, adjamount) \
-      end \
-    end \
-    return {0, cashtransid} \
   end \
   ';
 
@@ -1907,11 +1874,6 @@ function registerScripts() {
     end \
   end \
   return 0 \
-  ';
-
-  scriptcashtrans = updatecash + '\
-  local ret = updatecash(KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[7], KEYS[8]) \
-  return ret \
   ';
 
   scriptgetbrokers = '\

@@ -1595,11 +1595,9 @@ function newChat(chat) {
   // we need to parse the message to find out which client to forward it to
   try {
     var chatobj = JSON.parse(chat);
-    console.log(chatobj);
 
     if ('chat' in chatobj && chatobj.chat.clientid in connections) {
-      console.log('sending');
-        connections[chatobj.chat.clientid].write(chat);
+      connections[chatobj.chat.clientid].write(chat);
     }
   } catch (e) {
     console.log(e);
@@ -1624,79 +1622,6 @@ function getDateString(utcdatetime) {
 }
 
 function registerScripts() {
-  var round;
-  var adjustmarginreserve;
-  var creditcheck;
-  var getproquotesymbol;
-  var updatetrademargin;
-  var calcfinance;
-
-  round = '\
-  local round = function(num, dp) \
-    local mult = 10 ^ (dp or 0) \
-    return math.floor(num * mult + 0.5) / mult \
-  end \
-  ';
-
-  //
-  // parameter: symbol
-  // returns: isin, proquote symbol, market & hedge symbol
-  //
-  getproquotesymbol = '\
-  local getproquotesymbol = function(symbol) \
-    local symbolkey = "symbol:" .. symbol \
-    local fields = {"isin", "proquotesymbol", "market", "hedgesymbol"} \
-    local vals = redis.call("hmget", symbolkey, unpack(fields)) \
-    return {vals[1], vals[2], vals[3], vals[4]} \
-  end \
-  ';
-
-  //
-  // get proquote quote id & quoting rsp
-  //
-  getproquotequote = '\
-    local getproquotequote = function(quoteid, side) \
-      local quotekey = "quote:" .. quoteid \
-      local pqquoteid = "" \
-      local qbroker = "" \
-      if quoteid ~= "" then \
-        if side == 1 then \
-          pqquoteid = redis.call("hget", quotekey, "offerquoteid") \
-          qbroker = redis.call("hget", quotekey, "offerqbroker") \
-        else \
-          pqquoteid = redis.call("hget", quotekey, "bidquoteid") \
-          qbroker = redis.call("hget", quotekey, "bidqbroker") \
-        end \
-      end \
-      return {pqquoteid, qbroker} \
-    end \
-  ';
-
-  addtoorderbook = '\
-  local addtoorderbook = function(symbol, orderid, side, price) \
-    --[[ buy orders need a negative price ]] \
-    if tonumber(side) == 1 then \
-      price = "-" .. price \
-    end \
-    --[[ add order to order book ]] \
-    redis.call("zadd", symbol, price, orderid) \
-    redis.call("sadd", "orderbooks", symbol) \
-  end \
-  ';
-
-  calcfinance = round + '\
-  local calcfinance = function(consid, currency, longshort, nosettdays) \
-    local finance = 0 \
-    local financerate = redis.call("get", "financerate:" .. currency .. ":" .. longshort) \
-    if financerate then \
-      --[[ nosettdays = 0 represents rolling settlement, so set it to 1 day for interest calculation ]] \
-      if tonumber(nosettdays) == 0 then nosettdays = 1 end \
-      finance = round(consid * tonumber(nosettdays) / 365 * tonumber(financerate) / 100, 2) \
-   end \
-   return finance \
-  end \
-  ';
-
   //
   // get alpha sorted list of instruments for a specified client
   // uses set of valid instrument types per client i.e. 1:instrumenttypes CFD
