@@ -80,17 +80,19 @@ function emailTrades() {
           return;
         }
 
-        // get symbol dscription
-        db.hget("symbol:" + trade.symbol, "description", function(err, description) {
-          if (err) {
-            console.log(err);
-            return;
-          }
+        if (!('emailsent' in trade)) {
+          // get symbol dscription
+          db.hget("symbol:" + trade.symbol, "description", function(err, description) {
+            if (err) {
+              console.log(err);
+              return;
+            }
 
-          trade.description = description;
+            trade.description = description;
 
-          sendTrade(trade);
-        });
+            sendTrade(trade);
+          });
+        }
       });
     });
   });
@@ -125,6 +127,9 @@ function sendTrade(trade) {
         return;
       }
       console.log(response);
+
+      // mark trade as 'sent'
+      db.hset("trade:" + trade.tradeid, "emailsent", 1);
     });
   });
 }
