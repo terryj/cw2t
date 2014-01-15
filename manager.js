@@ -79,6 +79,8 @@ var scriptnewchat;
 var scriptgetchat;
 var scriptgetpendingchat;
 var scriptgetcash;
+var scriptgetreserves;
+var scriptgetmargin;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -232,6 +234,10 @@ function listen() {
             sendConnections(obj.connectionrequest, conn);
           } else if ("chat" in obj) {
             newChat(obj.chat, userid);
+          } else if ("marginrequest" in obj) {
+            marginRequest(obj.marginrequest, conn);
+          } else if ("reservesrequest" in obj) {
+            reservesRequest(obj.reservesrequest, conn);
           } else if ("pendingchatrequest" in obj) {
             pendingChatRequest(obj.pendingchatrequest, conn);
           } else if ("ping" in obj) {
@@ -1061,6 +1067,20 @@ function cashRequest(cashreq, conn) {
   db.eval(scriptgetcash, 1, cashreq.clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"cash\":" + ret + "}");
+  });  
+}
+
+function marginRequest(marginreq, conn) {
+  db.eval(scriptgetmargin, 1, marginreq.clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"margins\":" + ret + "}");
+  });  
+}
+
+function reservesRequest(reservesreq, conn) {
+  db.eval(scriptgetreserves, 1, reservesreq.clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"reserves\":" + ret + "}");
   });  
 }
 
@@ -2103,6 +2123,33 @@ function registerScripts() {
   local cash = redis.call("smembers", KEYS[1] .. ":cash") \
   for index = 1, #cash do \
     local amount = redis.call("get", KEYS[1] .. ":cash:" .. cash[index]) \
+    table.insert(tblresults, {currency=cash[index],amount=amount}) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // pass client id
+  //
+  scriptgetmargin = '\
+  local tblresults = {} \
+  local margins = redis.call("smembers", KEYS[1] .. ":margins") \
+  for index = 1, #margins do \
+    local margin = redis.call("get", KEYS[1] .. ":margin:" .. margins[index]) \
+    table.insert(tblresults, {currency=margins[index],amount=margin}) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // pass client id
+  //
+  scriptgetreserves = '\
+  local tblresults = {} \
+  local reserves = redis.call("smembers", KEYS[1] .. ":reserves") \
+  for index = 1, #reserves do \
+    hget
+    local reserve = redis.call("get", KEYS[1] .. ":reserve:" .. reserves[index]) \
     table.insert(tblresults, {currency=cash[index],amount=amount}) \
   end \
   return cjson.encode(tblresults) \

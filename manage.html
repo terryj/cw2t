@@ -2399,6 +2399,8 @@
 
             var lnkpositions = newlink("lnkpositions", "Positions", "", frmpositions);
             var lnkcash = newlink("lnkcash", "Cash", "", frmpositions);
+            var lnkmargin = newlink("lnkmargin", "Margin", "", frmpositions);
+            var lnkreserves = newlink("lnkreserves", "Reserves", "", frmpositions);
 
             lnkpositions.onclick = function() {
                 var positionrequest = {};
@@ -2418,6 +2420,26 @@
                 setSelected(lnkcash);
                 cashrequest.clientid = inpclientid.value;
                 sockjs.send("{\"cashrequest\":" + JSON.stringify(cashrequest) + "}");
+            }
+
+            lnkmargin.onclick = function() {
+                var marginrequest = {};
+
+                if (!validateClientid()) {return;}
+
+                setSelected(lnkmargin);
+                marginrequest.clientid = inpclientid.value;
+                sockjs.send("{\"marginrequest\":" + JSON.stringify(marginrequest) + "}");
+            }
+
+            lnkreserves.onclick = function() {
+                var reservesrequest = {};
+
+                if (!validateClientid()) {return;}
+
+                setSelected(lnkreserves);
+                cashrequest.clientid = inpclientid.value;
+                sockjs.send("{\"reservesrequest\":" + JSON.stringify(reservesrequest) + "}");
             }
 
             inpclientid = document.createElement("input");
@@ -2442,6 +2464,8 @@
             function setSelected(link) {
                 lnkpositions.className = "";
                 lnkcash.className = "";
+                lnkmargin.className = "";
+                lnkreserves.className = "";
 
                 link.className = "linkselected";
             }
