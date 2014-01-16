@@ -541,7 +541,7 @@ function getSendHedgebook(hedgebook, conn) {
 }
 
 function costUpdate(cost, conn) {
-  db.eval(scriptcost, 11, cost.insttype, cost.currency, cost.side, cost.commissionpercent, cost.commissionmin, cost.ptmlevylimit, cost.ptmlevy, cost.stampdutylimit, cost.stampdutypercent, cost.contractcharge, cost.finance, function(err, ret) {
+  db.eval(scriptcost, 12, cost.insttype, cost.currency, cost.side, cost.commissionpercent, cost.commissionmin, cost.ptmlevylimit, cost.ptmlevy, cost.stampdutylimit, cost.stampdutypercent, cost.contractcharge, cost.finance, cost.defaultnosettdays, function(err, ret) {
     if (err) throw err;
 
     getSendCost(cost.insttype, cost.currency, cost.side, conn);
@@ -1996,19 +1996,19 @@ function registerScripts() {
 
   scriptcost = '\
   local costkey = KEYS[1] .. ":" .. KEYS[2] .. ":" .. KEYS[3] \
-  redis.call("hmset", "cost:" .. costkey, "costkey", costkey, "commissionpercent", KEYS[4], "commissionmin", KEYS[5], "ptmlevylimit", KEYS[6], "ptmlevy", KEYS[7], "stampdutylimit", KEYS[8], "stampdutypercent", KEYS[9], "contractcharge", KEYS[10], "finance", KEYS[11]) \
+  redis.call("hmset", "cost:" .. costkey, "costkey", costkey, "commissionpercent", KEYS[4], "commissionmin", KEYS[5], "ptmlevylimit", KEYS[6], "ptmlevy", KEYS[7], "stampdutylimit", KEYS[8], "stampdutypercent", KEYS[9], "contractcharge", KEYS[10], "finance", KEYS[11], "defaultnosettdays", KEYS[12]) \
   redis.call("sadd", "costs", costkey) \
   ';
 
   // todo: use 'hgetall' & ipair to get all vals
   scriptgetcosts = '\
   local costs = redis.call("smembers", "costs") \
-  local fields = {"commissionpercent", "commissionmin", "ptmlevylimit", "ptmlevy", "stampdutylimit", "stampdutypercent", "contractcharge", "finance"} \
+  local fields = {"commissionpercent", "commissionmin", "ptmlevylimit", "ptmlevy", "stampdutylimit", "stampdutypercent", "contractcharge", "finance", "defaultnosettdays"} \
   local vals \
   local cost = {} \
   for index = 1, #costs do \
     vals = redis.call("hmget", "cost:" .. costs[index], unpack(fields)) \
-    table.insert(cost, {costkey = costs[index], commissionpercent = vals[1], commissionmin = vals[2], ptmlevylimit = vals[3], ptmlevy = vals[4], stampdutylimit = vals[5], stampdutypercent = vals[6], contractcharge = vals[7], finance = vals[8]}) \
+    table.insert(cost, {costkey = costs[index], commissionpercent = vals[1], commissionmin = vals[2], ptmlevylimit = vals[3], ptmlevy = vals[4], stampdutylimit = vals[5], stampdutypercent = vals[6], contractcharge = vals[7], finance = vals[8], defaultnosettdays = vals[9]}) \
   end \
   return cjson.encode(cost) \
   ';
@@ -2148,7 +2148,6 @@ function registerScripts() {
   local tblresults = {} \
   local reserves = redis.call("smembers", KEYS[1] .. ":reserves") \
   for index = 1, #reserves do \
-    hget
     local reserve = redis.call("get", KEYS[1] .. ":reserve:" .. reserves[index]) \
     table.insert(tblresults, {currency=cash[index],amount=amount}) \
   end \

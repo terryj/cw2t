@@ -728,11 +728,15 @@
                 } else if ("instrument" in obj) {
                     updateInstrument(obj.instrument);
                 } else if ("margins" in obj) {
+                    clearMargins();
                     loadMargins(obj.margins);
+                    displayMargins();
                 } else if ("margin" in obj) {
                     updateMargin(obj.margin);
                 } else if ("reserves" in obj) {
+                    clearReserves();
                     loadReserves(obj.reserves);
+                    displayReserves();
                 } else if ("reserve" in obj) {
                     updateReserve(obj.reserve);
                 } else if ("signinreply" in obj) {
@@ -981,6 +985,14 @@
 
         function clearCash() {
             cash = [];
+        }
+
+        function clearMargins() {
+            margins = [];
+        }
+
+        function clearReserves() {
+            reserves = [];
         }
 
         //
@@ -1473,11 +1485,13 @@
         }
 
         function clearHeadings() {
-            for (var i = 0; i < main.childNodes.length; ++i) {
+            for (var i = main.childNodes.length - 1; i >= 0; --i) {
                 if (main.childNodes[i].nodeType == Node.TEXT_NODE) {
                     main.removeChild(main.childNodes[i]);
-                }
+                }                
             }
+
+            main.className = "";
         }
 
         function clearOrderBookHeadings() {
@@ -1572,8 +1586,6 @@
             clearStrips();
             clearAllSymbolDivs();
             clearEmptyLines();
-
-            main.className = "";
         }
 
         function clearLists() {
@@ -1826,7 +1838,7 @@
 
             clearLists();
             clearEmptyLines();
-            removeHeadings();
+            clearHeadings();
 
             for (var i in instrumenttypes) {
                 var emptyline = addNewLine(main);
@@ -1889,7 +1901,6 @@
             clearEmptyLines();
 
             list1 = getList("list1");
-
             var emptyline1 = addNewLine(main);
             emptyline1.id = "emptyline:1";
             list2 = getList("list2");
@@ -2146,6 +2157,7 @@
 
             clearLists();
             clearEmptyLines();
+            clearHeadings();
 
             var emptyline = addNewLine(main);
             emptyline.id = "emptyline:1";
@@ -2165,15 +2177,22 @@
         function displayMargins() {
             var firstMargin = true;
 
-            addHeading("Margin", list2);
+            clearLists();
+            clearEmptyLines();
+            clearHeadings();
+
+            var emptyline = addNewLine(main);
+            emptyline.id = "emptyline:1";
+
+            var list = getList("list1");
 
             for (var x in margins) {
-                addElement(marginMsg(margins[x]), list2, margins[x].currency);
+                addElement(marginMsg(margins[x]), list, margins[x].currency);
                 firstMargin = false;
             }
 
             if (firstMargin) {
-                addElement("No margins", list2, "");                
+                addElement("No margin", list, "");                
             }
         }
 
@@ -2182,33 +2201,24 @@
             var msg;
             var firstReserve = true;
 
-            addHeading("Stock Reserved", list3);
+            clearLists();
+            clearEmptyLines();
+            clearHeadings();
+
+            var emptyline = addNewLine(main);
+            emptyline.id = "emptyline:1";
+
+            var list = getList("list1");
 
             for (var x in reserves) {
                 reskey = reserves[x].symbol + " " + reserves[x].currency;
                 msg = reserveMsg(reserves[x]);
-                addElement(msg, list3, reskey);
+                addElement(msg, list, reskey);
                 firstReserve = false;
             }
 
             if (firstReserve) {
-                addElement("No reserves", list3, "");
-            }
-        }
-
-        function removeOrderAndTidy(orderid, list) {
-            var headingtext;
-
-            if (list == list1) {
-                headingtext = "No new orders";
-            } else {
-                headingtext = "No part-filled orders";
-            }
-
-            removeElementFromList(orderid, list);
-
-            if (list.childNodes.length == 0) {
-                addElement(headingtext, list, 0);
+                addElement("No reserves", list, "");
             }
         }
 
@@ -2629,17 +2639,9 @@
 
         function removeHeading(text) {
             for (var i = 0; i < main.childNodes.length; ++i) {
-                if (main.childNodes[i].nodeType == 3 && main.childNodes[i].nodeValue == text) {
+                if (main.childNodes[i].nodeType == Node.TEXT_NODE && main.childNodes[i].nodeValue == text) {
                     main.removeChild(main.childNodes[i]);
                     break;
-                }
-            }
-        }
-
-        function removeHeadings() {
-            for (var i = 0; i < main.childNodes.length; ++i) {
-                if (main.childNodes[i].nodeType == 3) {
-                    main.removeChild(main.childNodes[i]);
                 }
             }
         }
@@ -2702,7 +2704,8 @@
             if ('price' in order) {
                 msg += " @ " + order.price;
             }
-            msg += " " + getOrdertypeDesc(order.ordertype);
+
+            msg += ", T+" + order.nosettdays + ", " + getOrdertypeDesc(order.ordertype);
             if (order.remquantity > 0) {
                 msg += ", " + order.remquantity  + " remaining";
             }
@@ -2744,15 +2747,13 @@
         function tradeMsg(trade) {
             var msg;
 
-            msg = getSideDescTrade(trade.side) + " " + trade.quantity + " " + trade.symbol + ", T+" + trade.nosettdays;
-
-            msg += " @ " + trade.price;
+            msg = getSideDescTrade(trade.side) + " " + trade.quantity + " " + trade.symbol + " @ " + trade.price;
 
             if (trade.settlcurrency != "GBP" || trade.settlcurrency != trade.currency) {
                 msg += " (" + trade.settlcurrency + ")"
             }
 
-            msg += ", trade id: " + trade.tradeid + ", order id: " + trade.orderid + ", executed " + formatUTCDateTime(trade.timestamp);
+            msg += ", T+" + trade.nosettdays + ", trade id: " + trade.tradeid + ", order id: " + trade.orderid + ", executed " + formatUTCDateTime(trade.timestamp);
 
             return msg;
         }
@@ -2789,7 +2790,7 @@
             } else {
                 msg = "Short ";
             }
-            msg += position.quantity + " " + position.symbol + ", cost " + parseFloat(position.cost).toFixed(2) + " " + position.currency + ", for settlement" + formatUTCDate(position.settldate);
+            msg += position.quantity + " " + position.symbol + ", cost " + parseFloat(position.cost).toFixed(2) + " " + position.currency + ", for settlement " + formatUTCDate(position.settldate);
 
             return msg;
         }
@@ -3184,36 +3185,19 @@
             var lblsettle;
             var inpclientid;
             var lblcurrency;
-            var inpsymbol;
             var focusfield;
             var focusfldstr;
             var orderdivstr;
             var quotereqqtystr;
             var inpclientidstr;
 
-            inpsymbol = document.createElement("input");
-            inpsymbol.type = "hidden";
-            inpsymbol.id = "inpsymbol";
-
-            if (symbol == null) {
-                orderdivstr = "orderdiv";
-                orderdiv = getDiv(orderdivstr, null);
-                inpclientidstr = "inpclientid";
-                quotereqqtystr = "quotereqquantity";
-                focusfldstr = "clientboxinput";
-                selectClient("orderdiv", orderdiv, null, true, null, inpclientidstr, "stockboxinput");
-                addNewLine(orderdiv);
-                selectStock("orderdiv", orderdiv, true, false, quotereqqty);
-            } else {
-                clearSymbolDiv(symbol);
-                orderdivstr = "orderdiv:" + symbol;
-                orderdiv = getDiv("orderdiv:" + symbol, symbol);
-                inpclientidstr = "inpclientid:" + symbol;
-                quotereqqtystr = "quotereqquantity:" + symbol;
-                focusfldstr = "clientboxinput:" + symbol;
-                selectClient("orderdiv", orderdiv, symbol, true, null, inpclientidstr, quotereqqtystr);
-                inpsymbol.value = symbol;
-            }
+            clearSymbolDiv(symbol);
+            orderdivstr = "orderdiv:" + symbol;
+            orderdiv = getDiv("orderdiv:" + symbol, symbol);
+            inpclientidstr = "inpclientid:" + symbol;
+            quotereqqtystr = "quotereqquantity:" + symbol;
+            focusfldstr = "clientboxinput:" + symbol;
+            selectClient("orderdiv", orderdiv, symbol, true, null, inpclientidstr, quotereqqtystr);
 
             quotereqqty = document.createElement("input");
             quotereqqty.className = "quotereqquantity";
@@ -3289,7 +3273,6 @@
             addNewLine(orderdiv);
             orderdiv.appendChild(quotereqbutton);
             orderdiv.appendChild(inpclientid);
-            orderdiv.appendChild(inpsymbol);
 
             function sendIt() {
                 if (inpclientid.value == "") {
@@ -3297,15 +3280,6 @@
                     focusfield = document.getElementById(focusfldstr);
                     focusfield.focus();
                     return;
-                }
-
-                if (symbol == null) {
-                    if (inpsymbol.value == "") {
-                        alert("Enter a symbol");
-                        focusfield = document.getElementById("stockboxinput");
-                        focusfield.focus();
-                        return;
-                    }
                 }
 
                 if (validateNumeric(quotereqqty, getQuantityDesc(qtyascashorshares))) {
@@ -3317,7 +3291,7 @@
                         quantity = "";                        
                     }
 
-                    sendRequestQuote(inpclientid.value, inpsymbol.value, quantity, cashorderqty, instruments[inpsymbol.value].currency, currencysel[currencysel.selectedIndex].value, settlperiod[settlperiod.selectedIndex].value, orderdivstr);
+                    sendRequestQuote(inpclientid.value, symbol, quantity, cashorderqty, instruments[symbol].currency, currencysel[currencysel.selectedIndex].value, settlperiod[settlperiod.selectedIndex].value, orderdivstr);
 
                     disable();
                 } else {
@@ -4179,7 +4153,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Request Quote", "Chat"];
+            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Chat", "End Of Day"];
 
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
@@ -4189,7 +4163,7 @@
                 if (i == 0) {
                     menuitem.className = "menuitemselected";
                     lastElement = menuitem;
-                } else if (i == 10) { // change if menu changed
+                } else if (i == 9) { // change if menu changed
                     menuitem.id = "menuitemchat";
                 }
                 menu.appendChild(menuitem);
@@ -4241,10 +4215,10 @@
                     requestPositions();
                     break;
                 case 9:
-                    requestQuote(null);
+                    requestConnections();
                     break;
                 case 10:
-                    requestConnections();
+                    endOfDay();
                     break;
                 }
             }
@@ -4327,6 +4301,9 @@
                 clientboxinput.value = "";
 
                 displayClient(clients[element.value], frm, "", namefld, idfld, "");
+
+                clearHeadings();
+                clearLists();
 
                 if (focusfldstr != "") {
                     focusfld = document.getElementById(focusfldstr);
@@ -4994,6 +4971,9 @@
             var lblfinance = newlabel("lblfinance", "Finance %:", "formlabel", frmcosts);
             var inpfinance = newinput("inpfinance", "forminput", frmcosts, false);
             addNewLine(frmcosts);
+            var lbldefaultnosettdays = newlabel("lbldefaultnosettdays", "Default Settl. Days:", "formlabel", frmcosts);
+            var inpdefaultnosettdays = newinput("inpdefaultnosettdays", "forminput", frmcosts, false);
+            addNewLine(frmcosts);
             var btnupdate = newbutton("btnupdate", "Update", "formbutton", frmcosts);
             addNewLine(frmcosts);
             var lblcostsconf = newlabel("lblcostsconf", "", "", frmcosts);
@@ -5027,6 +5007,7 @@
                 cost.stampdutypercent = inpstampdutypercent.value;
                 cost.contractcharge = inpcontractcharge.value;
                 cost.finance = inpfinance.value;
+                cost.defaultnosettdays = inpdefaultnosettdays.value;
 
                 sockjs.send("{\"cost\":" + JSON.stringify(cost) + "}");
             }
@@ -5057,6 +5038,7 @@
             var inpstampdutypercent = document.getElementById("inpstampdutypercent");
             var inpcontractcharge = document.getElementById("inpcontractcharge");
             var inpfinance = document.getElementById("inpfinance");
+            var inpdefaultnosettdays = document.getElementById("inpdefaultnosettdays");
 
             if (costkey in costs) {
                 inpcommissionpercent.value = costs[costkey].commissionpercent;
@@ -5067,6 +5049,7 @@
                 inpstampdutypercent.value = costs[costkey].stampdutypercent;
                 inpcontractcharge.value = costs[costkey].contractcharge;
                 inpfinance.value = costs[costkey].finance;
+                inpdefaultnosettdays.value = costs[costkey].defaultnosettdays;
             } else {
                 inpcommissionpercent.value = "";
                 inpcommissionmin.value = "";
@@ -5075,7 +5058,8 @@
                 inpstampdutylimit.value = "";
                 inpstampdutypercent.value = "";
                 inpcontractcharge.value = "";
-                inpfinance.value = "";                
+                inpfinance.value = "";
+                inpdefaultnosettdays.value = "";            
             }
         }
 
@@ -5466,8 +5450,14 @@
             }
         }
 
-        function settings () {
-            addElement("Real soon now", list1, "");
+        function endOfDay() {
+            var eoddate = new Date();
+
+            var frmeod = getForm("frmeod");
+
+            var lbleoddate = newlabel("lbleoddate", "Run End Of Day for " + eoddate, "", frmeod);
+
+            var btneod = newbutton("btneod", "Confirm", "formbutton", frmeod);
         }
 
         function populateDate(day, month, year, defaultdate) {

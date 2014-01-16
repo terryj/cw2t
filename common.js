@@ -13,6 +13,10 @@ exports.registerCommonScripts = function () {
 
   updatecash = '\
   local updatecash = function(clientid, currency, transtype, amount, desc, timestamp, operatortype, operatorid) \
+    amount = tonumber(amount) \
+    if amount == 0 then \
+      return {0, 0} \
+    end \
     local cashtransid = redis.call("incr", "cashtransid") \
     if not cashtransid then return {1005} end \
     redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currency", currency, "transtype", transtype, "amount", amount, "desc", desc, "timestamp", timestamp, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
@@ -20,14 +24,14 @@ exports.registerCommonScripts = function () {
     local cashskey = clientid .. ":cash" \
     local cash = redis.call("get", cashkey) \
     --[[ take account of +/- transaction type ]] \
-    if transtype == "TB" or transtype == "CO" or transtype == "JO" then \
-      amount = -tonumber(amount) \
+    if transtype == "TB" or transtype == "CO" or transtype == "JO" or transtype == "TC" or transtype == "FI" then \
+      amount = -amount \
     end \
     if not cash then \
       redis.call("set", cashkey, amount) \
       redis.call("sadd", cashskey, currency) \
     else \
-      local adjamount = tonumber(cash) + tonumber(amount) \
+      local adjamount = tonumber(cash) + amount \
       if adjamount == 0 then \
         redis.call("del", cashkey) \
         redis.call("srem", cashskey, currency) \

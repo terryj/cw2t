@@ -198,21 +198,23 @@ function getSettDate(nosettdays) {
   var today = new Date();
   var days = 0;
 
-  while (true) {
-    // ignore weekends & holidays
-    if (today.getDay() == 6) {
-      today.setDate(today.getDate() + 2);
-    } else if (today.getDay() == 0) {
-      today.setDate(today.getDate() + 1);
-    } else if (isHoliday(today)) {
-      today.setDate(today.getDate() + 1);
-    } else {
-      today.setDate(today.getDate() + 1);
-      days++;
-    }
+  if (nosettdays > 0) {
+    while (true) {
+      // ignore weekends & holidays
+      if (today.getDay() == 6) {
+        today.setDate(today.getDate() + 2);
+      } else if (today.getDay() == 0) {
+        today.setDate(today.getDate() + 1);
+      } else if (isHoliday(today)) {
+        today.setDate(today.getDate() + 1);
+      } else {
+        today.setDate(today.getDate() + 1);
+        days++;
+      }
 
-    if (days >= nosettdays) {
-      break;
+      if (days >= nosettdays) {
+        break;
+      }
     }
   }
 
@@ -341,8 +343,16 @@ function newOrder(order) {
       order.qbroker = ret[6];
     }
 
+    console.log(ret);
+
+    // always set settlement date to default date for external orders
     if (order.nosettdays != ret[11]) {
       order.futsettdate = getUTCDateString(getSettDate(ret[11]));
+
+      // update the stored order settlement details if it is a hedge
+      if (ret[8] != "") {
+        db.hmset("order:" + ret[8], "nosettdays", ret[11], "futsettdate", order.futsettdate);
+      }
     }
 
     processOrder(order, ret[8], ret[9], ret[10]);
@@ -657,9 +667,6 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
 
       // publish the hedge to the client server, so anyone viewing the hedgebook receives it
       db.publish(clientserverchannel, "trade:" + hedgetradeid);
-
-      // & publish it to the user server
-      db.publish(userserverchannel, "trade:" + hedgetradeid);
 
       // if we are hedging, change the order id to that of the hedge & forward to proquote
       if (hedgeorderid != "") {
@@ -1915,7 +1922,7 @@ function registerScripts() {
       end \
       updatereserve(clientid, symbol, currency, settldate, quantity) \
     end \
-    return {1, initialmargin[2]} \
+    return {1, initialmargin[2], initialmargin[3]} \
   end \
   ';
 
@@ -1989,7 +1996,7 @@ function registerScripts() {
   ';
 
   newtrade = updateposition + updatecash + '\
-  local newtrade = function(clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, operatortype, operatorid) \
+  local newtrade = function(clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, operatortype, operatorid, finance) \
     local tradeid = redis.call("incr", "tradeid") \
     if not tradeid then return 0 end \
     local tradekey = "trade:" .. tradeid \
@@ -1998,14 +2005,12 @@ function registerScripts() {
     redis.call("sadd", clientid .. ":trades", tradeid) \
     redis.call("sadd", "order:" .. orderid .. ":trades", tradeid) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
-    local tradecost \
-    updatecash(clientid, settlcurrency, "TC", -totalcost, "trade costs", timestamp, operatortype, operatorid) \
-    if tonumber(side) == 1 then \
-      tradecost = settlcurramt + totalcost \
-    else \
-      tradecost = settlcurramt - totalcost \
+    updatecash(clientid, settlcurrency, "TC", totalcost, "trade costs", timestamp, operatortype, operatorid) \
+    --[[ finance may be paid up front ]] \
+    if tonumber(nosettdays) ~= 0 then \
+      updatecash(clientid, settlcurrency, "FI", finance, "finance", timestamp, operatortype, operatorid) \
     end \
-    updateposition(clientid, symbol, side, quantity, price, tradecost, settlcurrency, futsettdate, initialmargin) \
+    updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, futsettdate, initialmargin) \
     return tradeid \
   end \
   ';
@@ -2016,7 +2021,7 @@ function registerScripts() {
     local orderid = redis.call("incr", "orderid") \
     redis.call("hmset", "order:" .. orderid, "clientid", clientid, "symbol", symbol, "side", side, "quantity", quantity, "price", price, "ordertype", ordertype, "remquantity", remquantity, "status", status, "markettype", markettype, "futsettdate", futsettdate, "partfill", partfill, "quoteid", quoteid, "currency", currency, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "timestamp", timestamp, "margin", margin, "timeinforce", timeinforce, "expiredate", expiredate, "expiretime", expiretime, "settlcurrency", settlcurrency, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "orderid", orderid, "externalorderid", externalorderid, "execid", execid, "nosettdays", nosettdays, "operatortype", operatortype, "operatorid", operatorid, "hedgeorderid", hedgeorderid) \
     --[[ add to set of orders for this client ]] \
-    redis.call("sadd", KEYS[1] .. ":orders", orderid) \
+    redis.call("sadd", clientid .. ":orders", orderid) \
     --[[ add order id to associated quote, if there is one ]] \
     if quoteid ~= "" then \
       redis.call("hset", "quote:" .. quoteid, "orderid", orderid) \
@@ -2066,8 +2071,8 @@ function registerScripts() {
       reverseside = 1 \
     end \
     local hedgecosts = {0,0,0,0} \
-    tradeid = newtrade(KEYS[1], orderid, KEYS[2], side, KEYS[4], KEYS[5], KEYS[11], 1, 1, ret[2], hedgebookid, KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 5) \
-    hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 5) \
+    tradeid = newtrade(KEYS[1], orderid, KEYS[2], side, KEYS[4], KEYS[5], KEYS[11], 1, 1, ret[2], hedgebookid, KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 5, KEYS[22], KEYS[23], ret[3]) \
+    hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 5, KEYS[22], KEYS[23], 0) \
     --[[ adjust order as filled ]] \
     redis.call("hmset", "order:" .. orderid, "remquantity", 0, "status", 2) \
     --[[ todo: may need to adjust margin here ]] \
@@ -2081,6 +2086,8 @@ function registerScripts() {
         hedgeorderid = neworder(hedgebookid, proquotesymbol[4], KEYS[3], KEYS[4], KEYS[5], "X", KEYS[4], 0, KEYS[7], KEYS[8], KEYS[9], "", KEYS[11], KEYS[12], KEYS[13], KEYS[14], 0, KEYS[15], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], "", "", KEYS[21], KEYS[22], KEYS[23], orderid) \
         --[[ get proquote values ]] \
         proquotequote = getproquotequote(KEYS[10], side) \
+        --[[ assume uk equity as underlying for default settl days ]] \
+        defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. KEYS[18] .. ":" .. side, "defaultnosettdays") \
       end \
     end \
   else \
@@ -2088,7 +2095,7 @@ function registerScripts() {
     if markettype == 0 then \
       proquotesymbol = getproquotesymbol(KEYS[2]) \
       proquotequote = getproquotequote(KEYS[10], side) \
-      defaultnosettdays = redis.call("hget", "cost:" .. instrumenttype .. ":" .. KEYS[18] .. ":" .. 1, "defaultnosettdays") \
+      defaultnosettdays = redis.call("hget", "cost:" .. instrumenttype .. ":" .. KEYS[18] .. ":" .. side, "defaultnosettdays") \
     end \
   end \
   return {ret[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttype, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays} \
@@ -2155,8 +2162,9 @@ function registerScripts() {
       --[[ create trades for active & passive orders ]] \
       local costs = getcosts(instrumenttype, vals[4], consid, vals[7]) \
       local matchcosts = getcosts(instrumenttype, matchside, consid, matchvals[7]) \
-      local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], vals[4], tradequantity, tradeprice, vals[7], costs, matchorder[2], matchorder[4], "1", "", vals[10], vals[11], "", "", vals[7], "", "") \
-      local matchtradeid = newtrade(matchvals[2], matchvals[4], matchorders[i], matchvals[3], matchside, tradequantity, tradeprice, matchvals[7], matchcosts, order[2], order[4], "1", "", matchvals[10], matchvals[11], "", "", vals[7], "", "") \
+      local finance = 0 \
+      local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], vals[4], tradequantity, tradeprice, vals[7], costs, matchorder[2], matchorder[4], "1", "", vals[10], vals[11], "", "", vals[7], "", "", 1, 1, finance) \
+      local matchtradeid = newtrade(matchvals[2], matchvals[4], matchorders[i], matchvals[3], matchside, tradequantity, tradeprice, matchvals[7], matchcosts, order[2], order[4], "1", "", matchvals[10], matchvals[11], "", "", vals[7], "", "", 1, 1, finance) \
       --[[ update return values ]] \
       mo[j] = matchorders[i] \
       t[j] = tradeid \
@@ -2188,13 +2196,13 @@ function registerScripts() {
   // fill
   //
   scriptnewtrade = newtrade + getcosts + adjustmarginreserve + updatetrademargin + '\
-  local fields = {"clientid", "symbol", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "operatortype", "hedgeorderid", "futsettdate"} \
+  local fields = {"clientid", "symbol", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "operatortype", "hedgeorderid", "futsettdate", "operatorid"} \
   local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
   local quantity = tonumber(KEYS[4]) \
   local price = tonumber(KEYS[5]) \
   local instrumenttype = redis.call("hget", "symbol:" .. vals[2], "instrumenttype") \
   local initialmargin = getinitialmargin(vals[2], instrumenttype, quantity, price, KEYS[17], vals[3], vals[8]) \
-  local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], initialmargin[2], KEYS[9], 0, KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin[1], vals[9]) \
+  local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], initialmargin[2], KEYS[9], 0, KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin[1], vals[9], vals[12], initialmargin[3]) \
   --[[ adjust order related margin/reserve ]] \
   adjustmarginreserve(KEYS[1], vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[17], vals[7], KEYS[15], KEYS[11], vals[8]) \
   --[[ adjust order ]] \
@@ -2287,7 +2295,7 @@ function registerScripts() {
   local proquotesymbol = getproquotesymbol(KEYS[2]) \
   local instrumenttype = redis.call("hget", "symbol:" .. KEYS[2], "instrumenttype") \
   --[[ assuming buy to get default settlement days ]] \
-  local defaultnosettdays = redis.call("hget", "cost:" .. instrumenttype .. ":" .. KEYS[6] .. ":" .. 1, "defaultnosettdays") \
+  local defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. KEYS[6] .. ":" .. "1", "defaultnosettdays") \
   return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], defaultnosettdays} \
   ';
 
