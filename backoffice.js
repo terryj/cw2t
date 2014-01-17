@@ -47,7 +47,7 @@ var smtpTransport = nodemailer.createTransport("SMTP",{
    service: "Gmail",
    auth: {
        user: "terrymjohnston@gmail.com",
-       pass: "***"
+       pass: "dorothy0102"
    }
 });
 
@@ -101,19 +101,21 @@ function emailTrades() {
     //smtpTransport.close(); // shut down the connection pool, no more messages
 
 function sendTrade(trade) {
-  db.hget("client:" + trade.clientid, "email", function(err, email) {
+  db.hgetall("client:" + trade.clientid, function(err, client) {
+    console.log("Sending trade id:" + trade.tradeid + " for client id:" + client.clientid);
+    
     // handle GBX from proquote
     if (trade.currency == "GBX") {
       trade.currency = "GBP";
     }
 
     var subject = getSubject(trade);
-    var msg = htmlMsg(trade);
+    var msg = htmlMsg(trade, client);
 
     // setup e-mail data
     var mailoptions = {
       from: "Terry Johnston <terrymjohnston@gmail.com>", // sender address
-      to: email, // receiver address
+      to: client.email, // receiver address
       subject: subject, // subject line
       generateTextFromHTML: true,
       //text: "test", // plaintext body
@@ -150,12 +152,12 @@ function getSubject(trade) {
   return msg;
 }
 
-function htmlMsg(trade) {
+function htmlMsg(trade, client) {
   var msg;
 
   msg = "<h2>Thomas Grant & Company - Contract Note</h2>";
 
-  msg += "<p>This is to confirm that at " + formatUTCDateTime(trade.timestamp) + " you ";
+  msg += "<p>This is to confirm that at " + formatUTCDateTime(trade.timestamp) + ", " + client.name;
 
   msg += "<p>";
 
@@ -165,7 +167,7 @@ function htmlMsg(trade) {
     msg += "Sold";
   }
 
-  msg += " " + trade.quantity + " " + trade.description + " @ " + trade.price + " for consideration of " + trade.settlcurramt + trade.settlcurrency;
+  msg += " " + trade.quantity + " " + trade.description + " @ " + trade.price + " for consideration of " + trade.settlcurramt + " " + trade.settlcurrency;
 
   msg += "<p>For settlement T+" + trade.nosettdays + " on " + formatUTCDate(trade.futsettdate) + "</p>";
 
@@ -183,14 +185,14 @@ function htmlMsg(trade) {
   }
 
   msg += "<p><p>Thomas Grant & Company Ltd."
-  msg += "40A Friar Lane. Leicester. Leicestershire. LE1 5RA";
-  msg += "Leicester Dealers: 0116 2255500";
-  msg += "Derby Office: 0133 2370299";
-  msg += "Administration: 0116 2255509";
-  msg += "FAX: 0116 2258800";
-  msg += "Email: info@thomasgrant.co.uk";
-  msg += "FCA No: 163296";
-  
+  msg += "<br>40A Friar Lane. Leicester. Leicestershire. LE1 5RA";
+  msg += "<br>Leicester Dealers: 0116 2255500";
+  msg += "<br>Derby Office: 0133 2370299";
+  msg += "<br>Administration: 0116 2255509";
+  msg += "<br>FAX: 0116 2258800";
+  msg += "<br>Email: info@thomasgrant.co.uk";
+  msg += "<br>FCA No: 163296";
+
   return msg;
 }
 
