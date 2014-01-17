@@ -153,7 +153,7 @@ function getSubject(trade) {
 function htmlMsg(trade) {
   var msg;
 
-  msg = "<h2>Thomas Grant & Co. Contract Note</h2>";
+  msg = "<h2>Thomas Grant & Company - Contract Note</h2>";
 
   msg += "<p>This is to confirm that at " + formatUTCDateTime(trade.timestamp) + " you ";
 
@@ -167,9 +167,9 @@ function htmlMsg(trade) {
 
   msg += " " + trade.quantity + " " + trade.description + " @ " + trade.price + " for consideration of " + trade.settlcurramt + trade.settlcurrency;
 
-  msg += "<p>For settlement on " + formatUTCDate(trade.futsettdate) + "<\p>";
+  msg += "<p>For settlement T+" + trade.nosettdays + " on " + formatUTCDate(trade.futsettdate) + "</p>";
 
-  msg += "<p>Trade id:" + trade.tradeid + "<\p>";
+  msg += "<p>Trade id:" + trade.tradeid + "</p>";
 
   msg += "<p><b>Costs</b>";
 
@@ -178,8 +178,19 @@ function htmlMsg(trade) {
   msg += "<br>Stamp Duty: " + trade.stampduty;
   msg += "<br>Contract Charge: " + trade.contractcharge;
 
-  msg += "</p>";
+  if ('finance' in trade && trade.finance > 0) {
+    msg += "<br>Finance Charge: " + trade.finance;
+  }
 
+  msg += "<p><p>Thomas Grant & Company Ltd."
+  msg += "40A Friar Lane. Leicester. Leicestershire. LE1 5RA";
+  msg += "Leicester Dealers: 0116 2255500";
+  msg += "Derby Office: 0133 2370299";
+  msg += "Administration: 0116 2255509";
+  msg += "FAX: 0116 2258800";
+  msg += "Email: info@thomasgrant.co.uk";
+  msg += "FCA No: 163296";
+  
   return msg;
 }
 

@@ -19,7 +19,8 @@ exports.registerCommonScripts = function () {
     end \
     local cashtransid = redis.call("incr", "cashtransid") \
     if not cashtransid then return {1005} end \
-    redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currency", currency, "transtype", transtype, "amount", amount, "desc", desc, "timestamp", timestamp, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
+    redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currency", currency, "transtype", transtype, "amount", amount, "description", desc, "timestamp", timestamp, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
+    redis.call("sadd", clientid .. ":cashtrans", cashtransid) \
     local cashkey = clientid .. ":cash:" .. currency \
     local cashskey = clientid .. ":cash" \
     local cash = redis.call("get", cashkey) \

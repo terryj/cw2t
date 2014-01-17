@@ -1999,17 +1999,18 @@ function registerScripts() {
   local newtrade = function(clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, operatortype, operatorid, finance) \
     local tradeid = redis.call("incr", "tradeid") \
     if not tradeid then return 0 end \
+    --[[ daily finance that is indicated for rolling settlement is charged via end of day ]] \
+    if tonumber(nosettdays) == 0 then \
+      finance = 0 \
+    end \
     local tradekey = "trade:" .. tradeid \
-    redis.call("hmset", tradekey, "clientid", clientid, "orderid", orderid, "symbol", symbol, "side", side, "quantity", quantity, "price", price, "currency", currency, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrency", settlcurrency, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays) \
+    redis.call("hmset", tradekey, "clientid", clientid, "orderid", orderid, "symbol", symbol, "side", side, "quantity", quantity, "price", price, "currency", currency, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrency", settlcurrency, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "finance", finance) \
     redis.call("sadd", "trades", tradeid) \
     redis.call("sadd", clientid .. ":trades", tradeid) \
     redis.call("sadd", "order:" .. orderid .. ":trades", tradeid) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
     updatecash(clientid, settlcurrency, "TC", totalcost, "trade costs", timestamp, operatortype, operatorid) \
-    --[[ finance may be paid up front ]] \
-    if tonumber(nosettdays) ~= 0 then \
-      updatecash(clientid, settlcurrency, "FI", finance, "finance", timestamp, operatortype, operatorid) \
-    end \
+    updatecash(clientid, settlcurrency, "FI", finance, "finance", timestamp, operatortype, operatorid) \
     updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, futsettdate, initialmargin) \
     return tradeid \
   end \

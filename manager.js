@@ -81,6 +81,7 @@ var scriptgetpendingchat;
 var scriptgetcash;
 var scriptgetreserves;
 var scriptgetmargin;
+var scriptgetcashhistory;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -228,6 +229,8 @@ function listen() {
             tradeHistory(obj.tradehistoryrequest, conn);
           } else if ("quotehistoryrequest" in obj) {
             quoteHistory(obj.quotehistoryrequest, conn);
+          } else if ("cashhistoryrequest" in  obj) {
+            cashHistory(obj.cashhistoryrequest, conn);
           } else if ("chathistoryrequest" in obj) {
             chatHistory(obj.chathistoryrequest, conn);
           } else if ("connectionrequest" in obj) {
@@ -1009,6 +1012,13 @@ function tradeHistory(req, conn) {
     if (err) throw err;
     conn.write("{\"trades\":" + ret + "}");
   });
+}
+
+function cashHistory(req, conn) {
+  db.eval(scriptgetcashhistory, 1, req.clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"cashhistory\":" + ret + "}");
+  });  
 }
 
 function chatHistory(req, conn) {
@@ -2096,6 +2106,21 @@ function registerScripts() {
   for index = 1, #trades do \
     vals = redis.call("hmget", "trade:" .. trades[index], unpack(fields)) \
     table.insert(tblresults, {clientid=vals[1],orderid=vals[2],symbol=vals[3],side=vals[4],quantity=vals[5],price=vals[6],currency=vals[7],currencyratetoorg=vals[8],currencyindtoorg=vals[9],commission=vals[10],ptmlevy=vals[11],stampduty=vals[12],contractcharge=vals[13],counterpartyid=vals[14],markettype=vals[15],externaltradeid=vals[16],futsettdate=vals[17],timestamp=vals[18],lastmkt=vals[19],externalorderid=vals[20],tradeid=vals[21],settlcurrency=vals[22],settlcurramt=vals[23],settlcurrfxrate=vals[24],settlcurrfxratecalc=vals[25],nosettdays=vals[26],margin=vals[27]}) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // pass client id
+  //
+  scriptgetcashhistory = '\
+  local tblresults = {} \
+  local cashhistory = redis.call("smembers", KEYS[1] .. ":cashtrans") \
+  local fields = {"clientid","currency","amount","transtype","description","timestamp","cashtransid"} \
+  local vals \
+  for index = 1, #cashhistory do \
+    vals = redis.call("hmget", "cashtrans:" .. cashhistory[index], unpack(fields)) \
+    table.insert(tblresults, {clientid=vals[1],currency=vals[2],amount=vals[3],transtype=vals[4],description=vals[5],timestamp=vals[6],cashtransid=vals[7]}) \
   end \
   return cjson.encode(tblresults) \
   ';

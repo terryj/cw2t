@@ -664,6 +664,7 @@
         var quoterequests = {};
         var connections = {};
         var chathistory = {};
+        var cashhistory = {};
 
         //
         // incoming data function
@@ -772,10 +773,12 @@
                     clearConnections();
                     loadConnections(obj.connections);
                     displayConnections();
+                } else if ("cashhistory" in obj) {
+                    clearCashHistory();
+                    loadCashHistory(obj.cashhistory);
+                    displayCashHistory();
                 } else if ("chat" in obj) {
                     newChat(obj.chat);
-                /*} else if ("pendingchat" in obj) {
-                    pendingChat(obj.pendingchat);*/
                 } else if ("chathistory" in obj) {
                     clearChatHistory();
                     loadChatHistory(obj.chathistory);
@@ -953,6 +956,12 @@
             }            
         }
 
+        function loadCashHistory(cashhistarr) {
+            for (var i = 0; i < cashhistarr.length; ++i) {
+                cashhistory[cashhistarr[i].cashtransid] = cashhistarr[i];
+            }            
+        }
+
         // clear array routines
 
         function clearQuoteRequests() {
@@ -993,6 +1002,10 @@
 
         function clearReserves() {
             reserves = [];
+        }
+
+        function clearCashHistory() {
+            cashhistory = [];
         }
 
         //
@@ -2152,6 +2165,37 @@
             }
         }
 
+        function displayCashHistory() {
+            var firstcashhistory = true;
+            var msg;
+            var list;
+
+            clearLists();
+            clearHeadings();
+            clearEmptyLines();
+
+            list = getList("list1");
+
+            for (var x in cashhistory) {
+                msg = cashHistoryMsg(cashhistory[x]);
+                addElement(msg, list, cashhistory[x].cashtransid);
+                firstcashhistory = false;
+            }
+
+            if (firstcashhistory) {
+                addElement("No cash items", list, 0);                
+            } else {
+                list.onclick = function(e) {
+                    var element;
+
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewCashHistory(element.value);
+                }
+            }
+        }
+
         function displayCash() {
             var firstCash = true;
 
@@ -2373,6 +2417,28 @@
             }
 
             alert(msg);
+        }
+
+        function viewCashHistory(cashtransid) {
+            var msg = "";
+            var cashhist;
+            var fieldcontents;
+            var fielddesc;
+
+            cashhist = cashhistory[cashtransid];
+
+            for (var field in cashhist) {
+                fieldcontents = cashhist[field];
+
+                switch (field) {
+                    default:
+                        fielddesc = fieldcontents;
+                }
+
+                msg += field + ": " + fielddesc + "\n";
+            }
+
+            alert(msg);            
         }
 
         function viewPosition(positionid) {
@@ -2754,6 +2820,14 @@
             }
 
             msg += ", T+" + trade.nosettdays + ", trade id: " + trade.tradeid + ", order id: " + trade.orderid + ", executed " + formatUTCDateTime(trade.timestamp);
+
+            return msg;
+        }
+
+        function cashHistoryMsg(cashhist) {
+            var msg;
+
+            msg = cashhist.timestamp + " " + cashtranstypes[cashhist.transtype].description + " " + cashhist.amount + " " + cashhist.currency;
 
             return msg;
         }
@@ -3818,6 +3892,9 @@
             }*/
 
             function sendIt() {
+                alert("Limit orders: coming soon...");
+                return;
+
                 var settdate;
 
                 if ((!validateNumeric(quantityinput, getQuantityDesc(qtyascashorshares))) || (!validateNumeric(priceinput, pricedesc))) {
@@ -3862,12 +3939,7 @@
         function populateSettlPeriod(settlperiod, instrumenttype) {
             settlperiod.options.length = 0;
 
-            if (instrumenttype != "DE") {
-                settlperiod[0] = new Option("T+0 (Rolling)", 0, true, true);
-                settlperiod[1] = new Option("T+10", 10, false, false);
-                settlperiod[2] = new Option("T+20", 20, false, false);
-                settlperiod[3] = new Option("T+50", 50, false, false);
-            } else {
+            if (instrumenttype == "DE" || instrumenttype == "IE") {
                 for (var i = 0; i < 50; i++) {
                     var s = i + 1;
                     if (s == 3) {
@@ -3876,6 +3948,13 @@
                         settlperiod[i] = new Option("T+" + s, s, false, false);
                     }
                 }
+            } else if (instrumenttype == "CCFD") {
+                settlperiod[0] = new Option("T+3", 3, true, true);
+            } else {
+                settlperiod[0] = new Option("T+0 (Rolling)", 3, true, true);
+                settlperiod[1] = new Option("T+10", 10, false, false);
+                settlperiod[2] = new Option("T+20", 20, false, false);
+                settlperiod[3] = new Option("T+50", 50, false, false);                
             }
         }
 
@@ -5371,6 +5450,7 @@
             var lnkquotes = newlink("lnkquotes", "Quotes", "", frmhistory);
             var lnkorders = newlink("lnkorders", "Orders", "", frmhistory);
             var lnktrades = newlink("lnktrades", "Trades", "", frmhistory);
+            var lnkcash = newlink("lnkcash", "Cash", "", frmhistory);
             var lnkchat = newlink("lnkchat", "Chat", "", frmhistory);
 
             lnkquoterequests.onclick = function() {
@@ -5405,6 +5485,14 @@
                 sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
             }
 
+            lnkcash.onclick = function() {
+                if (!validateClientid()) {return;}
+
+                setSelected(lnkcash);
+                historyrequest.clientid = inpclientid.value;
+                sockjs.send("{\"cashhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
             lnkchat.onclick = function() {
                 if (!validateClientid()) {return;}
 
@@ -5412,7 +5500,6 @@
                 historyrequest.clientid = inpclientid.value;
                 sockjs.send("{\"chathistoryrequest\":" + JSON.stringify(historyrequest) + "}");
             }
-
 
             inpclientid = document.createElement("input");
             inpclientid.type = "hidden";
@@ -5445,6 +5532,7 @@
                 lnkorders.className = "";
                 lnktrades.className = "";
                 lnkchat.className = "";
+                lnkcash.className = "";
 
                 link.className = "linkselected";
             }
