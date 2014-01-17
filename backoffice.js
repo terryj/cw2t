@@ -47,7 +47,7 @@ var smtpTransport = nodemailer.createTransport("SMTP",{
    service: "Gmail",
    auth: {
        user: "terrymjohnston@gmail.com",
-       pass: "dorothy0102"
+       pass: "***"
    }
 });
 
@@ -103,7 +103,7 @@ function emailTrades() {
 function sendTrade(trade) {
   db.hgetall("client:" + trade.clientid, function(err, client) {
     console.log("Sending trade id:" + trade.tradeid + " for client id:" + client.clientid);
-    
+
     // handle GBX from proquote
     if (trade.currency == "GBX") {
       trade.currency = "GBP";
