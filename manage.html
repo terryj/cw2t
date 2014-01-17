@@ -404,7 +404,7 @@
         .orderstock {
             color: gray;
             display: inline-block;
-            width: 120px;
+            width: 140px;
             font-size: 21px;
             margin-left: 3px;
             text-align: center;
@@ -3684,7 +3684,10 @@
 
             stocklabel = document.createElement("label");
             stocklabel.className = "orderstock";
-            stocklabel.innerHTML = symbol + " @ ";
+            stocklabel.innerHTML = symbol;// + " @ ";
+
+            atlabel = document.createElement("label");
+            atlabel.innerHTML = " @ ";
 
             /*ordertypesel = document.createElement("select");
             ordertypesel.id = "ordertype" + symbol;
@@ -3833,6 +3836,7 @@
             orderdiv.appendChild(quantityinput);
             orderdiv.appendChild(stocklabel);
             orderdiv.appendChild(priceinput);
+            orderdiv.appendChild(atlabel);
             //orderdiv.appendChild(ordertypesel);
             orderdiv.appendChild(timeinforcesel);
             orderdiv.appendChild(settlabel);
