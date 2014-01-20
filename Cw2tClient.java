@@ -110,7 +110,7 @@ class Cw2tSubscriber extends JedisPubSub {
             // bid/offer price
             s.add(Tag.makeTag("4332/1"));
             s.add(Tag.makeTag("4333/1"));
-            s.add(Tag.makeTag("4332/2"));
+            /*s.add(Tag.makeTag("4332/2"));
             s.add(Tag.makeTag("4333/2"));
             s.add(Tag.makeTag("4332/3"));
             s.add(Tag.makeTag("4333/3"));
@@ -119,10 +119,10 @@ class Cw2tSubscriber extends JedisPubSub {
             s.add(Tag.makeTag("4332/5"));
             s.add(Tag.makeTag("4333/5"));
             s.add(Tag.makeTag("4332/6"));
-            s.add(Tag.makeTag("4333/6"));
+            s.add(Tag.makeTag("4333/6"));*/
             
             // bid/offer volume
-            s.add(Tag.makeTag("4331/1"));
+            /*s.add(Tag.makeTag("4331/1"));
             s.add(Tag.makeTag("4334/1"));
             s.add(Tag.makeTag("4331/2"));
             s.add(Tag.makeTag("4334/2"));
@@ -133,7 +133,10 @@ class Cw2tSubscriber extends JedisPubSub {
             s.add(Tag.makeTag("4331/5"));
             s.add(Tag.makeTag("4334/5"));
             s.add(Tag.makeTag("4331/6"));
-            s.add(Tag.makeTag("4334/6"));
+            s.add(Tag.makeTag("4334/6"));*/
+            
+            //s.add(Tag.makeTag("4220"));
+            //s.add(Tag.makeTag("4221"));
 
             System.out.println("Subscribing to topic: " + message.substring(10));
             session.Subscribe(message.substring(10), SLDictionary.ReqType.REQ_SNAP_REF, s);
@@ -353,6 +356,13 @@ public class Cw2tClient implements ISessionObserver {
                     desc = "offervol";
                 }
                 level = tag.substring(slash+1);
+            } else {
+                //System.out.println(tag);
+                
+                /*if (tag.equals("4221") {
+                    
+                }*/
+                continue;
             }
             
             // get the value
@@ -381,11 +391,13 @@ public class Cw2tClient implements ISessionObserver {
             }
             
             // add a price level to the message
-            jsonmsg = jsonmsg + "{\"level\":" + level +  ",\"" + desc + "\":" + s + "}";
+            jsonmsg = jsonmsg + "{\"level\":" + level +  ",\"" + desc + "\":\"" + s + "\"}";
             
             // add to map
             fieldmap.put(desc+level, s);
         }
+        
+        if (firstprice) return;
         
         // complete the message
         jsonmsg = jsonmsg + "]";

@@ -15,6 +15,16 @@
             color: #666666;
             cursor: pointer;
         }
+        .listchat {
+            display: block;
+            font-size: 24px;
+            color: #666666;
+            white-space: nowrap;
+        }
+        .listchat li:hover {
+            color: #666666;
+            cursor: pointer;
+        }
         .menu li {
             display: inline;
             margin: 0 10px;
@@ -34,7 +44,8 @@
             color: yellow;
         }
         .cw2t {
-            width: 620px;
+            /*width: 620px;*/
+            width: 460px;
             font-size: 33px;
             color: #C0C0C0;
             white-space: nowrap;
@@ -42,7 +53,8 @@
         }
         .yellowstrip {
             background-color: yellow;
-            width: 620px;
+            /*width: 620px;*/
+            width: 460px;
             white-space: nowrap;
             margin: 3px;
         }
@@ -63,12 +75,14 @@
             text-decoration: underline;
         }
         .depthstrip {
-            width: 620px;
+            /*width: 620px;*/
+            width: 460px;
             white-space: nowrap;
             margin: 3px;
         }
         .headingstrip {
-            width: 620px;
+            /*width: 620px;*/
+            width: 460px;
             white-space: nowrap;
             margin: 3px;
         }
@@ -348,14 +362,14 @@
         }
         .stock {
             display: inline-block;
-            width: 162px;
+            width: 180px;
             font-size: 27px;
             color: gray;
             cursor: pointer;
         }
         .stockheading {
             display: inline-block;
-            width: 162px;
+            width: 180px;
             font-size: 12px;
             color: gray;
         }
@@ -393,7 +407,8 @@
             font-size: 12px;
         }
         .forminstrument {
-            width: 620px;
+            /*width: 620px;*/
+            width: 460px;
             white-space: nowrap;            
         }
         .orderquantity {
@@ -665,6 +680,8 @@
         var connections = {};
         var chathistory = {};
         var cashhistory = {};
+        var chatmenuoption = 9;
+        var showvolume = false;
 
         //
         // incoming data function
@@ -2594,6 +2611,9 @@
             var chattextlen;
             var pendingchatrequest = {};
 
+            var ls = document.getElementById("list1");
+            ls.className = "listchat";
+
             if ('pendingchat' in connections[elem.value] && connections[elem.value].pendingchat) {
                 pendingchatrequest.clientid = elem.value;
                 sockjs.send("{\"pendingchatrequest\":" + JSON.stringify(pendingchatrequest) + "}");
@@ -2613,7 +2633,7 @@
 
             addNewLine(chatdiv);
 
-            var chatbtn = newbutton("btnchat", "Send", "chatbtn", chatdiv);
+            var chatbtn = newbutton("btnchat:" + elem.value, "Send", "chatbtn", chatdiv);
 
             chatid = document.createElement("input");
             chatid.type = "hidden";
@@ -2629,14 +2649,24 @@
 
             elem.appendChild(chatdiv);
 
-            chatbtn.onclick = function() {
+            chatbtn.onclick = function(event) {
                 var chat = {};
+
+                event = event || window.event;  // cross-browser event
 
                 chat.chatid = chatid.value;
                 chat.clientid = elem.value;
                 chat.text = chattext.value.substr(chattextlen.value);
 
                 sockjs.send("{\"chat\":" + JSON.stringify(chat) + "}");
+
+                if (event.stopPropagation) {
+                    // W3C standard variant
+                    event.stopPropagation();
+                } else {
+                    // IE variant
+                    event.cancelBubble = true;
+                }
             }
 
             chattext.focus();
@@ -2653,7 +2683,7 @@
             var items;
 
             // if chat not selected, just highlight the menu option
-            if (selectedmenu != 10) {
+            if (selectedmenu != chatmenuoption) {
                 menuitemchat = document.getElementById("menuitemchat");
                 if (menuitemchat != null) {
                     menuitemchat.className = "menuitemchat";
@@ -2967,8 +2997,10 @@
                 if (strip != null) {
                     bidprice = document.getElementById("bidprice:" + symbol + ":" + y);
                     offerprice = document.getElementById("offerprice:" + symbol + ":" + y);
-                    bidquantity = document.getElementById("bidquantity:" + symbol + ":" + y);
-                    offerquantity = document.getElementById("offerquantity:" + symbol + ":" + y);
+                    if (showvolume) {
+                        bidquantity = document.getElementById("bidquantity:" + symbol + ":" + y);
+                        offerquantity = document.getElementById("offerquantity:" + symbol + ":" + y);
+                    }
                 } else {
                     // first time through, so create elements
                     strip = document.createElement('div');
@@ -2979,8 +3011,10 @@
                     strip.onmouseout = function() {
                         links.style.visibility = "hidden";
                     }
-                    level2 = document.createElement('span');
-                    level2.className = "level2";
+                    if (showvolume) {
+                        level2 = document.createElement('span');
+                        level2.className = "level2";
+                    }
                     stock = document.createElement('span');
                     stock.className = "stock";
                     bidprice = document.createElement('span');
@@ -2991,16 +3025,20 @@
                     offerprice.id = "offerprice:" + symbol + ":" + y;
                     offerprice.title = "Place a new buy order";
                     offerprice.onclick = function() {setOrderPrice(this, "1", symbol);}
-                    bidquantity = document.createElement('span');
-                    bidquantity.className = "bidquantity";
-                    bidquantity.id = "bidquantity:" + symbol + ":" + y;
-                    bidquantity.title = "Place a new sell order";
-                    bidquantity.onclick = function() {setOrderQuantity(this, "2", symbol);}
-                    offerquantity = document.createElement('span');
-                    offerquantity.className = "offerquantity";
-                    offerquantity.id = "offerquantity:" + symbol + ":" + y;
-                    offerquantity.title = "Place a new buy order";
-                    offerquantity.onclick = function() {setOrderQuantity(this, "1", symbol);}
+
+                    if (showvolume) {
+                        bidquantity = document.createElement('span');
+                        bidquantity.className = "bidquantity";
+                        bidquantity.id = "bidquantity:" + symbol + ":" + y;
+                        bidquantity.title = "Place a new sell order";
+                        bidquantity.onclick = function() {setOrderQuantity(this, "2", symbol);}
+                        offerquantity = document.createElement('span');
+                        offerquantity.className = "offerquantity";
+                        offerquantity.id = "offerquantity:" + symbol + ":" + y;
+                        offerquantity.title = "Place a new buy order";
+                        offerquantity.onclick = function() {setOrderQuantity(this, "1", symbol);}
+                    }
+
                     slash = document.createElement('span');
                     slash.className = "slash";
                     slash.innerHTML = "/";
@@ -3039,18 +3077,20 @@
                         links.appendChild(placebuyorderlnk);
                         links.appendChild(placesellorderlnk);
 
-                        level2.onclick = function() {
-                            clearAllStrips(symbol);
-                            obdisplay[symbol].level2 = !obdisplay[symbol].level2;
-                            displayOrderBook(symbol);
-                        }
+                        if (showvolume) {
+                            level2.onclick = function() {
+                                clearAllStrips(symbol);
+                                obdisplay[symbol].level2 = !obdisplay[symbol].level2;
+                                displayOrderBook(symbol);
+                            }
 
-                        if (obdisplay[symbol].level2) {
-                            level2.title = "hide depth";
-                            level2.innerHTML = "-";
-                        } else {
-                            level2.title = "show depth";
-                            level2.innerHTML = "+";
+                            if (obdisplay[symbol].level2) {
+                                level2.title = "hide depth";
+                                level2.innerHTML = "-";
+                            } else {
+                                level2.title = "show depth";
+                                level2.innerHTML = "+";
+                            }
                         }
 
                         stock.innerHTML = symbol;
@@ -3075,13 +3115,19 @@
                         strip.className = "depthstrip";
                     }
 
-                    strip.appendChild(level2);
+                    if (showvolume) {
+                        strip.appendChild(level2);
+                    }
                     strip.appendChild(stock);
-                    strip.appendChild(bidquantity);
+                    if (showvolume) {
+                        strip.appendChild(bidquantity);
+                    }
                     strip.appendChild(bidprice);
                     strip.appendChild(slash);
                     strip.appendChild(offerprice);
-                    strip.appendChild(offerquantity);
+                    if (showvolume) {
+                        strip.appendChild(offerquantity);
+                    }
                     strip.appendChild(removestock);
 
                     if (y == 0) {
@@ -3103,10 +3149,12 @@
                 priceChange(symbol, y, bidprice, offerprice);
 
                 bidprice.innerHTML = orderbooks[symbol][y].bid;
-                offerprice.innerHTML = orderbooks[symbol][y].offer;                    
+                offerprice.innerHTML = orderbooks[symbol][y].offer;
 
-                bidquantity.innerHTML = orderbooks[symbol][y].bidvol;
-                offerquantity.innerHTML = orderbooks[symbol][y].offervol;
+                if (showvolume) {
+                    bidquantity.innerHTML = orderbooks[symbol][y].bidvol;
+                    offerquantity.innerHTML = orderbooks[symbol][y].offervol;
+                }
 
                 if (!obdisplay[symbol].level2) {break;}
             }
@@ -3214,34 +3262,45 @@
             headingstrip = document.createElement('div');
             headingstrip.id = "headingstrip";
             headingstrip.className = "headingstrip";
-            headinglevel2 = document.createElement('span');
-            headinglevel2.className = "level2heading";
+            if (showvolume) {
+                headinglevel2 = document.createElement('span');
+                headinglevel2.className = "level2heading";
+            }
             headingstock = document.createElement('span');
             headingstock.innerHTML = "Stock";
             headingstock.className = "stockheading";
-            headingbidquantity = document.createElement('span');
-            headingbidquantity.innerHTML = "Bid Vol";
-            headingbidquantity.className = "bidquantityheading";
+            if (showvolume) {
+                headingbidquantity = document.createElement('span');
+                headingbidquantity.innerHTML = "Bid Vol";
+                headingbidquantity.className = "bidquantityheading";
+            }
             headingbidprice = document.createElement('span');
             headingbidprice.innerHTML = "Bid Price";
             headingbidprice.className = "bidheading";
             headingofferprice = document.createElement('span');
             headingofferprice.innerHTML = "Offer Price";
             headingofferprice.className = "offerheading";
-            headingofferquantity = document.createElement('span');
-            headingofferquantity.innerHTML = "Offer Vol";
-            headingofferquantity.className = "offerquantityheading"
+            if (showvolume) {
+                headingofferquantity = document.createElement('span');
+                headingofferquantity.innerHTML = "Offer Vol";
+                headingofferquantity.className = "offerquantityheading";
+            }
             headingslash = document.createElement('span');
             headingslash.innerHTML = "/";
             headingslash.className = "slashheading";
-
-            headingstrip.appendChild(headinglevel2);
+            if (showvolume) {
+                headingstrip.appendChild(headinglevel2);
+            }
             headingstrip.appendChild(headingstock);
-            headingstrip.appendChild(headingbidquantity);
+            if (showvolume) {
+                headingstrip.appendChild(headingbidquantity);
+            }
             headingstrip.appendChild(headingbidprice);
             headingstrip.appendChild(headingslash);
             headingstrip.appendChild(headingofferprice);
-            headingstrip.appendChild(headingofferquantity);
+            if (showvolume) {
+                headingstrip.appendChild(headingofferquantity);
+            }
 
             main.appendChild(headingstrip);
         }
@@ -4235,7 +4294,7 @@
             menu.className = "menu";
             menu.id = "menu";
 
-            // build the main menu
+            // build the main menu - reset chatmenuoption if changed
             menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Chat", "End Of Day"];
 
             for (var i = 0; i < menuarr.length; ++i) {
@@ -4246,7 +4305,7 @@
                 if (i == 0) {
                     menuitem.className = "menuitemselected";
                     lastElement = menuitem;
-                } else if (i == 9) { // change if menu changed
+                } else if (i == chatmenuoption) { // change if menu changed
                     menuitem.id = "menuitemchat";
                 }
                 menu.appendChild(menuitem);
