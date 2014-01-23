@@ -1587,6 +1587,8 @@ function registerScripts() {
   var neworder;
   var getreserve;
   var getposition;
+  var getpositions;
+  var getcash;
 
   round = '\
   local round = function(num, dp) \
@@ -1782,41 +1784,60 @@ function registerScripts() {
   // positions are keyed on clientid + symbol + currency + settlement date
   //
   updateposition = '\
-  local updateposition = function(clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, settldate, initialmargin) \
+  local updateposition = function(clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, settldate, trademargin) \
     local poskey = symbol .. ":" .. currency .. ":" .. settldate \
     local positionkey = clientid .. ":position:" .. poskey \
     local positionskey = clientid .. ":positions" \
     local posqty = 0 \
     local poscost = 0 \
-    local posinitialmargin = 0 \
-    local fields = {"quantity", "cost", "initialmargin", "longshort"} \
+    local realisedpandl = 0 \
+    local posmargin = 0 \
+    local avgcostpershare = 0 \
+    local fields = {"quantity", "cost", "margin", "side", "averagecostpershare", "realisedpandl"} \
     local vals = redis.call("hmget", positionkey, unpack(fields)) \
+    --[[ do we already have a position? ]] \
     if vals[1] then \
+      --[[ are we adding to it ?]] \
       if tonumber(side) == tonumber(vals[4]) then \
         posqty = tonumber(vals[1]) + tonumber(tradequantity) \
         poscost = tonumber(vals[2]) + tonumber(tradecost) \
-        posinitialmargin = tonumber(vals[3]) + tonumber(initialmargin) \
+        posmargin = tonumber(vals[3]) + tonumber(trademargin) \
+        avgcostpershare = poscost / posqty \
       else \
         posqty = tonumber(vals[1]) - tonumber(tradequantity) \
-        poscost = tonumber(vals[2]) - tonumber(tradecost) \
-        posinitialmargin = tonumber(vals[3]) - tonumber(initialmargin) \
+        if posqty == 0 then \
+          poscost = 0 \
+          posmargin = 0 \
+          avgcostpershare = 0 \
+        else \
+          poscost = posqty * tonumber(vals[5]) \
+          posmargin = posqty / tonumber(vals[1]) * tonumber(vals[3]) \
+          avgcostpershare = poscost / posqty \
+        end \
+        realisedpandl = tonumber(vals[6]) + (tonumber(tradequantity) * (tonumber(tradeprice) - tonumber(vals[5]))) \
       end \
-      if posqty == 0 then \
-        redis.call("hdel", positionkey, "clientid", "symbol", "longshort", "quantity", "cost", "currency", "settldate", "initialmargin") \
-        redis.call("srem", positionskey, poskey) \
-      else \
-        redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "initialmargin", posinitialmargin) \
-      end \
+      --[[ todo: may need to remove position here ]] \
+      --[[ todo: may need to update cash for p&l here ]] \
+      --[[ todo: may need to update margin here ]] \
+      redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare, "realisedpandl", realisedpandl) \
     else \
       posqty = tradequantity \
       poscost = tradecost \
-      posinitialmargin = initialmargin \
+      posmargin = trademargin \
+      avgcostpershare = poscost / posqty \
       local positionid = redis.call("incr", "positionid") \
-      redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "longshort", side, "quantity", posqty, "cost", poscost, "currency", currency, "settldate", settldate, "initialmargin", posinitialmargin, "positionid", positionid) \
+      redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "side", side, "quantity", posqty, "cost", poscost, "currency", currency, "settldate", settldate, "margin", posmargin, "positionid", positionid, "averagecostpershare", avgcostpershare, "realisedpandl", 0) \
       redis.call("sadd", positionskey, poskey) \
     end \
   end \
   ';
+
+/* remove position
+      if posqty == 0 then \
+        redis.call("hdel", positionkey, "clientid", "symbol", "longshort", "quantity", "cost", "currency", "settldate", "initialmargin") \
+        redis.call("srem", positionskey, poskey) \
+      else \
+*/
 
   adjustmarginreserve = getinitialmargin + updateordermargin + updatereserve + '\
   local adjustmarginreserve = function(orderid, clientid, symbol, side, price, ordmargin, currency, remquantity, newremquantity, settldate, nosettdays) \
@@ -1845,20 +1866,57 @@ function registerScripts() {
 
   getposition = '\
   local getposition = function(clientid, symbol, currency, settldate) \
-    local fields = {"quantity", "cost", "longshort"} \
+    local fields = {"quantity", "cost", "side"} \
     local position = redis.call("hmget", clientid .. ":position:" .. symbol .. ":" .. currency .. ":" .. settldate, unpack(fields)) \
     return position \
+  end \
+  ';
+
+  // only deling with trade currency for the time being - todo: review
+  getpositions = '\
+  local getpositions = function(clientid, currency) \
+    local positions = redis.call("smembers", clientid .. ":positions") \
+    local fields = {"symbol", "currency", "quantity", "margin", "averagecostpershare", "realisedpandl"} \
+    local vals \
+    local totalmargin = 0 \
+    local totalrealisedpandl = 0 \
+    local totalunrealisedpandl = 0 \
+    for index = 1, #positions do \
+      vals = redis.call("hmget", clientid .. ":position:" .. positions[index], unpack(fields)) \
+      if vals[2] == currency then \
+        totalmargin = totalmargin + tonumber(vals[4]) \
+        totalrealisedpandl = totalrealisedpandl + tonumber(vals[6]) \
+        local price = redis.call("get", "price:" .. vals[1]) \
+        if price then \
+          totalunrealisedpandl = totalunrealisedpandl + (tonumber(vals[3]) * (tonumber(price) - tonumber(vals[5]))) \
+        end \
+      end \
+    end \
+    return {totalmargin, totalrealisedpandl, totalunrealisedpandl} \
   end \
   ';
 
   getreserve = '\
   local getreserve = function(clientid, symbol, currency, settldate) \
     local reserve = redis.call("get", clientid .. ":reserve:" .. symbol .. ":" .. currency .. ":" .. settldate) \
+    if not reserve then \
+      return 0 \
+    end \
     return reserve \
   end \
   ';
 
-  creditcheck = getinitialmargin + getposition + getreserve + rejectorder + updateordermargin + updatereserve + '\
+  getcash = '\
+  local getcash = function(clientid, currency) \
+    local cash = redis.call("get", clientid .. ":cash:" .. currency) \
+    if not cash then \
+      return 0 \
+    end \
+    return cash \
+  end \
+  ';
+
+  /*creditcheck = getinitialmargin + getposition + getreserve + rejectorder + updateordermargin + updatereserve + '\
   local creditcheck = function(orderid, clientid, symbol, side, quantity, price, currency, settldate, instrumenttype, nosettdays) \
     --[[ see if client is allowed to trade this product ]] \
     if redis.call("sismember", clientid .. ":instrumenttypes", instrumenttype) == 0 then \
@@ -1921,6 +1979,71 @@ function registerScripts() {
         return {0} \
       end \
       updatereserve(clientid, symbol, currency, settldate, quantity) \
+    end \
+    return {1, initialmargin[2], initialmargin[3]} \
+  end \
+  ';*/
+
+  creditcheck = rejectorder + getinitialmargin + getcash + getposition + getpositions + getreserve + '\
+  local creditcheck = function(orderid, clientid, symbol, side, quantity, price, currency, settldate, instrumenttype, nosettdays) \
+    --[[ see if client is allowed to trade this product ]] \
+    if redis.call("sismember", clientid .. ":instrumenttypes", instrumenttype) == 0 then \
+      rejectorder(orderid, 1018, "") \
+      return {0} \
+    end \
+    --[[ calculate initial margin, including costs ]] \
+    local initialmargin = getinitialmargin(symbol, instrumenttype, quantity, price, currency, side, nosettdays) \
+    --[[ todo: always allow closing trades ]] \
+    local position = getposition(clientid, symbol, currency, settldate) \
+    if position[1] then \
+      if tonumber(side) ~= tonumber(position[3]) then \
+        if tonumber(quantity) > tonumber(position[1]) then \
+          --[[ trying to close quantity greater than position ]] \
+          rejectorder(orderid, 1019, "") \
+          return {0} \
+        else \
+          --[[ closing trade, so ok ]] \
+          return {1, initialmargin[2]} \
+        end \
+      end \
+    end \
+    --[[ check free margin for all derivative trades & equity buys ]] \
+    if instrumenttype == "CFD" or instrumenttype == "SPB" or instrumenttype == "CCFD" or tonumber(side) == 1 then \
+      local cash = getcash(clientid, currency) \
+      local positions = getpositions(clientid, currency) \
+      local balance = tonumber(cash) + positions[1] \
+      local equity = balance + positions[2] \
+      local freemargin = equity - positions[3] \
+      if initialmargin[1] > freemargin then \
+        rejectorder(orderid, 1020, "") \
+        return {0} \
+      end \
+      --[[ do we need?]] \
+      --[[updateordermargin(orderid, clientid, 0, currency, initialmargin[1])]] \
+    else \
+      --[[ allow ifa certificated client sells ]] \
+      if instrumenttype == "DE" then \
+        if redis.call("hget", "client:" .. clientid, "type") == "3" then \
+          return {1, initialmargin[2]} \
+        end \
+      end \
+      --[[ check there is a position ]] \
+      if not position[1] then \
+        rejectorder(orderid, 1003, "") \
+        return {0} \
+      end \
+      --[[ check there is a large enough position ]] \
+      local netpos = tonumber(position[1]) \
+      local reserve = getreserve(clientid, symbol, currency, settldate) \
+      if reserve then \
+        netpos = netpos - tonumber(reserve) \
+      end \
+      if tonumber(quantity) > netpos then \
+        rejectorder(orderid, 1004, "") \
+        return {0} \
+      end \
+      --[[ do we need ?]] \
+      --[[updatereserve(clientid, symbol, currency, settldate, quantity)]] \
     end \
     return {1, initialmargin[2], initialmargin[3]} \
   end \

@@ -1340,62 +1340,68 @@ function getReasonDesc(reason) {
   var desc;
 
   switch (parseInt(reason)) {
-    case 1001:
-      desc = "No currency held for this instrument";
-      break;
-    case 1002:
-      desc = "Insufficient cash in settlement currency";
-      break;
-    case 1003:
-      desc = "No position held in this instrument";
-      break;
-    case 1004:
-      desc = "Insufficient position size in this instrument";
-      break;
-    case 1005:
-      desc = "System error";
-      break;
-    case 1006:
-      desc = "Invalid order";
-      break;
-    case 1007:
-      desc = "Invalid instrument";
-      break;
-    case 1008:
-      desc = "Order already cancelled";
-      break;
-    case 1009:
-      desc = "Order not found";
-      break;
-    case 1010:
-      desc = "Order already filled";
-      break;
-    case 1011:
-      desc = "Order currency does not match symbol currency";
-      break;
-    case 1012:
-      desc = "Order already rejected";
-      break;
-    case 1013:
-      desc = "Ordercancelrequest not found";
-      break;
-    case 1014:
-      desc = "Quoterequest not found";
-      break;
-    case 1015:
-      desc = "Symbol not found";
-      break;
-    case 1016:
-      desc = "Proquote symbol not found";
-      break;
-    case 1017:
-      desc = "Client not found";
-      break;
-    case 1018:
-      desc = "Client not authorised to trade this type of product";
-      break;
-    default:
-      desc = "Unknown reason";
+  case 1001:
+    desc = "No currency held for this instrument";
+    break;
+  case 1002:
+    desc = "Insufficient cash in settlement currency";
+    break;
+  case 1003:
+    desc = "No position held in this instrument";
+    break;
+  case 1004:
+    desc = "Insufficient position size in this instrument";
+    break;
+  case 1005:
+    desc = "System error";
+    break;
+  case 1006:
+    desc = "Invalid order";
+    break;
+  case 1007:
+    desc = "Invalid instrument";
+    break;
+  case 1008:
+    desc = "Order already cancelled";
+    break;
+  case 1009:
+    desc = "Order not found";
+    break;
+  case 1010:
+    desc = "Order already filled";
+    break;
+  case 1011:
+    desc = "Order currency does not match symbol currency";
+    break;
+  case 1012:
+    desc = "Order already rejected";
+    break;
+  case 1013:
+    desc = "Ordercancelrequest not found";
+    break;
+  case 1014:
+    desc = "Quoterequest not found";
+    break;
+  case 1015:
+    desc = "Symbol not found";
+    break;
+  case 1016:
+    desc = "Proquote symbol not found";
+    break;
+  case 1017:
+    desc = "Client not found";
+    break;
+  case 1018:
+    desc = "Client not authorised to trade this type of product";
+    break;
+  case 1019:
+    desc = "Quantity greater than position quantity";
+    break;
+  case 1020:
+    desc = "Insufficient free margin";
+    break;
+  default:
+    desc = "Unknown reason";
   }
 
   return desc;

@@ -1298,6 +1298,12 @@ function getReasonDesc(reason) {
     case 1018:
       desc = "Client not authorised to trade this type of product";
       break;
+    case 1019:
+      desc = "Quantity greater than position quantity";
+      break;
+    case 1020:
+      desc = "Insufficient free margin";
+      break;
     default:
       desc = "Unknown reason";
   }
