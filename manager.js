@@ -82,6 +82,7 @@ var scriptgetcash;
 var scriptgetreserves;
 var scriptgetmargin;
 var scriptgetcashhistory;
+var scriptgetaccount;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -1083,9 +1084,9 @@ function cashRequest(cashreq, conn) {
 }
 
 function accountRequest(acctreq, conn) {
-  db.eval(scriptgetpositions, 1, acctreq.clientid, function(err, ret) {
+  db.eval(scriptgetaccount, 1, acctreq.clientid, function(err, ret) {
     if (err) throw err;
-    conn.write("{\"positions\":" + ret + "}");
+    conn.write("{\"account\":" + ret + "}");
   });
 }
 
@@ -1831,6 +1832,8 @@ function getPTPQuoteRejectReason(reason) {
 
 function registerScripts() {
   var stringsplit;
+  var getpositions = common.getpositions;
+  var getcash = common.getcash;
 
   //
   // function to split a string into an array of substrings, based on a character
@@ -2164,6 +2167,23 @@ function registerScripts() {
   for index = 1, #cash do \
     local amount = redis.call("get", KEYS[1] .. ":cash:" .. cash[index]) \
     table.insert(tblresults, {currency=cash[index],amount=amount}) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // assumes there is cash for any currency with positions
+  //
+  scriptgetaccount = getpositions + '\
+  local tblresults = {} \
+  local cash = redis.call("smembers", KEYS[1] .. ":cash") \
+  for index = 1, #cash do \
+    local amount = redis.call("get", KEYS[1] .. ":cash:" .. cash[index]) \
+    local positions = getpositions(KEYS[1], cash[index]) \
+    local balance = tonumber(amount) + positions[2] \
+    local equity = balance + positions[3] \
+    local freemargin = equity - positions[1] \
+    table.insert(tblresults, {currency=cash[index],cash=amount,realisedpandl=positions[2],balance=balance,unrealisedpandl=positions[3],equity=equity,margin=positions[1],freemargin=freemargin}) \
   end \
   return cjson.encode(tblresults) \
   ';

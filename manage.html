@@ -624,6 +624,12 @@
             font-size: 18px;
             color: #666666;
         }
+        .rowlong {
+            color: blue;
+        }
+        .rowshort {
+            color: red;
+        }
     </style>
 </head>
 <body lang="en">
@@ -682,6 +688,7 @@
         var cashhistory = {};
         var chatmenuoption = 9;
         var showvolume = false;
+        var account = {};
 
         //
         // incoming data function
@@ -726,9 +733,13 @@
                 } else if ("positions" in obj) {
                     clearPositions();
                     loadPositions(obj.positions);
-                    displayPositionsOrAccount();
+                    displayPositions();
                 } else if ("position" in obj) {
-                    updatePosition(obj.position);            
+                    updatePosition(obj.position);
+                } else if ("account" in obj) {
+                    clearAccount();
+                    loadAccount(obj.account);
+                    displayAccount();
                 } else if ("cashitem" in obj) {
                     updateCash(obj.cashitem);
                 } else if ("cashtranstypes" in obj) {
@@ -851,6 +862,12 @@
         function loadCash(casharr) {
             for (var i = 0; i < casharr.length; ++i) {
                 cash[casharr[i].currency] = casharr[i];
+            }                        
+        }
+
+        function loadAccount(acctarr) {
+            for (var i = 0; i < acctarr.length; ++i) {
+                account[acctarr[i].currency] = acctarr[i];
             }                        
         }
 
@@ -1023,6 +1040,10 @@
 
         function clearCashHistory() {
             cashhistory = [];
+        }
+
+        function clearAccount() {
+            account = [];
         }
 
         //
@@ -1546,6 +1567,16 @@
             }
         }
 
+        function clearTable(tablestr) {
+            var tbl = document.getElementById(tablestr);
+            if (tbl != null) {
+                while(tbl.hasChildNodes()){
+                    tbl.removeChild(tbl.childNodes[0])
+                }
+                main.removeChild(tbl);
+            }
+        }
+
         function clearForm(formid, remove) {
             var frm = document.getElementById(formid);
             if (frm != null) {
@@ -1616,6 +1647,7 @@
             clearStrips();
             clearAllSymbolDivs();
             clearEmptyLines();
+            clearTables();
         }
 
         function clearLists() {
@@ -1638,6 +1670,11 @@
             clearForm("frmifa", true);
             clearForm("frmhistory", true);
             clearForm("frmpositions", true);
+        }
+
+        function clearTables() {
+            clearTable("tblpositions");
+            clearTable("tblaccount");
         }
 
         function clearDivs() {
@@ -1862,21 +1899,7 @@
             addHeading("Cancelled", list5);
         }
 
-        function displayPositionsOrAccount() {
-            clearLists();
-            clearEmptyLines();
-            clearHeadings();
-
-            var lnkaccount = document.getElementById("lnkaccount");
-
-            if (lnkaccount != null && lnkaccount.className == "linkselected") {
-                displayAccount();
-            } else {
-                displayPositions();
-            }
-        }
-
-        function displayPositions() {
+        /*function displayPositions() {
             var list;
             var listid = 1;
 
@@ -1923,26 +1946,31 @@
                     viewPosition(element.value);
                 }                
             }
-        }
+        }*/
 
-        function displayAccount() {
-            var tblaccount;
+        function displayPositions() {
+            var tblpositions;
             var tblbody;
             var posrow;
             var headingrow;
 
+            clearLists();
+            clearEmptyLines();
+            clearHeadings();
+            clearTables();
+
             var emptyline = addNewLine(main);
             emptyline.id = "emptyline:" + "1";
 
-            tblaccount = document.createElement("table");
-            tblaccount.id = "tblaccount";
-            tblaccount.setAttribute("border", "1");
+            tblpositions = document.createElement("table");
+            tblpositions.id = "tblpositions";
+            tblpositions.setAttribute("border", "1");
 
             tblbody = document.createElement("tbody");
             tblbody.id = "tblbody";
 
-            tblaccount.appendChild(tblbody);
-            main.appendChild(tblaccount);
+            tblpositions.appendChild(tblbody);
+            main.appendChild(tblpositions);
 
             headingrow = document.createElement("tr");
 
@@ -1999,13 +2027,15 @@
                         col.innerHTML = positions[x].currency;
                         break;
                     case 2:
-                        col.innerHTML = positions[x].settldate;
+                        col.innerHTML = formatUTCDate(positions[x].settldate);
                         break;
                     case 3:
                         if (positions[x].side == 1) {
                             col.innerHTML = "Long";
+                            posrow.className = "rowlong";
                         } else {
                             col.innerHTML = "Short";                            
+                            posrow.className = "rowshort";
                         }
                         break;
                     case 4:
@@ -2030,6 +2060,104 @@
                 }
 
                 tblbody.appendChild(posrow);
+            }
+        }
+
+        function displayAccount() {
+            var tblaccount;
+            var tblbody;
+
+            clearLists();
+            clearEmptyLines();
+            clearHeadings();
+            clearTables();
+
+            var emptyline = addNewLine(main);
+            emptyline.id = "emptyline:" + "1";
+
+            tblaccount = document.createElement("table");
+            tblaccount.id = "tblaccount";
+            //tblaccount.setAttribute("border", "1");
+
+            tblbody = document.createElement("tbody");
+            tblbody.id = "tblbody";
+
+            tblaccount.appendChild(tblbody);
+            main.appendChild(tblaccount);
+
+            for (var x in account) {
+                var headingrow = document.createElement("tr");
+
+                var col = document.createElement("td");
+                col.innerHTML = account[x].currency;
+
+                headingrow.appendChild(col);
+
+                var emptyrow = document.createElement("tr");
+
+                tblbody.appendChild(headingrow);
+                tblbody.appendChild(emptyrow);
+
+                for (var i = 0; i < 9; ++i) {
+                    var row = document.createElement("tr");
+                    var col = document.createElement("td");
+                    var colval = document.createElement("td");
+
+                    row.appendChild(col);
+
+                    switch (i) {
+                    case 0:
+                        col.innerHTML = "Cash";
+                        colval.innerHTML = account[x].cash;
+                        break;
+                    case 1:
+                        col.innerHTML = "Realised P&L";
+                        colval.innerHTML = account[x].realisedpandl;
+                        break;
+                    case 2:
+                        col.innerHTML = "Trading Balance";
+                        colval.innerHTML = account[x].balance;
+                        var colempty = document.createElement("td");
+                        row.appendChild(colempty);
+                        break;
+                    case 3:
+                        col.innerHTML = "Unrealised P&L";
+                        colval.innerHTML = account[x].unrealisedpandl;
+                        var colempty = document.createElement("td");
+                        row.appendChild(colempty);
+                        break;
+                    case 4:
+                        col.innerHTML = "Equity";
+                        colval.innerHTML = account[x].equity;
+                        var colempty = document.createElement("td");
+                        row.appendChild(colempty);
+                        var colempty = document.createElement("td");
+                        row.appendChild(colempty);
+                        break;
+                    case 5:
+                        col.innerHTML = "Margin";
+                        colval.innerHTML = "(" + account[x].margin + ")";
+                        var colempty = document.createElement("td");
+                        row.appendChild(colempty);
+                        var colempty = document.createElement("td");
+                        row.appendChild(colempty);
+                        break;
+                    case 6:
+                        col.innerHTML = "Free Margin";
+                        colval.innerHTML = account[x].freemargin;
+                        var colempty = document.createElement("td");
+                        row.appendChild(colempty);
+                        var colempty = document.createElement("td");
+                        row.appendChild(colempty);
+                        var colempty = document.createElement("td");
+                        row.appendChild(colempty);
+                        break;
+                    default:
+                    }
+
+                    row.appendChild(colval);
+                    tblbody.appendChild(row);
+                }
             }
         }
 
@@ -2341,6 +2469,7 @@
             clearLists();
             clearEmptyLines();
             clearHeadings();
+            clearTables();
 
             var emptyline = addNewLine(main);
             emptyline.id = "emptyline:1";
@@ -2363,6 +2492,7 @@
             clearLists();
             clearEmptyLines();
             clearHeadings();
+            clearTables();
 
             var emptyline = addNewLine(main);
             emptyline.id = "emptyline:1";
@@ -2387,6 +2517,7 @@
             clearLists();
             clearEmptyLines();
             clearHeadings();
+            clearTables();
 
             var emptyline = addNewLine(main);
             emptyline.id = "emptyline:1";
@@ -4577,6 +4708,7 @@
 
                 clearHeadings();
                 clearLists();
+                clearTables();
 
                 if (focusfldstr != "") {
                     focusfld = document.getElementById(focusfldstr);

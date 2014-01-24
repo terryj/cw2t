@@ -10,6 +10,8 @@ exports.registerCommonScripts = function () {
 	var subscribeinstrument;
 	var unsubscribeinstrument;
   var updatecash;
+  var getpositions;
+  var getcash;
 
   updatecash = '\
   local updatecash = function(clientid, currency, transtype, amount, desc, timestamp, operatortype, operatorid) \
@@ -45,6 +47,44 @@ exports.registerCommonScripts = function () {
   ';
 
   exports.updatecash = updatecash;
+
+  getcash = '\
+  local getcash = function(clientid, currency) \
+    local cash = redis.call("get", clientid .. ":cash:" .. currency) \
+    if not cash then \
+      return 0 \
+    end \
+    return cash \
+  end \
+  ';
+
+  exports.getcash = getcash;
+
+  // only dealing with trade currency for the time being - todo: review
+  getpositions = '\
+  local getpositions = function(clientid, currency) \
+    local positions = redis.call("smembers", clientid .. ":positions") \
+    local fields = {"symbol", "currency", "quantity", "margin", "averagecostpershare", "realisedpandl"} \
+    local vals \
+    local totalmargin = 0 \
+    local totalrealisedpandl = 0 \
+    local totalunrealisedpandl = 0 \
+    for index = 1, #positions do \
+      vals = redis.call("hmget", clientid .. ":position:" .. positions[index], unpack(fields)) \
+      if vals[2] == currency then \
+        totalmargin = totalmargin + tonumber(vals[4]) \
+        totalrealisedpandl = totalrealisedpandl + tonumber(vals[6]) \
+        local price = redis.call("get", "price:" .. vals[1]) \
+        if price then \
+          totalunrealisedpandl = totalunrealisedpandl + (tonumber(vals[3]) * (tonumber(price) - tonumber(vals[5]))) \
+        end \
+      end \
+    end \
+    return {totalmargin, totalrealisedpandl, totalunrealisedpandl} \
+  end \
+  ';
+
+  exports.getpositions = getpositions;
 
 	subscribeinstrument = '\
   local subscribeinstrument = function(symbol, id, servertype) \

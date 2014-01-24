@@ -1587,8 +1587,8 @@ function registerScripts() {
   var neworder;
   var getreserve;
   var getposition;
-  var getpositions;
-  var getcash;
+  var getpositions = common.getpositions;
+  var getcash = common.getcash;
 
   round = '\
   local round = function(num, dp) \
@@ -1872,8 +1872,8 @@ function registerScripts() {
   end \
   ';
 
-  // only deling with trade currency for the time being - todo: review
-  getpositions = '\
+  // only dealing with trade currency for the time being - todo: review
+  /*getpositions = '\
   local getpositions = function(clientid, currency) \
     local positions = redis.call("smembers", clientid .. ":positions") \
     local fields = {"symbol", "currency", "quantity", "margin", "averagecostpershare", "realisedpandl"} \
@@ -1894,7 +1894,7 @@ function registerScripts() {
     end \
     return {totalmargin, totalrealisedpandl, totalunrealisedpandl} \
   end \
-  ';
+  ';*/
 
   getreserve = '\
   local getreserve = function(clientid, symbol, currency, settldate) \
@@ -1906,7 +1906,7 @@ function registerScripts() {
   end \
   ';
 
-  getcash = '\
+  /*getcash = '\
   local getcash = function(clientid, currency) \
     local cash = redis.call("get", clientid .. ":cash:" .. currency) \
     if not cash then \
@@ -1914,7 +1914,7 @@ function registerScripts() {
     end \
     return cash \
   end \
-  ';
+  ';*/
 
   creditcheck = rejectorder + getinitialmargin + getcash + getposition + getpositions + getreserve + updateordermargin + '\
   local creditcheck = function(orderid, clientid, symbol, side, quantity, price, currency, settldate, instrumenttype, nosettdays) \
@@ -1943,9 +1943,10 @@ function registerScripts() {
     if instrumenttype == "CFD" or instrumenttype == "SPB" or instrumenttype == "CCFD" or tonumber(side) == 1 then \
       local cash = getcash(clientid, currency) \
       local positions = getpositions(clientid, currency) \
-      local balance = tonumber(cash) + positions[1] \
-      local equity = balance + positions[2] \
-      local freemargin = equity - positions[3] \
+      --[[ positions[1] = margin, [2] = realised p&l, [3] = unrealised p&l ]] \
+      local balance = tonumber(cash) + positions[2] \
+      local equity = balance + positions[3] \
+      local freemargin = equity - positions[1] \
       if initialmargin[1] > freemargin then \
         rejectorder(orderid, 1020, "") \
         return {0} \
@@ -2105,7 +2106,7 @@ function registerScripts() {
   local instrumenttype = redis.call("hget", "symbol:" .. KEYS[2], "instrumenttype") \
   local cc = creditcheck(orderid, KEYS[1], KEYS[2], side, KEYS[4], KEYS[5], KEYS[18], KEYS[8], instrumenttype, KEYS[21]) \
   --[[ return order id for lookup, if credit check has failed, error message will be in order ]] \
-  --[[ cc[1]=ok/fail, cc[2]=margin, cc[3]=costs, cc[4]=finance ]] \
+  --[[ cc[1] = ok/fail, cc[2] = margin, cc[3] = costs, cc[4] = finance ]] \
   if cc[1] == 0 then \
     return {cc[1], orderid} \
   end \
