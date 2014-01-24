@@ -726,7 +726,7 @@
                 } else if ("positions" in obj) {
                     clearPositions();
                     loadPositions(obj.positions);
-                    displayPositions();
+                    displayPositionsOrAccount();
                 } else if ("position" in obj) {
                     updatePosition(obj.position);            
                 } else if ("cashitem" in obj) {
@@ -1862,6 +1862,20 @@
             addHeading("Cancelled", list5);
         }
 
+        function displayPositionsOrAccount() {
+            clearLists();
+            clearEmptyLines();
+            clearHeadings();
+
+            var lnkaccount = document.getElementById("lnkaccount");
+
+            if (lnkaccount != null && lnkaccount.className == "linkselected") {
+                displayAccount();
+            } else {
+                displayPositions();
+            }
+        }
+
         function displayPositions() {
             var list;
             var listid = 1;
@@ -1908,6 +1922,114 @@
 
                     viewPosition(element.value);
                 }                
+            }
+        }
+
+        function displayAccount() {
+            var tblaccount;
+            var tblbody;
+            var posrow;
+            var headingrow;
+
+            var emptyline = addNewLine(main);
+            emptyline.id = "emptyline:" + "1";
+
+            tblaccount = document.createElement("table");
+            tblaccount.id = "tblaccount";
+            tblaccount.setAttribute("border", "1");
+
+            tblbody = document.createElement("tbody");
+            tblbody.id = "tblbody";
+
+            tblaccount.appendChild(tblbody);
+            main.appendChild(tblaccount);
+
+            headingrow = document.createElement("tr");
+
+            for (var i = 0; i < 9; ++i) {
+                var col = document.createElement("td");
+
+                switch (i) {
+                case 0:
+                    col.innerHTML = "Symbol";
+                    break;
+                case 1:
+                    col.innerHTML = "Currency";
+                    break;
+                case 2:
+                    col.innerHTML = "Settl. Date";
+                    break;
+                case 3:
+                    col.innerHTML = "Long/Short";
+                    break;
+                case 4:
+                    col.innerHTML = "Quantity";
+                    break;
+                case 5:
+                    col.innerHTML = "Cost";
+                    break;
+                case 6:
+                    col.innerHTML = "Avg. Cost/Share";
+                    break;
+                case 7:
+                    col.innerHTML = "Margin";
+                    break;
+                case 8:
+                    col.innerHTML = "Realised P&L";
+                    break;
+                default:
+                }
+
+                headingrow.appendChild(col);
+            }
+
+            tblbody.appendChild(headingrow);
+
+            for (var x in positions) {
+                var posrow = document.createElement("tr");
+
+                for (var i = 0; i < 9; ++i) {
+                    var col = document.createElement("td");
+
+                    switch (i) {
+                    case 0:
+                        col.innerHTML = positions[x].symbol;
+                        break;
+                    case 1:
+                        col.innerHTML = positions[x].currency;
+                        break;
+                    case 2:
+                        col.innerHTML = positions[x].settldate;
+                        break;
+                    case 3:
+                        if (positions[x].side == 1) {
+                            col.innerHTML = "Long";
+                        } else {
+                            col.innerHTML = "Short";                            
+                        }
+                        break;
+                    case 4:
+                        col.innerHTML = positions[x].quantity;
+                        break;
+                    case 5:
+                        col.innerHTML = positions[x].cost;
+                        break;
+                    case 6:
+                        col.innerHTML = positions[x].averagecostpershare;
+                        break;
+                    case 7:
+                        col.innerHTML = positions[x].margin;
+                        break;
+                    case 8:
+                        col.innerHTML = positions[x].realisedpandl;
+                        break;
+                    default:
+                    }
+
+                    posrow.appendChild(col);
+                }
+
+                tblbody.appendChild(posrow);
             }
         }
 
@@ -2494,6 +2616,7 @@
             var lnkcash = newlink("lnkcash", "Cash", "", frmpositions);
             var lnkmargin = newlink("lnkmargin", "Margin", "", frmpositions);
             var lnkreserves = newlink("lnkreserves", "Reserves", "", frmpositions);
+            var lnkaccount = newlink("lnkaccount", "Account", "", frmpositions);
 
             lnkpositions.onclick = function() {
                 var positionrequest = {};
@@ -2535,6 +2658,16 @@
                 sockjs.send("{\"reservesrequest\":" + JSON.stringify(reservesrequest) + "}");
             }
 
+            lnkaccount.onclick = function() {
+                var accountrequest = {};
+
+                if (!validateClientid()) {return;}
+
+                setSelected(lnkaccount);
+                accountrequest.clientid = inpclientid.value;
+                sockjs.send("{\"accountrequest\":" + JSON.stringify(accountrequest) + "}");
+            }
+
             inpclientid = document.createElement("input");
             inpclientid.type = "hidden";
             inpclientid.id = "inpclientid";
@@ -2559,6 +2692,7 @@
                 lnkcash.className = "";
                 lnkmargin.className = "";
                 lnkreserves.className = "";
+                lnkaccount.className = "";
 
                 link.className = "linkselected";
             }

@@ -1916,7 +1916,7 @@ function registerScripts() {
   end \
   ';
 
-  creditcheck = rejectorder + getinitialmargin + getcash + getposition + getpositions + getreserve + '\
+  creditcheck = rejectorder + getinitialmargin + getcash + getposition + getpositions + getreserve + updateordermargin + '\
   local creditcheck = function(orderid, clientid, symbol, side, quantity, price, currency, settldate, instrumenttype, nosettdays) \
     --[[ see if client is allowed to trade this product ]] \
     if redis.call("sismember", clientid .. ":instrumenttypes", instrumenttype) == 0 then \

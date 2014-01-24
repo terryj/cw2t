@@ -211,6 +211,8 @@ function listen() {
             positionRequest(obj.positionrequest, conn);
           } else if ("cashrequest" in obj) {
             cashRequest(obj.cashrequest, conn);
+          } else if ("accountrequest" in obj) {
+            accountRequest(obj.accountrequest, conn);
           } else if ("index" in obj) {
             sendIndex(obj.index, conn);        
           } else if ("newclient" in obj) {
@@ -1078,6 +1080,13 @@ function cashRequest(cashreq, conn) {
     if (err) throw err;
     conn.write("{\"cash\":" + ret + "}");
   });  
+}
+
+function accountRequest(acctreq, conn) {
+  db.eval(scriptgetpositions, 1, acctreq.clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"positions\":" + ret + "}");
+  });
 }
 
 function marginRequest(marginreq, conn) {
@@ -2137,11 +2146,11 @@ function registerScripts() {
   scriptgetpositions = '\
   local tblresults = {} \
   local positions = redis.call("smembers", KEYS[1] .. ":positions") \
-  local fields = {"clientid","symbol","longshort","quantity","cost","currency","settldate","initialmargin","positionid"} \
+  local fields = {"clientid","symbol","side","quantity","cost","currency","settldate","margin","positionid","averagecostpershare","realisedpandl"} \
   local vals \
   for index = 1, #positions do \
     vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
-    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],longshort=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],settldate=vals[7],initialmargin=vals[8],positionid=vals[9]}) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],settldate=vals[7],margin=vals[8],positionid=vals[9],averagecostpershare=vals[10],realisedpandl=vals[11]}) \
   end \
   return cjson.encode(tblresults) \
   ';
