@@ -4003,7 +4003,7 @@
             settlperiod.options.length = 0;
 
             if (instrumenttype == "DE" || instrumenttype == "IE") {
-                for (var i = 0; i < 50; i++) {
+                for (var i = 0; i < 10; i++) {
                     var s = i + 1;
                     if (s == 3) {
                         settlperiod[i] = new Option("T+" + s, s, true, true);
@@ -4012,12 +4012,9 @@
                     }
                 }
             } else if (instrumenttype == "CCFD") {
-                settlperiod[0] = new Option("T+3", 3, true, true);
+                settlperiod[0] = new Option("T+10", 10, true, true);
             } else {
-                settlperiod[0] = new Option("T+0 (Rolling)", 3, true, true);
-                settlperiod[1] = new Option("T+10", 10, false, false);
-                settlperiod[2] = new Option("T+20", 20, false, false);
-                settlperiod[3] = new Option("T+50", 50, false, false);                
+                settlperiod[0] = new Option("T+0 (Rolling)", 0, true, true);
             }
         }
 
