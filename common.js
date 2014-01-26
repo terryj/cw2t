@@ -10,8 +10,9 @@ exports.registerCommonScripts = function () {
 	var subscribeinstrument;
 	var unsubscribeinstrument;
   var updatecash;
-  var getpositions;
+  var gettotalpositions;
   var getcash;
+  var getfreemargin;
 
   updatecash = '\
   local updatecash = function(clientid, currency, transtype, amount, desc, timestamp, operatortype, operatorid) \
@@ -61,8 +62,8 @@ exports.registerCommonScripts = function () {
   exports.getcash = getcash;
 
   // only dealing with trade currency for the time being - todo: review
-  getpositions = '\
-  local getpositions = function(clientid, currency) \
+  gettotalpositions = '\
+  local gettotalpositions = function(clientid, currency) \
     local positions = redis.call("smembers", clientid .. ":positions") \
     local fields = {"symbol", "currency", "quantity", "margin", "averagecostpershare", "realisedpandl"} \
     local vals \
@@ -84,7 +85,21 @@ exports.registerCommonScripts = function () {
   end \
   ';
 
-  exports.getpositions = getpositions;
+  exports.gettotalpositions = gettotalpositions;
+
+  getfreemargin = '\
+  local getfreemargin = function(clientid, currency) \
+    local cash = getcash(clientid, currency) \
+    local totalpositions = gettotalpositions(clientid, currency) \
+    --[[ totalpositions[1] = margin, [2] = realised p&l, [3] = unrealised p&l ]] \
+    local balance = tonumber(cash) + totalpositions[2] \
+    local equity = balance + totalpositions[3] \
+    local freemargin = equity - totalpositions[1] \
+    return freemargin \
+  end \
+  ';
+
+  exports.getfreemargin = getfreemargin;
 
 	subscribeinstrument = '\
   local subscribeinstrument = function(symbol, id, servertype) \

@@ -1953,6 +1953,7 @@
             var tblbody;
             var posrow;
             var headingrow;
+            var numcols = 11;
 
             clearLists();
             clearEmptyLines();
@@ -1974,7 +1975,7 @@
 
             headingrow = document.createElement("tr");
 
-            for (var i = 0; i < 9; ++i) {
+            for (var i = 0; i < numcols; ++i) {
                 var col = document.createElement("td");
 
                 switch (i) {
@@ -2005,6 +2006,12 @@
                 case 8:
                     col.innerHTML = "Realised P&L";
                     break;
+                case 9:
+                    col.innerHTML = "Market Price";
+                    break;
+                case 10:
+                    col.innerHTML = "Unrealised P&L";
+                    break;
                 default:
                 }
 
@@ -2016,7 +2023,7 @@
             for (var x in positions) {
                 var posrow = document.createElement("tr");
 
-                for (var i = 0; i < 9; ++i) {
+                for (var i = 0; i < numcols; ++i) {
                     var col = document.createElement("td");
 
                     switch (i) {
@@ -2052,6 +2059,12 @@
                         break;
                     case 8:
                         col.innerHTML = positions[x].realisedpandl;
+                        break;
+                    case 9:
+                        col.innerHTML = positions[x].mktprice;
+                        break;
+                    case 10:
+                        col.innerHTML = positions[x].unrealisedpandl;
                         break;
                     default:
                     }
@@ -2736,7 +2749,7 @@
             alert(msg);
         }
 
-        function requestPositions(event) {
+        function requestPortfolio() {
             var inpclientid;
 
             var frmpositions = getForm("frmpositions");
@@ -4616,7 +4629,7 @@
                     requestHistory();
                     break;
                 case 8:
-                    requestPositions();
+                    requestPortfolio();
                     break;
                 case 9:
                     requestConnections();

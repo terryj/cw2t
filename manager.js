@@ -1832,7 +1832,7 @@ function getPTPQuoteRejectReason(reason) {
 
 function registerScripts() {
   var stringsplit;
-  var getpositions = common.getpositions;
+  var gettotalpositions = common.gettotalpositions;
   var getcash = common.getcash;
 
   //
@@ -2153,7 +2153,15 @@ function registerScripts() {
   local vals \
   for index = 1, #positions do \
     vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
-    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],settldate=vals[7],margin=vals[8],positionid=vals[9],averagecostpershare=vals[10],realisedpandl=vals[11]}) \
+    --[[ value the position ]] \
+    local price = redis.call("get", "price:" .. vals[2]) \
+    local unrealisedpandl = 0 \
+    if price then \
+      unrealisedpandl = tonumber(vals[4]) * (tonumber(price) - tonumber(vals[10])) \
+    else \
+      price = 0 \
+    end \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],settldate=vals[7],margin=vals[8],positionid=vals[9],averagecostpershare=vals[10],realisedpandl=vals[11],mktprice=price,unrealisedpandl=unrealisedpandl}) \
   end \
   return cjson.encode(tblresults) \
   ';
@@ -2174,16 +2182,16 @@ function registerScripts() {
   //
   // assumes there is cash for any currency with positions
   //
-  scriptgetaccount = getpositions + '\
+  scriptgetaccount = gettotalpositions + '\
   local tblresults = {} \
   local cash = redis.call("smembers", KEYS[1] .. ":cash") \
   for index = 1, #cash do \
     local amount = redis.call("get", KEYS[1] .. ":cash:" .. cash[index]) \
-    local positions = getpositions(KEYS[1], cash[index]) \
-    local balance = tonumber(amount) + positions[2] \
-    local equity = balance + positions[3] \
-    local freemargin = equity - positions[1] \
-    table.insert(tblresults, {currency=cash[index],cash=amount,realisedpandl=positions[2],balance=balance,unrealisedpandl=positions[3],equity=equity,margin=positions[1],freemargin=freemargin}) \
+    local totalpositions = gettotalpositions(KEYS[1], cash[index]) \
+    local balance = tonumber(amount) + totalpositions[2] \
+    local equity = balance + totalpositions[3] \
+    local freemargin = equity - totalpositions[1] \
+    table.insert(tblresults, {currency=cash[index],cash=amount,realisedpandl=totalpositions[2],balance=balance,unrealisedpandl=totalpositions[3],equity=equity,margin=totalpositions[1],freemargin=freemargin}) \
   end \
   return cjson.encode(tblresults) \
   ';
