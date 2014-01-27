@@ -87,7 +87,7 @@ exports.registerCommonScripts = function () {
 
   exports.gettotalpositions = gettotalpositions;
 
-  getfreemargin = '\
+  getfreemargin = getcash + gettotalpositions + '\
   local getfreemargin = function(clientid, currency) \
     local cash = getcash(clientid, currency) \
     local totalpositions = gettotalpositions(clientid, currency) \
