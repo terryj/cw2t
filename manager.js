@@ -507,7 +507,7 @@ function getSendIfa(ifaid, conn) {
 function cashTrans(cashtrans, userid, conn) {
   cashtrans.timestamp = getUTCTimeStamp();
 
-  db.eval(common.scriptcashtrans, 8, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.desc, cashtrans.timestamp, operatortype, userid, function(err, ret) {
+  db.eval(common.scriptcashtrans, 11, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.settldate, operatortype, userid, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
@@ -1018,7 +1018,7 @@ function tradeHistory(req, conn) {
 }
 
 function cashHistory(req, conn) {
-  db.eval(scriptgetcashhistory, 1, req.clientid, function(err, ret) {
+  db.eval(scriptgetcashhistory, 2, req.clientid, req.currency, function(err, ret) {
     if (err) throw err;
     conn.write("{\"cashhistory\":" + ret + "}");
   });  
@@ -1086,6 +1086,7 @@ function cashRequest(cashreq, conn) {
 function accountRequest(acctreq, conn) {
   db.eval(scriptgetaccount, 1, acctreq.clientid, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
     conn.write("{\"account\":" + ret + "}");
   });
 }
@@ -2134,11 +2135,21 @@ function registerScripts() {
   scriptgetcashhistory = '\
   local tblresults = {} \
   local cashhistory = redis.call("smembers", KEYS[1] .. ":cashtrans") \
-  local fields = {"clientid","currency","amount","transtype","description","timestamp","cashtransid"} \
+  local fields = {"clientid","currency","amount","transtype","drcr","description","reference","timestamp","settldate","cashtransid"} \
   local vals \
+  local balance = 0 \
   for index = 1, #cashhistory do \
     vals = redis.call("hmget", "cashtrans:" .. cashhistory[index], unpack(fields)) \
-    table.insert(tblresults, {clientid=vals[1],currency=vals[2],amount=vals[3],transtype=vals[4],description=vals[5],timestamp=vals[6],cashtransid=vals[7]}) \
+    --[[ match the currency ]] \
+    if vals[2] == KEYS[2] then \
+      --[[ adjust balance according to debit/credit ]] \
+      if vals[5] == 1 then \
+        balance = balance - tonumber(vals[3]) \
+      else \
+        balance = balance + tonumber(vals[3]) \
+      end \
+      table.insert(tblresults, {datetime=vals[1],currency=vals[2],amount=vals[3],transtype=vals[4],drcr=vals[5],description=vals[6],reference=vals[7],timestamp=vals[8],settldate=vals[9],cashtransid=vals[10],balance=balance}) \
+    end \
   end \
   return cjson.encode(tblresults) \
   ';

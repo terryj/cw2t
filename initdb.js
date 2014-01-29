@@ -63,7 +63,7 @@ function initdb() {
   db.sadd("clients", "999999");
 
   // clients - hash for each
-  db.hmset("client:999999", "email", "999999@thomasgrant.co.uk", "password", "999999", "brokerid", 1, "clientid", 999999, "marketext", "D", "name", "Thomas Grant Hedgebook", "address", "", "mobile", "", "hedge", 0, "type", 2, "brokerclientcode", 999999);
+  db.hmset("client:999999", "email", "999999@thomasgrant.co.uk", "password", "999999", "brokerid", 1, "clientid", 999999, "marketext", "D", "name", "Thomas Grant Hedgebook", "address", "", "mobile", "", "hedge", 0, "type", 2, "brokerclientcode", 999999, "commissionpercent", 0);
 
   // link between client email & id
   db.set("client:999999@thomasgrant.co.uk", "999999");
@@ -140,22 +140,21 @@ function initdb() {
   db.sadd("index:UKX", "BARC.L");
 
   // cash transaction types
-  db.sadd("cashtranstypes", "CI");
-  db.sadd("cashtranstypes", "CO");
-  db.sadd("cashtranstypes", "JI");
-  db.sadd("cashtranstypes", "JO");
-  db.sadd("cashtranstypes", "BT");
-  db.sadd("cashtranstypes", "ST");
+  db.sadd("cashtranstypes", "CA");
+  db.sadd("cashtranstypes", "DI");
+  db.sadd("cashtranstypes", "TC");
   db.sadd("cashtranstypes", "FI");
   db.sadd("cashtranstypes", "IN");
+  db.sadd("cashtranstypes", "CO");
+  db.sadd("cashtranstypes", "OT");
 
-  db.set("cashtranstype:CI", "Cash In");
-  db.set("cashtranstype:CO", "Cash Out");
-  db.set("cashtranstype:JI", "Journal In");
-  db.set("cashtranstype:JO", "Journal Out");
+  db.set("cashtranstype:CA", "Cash");
+  db.set("cashtranstype:DI", "Dividend");
   db.set("cashtranstype:TC", "Trade Costs");
   db.set("cashtranstype:FI", "Finance");
   db.set("cashtranstype:IN", "Interest");
+  db.set("cashtranstype:CO", "Commission");
+  db.set("cashtranstype:OT", "Other");
 
   // currencies
   db.sadd("currencies", "GBP");

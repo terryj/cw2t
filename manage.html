@@ -4,6 +4,19 @@
     <title>TG-Online Manager v0.9</title/>
     <script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
     <style>
+        table {
+            font-size: 21px;
+        }
+        table, .colrightalign {
+            text-align: right;
+       }
+        table, .colleftalign {
+            text-align: left;
+        }
+        table, .colunderline {
+            text-align: right;
+            border-bottom: 1px solid #000;
+        }
         .list {
             display: block;
             font-size: 24px;
@@ -868,7 +881,7 @@
         function loadAccount(acctarr) {
             for (var i = 0; i < acctarr.length; ++i) {
                 account[acctarr[i].currency] = acctarr[i];
-            }                        
+            }
         }
 
         function loadMargins(marginarr) {
@@ -1292,6 +1305,7 @@
             clearField(inpclient);
             clearField(inpamount);
             clearField(inpdesc);
+            clearField(inpref);
         }
 
         function updateOrder(order) {
@@ -1675,6 +1689,7 @@
         function clearTables() {
             clearTable("tblpositions");
             clearTable("tblaccount");
+            clearTable("tblcashhistory");
         }
 
         function clearDivs() {
@@ -1963,6 +1978,12 @@
             var emptyline = addNewLine(main);
             emptyline.id = "emptyline:" + "1";
 
+            if (Object.keys(positions).length == 0) {
+                var list = getList("list1");
+                addElement("No positions", list, 0);
+                return;
+            }
+
             tblpositions = document.createElement("table");
             tblpositions.id = "tblpositions";
             tblpositions.setAttribute("border", "1");
@@ -2079,6 +2100,7 @@
         function displayAccount() {
             var tblaccount;
             var tblbody;
+            var numrows = 7;
 
             clearLists();
             clearEmptyLines();
@@ -2088,9 +2110,14 @@
             var emptyline = addNewLine(main);
             emptyline.id = "emptyline:" + "1";
 
+            if (Object.keys(account).length == 0) {
+                var list = getList("list1");
+                addElement("No cash or transactions", list, 0);
+                return;
+            }
+
             tblaccount = document.createElement("table");
             tblaccount.id = "tblaccount";
-            //tblaccount.setAttribute("border", "1");
 
             tblbody = document.createElement("tbody");
             tblbody.id = "tblbody";
@@ -2103,6 +2130,7 @@
 
                 var col = document.createElement("td");
                 col.innerHTML = account[x].currency;
+                col.className = "colleftalign";
 
                 headingrow.appendChild(col);
 
@@ -2111,7 +2139,7 @@
                 tblbody.appendChild(headingrow);
                 tblbody.appendChild(emptyrow);
 
-                for (var i = 0; i < 9; ++i) {
+                for (var i = 0; i < numrows; ++i) {
                     var row = document.createElement("tr");
                     var col = document.createElement("td");
                     var colval = document.createElement("td");
@@ -2121,49 +2149,63 @@
                     switch (i) {
                     case 0:
                         col.innerHTML = "Cash";
-                        colval.innerHTML = account[x].cash;
+                        col.className = "colleftalign";
+                        colval.innerHTML = formatCurrency(account[x].cash);
+                        colval.className = "colrightalign";
                         break;
                     case 1:
                         col.innerHTML = "Realised P&L";
-                        colval.innerHTML = account[x].realisedpandl;
+                        col.className = "colleftalign";
+                        colval.innerHTML = formatCurrency(account[x].realisedpandl);
+                        colval.className = "colunderline";
                         break;
                     case 2:
                         col.innerHTML = "Trading Balance";
-                        colval.innerHTML = account[x].balance;
+                        col.className = "colleftalign";
+                        colval.innerHTML = formatCurrency(account[x].balance);
+                        colval.className = "colrightalign";
                         var colempty = document.createElement("td");
                         row.appendChild(colempty);
                         break;
                     case 3:
                         col.innerHTML = "Unrealised P&L";
-                        colval.innerHTML = account[x].unrealisedpandl;
+                        col.className = "colleftalign";
+                        colval.innerHTML = formatCurrency(account[x].unrealisedpandl);
+                        colval.className = "colunderline";
                         var colempty = document.createElement("td");
                         row.appendChild(colempty);
                         break;
                     case 4:
                         col.innerHTML = "Equity";
-                        colval.innerHTML = account[x].equity;
-                        var colempty = document.createElement("td");
-                        row.appendChild(colempty);
-                        var colempty = document.createElement("td");
-                        row.appendChild(colempty);
+                        col.className = "colleftalign";
+                        colval.innerHTML = formatCurrency(account[x].equity);
+                        colval.className = "colrightalign";
+                        var colempty1 = document.createElement("td");
+                        row.appendChild(colempty1);
+                        var colempty2 = document.createElement("td");
+                        row.appendChild(colempty2);
                         break;
                     case 5:
                         col.innerHTML = "Margin";
-                        colval.innerHTML = "(" + account[x].margin + ")";
-                        var colempty = document.createElement("td");
-                        row.appendChild(colempty);
-                        var colempty = document.createElement("td");
-                        row.appendChild(colempty);
+                        col.className = "colleftalign";
+                        colval.innerHTML = "(" + formatCurrency(account[x].margin) + ")";
+                        colval.className = "colunderline";
+                        var colempty1 = document.createElement("td");
+                        row.appendChild(colempty1);
+                        var colempty2 = document.createElement("td");
+                        row.appendChild(colempty2);
                         break;
                     case 6:
                         col.innerHTML = "Free Margin";
-                        colval.innerHTML = account[x].freemargin;
-                        var colempty = document.createElement("td");
-                        row.appendChild(colempty);
-                        var colempty = document.createElement("td");
-                        row.appendChild(colempty);
-                        var colempty = document.createElement("td");
-                        row.appendChild(colempty);
+                        col.className = "colleftalign";
+                        colval.innerHTML = formatCurrency(account[x].freemargin);
+                        colval.className = "colrightalign";
+                        var colempty1 = document.createElement("td");
+                        row.appendChild(colempty1);
+                        var colempty2 = document.createElement("td");
+                        row.appendChild(colempty2);
+                        var colempty3 = document.createElement("td");
+                        row.appendChild(colempty3);
                         break;
                     default:
                     }
@@ -2192,6 +2234,7 @@
             clearLists();
             clearHeadings();
             clearEmptyLines();
+            clearTables();
 
             list1 = getList("list1");
             var emptyline1 = addNewLine(main);
@@ -2329,6 +2372,7 @@
             clearLists();
             clearHeadings();
             clearEmptyLines();
+            clearTables();
 
             list = getList("list1");
 
@@ -2360,6 +2404,7 @@
             clearLists();
             clearHeadings();
             clearEmptyLines();
+            clearTables();
 
             list = getList("list1");
 
@@ -2391,6 +2436,7 @@
             clearLists();
             clearHeadings();
             clearEmptyLines();
+            clearTables();
 
             list = getList("list1");
 
@@ -2422,6 +2468,7 @@
             clearLists();
             clearHeadings();
             clearEmptyLines();
+            clearTables();
 
             list = getList("list1");
 
@@ -2445,7 +2492,7 @@
             }
         }
 
-        function displayCashHistory() {
+        /*function displayCashHistory() {
             var firstcashhistory = true;
             var msg;
             var list;
@@ -2457,6 +2504,9 @@
             list = getList("list1");
 
             for (var x in cashhistory) {
+                if (firstcashhistory) {
+                    add
+                }
                 msg = cashHistoryMsg(cashhistory[x]);
                 addElement(msg, list, cashhistory[x].cashtransid);
                 firstcashhistory = false;
@@ -2474,6 +2524,153 @@
                     viewCashHistory(element.value);
                 }
             }
+        }*/
+
+        function displayCashHistory() {
+            var tblcashhistory;
+            var tblbody;
+            var posrow;
+            var headingrow;
+            var numcols = 7;
+            var firstrow;
+
+            clearLists();
+            clearEmptyLines();
+            clearHeadings();
+            clearTables();
+
+            if (Object.keys(cashhistory).length == 0) {
+                var list = getList("list1");
+                addElement("No cash transactions", list, 0);
+                return;
+            }
+
+            tblcashhistory = document.createElement("table");
+            tblcashhistory.id = "tblcashhistory";
+            tblcashhistory.setAttribute("border", "1");
+
+            tblbody = document.createElement("tbody");
+            tblbody.id = "tblbody";
+
+            tblcashhistory.appendChild(tblbody);
+            main.appendChild(tblcashhistory);
+
+            headingrow = document.createElement("tr");
+
+            for (var i = 0; i < numcols; ++i) {
+                var col = document.createElement("td");
+
+                switch (i) {
+                case 0:
+                    col.innerHTML = "Datetime";
+                    col.className = "colleftalign";
+                    break;
+                case 1:
+                    col.innerHTML = "Type";
+                    col.className = "colleftalign";
+                    break;
+                case 2:
+                    col.innerHTML = "Description";
+                    col.className = "colleftalign";
+                    break;
+                case 3:
+                    col.innerHTML = "Reference";
+                    col.className = "colleftalign";
+                    break;
+                case 4:
+                    col.innerHTML = "Debit";
+                    col.className = "colrightalign";
+                    break;
+                case 5:
+                    col.innerHTML = "Credit";
+                    col.className = "colrightalign";
+                    break;
+                case 6:
+                    col.innerHTML = "Balance";
+                    col.className = "colrightalign";
+                    break;
+                default:
+                }
+
+                headingrow.appendChild(col);
+            }
+
+            tblbody.appendChild(headingrow);
+
+            firstrow = document.createElement("tr");
+
+            for (var i = 0; i < numcols-1; ++i) {
+                var col = document.createElement("td");
+                if (i == 2) {
+                    col.innerHTML = "Start Balance";
+                } else {
+                    col.innerHTML = "";
+                }
+                firstrow.appendChild(col);
+            }
+
+            var col = document.createElement("td");
+            col.innerHTML = "0.00";
+            col.className = "colrightalign";
+            firstrow.appendChild(col);
+
+            tblbody.appendChild(firstrow);
+
+            for (var x in cashhistory) {
+                var row = document.createElement("tr");
+
+                for (var i = 0; i < numcols; ++i) {
+                    var col = document.createElement("td");
+
+                    switch (i) {
+                    case 0:
+                        col.innerHTML = formatUTCDateTime(cashhistory[x].timestamp);
+                        break;
+                    case 1:
+                        col.innerHTML = cashhistory[x].transtype;
+                        break;
+                    case 2:
+                        col.innerHTML = cashhistory[x].description;
+                        break;
+                    case 3:
+                        col.innerHTML = cashhistory[x].reference;
+                        break;
+                    case 4:
+                        if (cashhistory[x].drcr == 1) {
+                            var amount = formatCurrency(cashhistory[x].amount);
+                            col.innerHTML = amount;
+                        } else {
+                            col.innerHTML = "";                            
+                        }
+                        col.className = "colrightalign";
+                        break;
+                    case 5:
+                        if (cashhistory[x].drcr == 2) {
+                            var amount = formatCurrency(cashhistory[x].amount);                            
+                            col.innerHTML = amount;
+                        } else {
+                            col.innerHTML = "";                            
+                        }
+                        col.className = "colrightalign";
+                        break;
+                    case 6:
+                        var balance = formatCurrency(cashhistory[x].balance);
+                        col.innerHTML = balance;
+                        col.className = "colrightalign";
+                        break;
+                    default:
+                    }
+
+                    row.appendChild(col);
+                }
+
+                tblbody.appendChild(row);
+            }
+        }
+
+        function formatCurrency(num) {
+            num = isNaN(num) || num === '' || num === null ? 0.00 : num;
+            return parseFloat(num).toFixed(2);
         }
 
         function displayCash() {
@@ -2798,7 +2995,7 @@
                 if (!validateClientid()) {return;}
 
                 setSelected(lnkreserves);
-                cashrequest.clientid = inpclientid.value;
+                reservesrequest.clientid = inpclientid.value;
                 sockjs.send("{\"reservesrequest\":" + JSON.stringify(reservesrequest) + "}");
             }
 
@@ -4817,6 +5014,7 @@
                 chkinsttype.type = "checkbox";
                 chkinsttype.id = "checkbox:" + instrumenttypes[i].instrumenttypeid;
                 chkinsttype.className = "formcheckbox";
+
                 var textinsttype = document.createTextNode(instrumenttypes[i].description);
 
                 frmclient.appendChild(chkinsttype);
@@ -5051,6 +5249,11 @@
             var lblcashconf;
             var inpclientid;
             var clientboxinput;
+            var lblref;
+            var inpref;
+            var settlday;
+            var settlmonth;
+            var settlyear;
 
             selectClient("frmcash", null, null, false, "inpclient", "inpclientid", "");
 
@@ -5086,9 +5289,27 @@
             inpdesc = document.createElement("input");
             inpdesc.id = "inpdesc";
             inpdesc.className = "forminput";
+            lblref = document.createElement("label");
+            lblref.className = "formlabel";
+            lblref.innerHTML = "Reference:";
+            inpref = document.createElement("input");
+            inpref.id = "inpref";
+            inpref.className = "forminput";
             inpclientid = document.createElement("input");
             inpclientid.type = "hidden";
             inpclientid.id = "inpclientid";
+            lblsettldate = document.createElement("label");
+            lblsettldate.className = "formlabel";
+            lblsettldate.innerHTML = "Settlement Date:";
+            settlday = document.createElement("select");
+            settlday.id = "settlday";
+            settlday.className = "formselect";
+            settlmonth = document.createElement("select");
+            settlmonth.id = "settlmonth";
+            settlmonth.className = "formselect";
+            settlyear = document.createElement("select");
+            settlyear.id = "settlyear";
+            settlyear.className = "formselect";
 
             btnupdate = document.createElement("input");
             btnupdate.type = "button";
@@ -5122,7 +5343,16 @@
                 cashtrans.currency = selcurrency[selcurrency.selectedIndex].value;
                 cashtrans.transtype = seltranstype[seltranstype.selectedIndex].value;
                 cashtrans.amount = inpamount.value;
-                cashtrans.desc = inpdesc.value;
+                cashtrans.description = inpdesc.value;
+                cashtrans.reference = inpref.value;
+
+                if (optdr.checked) {
+                    cashtrans.drcr = 1;
+                } else {
+                    cashtrans.drcr = 2;                    
+                }
+
+                cashtrans.settldate = formatToUTCDate(settlday[settlday.selectedIndex].value, settlmonth[settlmonth.selectedIndex].value, settlyear[settlyear.selectedIndex].value);
 
                 sockjs.send("{\"cashtrans\":" + JSON.stringify(cashtrans) + "}");
             }
@@ -5131,7 +5361,8 @@
             lblcashconf.id = "lblcashconf";
 
             populateCurrencies(selcurrency, "GBP");
-            populateCashtranstypes(seltranstype, "CI");
+            populateCashtranstypes(seltranstype, "CA");
+            populateDate(settlday, settlmonth, settlyear, new Date());
 
             inpclient.disabled = true;
 
@@ -5145,11 +5376,26 @@
             frmcash.appendChild(lbltranstype);
             frmcash.appendChild(seltranstype);
             addNewLine(frmcash);
+            var lbldrcr = newlabel("lbldrcr", "Debit/Credit:", "formlabel", frmcash);
+            var optdr = newoption("optdr", "optdrcr", "formcheckbox", frmcash);
+            var lbldr = newlabel("lbldr", "Debit", "", frmcash);
+            var optcr = newoption("optcr", "optdrcr", "formcheckbox", frmcash);
+            var lblcr = newlabel("lblcr", "Credit", "", frmcash);
+            optdr.checked = true;
+            addNewLine(frmcash);
             frmcash.appendChild(lblamount);
             frmcash.appendChild(inpamount);
             addNewLine(frmcash);
+            frmcash.appendChild(lblsettldate);
+            frmcash.appendChild(settlday);
+            frmcash.appendChild(settlmonth);
+            frmcash.appendChild(settlyear);
+            addNewLine(frmcash);
             frmcash.appendChild(lbldesc);
             frmcash.appendChild(inpdesc);
+            addNewLine(frmcash);
+            frmcash.appendChild(lblref);
+            frmcash.appendChild(inpref);
             addNewLine(frmcash);
             frmcash.appendChild(btnupdate);
             addNewLine(frmcash);
@@ -5829,6 +6075,7 @@
 
                 setSelected(lnkcash);
                 historyrequest.clientid = inpclientid.value;
+                historyrequest.currency = "GBP";
                 sockjs.send("{\"cashhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
             }
 

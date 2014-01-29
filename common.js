@@ -13,22 +13,32 @@ exports.registerCommonScripts = function () {
   var gettotalpositions;
   var getcash;
   var getfreemargin;
+  var round;
 
+  round = '\
+  local round = function(num, dp) \
+    local mult = 10 ^ (dp or 0) \
+    return math.floor(num * mult + 0.5) / mult \
+  end \
+  ';
+  
+  exports.round = round;
+ 
   updatecash = '\
-  local updatecash = function(clientid, currency, transtype, amount, desc, timestamp, operatortype, operatorid) \
+  local updatecash = function(clientid, currency, transtype, amount, drcr, desc, reference, timestamp, settldate, operatortype, operatorid) \
     amount = tonumber(amount) \
     if amount == 0 then \
       return {0, 0} \
     end \
     local cashtransid = redis.call("incr", "cashtransid") \
     if not cashtransid then return {1005} end \
-    redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currency", currency, "transtype", transtype, "amount", amount, "description", desc, "timestamp", timestamp, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
+    redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currency", currency, "transtype", transtype, "amount", amount, "drcr", drcr, "description", desc, "reference", reference, "timestamp", timestamp, "settldate", settldate, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
     redis.call("sadd", clientid .. ":cashtrans", cashtransid) \
     local cashkey = clientid .. ":cash:" .. currency \
     local cashskey = clientid .. ":cash" \
     local cash = redis.call("get", cashkey) \
-    --[[ take account of +/- transaction type ]] \
-    if transtype == "TB" or transtype == "CO" or transtype == "JO" or transtype == "TC" or transtype == "FI" then \
+    --[[ adjust for debit / credit]] \
+    if drcr == 1 then \
       amount = -amount \
     end \
     if not cash then \
@@ -161,7 +171,7 @@ exports.registerCommonScripts = function () {
   // a cash transaction
   //
   exports.scriptcashtrans = updatecash + '\
-  local ret = updatecash(KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[7], KEYS[8]) \
+  local ret = updatecash(KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[7], KEYS[8], KEYS[9], KEYS[10], KEYS[11]) \
   return ret \
   ';
 

@@ -1568,6 +1568,7 @@ string luaScript = "local tDecoded = redis.call('GET', KEYS[1]);\n"
 function registerScripts() {
   var updatecash = common.updatecash;
   var getfreemargin = common.getfreemargin;
+  var round = common.round;
   var updateposition;
   var updateordermargin;
   var updatereserve;
@@ -1587,13 +1588,6 @@ function registerScripts() {
   var neworder;
   var getreserve;
   var getposition;
-
-  round = '\
-  local round = function(num, dp) \
-    local mult = 10 ^ (dp or 0) \
-    return math.floor(num * mult + 0.5) / mult \
-  end \
-  ';
 
   getcosts = round + '\
   local getcosts = function(clientid, instrumenttype, side, consid, currency) \
@@ -2014,8 +2008,12 @@ function registerScripts() {
     redis.call("sadd", clientid .. ":trades", tradeid) \
     redis.call("sadd", "order:" .. orderid .. ":trades", tradeid) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
-    updatecash(clientid, settlcurrency, "TC", totalcost, "trade costs", timestamp, operatortype, operatorid) \
-    updatecash(clientid, settlcurrency, "FI", finance, "finance", timestamp, operatortype, operatorid) \
+    if totalcost > 0 then \
+      updatecash(clientid, settlcurrency, "TC", totalcost, 1, "trade costs", tradekey, timestamp, "", operatortype, operatorid) \
+    end \
+    if tonumber(finance) > 0 then \
+      updatecash(clientid, settlcurrency, "FI", finance, 1, "finance", tradekey, timestamp, "", operatortype, operatorid) \
+    end \
     updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, futsettdate, initialmargin) \
     return tradeid \
   end \
