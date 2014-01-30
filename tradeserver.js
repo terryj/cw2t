@@ -319,6 +319,7 @@ function newOrder(order) {
   // store the order, get an id & credit check it
   db.eval(scriptneworder, 23, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
 
     // credit check failed
     if (ret[0] == 0) {
@@ -1561,6 +1562,7 @@ function registerScripts() {
   var getreserve;
   var getposition;
   var round;
+  var getrealisedpandl;
 
   round = '\
   local round = function(num, dp) \
@@ -1728,10 +1730,21 @@ function registerScripts() {
   end \
   ';
 
+  getrealisedpandl = round + '\
+  local getrealisedpandl = function(side, tradequantity, tradeprice, avgcost) \
+    local realisedpandl = tonumber(tradequantity) * (tonumber(tradeprice) - tonumber(avgcost)) \
+    if tonumber(side) == 1 then \
+      realisedpandl = -realisedpandl \
+    end \
+    realisedpandl = round(realisedpandl, 2) \
+    return realisedpandl \
+  end \
+  ';
+
   //
   // positions are keyed on clientid + symbol + currency + settlement date
   //
-  updateposition = round + '\
+  updateposition = getrealisedpandl + '\
   local updateposition = function(clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, settldate, trademargin) \
     local poskey = symbol .. ":" .. currency .. ":" .. settldate \
     local positionkey = clientid .. ":position:" .. poskey \
@@ -1759,8 +1772,7 @@ function registerScripts() {
         poscost = 0 \
         posmargin = 0 \
         avgcostpershare = 0 \
-        realisedpandl = tonumber(vals[6]) + (tonumber(tradequantity) * (tonumber(tradeprice) - tonumber(vals[5]))) \
-        realisedpandl = round(realisedpandl, 2) \
+        realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
       elseif tonumber(tradequantity) > tonumber(vals[1]) then \
         --[[ close position & open new ]] \
         posqty = tonumber(tradequantity) - tonumber(vals[1]) \
@@ -1769,8 +1781,7 @@ function registerScripts() {
         posmargin = posqty / tonumber(tradequantity) * tonumber(trademargin) \
         posmargin = round(posmargin, 5) \
         avgcostpershare = tradeprice \
-        realisedpandl = tonumber(vals[6]) + (tonumber(tradequantity) * (tonumber(tradeprice) - tonumber(vals[5]))) \
-        realisedpandl = round(realisedpandl, 2) \
+        realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
         --[[ reverse the side ]] \
         redis.call("hset", positionkey, "side", side) \
       else \
@@ -1781,8 +1792,7 @@ function registerScripts() {
         posmargin = posqty / tonumber(vals[1]) * tonumber(vals[3]) \
         posmargin = round(posmargin, 5) \
         avgcostpershare = vals[5] \
-        realisedpandl = tonumber(vals[6]) + (tonumber(tradequantity) * (tonumber(tradeprice) - tonumber(vals[5]))) \
-        realisedpandl = round(realisedpandl, 2) \
+        realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
       end \
       --[[ todo: may need to remove position here ]] \
       --[[ todo: may need to update cash for p&l here ]] \
@@ -1867,17 +1877,24 @@ function registerScripts() {
     local position = getposition(clientid, symbol, currency, settldate) \
     if position[1] then \
       if tonumber(side) ~= tonumber(position[3]) then \
-        if tonumber(quantity) > tonumber(position[1]) then \
-          --[[ we are trying to close a quantity greater than current position, so need to check we can open a new position ]] \
-          local freemargin = getfreemargin(clientid, currency) \
-          --[[ add the margin returned by closing the position ]] \
-          freemargin = freemargin + position[4] \
-          --[[ check part of initial margin that would result from opening new position ]] \
-          local newinitialmargin = (tonumber(quantity) - tonumber(position[1])) * initialmargin \
-          if newinitialmargin + totalcost[1] + finance < freemargin then \
-            rejectorder(orderid, 1020, "") \
+        if tonumber(quantity) <= tonumber(position[1]) then \
+          --[[ closing trade, so ok ]] \
+          return {1, initialmargin, totalcost[2], finance} \
+        end \
+        if instrumenttype == "DE" and tonumber(side) == 2 then \
+            --[[ equity, so cannot sell more than we have ]] \
+            rejectorder(orderid, 1019, "") \
             return {0} \
-          end \
+        end \
+        --[[ we are trying to close a quantity greater than current position, so need to check we can open a new position ]] \
+        local freemargin = getfreemargin(clientid, currency) \
+        --[[ add the margin returned by closing the position ]] \
+        freemargin = freemargin + position[4] \
+        --[[ check part of initial margin that would result from opening new position ]] \
+        local newinitialmargin = (tonumber(quantity) - tonumber(position[1])) * initialmargin \
+        if newinitialmargin + totalcost[1] + finance < freemargin then \
+          rejectorder(orderid, 1020, "") \
+          return {0} \
         end \
         --[[ closing trade or enough margin to close & open a new position, so ok ]] \
         return {1, initialmargin, totalcost[2], finance} \
@@ -1892,7 +1909,7 @@ function registerScripts() {
       end \
       updateordermargin(orderid, clientid, 0, currency, initialmargin) \
     else \
-      --[[ allow ifa certificated client sells ]] \
+      --[[ allow ifa certificated equity sells ]] \
       if instrumenttype == "DE" then \
         if redis.call("hget", "client:" .. clientid, "type") == "3" then \
           return {1, initialmargin, totalcost[2], finance} \
@@ -1901,6 +1918,11 @@ function registerScripts() {
       --[[ check there is a position ]] \
       if not position[1] then \
         rejectorder(orderid, 1003, "") \
+        return {0} \
+      end \
+      --[[ check the position is long ]] \
+      if tonumber(position[3]) == 2 then \
+        rejectorder(orderid, 1004, "") \
         return {0} \
       end \
       --[[ check there is a large enough position ]] \

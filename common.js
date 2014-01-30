@@ -13,7 +13,8 @@ exports.registerCommonScripts = function () {
   var gettotalpositions;
   var getcash;
   var getfreemargin;
- 
+  var getunrealisedpandl;
+
   updatecash = '\
   local updatecash = function(clientid, currency, transtype, amount, drcr, desc, reference, timestamp, settldate, operatortype, operatorid) \
     amount = tonumber(amount) \
@@ -61,11 +62,30 @@ exports.registerCommonScripts = function () {
 
   exports.getcash = getcash;
 
+  getunrealisedpandl = '\
+  local getunrealisedpandl = function(symbol, quantity, side, avgcost) \
+    local price = redis.call("get", "price:" .. symbol) \
+    local unrealisedpandl = 0 \
+    --[[ only calculate a p&l if we have a price ]] \
+    if price then \
+      --[[ take account of short positions ]] \
+      local qty = tonumber(quantity) \
+      if tonumber(side) == 2 then \
+        qty = -qty \
+      end \
+      unrealisedpandl = qty * (tonumber(price) - tonumber(avgcost)) \
+    end \
+    return unrealisedpandl \
+  end \
+  ';
+
+  exports.getunrealisedpandl = getunrealisedpandl;
+
   // only dealing with trade currency for the time being - todo: review
-  gettotalpositions = '\
+  gettotalpositions = getunrealisedpandl + '\
   local gettotalpositions = function(clientid, currency) \
     local positions = redis.call("smembers", clientid .. ":positions") \
-    local fields = {"symbol", "currency", "quantity", "margin", "averagecostpershare", "realisedpandl"} \
+    local fields = {"symbol", "currency", "quantity", "margin", "averagecostpershare", "realisedpandl", "side"} \
     local vals \
     local totalmargin = 0 \
     local totalrealisedpandl = 0 \
@@ -75,10 +95,7 @@ exports.registerCommonScripts = function () {
       if vals[2] == currency then \
         totalmargin = totalmargin + tonumber(vals[4]) \
         totalrealisedpandl = totalrealisedpandl + tonumber(vals[6]) \
-        local price = redis.call("get", "price:" .. vals[1]) \
-        if price then \
-          totalunrealisedpandl = totalunrealisedpandl + (tonumber(vals[3]) * (tonumber(price) - tonumber(vals[5]))) \
-        end \
+        totalunrealisedpandl = totalunrealisedpandl + getunrealisedpandl(vals[1], vals[3], vals[7], vals[5]) \
       end \
     end \
     return {totalmargin, totalrealisedpandl, totalunrealisedpandl} \
