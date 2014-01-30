@@ -164,7 +164,7 @@ function logon(reset) {
 	sendMessage('A', "", "", msg, false, null, null);
 }
 
-function logout(text) {
+function sendLogout(text) {
 	var msg = '';
 
 	console.log("sending logout msg");
@@ -209,7 +209,7 @@ function testRequest() {
 function TestRequestTimeout() {
 	console.log("test request timeout, quitting...");
 
-	logout("Test Request Timeout");
+	sendLogout("Test Request Timeout");
 
 	// we haven't heard for a while, so quit
 	disconnect();
@@ -1072,10 +1072,12 @@ function logoutReceived(logout, self) {
 	console.log('logout received');
 
 	if (!logoutinitiated) {
-		console.log('logout text=' + logout.text);
+		if ('text' in logout) {
+			console.log('logout text=' + logout.text);
+		}
 
 		// return a logout
-		logout('');
+		sendLogout('');
 	}
 
 	// we are done

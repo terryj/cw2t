@@ -606,7 +606,7 @@
                 } else if ("quotes" in obj) {
                     loadQuotes(obj.quotes);
                 } else if ("quoteack" in obj) {
-                    quoteAck(obj.quoteack);
+                    quoteAckReceived(obj.quoteack);
                 } else if ("quote" in obj) {
                     quoteReceived(obj.quote);
                 } else if ("positions" in obj) {
@@ -2739,8 +2739,8 @@
 
             div.appendChild(msglabel);
         }
-
-        function quoteAck(quoteack) {
+        
+        function quoteAckReceived(quoteack) {
             msg = " Quote request rejected, reason: " + quoteack.quoterejectreasondesc;
             if ('text' in quoteack && quoteack.text != "") {
                 msg += ", " + quoteack.text;

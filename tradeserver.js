@@ -1462,37 +1462,10 @@ ptp.on("quoteack", function(quoteack) {
       return;
     }
 
+    // publish to server
     db.publish(ret[1], "quoteack:" + quoteack.quotereqid);
   });
 });
-
-/*function sendQuoteAck(quotereqid) {
-  var quoteack = {};
-  var orgclientkey;
-
-  db.hgetall("quoterequest:" + quotereqid, function(err, quoterequest) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (quoterequest == null) {
-      console.log("can't find quote request id " + quotereqid);
-      return;
-    }
-
-    quoteack.quotereqid = quotereqid;
-    quoteack.symbol = quoterequest.symbol;
-    quoteack.quoterejectreason = quoterequest.quoterejectreason;
-
-    orgclientkey = quoterequest.orgid + ":" + quoterequest.clientid;
-
-    // send the quote acknowledgement
-    if (orgclientkey in connections) {
-      connections[orgclientkey].write("{\"quoteack\":" + JSON.stringify(quoteack) + "}");
-    }
-  });
-}*/
 
 //
 // message error
@@ -1568,7 +1541,6 @@ string luaScript = "local tDecoded = redis.call('GET', KEYS[1]);\n"
 function registerScripts() {
   var updatecash = common.updatecash;
   var getfreemargin = common.getfreemargin;
-  var round = common.round;
   var updateposition;
   var updateordermargin;
   var updatereserve;
@@ -1588,6 +1560,14 @@ function registerScripts() {
   var neworder;
   var getreserve;
   var getposition;
+  var round;
+
+  round = '\
+  local round = function(num, dp) \
+    local mult = 10 ^ (dp or 0) \
+    return math.floor(num * mult + 0.5) / mult \
+  end \
+  ';
 
   getcosts = round + '\
   local getcosts = function(clientid, instrumenttype, side, consid, currency) \
@@ -1751,7 +1731,7 @@ function registerScripts() {
   //
   // positions are keyed on clientid + symbol + currency + settlement date
   //
-  updateposition = '\
+  updateposition = round + '\
   local updateposition = function(clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, settldate, trademargin) \
     local poskey = symbol .. ":" .. currency .. ":" .. settldate \
     local positionkey = clientid .. ":position:" .. poskey \
@@ -1771,28 +1751,39 @@ function registerScripts() {
         poscost = tonumber(vals[2]) + tonumber(tradecost) \
         posmargin = tonumber(vals[3]) + tonumber(trademargin) \
         avgcostpershare = poscost / posqty \
+        avgcostpershare = round(avgcostpershare, 5) \
+        realisedpandl = vals[6] \
       elseif tonumber(tradequantity) == tonumber(vals[1]) then \
         --[[ just close position ]] \
         posqty = 0 \
         poscost = 0 \
         posmargin = 0 \
         avgcostpershare = 0 \
+        realisedpandl = tonumber(vals[6]) + (tonumber(tradequantity) * (tonumber(tradeprice) - tonumber(vals[5]))) \
+        realisedpandl = round(realisedpandl, 2) \
       elseif tonumber(tradequantity) > tonumber(vals[1]) then \
         --[[ close position & open new ]] \
         posqty = tonumber(tradequantity) - tonumber(vals[1]) \
         poscost = posqty * tonumber(tradeprice) \
+        poscost = round(poscost, 5) \
         posmargin = posqty / tonumber(tradequantity) * tonumber(trademargin) \
+        posmargin = round(posmargin, 5) \
         avgcostpershare = tradeprice \
+        realisedpandl = tonumber(vals[6]) + (tonumber(tradequantity) * (tonumber(tradeprice) - tonumber(vals[5]))) \
+        realisedpandl = round(realisedpandl, 2) \
         --[[ reverse the side ]] \
         redis.call("hset", positionkey, "side", side) \
       else \
         --[[ part-fill ]] \
         posqty = tonumber(vals[1]) - tonumber(tradequantity) \
         poscost = posqty * tonumber(vals[5]) \
+        poscost = round(poscost, 5) \
         posmargin = posqty / tonumber(vals[1]) * tonumber(vals[3]) \
+        posmargin = round(posmargin, 5) \
         avgcostpershare = vals[5] \
+        realisedpandl = tonumber(vals[6]) + (tonumber(tradequantity) * (tonumber(tradeprice) - tonumber(vals[5]))) \
+        realisedpandl = round(realisedpandl, 2) \
       end \
-      realisedpandl = tonumber(vals[6]) + (tonumber(tradequantity) * (tonumber(tradeprice) - tonumber(vals[5]))) \
       --[[ todo: may need to remove position here ]] \
       --[[ todo: may need to update cash for p&l here ]] \
       --[[ todo: may need to update margin here ]] \

@@ -7,15 +7,23 @@
         table {
             font-size: 21px;
         }
-        table, .colrightalign {
+        table .tr {
+            border-bottom: none;
+        }
+        table .colrightalign {
             text-align: right;
        }
-        table, .colleftalign {
+        table .colleftalign {
             text-align: left;
         }
-        table, .colunderline {
+        table .colunderline {
             text-align: right;
             border-bottom: 1px solid #000;
+        }
+        table .coldoubleunderline {
+            text-align: right;
+            border-bottom: 1px double #000;
+            text-decoration: underline;
         }
         .list {
             display: block;
@@ -740,7 +748,7 @@
                     loadQuotes(obj.quotes);
                     displayQuotes();
                 } else if ("quoteack" in obj) {
-                    quoteAck(obj.quoteack);
+                    quoteAckReceived(obj.quoteack);
                 } else if ("quote" in obj) {
                     quoteReceived(obj.quote);
                 } else if ("positions" in obj) {
@@ -2014,24 +2022,31 @@
                     break;
                 case 4:
                     col.innerHTML = "Quantity";
+                    col.className = "colrightalign";
                     break;
                 case 5:
                     col.innerHTML = "Cost";
+                    col.className = "colrightalign";
                     break;
                 case 6:
                     col.innerHTML = "Avg. Cost/Share";
+                    col.className = "colrightalign";
                     break;
                 case 7:
                     col.innerHTML = "Margin";
+                    col.className = "colrightalign";
                     break;
                 case 8:
                     col.innerHTML = "Realised P&L";
+                    col.className = "colrightalign";
                     break;
                 case 9:
                     col.innerHTML = "Market Price";
+                    col.className = "colrightalign";
                     break;
                 case 10:
                     col.innerHTML = "Unrealised P&L";
+                    col.className = "colrightalign";
                     break;
                 default:
                 }
@@ -2068,24 +2083,31 @@
                         break;
                     case 4:
                         col.innerHTML = positions[x].quantity;
+                        col.className = "colrightalign";
                         break;
                     case 5:
                         col.innerHTML = positions[x].cost;
+                        col.className = "colrightalign";
                         break;
                     case 6:
                         col.innerHTML = positions[x].averagecostpershare;
+                        col.className = "colrightalign";
                         break;
                     case 7:
                         col.innerHTML = positions[x].margin;
+                        col.className = "colrightalign";
                         break;
                     case 8:
                         col.innerHTML = positions[x].realisedpandl;
+                        col.className = "colrightalign";
                         break;
                     case 9:
                         col.innerHTML = positions[x].mktprice;
+                        col.className = "colrightalign";
                         break;
                     case 10:
                         col.innerHTML = positions[x].unrealisedpandl;
+                        col.className = "colrightalign";
                         break;
                     default:
                     }
@@ -2199,7 +2221,7 @@
                         col.innerHTML = "Free Margin";
                         col.className = "colleftalign";
                         colval.innerHTML = formatCurrency(account[x].freemargin);
-                        colval.className = "colrightalign";
+                        colval.className = "coldoubleunderline";
                         var colempty1 = document.createElement("td");
                         row.appendChild(colempty1);
                         var colempty2 = document.createElement("td");
@@ -3494,23 +3516,23 @@
                     stock.className = "stock";
                     bidprice = document.createElement('span');
                     bidprice.id = "bidprice:" + symbol + ":" + y;
-                    bidprice.title = "Place a new sell order";
+                    bidprice.title = "Place a new limit sell order";
                     bidprice.onclick = function() {setOrderPrice(this, "2", symbol);}
                     offerprice = document.createElement('span');
                     offerprice.id = "offerprice:" + symbol + ":" + y;
-                    offerprice.title = "Place a new buy order";
+                    offerprice.title = "Place a new limit buy order";
                     offerprice.onclick = function() {setOrderPrice(this, "1", symbol);}
 
                     if (showvolume) {
                         bidquantity = document.createElement('span');
                         bidquantity.className = "bidquantity";
                         bidquantity.id = "bidquantity:" + symbol + ":" + y;
-                        bidquantity.title = "Place a new sell order";
+                        bidquantity.title = "Place a new limit sell order";
                         bidquantity.onclick = function() {setOrderQuantity(this, "2", symbol);}
                         offerquantity = document.createElement('span');
                         offerquantity.className = "offerquantity";
                         offerquantity.id = "offerquantity:" + symbol + ":" + y;
-                        offerquantity.title = "Place a new buy order";
+                        offerquantity.title = "Place a new limit buy order";
                         offerquantity.onclick = function() {setOrderQuantity(this, "1", symbol);}
                     }
 
@@ -3537,12 +3559,12 @@
                         }
 
                         placebuyorderlnk = document.createElement('a');
-                        placebuyorderlnk.innerHTML = "Buy Order";
+                        placebuyorderlnk.innerHTML = "Limit Buy Order";
                         placebuyorderlnk.href = "javascript:void(0);";
                         placebuyorderlnk.onclick = function() {placeOrder(symbol, '1', 0, 0);}
 
                         placesellorderlnk = document.createElement('a');
-                        placesellorderlnk.innerHTML = "Sell order";
+                        placesellorderlnk.innerHTML = "Limit Sell order";
                         placesellorderlnk.href = "javascript:void(0);";
                         placesellorderlnk.onclick = function() {placeOrder(symbol, '2', 0, 0);}
 
@@ -4051,13 +4073,17 @@
             }
         }
 
-        function quoteAck(quoteack) {
+        function quoteAckReceived(quoteack) {
             msg = " Quote request rejected, reason: " + quoteack.quoterejectreasondesc;
             if ('text' in quoteack && quoteack.text != "") {
                 msg += ", " + quoteack.text;
             }
 
-            addMessageToDiv(msg, "orderdiv");
+            if (selectedmenu == 0) {
+                addMessageToDiv(msg, "orderdiv:" + quoteack.symbol);
+            } else {
+                addMessageToDiv(msg, "orderdiv");
+            }
         }
 
         function quoteReceived(quote) {
@@ -5029,6 +5055,10 @@
             var lblhedgeno = newlabel("lblhedgeno", "No", "", frmclient);
 
             addNewLine(frmclient);
+            var lblcommpercent = newlabel("lblcommpercent", "Commission %:", "formlabel", frmclient);
+            var inpcommpercent = newinput("inpcommpercent", "forminput", frmclient);
+
+            addNewLine(frmclient);
             var lblclientid = newlabel("lblclientid", "Client Id:", "formlabel", frmclient);
             var inpclientid = newinput("inpclientid", "forminput", frmclient, true);
 
@@ -5063,6 +5093,7 @@
                 client.clientid = inpclientid.value;
                 client.address = inpaddress.value;
                 client.email = inpemail.value;
+                client.commpercent = inpcommpercent.value;
 
                 if (selifa.selectedIndex == 0) {
                     client.ifaid = "";
@@ -5123,6 +5154,7 @@
             var lnknewclient;
             var inpclientid;
             var focusfld;
+            var inpcommpercent;
 
             if (frm == "frmclient") {
                 inpname = document.getElementById("inpname");
@@ -5138,6 +5170,7 @@
                 opthedgeno = document.getElementById("opthedgeno");
                 btnupdate = document.getElementById("btnupdate");
                 lnknewclient = document.getElementById("lnknewclient");
+                inpcommpercent = document.getElementById("inpcommpercent");
 
                 // create an empty client
                 if (client == null) {
@@ -5152,7 +5185,8 @@
                         ifaid: 0,
                         insttypes: [],
                         type: 1,
-                        hedge: 1
+                        hedge: 1,
+                        commpercent: ''
                     };
                 }
 
@@ -5166,6 +5200,7 @@
                     inpemail.value = client.email;
                     populateIfas(selifa, client.ifaid, 0);
                     populateClientTypes(seltype, client.type);
+                    inpcommpercent.value = client.commpercent;
 
                     if (parseInt(client.hedge)) {
                         opthedgeyes.checked = true;

@@ -459,7 +459,7 @@ function orderBookRemoveRequest(userid, symbol, conn) {
 function newClient(client, conn) {
   // maybe a new client or an updated client
   if (client.clientid == "") {
-    db.eval(scriptnewclient, 10, client.brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, function(err, ret) {
+    db.eval(scriptnewclient, 11, client.brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, client.commpercent, function(err, ret) {
       if (err) throw err;
 
       if (ret[0] != 0) {
@@ -470,7 +470,7 @@ function newClient(client, conn) {
       getSendClient(ret[1], conn);
     });
   } else {
-    db.eval(scriptupdateclient, 11, client.clientid, client.brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, function(err, ret) {
+    db.eval(scriptupdateclient, 12, client.clientid, client.brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, client.commpercent, function(err, ret) {
       if (err) throw err;
 
       if (ret != 0) {
@@ -1086,7 +1086,6 @@ function cashRequest(cashreq, conn) {
 function accountRequest(acctreq, conn) {
   db.eval(scriptgetaccount, 1, acctreq.clientid, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
     conn.write("{\"account\":" + ret + "}");
   });
 }
@@ -1861,7 +1860,7 @@ function registerScripts() {
   //
   scriptgetclients = '\
   local clients = redis.call("sort", "clients", "ALPHA") \
-  local fields = {"brokerid", "clientid", "email", "name", "address", "mobile", "ifaid", "type", "hedge", "brokerclientcode"} \
+  local fields = {"brokerid", "clientid", "email", "name", "address", "mobile", "ifaid", "type", "hedge", "brokerclientcode", "commpercent"} \
   local vals \
   local tblclient = {} \
   local tblinsttype = {} \
@@ -1869,7 +1868,7 @@ function registerScripts() {
     vals = redis.call("hmget", "client:" .. clients[index], unpack(fields)) \
     if KEYS[1] == vals[1] then \
       tblinsttype = redis.call("smembers", vals[2] .. ":instrumenttypes") \
-      table.insert(tblclient, {brokerid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype, type = vals[8], hedge = vals[9], brokerclientcode = vals[10]}) \
+      table.insert(tblclient, {brokerid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype, type = vals[8], hedge = vals[9], brokerclientcode = vals[10], commpercent = vals[11]}) \
     end \
   end \
   return cjson.encode(tblclient) \
@@ -1879,7 +1878,7 @@ function registerScripts() {
   local clientid = redis.call("incr", "clientid") \
   if not clientid then return {1005} end \
   --[[ store the client ]] \
-  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "brokerid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7], "hedge", KEYS[9], "brokerclientcode", KEYS[10], "marketext", "D") \
+  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "brokerid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7], "hedge", KEYS[9], "brokerclientcode", KEYS[10], "marketext", "D", "commpercent", KEYS[11]) \
   --[[ add to set of clients ]] \
   redis.call("sadd", "clients", clientid) \
   --[[ add route to find client from email ]] \
@@ -1900,7 +1899,7 @@ function registerScripts() {
   local email = redis.call("hget", clientkey, "email") \
   if not email then return 1017 end \
   --[[ update client ]] \
-  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "brokerid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifaid", KEYS[7], "type", KEYS[8], "hedge", KEYS[10], "brokerclientcode", KEYS[11]) \
+  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "brokerid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifaid", KEYS[7], "type", KEYS[8], "hedge", KEYS[10], "brokerclientcode", KEYS[11], "commpercent", KEYS[12]) \
   --[[ remove old email link and add new one ]] \
   if KEYS[4] ~= email then \
     redis.call("del", "client:" .. email) \

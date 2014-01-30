@@ -13,16 +13,6 @@ exports.registerCommonScripts = function () {
   var gettotalpositions;
   var getcash;
   var getfreemargin;
-  var round;
-
-  round = '\
-  local round = function(num, dp) \
-    local mult = 10 ^ (dp or 0) \
-    return math.floor(num * mult + 0.5) / mult \
-  end \
-  ';
-  
-  exports.round = round;
  
   updatecash = '\
   local updatecash = function(clientid, currency, transtype, amount, drcr, desc, reference, timestamp, settldate, operatortype, operatorid) \
