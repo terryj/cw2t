@@ -2165,9 +2165,8 @@ function registerScripts() {
   for index = 1, #positions do \
     vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
     --[[ value the position ]] \
-    local price = redis.call("get", "price:" .. vals[2]) \
     local unrealisedpandl = getunrealisedpandl(vals[2], vals[4], vals[3], vals[10]) \
-    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],settldate=vals[7],margin=vals[8],positionid=vals[9],averagecostpershare=vals[10],realisedpandl=vals[11],mktprice=price,unrealisedpandl=unrealisedpandl}) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],settldate=vals[7],margin=vals[8],positionid=vals[9],averagecostpershare=vals[10],realisedpandl=vals[11],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
   end \
   return cjson.encode(tblresults) \
   ';

@@ -74,8 +74,10 @@ exports.registerCommonScripts = function () {
         qty = -qty \
       end \
       unrealisedpandl = qty * (tonumber(price) - tonumber(avgcost)) \
+    else \
+      price = 0 \
     end \
-    return unrealisedpandl \
+    return {unrealisedpandl, price} \
   end \
   ';
 
@@ -95,7 +97,8 @@ exports.registerCommonScripts = function () {
       if vals[2] == currency then \
         totalmargin = totalmargin + tonumber(vals[4]) \
         totalrealisedpandl = totalrealisedpandl + tonumber(vals[6]) \
-        totalunrealisedpandl = totalunrealisedpandl + getunrealisedpandl(vals[1], vals[3], vals[7], vals[5]) \
+        local unrealisedpandl = getunrealisedpandl(vals[1], vals[3], vals[7], vals[5]) \
+        totalunrealisedpandl = totalunrealisedpandl + unrealisedpandl[1] \
       end \
     end \
     return {totalmargin, totalrealisedpandl, totalunrealisedpandl} \

@@ -1734,6 +1734,7 @@ function registerScripts() {
   local getrealisedpandl = function(side, tradequantity, tradeprice, avgcost) \
     local realisedpandl = tonumber(tradequantity) * (tonumber(tradeprice) - tonumber(avgcost)) \
     if tonumber(side) == 1 then \
+      --[[ we are buying, so reverse p&l ]] \
       realisedpandl = -realisedpandl \
     end \
     realisedpandl = round(realisedpandl, 2) \
