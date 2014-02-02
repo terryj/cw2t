@@ -655,7 +655,7 @@
 </head>
 <body lang="en">
     <div id="heading">
-        <div id="cw2t" class="cw2t">Thomas Grant & Company</div>
+        <div id="cw2t" class="cw2t"></div>
     </div>
     <div id="main">
     </div>
@@ -710,6 +710,7 @@
         var chatmenuoption = 9;
         var showvolume = false;
         var account = {};
+        var coheading = "Thomas Grant & Company";
 
         //
         // incoming data function
@@ -1384,6 +1385,8 @@
         * if the connection is lost, try to reconnect periodically
         */
         function newconn() {
+            var cw2theading;
+
             sockjs = new SockJS(sockjs_url);
 
             sockjs.onopen = function()  {
@@ -1400,6 +1403,8 @@
 
             sockjs.onclose = function()  {
                 console.log("connection closed");
+                cw2theading = document.getElementById('cw2t');
+                cw2theading.innerHTML = coheading + "- Connection Closed, Retrying...";
                 stopRestartTimer();
                 stopPriceTimer();
                 stopHeartbeatTimer();
@@ -4616,9 +4621,13 @@
             var email;
             var password;
             var btn;
+            var cw2theading;
 
             clearMenu();
             clearScreen();
+
+            cw2theading = document.getElementById('cw2t');
+            cw2theading.innerHTML = coheading;
 
             frm = document.createElement("form");
             frm.id = "frmsignin";
@@ -4717,7 +4726,7 @@
                     clearForm("frmsignin", true);
 
                     cw2theading = document.getElementById('cw2t');
-                    cw2theading.innerHTML = cw2theading.innerHTML + " - " + reply.email;
+                    cw2theading.innerHTML = coheading + " - " + reply.email;
 
                     signedin = true;
                 }
