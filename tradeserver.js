@@ -181,11 +181,14 @@ function quoteRequest(quoterequest) {
     quoterequest.proquotesymbol = ret[3];
     quoterequest.exchange = ret[4];
 
-    // make the quote request to proquote for the default settlement date
-    // the stored settlement date stays as requested
-    // the different settlement will be dealt with using finance
-    if (quoterequest.nosettdays != ret[5]) {
+    if (ret[6] == "CFD") {
+      // make the quote request to proquote for the default equity settlement date
+      // the stored settlement date stays as requested
+      // the different settlement will be dealt with using finance
       quoterequest.futsettdate = getUTCDateString(getSettDate(ret[5]));
+      /*if (quoterequest.nosettdays != ret[5]) {
+        quoterequest.futsettdate = getUTCDateString(getSettDate(ret[5]));
+      }*/
     }
 
     // forward the request to Proquote
@@ -344,15 +347,20 @@ function newOrder(order) {
       order.qbroker = ret[6];
     }
 
-    // always set settlement date to default date for external orders
-    if (order.nosettdays != ret[11]) {
+    // set the settlement date to equity default date for cfd orders, in case they are being hedged with the market
+    if (order.instrumenttype == "CFD") {
+      order.futsettdate = getUTCDateString(getSettDate(ret[11]));
+    }
+
+    // todo: check
+    /*if (order.nosettdays != ret[11]) {
       order.futsettdate = getUTCDateString(getSettDate(ret[11]));
 
       // update the stored order settlement details if it is a hedge
       if (ret[8] != "") {
         db.hmset("order:" + ret[8], "nosettdays", ret[11], "futsettdate", order.futsettdate);
       }
-    }
+    }*/
 
     processOrder(order, ret[8], ret[9], ret[10]);
   });
@@ -656,9 +664,19 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
     // todo: remove the conn
     matchOrder(order.orderid, conn);
   } else {
-    // forward client equity orders to the market
+    // equity orders
     if (order.instrumenttype == "DE") {
-      ptp.newOrder(order);
+      if (tradeid != "") {
+        // the order has been executed, so publish the order & trade
+        db.publish(order.operatortype, "order:" + order.orderid);
+        db.publish(order.operatortype, "trade:" + tradeid);
+
+        // publish the hedge to the client server, so anyone viewing the hedgebook receives it
+        db.publish(clientserverchannel, "trade:" + hedgetradeid);
+      } else {
+        // forward order to the market
+        ptp.newOrder(order);
+      }
     } else {
       // publish the regular order & trade to whence it came
       db.publish(order.operatortype, "order:" + order.orderid);
@@ -1716,15 +1734,15 @@ function registerScripts() {
     local reserveskey = clientid .. ":reserves" \
     local reserve = redis.call("get", reservekey) \
     if not reserve then \
-      redis.call("set", reservekey, quantity) \
+      redis.call("hmset", reservekey, "clientid", clientid, "symbol", symbol, "quantity", quantity, "currency", currency, "settldate", settldate) \
       redis.call("sadd", reserveskey, poskey) \
     else \
       local adjquantity = tonumber(reserve) + tonumber(quantity) \
       if adjquantity == 0 then \
-        redis.call("del", reservekey) \
+        redis.call("hdel", reservekey, "clientid", "symbol", "quantity", "currency", "settldate") \
         redis.call("srem", reserveskey, poskey) \
       else \
-        redis.call("set", reservekey, adjquantity) \
+        redis.call("hset", reservekey, "quantity", adjquantity) \
       end \
     end \
   end \
@@ -1854,7 +1872,7 @@ function registerScripts() {
 
   getreserve = '\
   local getreserve = function(clientid, symbol, currency, settldate) \
-    local reserve = redis.call("get", clientid .. ":reserve:" .. symbol .. ":" .. currency .. ":" .. settldate) \
+    local reserve = redis.call("hget", clientid .. ":reserve:" .. symbol .. ":" .. currency .. ":" .. settldate, "quantity") \
     if not reserve then \
       return 0 \
     end \
@@ -2110,11 +2128,29 @@ function registerScripts() {
       end \
     end \
   else \
-    --[[ get proquote values if order is external ]] \
+    --[[ this is an equity - just consider external orders for the time being - todo: internal ]] \
     if markettype == 0 then \
-      proquotesymbol = getproquotesymbol(KEYS[2]) \
-      proquotequote = getproquotequote(KEYS[10], side) \
-      defaultnosettdays = redis.call("hget", "cost:" .. instrumenttype .. ":" .. KEYS[18] .. ":" .. side, "defaultnosettdays") \
+      --[[ see if we need to send this trade to the market - if either product or client hedge, then send ]] \
+      local hedgeclient = tonumber(redis.call("hget", "client:" .. KEYS[1], "hedge")) \
+      local hedgeinst = tonumber(redis.call("hget", "symbol:" .. KEYS[2], "hedge")) \
+      if hedgeclient == 0 and hedgeinst == 0 then \
+        --[[ we are taking on the trade, so create trades for client & hedge book ]] \
+        hedgebookid = redis.call("get", "hedgebook:" .. instrumenttype .. ":" .. KEYS[18]) \
+        if not hedgebookid then hedgebookid = 999999 end \
+        local reverseside \
+        if side == 1 then \
+          reverseside = 2 \
+        else \
+          reverseside = 1 \
+        end \
+        local hedgecosts = {0,0,0,0} \
+        tradeid = newtrade(KEYS[1], orderid, KEYS[2], side, KEYS[4], KEYS[5], KEYS[11], 1, 1, cc[3], hedgebookid, KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], cc[2], KEYS[22], KEYS[23], cc[4]) \
+        hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
+      else \
+        proquotesymbol = getproquotesymbol(KEYS[2]) \
+        proquotequote = getproquotequote(KEYS[10], side) \
+        defaultnosettdays = redis.call("hget", "cost:" .. instrumenttype .. ":" .. KEYS[18] .. ":" .. side, "defaultnosettdays") \
+      end \
     end \
   end \
   return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttype, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays} \
@@ -2317,9 +2353,9 @@ function registerScripts() {
   --[[ get required instrument values for proquote ]] \
   local proquotesymbol = getproquotesymbol(KEYS[2]) \
   local instrumenttype = redis.call("hget", "symbol:" .. KEYS[2], "instrumenttype") \
-  --[[ assuming buy to get default settlement days ]] \
+  --[[ assuming equity buy to get default settlement days ]] \
   local defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. KEYS[6] .. ":" .. "1", "defaultnosettdays") \
-  return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], defaultnosettdays} \
+  return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], defaultnosettdays, instrumenttype} \
   ';
 
   // todo: check proquotsymbol against quote request symbol?

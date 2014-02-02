@@ -776,19 +776,16 @@
                 } else if ("instruments" in obj) {
                     loadInstruments(obj.instruments);
                 } else if ("instrument" in obj) {
+                    console.log(obj);
                     updateInstrument(obj.instrument);
                 } else if ("margins" in obj) {
                     clearMargins();
                     loadMargins(obj.margins);
                     displayMargins();
-                } else if ("margin" in obj) {
-                    updateMargin(obj.margin);
                 } else if ("reserves" in obj) {
                     clearReserves();
                     loadReserves(obj.reserves);
                     displayReserves();
-                } else if ("reserve" in obj) {
-                    updateReserve(obj.reserve);
                 } else if ("signinreply" in obj) {
                     replySignIn(obj.signinreply);
                 } else if ("index" in obj) {
@@ -902,7 +899,7 @@
             var reskey;
 
             for (var i = 0; i < reservearr.length; ++i) {
-                reskey = reservearr[i].symbol + ":" + reservearr[i].currency;
+                reskey = reservearr[i].symbol + ":" + reservearr[i].currency + ":" + reservearr.settldate;
                 reserves[reskey] = reservearr[i];
             }                        
         }
@@ -1124,59 +1121,6 @@
                     msg = JSON.stringify(cashitem);
                     if (updateElement(msg, list1, cashitem.currency) == null) {
                         addElement(msg, list1, cashitem.currency);
-                    }
-                }                
-            }
-        }
-
-        function updateMargin(margin) {
-            var msg;
-
-            if (margin.amount == 0) {
-                delete margins[margin.currency];
-
-                if (selectedmenu == 5) {
-                    removeElementFromList(margin.currency, list2);
-
-                    if (list2.childNodes.length == 0) {
-                        removeHeading("Margin");
-                    }
-                }
-            } else {
-                margins[margin.currency] = margin;
-
-                // display if we are looking at cash
-                if (selectedmenu == 5) {
-                    msg = marginMsg(margin);
-
-                    if (updateElement(msg, list2, margin.currency) == null) {
-                        addElement(msg, list2, margin.currency);
-                    }
-                }
-            }
-        }
-
-        function updateReserve(reserve) {
-            var msg;
-
-            if (reserve.quantity == 0) {
-                delete reserves[reserve.symbol];
-
-                if (selectedmenu == 5) {
-                    removeElementFromList(reserve.symbol, list3);
-
-                    if (list2.childNodes.length == 0) {
-                        removeHeading("Reserved");
-                    }
-                }
-            } else {
-                reserves[reserve.symbol] = reserve;
-
-                // display if we are looking at cash
-                if (selectedmenu == 5) {
-                    msg = JSON.stringify(reserve);
-                    if (updateElement(msg, list3, reserve.symbol) == null) {
-                        addElement(msg, list3, reserve.symbol);
                     }
                 }                
             }
@@ -2757,7 +2701,7 @@
             var list = getList("list1");
 
             for (var x in reserves) {
-                reskey = reserves[x].symbol + " " + reserves[x].currency;
+                reskey = reserves[x].symbol + ":" + reserves[x].currency + ":" + reserves[x].settldate;
                 msg = reserveMsg(reserves[x]);
                 addElement(msg, list, reskey);
                 firstReserve = false;
@@ -3397,7 +3341,7 @@
         }
 
         function reserveMsg(reserve) {
-            return reserve.quantity + " " + reserve.symbol + " " + reserve.currency;
+            return reserve.quantity + " " + reserve.symbol + " " + reserve.currency + " " + reserve.settldate;
         }
 
         function orderCancelReject(ordercancelreject) {
