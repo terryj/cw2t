@@ -186,9 +186,6 @@ function quoteRequest(quoterequest) {
       // the stored settlement date stays as requested
       // the different settlement will be dealt with using finance
       quoterequest.futsettdate = getUTCDateString(getSettDate(ret[5]));
-      /*if (quoterequest.nosettdays != ret[5]) {
-        quoterequest.futsettdate = getUTCDateString(getSettDate(ret[5]));
-      }*/
     }
 
     // forward the request to Proquote
@@ -1358,6 +1355,7 @@ ptp.on("orderFill", function(exereport) {
       console.log(err);
       return
     }
+    console.log(ret);
 
     // send the order & trade to the returned operator type
     db.publish(ret[1], "order:" + exereport.clordid);
@@ -1732,11 +1730,9 @@ function registerScripts() {
     local poskey = symbol .. ":" .. currency .. ":" .. settldate \
     local reservekey = clientid .. ":reserve:" .. poskey \
     local reserveskey = clientid .. ":reserves" \
-    local reserve = redis.call("get", reservekey) \
-    if not reserve then \
-      redis.call("hmset", reservekey, "clientid", clientid, "symbol", symbol, "quantity", quantity, "currency", currency, "settldate", settldate) \
-      redis.call("sadd", reserveskey, poskey) \
-    else \
+    --[[ get existing position, if there is one ]] \
+    local reserve = redis.call("hget", reservekey, "quantity") \
+    if reserve then \
       local adjquantity = tonumber(reserve) + tonumber(quantity) \
       if adjquantity == 0 then \
         redis.call("hdel", reservekey, "clientid", "symbol", "quantity", "currency", "settldate") \
@@ -1744,6 +1740,9 @@ function registerScripts() {
       else \
         redis.call("hset", reservekey, "quantity", adjquantity) \
       end \
+    else \
+      redis.call("hmset", reservekey, "clientid", clientid, "symbol", symbol, "quantity", quantity, "currency", currency, "settldate", settldate) \
+      redis.call("sadd", reserveskey, poskey) \
     end \
   end \
   ';
@@ -1892,8 +1891,8 @@ function registerScripts() {
     local initialmargin = getinitialmargin(symbol, consid) \
     local totalcost = gettotalcost(clientid, instrumenttype, side, consid, currency) \
     local finance = calcfinance(instrumenttype, consid, currency, side, nosettdays) \
-    --[[ always allow closing trades ]] \
     local position = getposition(clientid, symbol, currency, settldate) \
+    --[[ always allow closing trades ]] \
     if position[1] then \
       if tonumber(side) ~= tonumber(position[3]) then \
         if tonumber(quantity) <= tonumber(position[1]) then \
@@ -1910,8 +1909,8 @@ function registerScripts() {
         --[[ add the margin returned by closing the position ]] \
         freemargin = freemargin + position[4] \
         --[[ check part of initial margin that would result from opening new position ]] \
-        local newinitialmargin = (tonumber(quantity) - tonumber(position[1])) * initialmargin \
-        if newinitialmargin + totalcost[1] + finance < freemargin then \
+        local newinitialmargin = (tonumber(quantity) - tonumber(position[1])) / tonumber(quantity) * initialmargin \
+        if newinitialmargin + totalcost[1] + finance > freemargin then \
           rejectorder(orderid, 1020, "") \
           return {0} \
         end \

@@ -2143,7 +2143,7 @@ function registerScripts() {
     --[[ match the currency ]] \
     if vals[2] == KEYS[2] then \
       --[[ adjust balance according to debit/credit ]] \
-      if vals[5] == 1 then \
+      if tonumber(vals[5]) == 1 then \
         balance = balance - tonumber(vals[3]) \
       else \
         balance = balance + tonumber(vals[3]) \
