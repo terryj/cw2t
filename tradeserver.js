@@ -22,7 +22,6 @@ var orgid = "1"; // todo: via logon
 var tradeserverchannel = 3;
 var userserverchannel = 2;
 var clientserverchannel = 1;
-var holidays = {};
 
 // redis
 var redishost;
@@ -85,19 +84,8 @@ db.on("error", function(err) {
 
 function initialise() {
   initDb();
-  getHolidays();
   pubsub();
   connectToTrading();
-}
-
-function getHolidays() {
-  db.eval(scriptgetholidays, 0, function(err, ret) {
-    if (err) throw err;
-
-    for (i = 0; i < ret.length; i++) {
-      holidays[ret[i]] = i;
-    }
-  });
 }
 
 // pubsub connections
@@ -159,10 +147,12 @@ function quoteRequest(quoterequest) {
   console.log("quoterequest");
   console.log(quoterequest);
 
-  quoterequest.timestamp = getUTCTimeStamp();
+  var today = new Date();
+
+  quoterequest.timestamp = common.getUTCTimeStamp(today);
 
   // get settlement date from T+n no. of days
-  quoterequest.futsettdate = getUTCDateString(getSettDate(quoterequest.nosettdays));
+  quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, quoterequest.nosettdays));
 
   // store the quote request & get an id
   db.eval(scriptquoterequest, 11, quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, function(err, ret) {
@@ -171,7 +161,7 @@ function quoteRequest(quoterequest) {
     if (ret[0] != 0) {
       // todo: send a quote ack to client
 
-      console.log("Error in scriptquoterequest:" + getReasonDesc(ret[0]));
+      console.log("Error in scriptquoterequest:" + common.getReasonDesc(ret[0]));
       return;
     }
 
@@ -185,55 +175,12 @@ function quoteRequest(quoterequest) {
       // make the quote request to proquote for the default equity settlement date
       // the stored settlement date stays as requested
       // the different settlement will be dealt with using finance
-      quoterequest.futsettdate = getUTCDateString(getSettDate(ret[5]));
+      quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[5]));
     }
 
     // forward the request to Proquote
     ptp.quoteRequest(quoterequest);
   });
-}
-
-// roll date forwards by T+n number of days
-function getSettDate(nosettdays) {
-  var today = new Date();
-  var days = 0;
-
-  if (nosettdays > 0) {
-    while (true) {
-      // ignore weekends & holidays
-      if (today.getDay() == 6) {
-        today.setDate(today.getDate() + 2);
-      } else if (today.getDay() == 0) {
-        today.setDate(today.getDate() + 1);
-      } else if (isHoliday(today)) {
-        today.setDate(today.getDate() + 1);
-      } else {
-        today.setDate(today.getDate() + 1);
-        days++;
-      }
-
-      if (days >= nosettdays) {
-        break;
-      }
-    }
-  }
-
-  return today;
-}
-
-function isHoliday(datetocheck) {
-  var found = false;
-  var datetocheckstr = "";
-
-  datetocheckstr += datetocheck.getFullYear();
-  datetocheckstr += datetocheck.getMonth() + 1;
-  datetocheckstr += datetocheck.getDate();
-
-  if (datetocheckstr in holidays) {
-    found = true;
-  }
-
-  return found;
 }
 
 /*
@@ -301,8 +248,10 @@ function newOrder(order) {
 
   console.log(order);
 
+  var today = new Date();
+
   // todo: tie this in with in/out of hours
-  order.timestamp = getUTCTimeStamp();
+  order.timestamp = common.getUTCTimeStamp(today);
   order.markettype = 0; // 0 = main market, 1 = ooh
   order.partfill = 1; // accept part-fill
 
@@ -346,7 +295,7 @@ function newOrder(order) {
 
     // set the settlement date to equity default date for cfd orders, in case they are being hedged with the market
     if (order.instrumenttype == "CFD") {
-      order.futsettdate = getUTCDateString(getSettDate(ret[11]));
+      order.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[11]));
     }
 
     // todo: check
@@ -602,7 +551,7 @@ function getSendReserve(orgclientkey, symbol, currency) {
 function orderCancelRequest(clientid, ocr) {
   console.log("Order cancel request received for order#" + ocr.orderid);
 
-  ocr.timestamp = getUTCTimeStamp();
+  ocr.timestamp = common.getUTCTimeStamp(new Date());
 
   db.eval(scriptordercancelrequest, 4, orgid, clientid, ocr.orderid, ocr.timestamp, function(err, ret) {
     if (err) throw err;
@@ -648,7 +597,7 @@ function orderCancelReject(orgclientkey, ocr, reason) {
 
   ordercancelreject.orderid = ocr.orderid;
 
-  console.log("Order cancel request #" + ordercancelreject.orderid + " rejected, reason: " + getReasonDesc(reason));
+  console.log("Order cancel request #" + ordercancelreject.orderid + " rejected, reason: " + common.getReasonDesc(reason));
 
   if (orgclientkey in connections) {
     connections[orgclientkey].write("{\"ordercancelreject\":" + JSON.stringify(ordercancelreject) + "}");
@@ -1094,77 +1043,6 @@ function getTimeInForceDesc(timeinforce) {
 6 = Good Till Date*/
 }
 
-function getReasonDesc(reason) {
-  var desc;
-
-  switch (parseInt(reason)) {
-    case 1001:
-      desc = "No currency held for this instrument";
-      break;
-    case 1002:
-      desc = "Insufficient cash in settlement currency";
-      break;
-    case 1003:
-      desc = "No position held in this instrument";
-      break;
-    case 1004:
-      desc = "Insufficient position size in this instrument";
-      break;
-    case 1005:
-      desc = "System error";
-      break;
-    case 1006:
-      desc = "Invalid order";
-      break;
-    case 1007:
-      desc = "Invalid instrument";
-      break;
-    case 1008:
-      desc = "Order already cancelled";
-      break;
-    case 1009:
-      desc = "Order not found";
-      break;
-    case 1010:
-      desc = "Order already filled";
-      break;
-    case 1011:
-      desc = "Order currency does not match symbol currency";
-      break;
-    case 1012:
-      desc = "Order already rejected";
-      break;
-    case 1013:
-      desc = "Ordercancelrequest not found";
-      break;
-    case 1014:
-      desc = "Quoterequest not found";
-      break;
-    case 1015:
-      desc = "Symbol not found";
-      break;
-    case 1016:
-      desc = "Proquote symbol not found";
-      break;
-    case 1017:
-      desc = "Client not found";
-      break;
-    case 1018:
-      desc = "Client not authorised to trade this type of product";
-      break;
-    case 1019:
-      desc = "Quantity greater than position quantity";
-      break;
-    case 1020:
-      desc = "Insufficient free margin";
-      break;
-    default:
-      desc = "Unknown reason";
-  }
-
-  return desc;
-}
-
 function initDb() {
   common.registerCommonScripts();
   registerScripts();
@@ -1194,53 +1072,6 @@ function positionHistory(clientid, symbol, conn) {
   //bo.getPositionHistory(clientid, symbol);
 }
 
-function getUTCTimeStamp() {
-    var timestamp = new Date();
-
-    var year = timestamp.getUTCFullYear();
-    var month = timestamp.getUTCMonth() + 1; // flip 0-11 -> 1-12
-    var day = timestamp.getUTCDate();
-    var hours = timestamp.getUTCHours();
-    var minutes = timestamp.getUTCMinutes();
-    var seconds = timestamp.getUTCSeconds();
-    //var millis = timestamp.getUTCMilliseconds();
-
-    if (month < 10) {month = '0' + month;}
-
-    if (day < 10) {day = '0' + day;}
-
-    if (hours < 10) {hours = '0' + hours;}
-
-    if (minutes < 10) {minutes = '0' + minutes;}
-
-    if (seconds < 10) {seconds = '0' + seconds;}
-
-    /*if (millis < 10) {
-        millis = '00' + millis;
-    } else if (millis < 100) {
-        millis = '0' + millis;
-    }*/
-
-    //var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds, '.', millis].join('');
-    var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds].join('');
-
-    return ts;
-}
-
-function getUTCDateString(date) {
-    var year = date.getUTCFullYear();
-    var month = date.getUTCMonth() + 1; // flip 0-11 -> 1-12
-    var day = date.getUTCDate();
-
-    if (month < 10) {month = '0' + month;}
-
-    if (day < 10) {day = '0' + day;}
-
-    var utcdate = "" + year + month + day;
-
-    return utcdate;
-}
-
 ptp.on("orderReject", function(exereport) {
   var text = "";
   var ordrejreason = "";
@@ -1264,7 +1095,7 @@ ptp.on("orderReject", function(exereport) {
 
     if (ret != 0) {
       // todo: message to client
-      console.log("Error in scriptrejectorder, reason:" + getReasonDesc(ret));
+      console.log("Error in scriptrejectorder, reason:" + common.getReasonDesc(ret));
       return;
     }
 
@@ -1301,7 +1132,7 @@ ptp.on("orderCancel", function(exereport) {
 
     if (ret[0] != 0) {
       // todo: send to client
-      console.log("Error in scriptordercancel, reason:" + getReasonDesc(ret[0]));
+      console.log("Error in scriptordercancel, reason:" + common.getReasonDesc(ret[0]));
       return;
     }
 
@@ -1329,7 +1160,7 @@ ptp.on("orderExpired", function(exereport) {
 
     if (ret != 0) {
       // todo: send to client
-      console.log("Error in scriptorderexpire, reason:" + getReasonDesc(ret));
+      console.log("Error in scriptorderexpire, reason:" + common.getReasonDesc(ret));
       return;
     }
 
@@ -1410,8 +1241,8 @@ ptp.on("quote", function(quote, header) {
   // - todo: inform client & limit as parameter?
   if ('possdupflag' in header) {
     if (header.possdupflag == 'Y') {
-      var sendingtime = new Date(getDateString(header.sendingtime));
-      var validuntiltime = new Date(getDateString(quote.validuntiltime));
+      var sendingtime = new Date(common.getDateString(header.sendingtime));
+      var validuntiltime = new Date(common.getDateString(quote.validuntiltime));
       if (validuntiltime < sendingtime) {
         console.log("Quote received is past valid until time, discarding");
         return;
@@ -1445,7 +1276,7 @@ ptp.on("quote", function(quote, header) {
 
     if (ret[0] != 0) {
       // can't find quote request, so don't know which client to inform
-      console.log("Error in scriptquote:" + getReasonDesc(ret[0]));
+      console.log("Error in scriptquote:" + common.getReasonDesc(ret[0]));
       return;
     }
 
@@ -1503,61 +1334,11 @@ ptp.on("businessReject", function(businessreject) {
   // todo: lookup fix msg to get details of what it relates to
 });
 
-/*
-* Get the nuber of seconds between two UTC datetimes
-*/
-function getSeconds(startutctime, finishutctime) {
-  var startdt = new Date(getDateString(startutctime));
-  var finishdt = new Date(getDateString(finishutctime));
-  return ((finishdt - startdt) / 1000);
-}
-
-/*
-* Convert a UTC datetime to a valid string for creating a date object
-*/
-function getDateString(utcdatetime) {
-    return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
-}
-
-/*
-local results = redis.call("HGETALL", KEYS[1]);
-if results ~= 0 then
-    for key, value in ipairs(results) do
-        -- do something here
-    end
-end
-
-local data = redis.call('GET', key);
-local json;
-
-if not data then
-    json = {};
-else
-    json = cjson.decode(data);
-end
-
-json[name] = value;
-redis.call('SET', key, cjson.encode(json));
-return cjson.encode(json);
-
-string luaScript = "local tDecoded = redis.call('GET', KEYS[1]);\n"
-                    + "local tFinal = {};\n"
-                    + "for iIndex, tValue in ipairs(tDecoded) do\n"
-                    + "     if tonumber( tValue.Value ) < 20 then\n"
-                    + "        table.insert(tFinal, { ID = tValue.ID, Value = tValue.Value});\n"
-                    + "     else\n"
-                    + "         table.insert(tFinal, { ID = 999, Value = 0});\n"
-                    + "     end\n"
-                    + "end\n"
-                    + "return cjson.encode(tFinal);";
-
-                var test = redisClient.ExecLuaAsString(luaScript, "Meds25");
-
-*/
-
 function registerScripts() {
   var updatecash = common.updatecash;
   var getfreemargin = common.getfreemargin;
+  var round = common.round;
+  var calcfinance = common.calcfinance;
   var updateposition;
   var updateordermargin;
   var updatereserve;
@@ -1573,19 +1354,10 @@ function registerScripts() {
   var getproquotesymbol;
   var getinitialmargin;
   var updatetrademargin;
-  var calcfinance;
   var neworder;
   var getreserve;
   var getposition;
-  var round;
   var getrealisedpandl;
-
-  round = '\
-  local round = function(num, dp) \
-    local mult = 10 ^ (dp or 0) \
-    return math.floor(num * mult + 0.5) / mult \
-  end \
-  ';
 
   getcosts = round + '\
   local getcosts = function(clientid, instrumenttype, side, consid, currency) \
@@ -1640,33 +1412,6 @@ function registerScripts() {
   local gettotalcost = function(clientid, instrumenttype, side, consid, currency) \
     local costs =  getcosts(clientid, instrumenttype, side, consid, currency) \
     return {costs[1] + costs[2] + costs[3] + costs[4], costs} \
-  end \
-  ';
-
-  calcfinance = round + '\
-  local calcfinance = function(instrumenttype, consid, currency, side, nosettdays) \
-    local finance = 0 \
-    local costkey = "cost:" .. instrumenttype .. ":" .. currency .. ":" .. side \
-    local financerate = redis.call("hget", costkey, "finance") \
-    if financerate and tonumber(financerate) ~= nil then \
-      local daystofinance = 0 \
-      --[[ nosettdays = 0 represents rolling settlement, so set it to 1 day for interest calculation ]] \
-      if tonumber(nosettdays) == 0 then \
-        daystofinance = 1 \
-      else \
-        local defaultnosettdays = redis.call("hget", costkey, "defaultnosettdays") \
-        if defaultnosettdays and tonumber(defaultnosettdays) ~= nil then \
-          defaultnosettdays = tonumber(defaultnosettdays) \
-        else \
-          defaultnosettdays = 0 \
-        end \
-        if tonumber(nosettdays) > defaultnosettdays then \
-          daystofinance = tonumber(nosettdays) - defaultnosettdays \
-        end \
-      end \
-      finance = round(consid * daystofinance / 365 * tonumber(financerate) / 100, 2) \
-   end \
-   return finance \
   end \
   ';
 
@@ -2467,10 +2212,5 @@ function registerScripts() {
     end \
   end \
   return cjson.encode(inst) \
-  ';
-
-  scriptgetholidays = '\
-  local holidays = redis.call("smembers", "holidays") \
-  return holidays \
   ';
 }

@@ -317,27 +317,6 @@ function newPrice(topic, msg) {
   });
 }
 
-// roll date forwards by T+n number of days
-function getSettDate(nosettdays) {
-  var today = new Date();
-
-  for (i = 0; i < nosettdays; i++) {
-    today.setDate(today.getDate() + 1);
-
-    // ignore weekends
-    if (today.getDay() == 6) {
-      today.setDate(today.getDate() + 2);
-    } else if (today.getDay() == 0) {
-      today.setDate(today.getDate() + 1);
-    }
-
-    // todo: add holidays
-  }
-  console.log(today);
-
-  return today;
-}
-
 /*
 // Convert dd-mmm-yyyy to FIX date format 'yyyymmdd'
 */
@@ -1240,77 +1219,6 @@ function getTimeInForceDesc(timeinforce) {
 6 = Good Till Date*/
 }
 
-function getReasonDesc(reason) {
-  var desc;
-
-  switch (parseInt(reason)) {
-    case 1001:
-      desc = "No currency held for this instrument";
-      break;
-    case 1002:
-      desc = "Insufficient cash in settlement currency";
-      break;
-    case 1003:
-      desc = "No position held in this instrument";
-      break;
-    case 1004:
-      desc = "Insufficient position size in this instrument";
-      break;
-    case 1005:
-      desc = "System error";
-      break;
-    case 1006:
-      desc = "Invalid order";
-      break;
-    case 1007:
-      desc = "Invalid instrument";
-      break;
-    case 1008:
-      desc = "Order already cancelled";
-      break;
-    case 1009:
-      desc = "Order not found";
-      break;
-    case 1010:
-      desc = "Order already filled";
-      break;
-    case 1011:
-      desc = "Order currency does not match symbol currency";
-      break;
-    case 1012:
-      desc = "Order already rejected";
-      break;
-    case 1013:
-      desc = "Ordercancelrequest not found";
-      break;
-    case 1014:
-      desc = "Quoterequest not found";
-      break;
-    case 1015:
-      desc = "Symbol not found";
-      break;
-    case 1016:
-      desc = "Proquote symbol not found";
-      break;
-    case 1017:
-      desc = "Client not found";
-      break;
-    case 1018:
-      desc = "Client not authorised to trade this type of product";
-      break;
-    case 1019:
-      desc = "Quantity greater than position quantity";
-      break;
-    case 1020:
-      desc = "Insufficient free margin";
-      break;
-    default:
-      desc = "Unknown reason";
-  }
-
-  return desc;
-}
-
 function start(clientid, conn) {
   sendOrderBooksClient(clientid, conn);
   sendInstruments(clientid, conn);
@@ -1550,7 +1458,7 @@ function sendQuoteack(quotereqid) {
     quoteack.quotereqid = quoterequest.quotereqid;
     quoteack.clientid = quoterequest.clientid;
     quoteack.symbol = quoterequest.symbol;
-    quoteack.quoterejectreasondesc = getPTPQuoteRejectReason(quoterequest.quoterejectreason);
+    quoteack.quoterejectreasondesc = common.getPTPQuoteRejectReason(quoterequest.quoterejectreason);
     if ('text' in quoterequest) {
       quoteack.text = quoterequest.text;
     }
@@ -1576,7 +1484,7 @@ function sendQuote(quoteid) {
     }
 
     // get the number of seconds the quote is valid for
-    quote.noseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+    quote.noseconds = common.getSeconds(quote.transacttime, quote.validuntiltime);
 
     // send quote to the client who placed the quote request
     db.hget("quoterequest:" + quote.quotereqid, "operatorid", function(err, operatorid) {
@@ -1609,22 +1517,6 @@ function newChat(chat) {
     console.log(e);
     return;
   }
-}
-
-/*
-* Get the nuber of seconds between two UTC datetimes
-*/
-function getSeconds(startutctime, finishutctime) {
-  var startdt = new Date(getDateString(startutctime));
-  var finishdt = new Date(getDateString(finishutctime));
-  return ((finishdt - startdt) / 1000);
-}
-
-/*
-* Convert a UTC datetime to a valid string for creating a date object
-*/
-function getDateString(utcdatetime) {
-    return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
 }
 
 function registerScripts() {

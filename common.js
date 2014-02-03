@@ -6,6 +6,248 @@
 * December 2013
 ****************/
 
+//
+// returns trading day, number of days after passed date
+//
+function getSettDate(dt, nosettdays) {
+  var days = 0;
+
+  if (nosettdays > 0) {
+    while (true) {
+      // ignore weekends & holidays
+      if (dt.getDay() == 6) {
+        dt.setDate(dt.getDate() + 2);
+      } else if (dt.getDay() == 0) {
+        dt.setDate(dt.getDate() + 1);
+      } else if (isHoliday(dt)) {
+        dt.setDate(dt.getDate() + 1);
+      } else {
+        dt.setDate(dt.getDate() + 1);
+        days++;
+      }
+
+      if (days >= nosettdays) {
+        break;
+      }
+    }
+  }
+
+  return dt;
+}
+
+exports.getSettDate = getSettDate;
+
+function isHoliday(datetocheck) {
+  var ret;
+  var datetocheckstr = "";
+
+  datetocheckstr += datetocheck.getFullYear();
+  datetocheckstr += datetocheck.getMonth() + 1;
+  datetocheckstr += datetocheck.getDate();
+
+  db.sismember("holidays", datetocheckstr, function(err, found) {
+    if (err) throw err;
+    ret = found;
+  });
+
+  return ret;
+}
+
+exports.isHoliday = isHoliday;
+
+//
+// returns a UTC datetime string from a passed date object
+//
+function getUTCTimeStamp(timestamp) {
+    var year = timestamp.getUTCFullYear();
+    var month = timestamp.getUTCMonth() + 1; // flip 0-11 -> 1-12
+    var day = timestamp.getUTCDate();
+    var hours = timestamp.getUTCHours();
+    var minutes = timestamp.getUTCMinutes();
+    var seconds = timestamp.getUTCSeconds();
+    //var millis = timestamp.getUTCMilliseconds();
+
+    if (month < 10) {month = '0' + month;}
+
+    if (day < 10) {day = '0' + day;}
+
+    if (hours < 10) {hours = '0' + hours;}
+
+    if (minutes < 10) {minutes = '0' + minutes;}
+
+    if (seconds < 10) {seconds = '0' + seconds;}
+
+    /*if (millis < 10) {
+        millis = '00' + millis;
+    } else if (millis < 100) {
+        millis = '0' + millis;
+    }*/
+
+    //var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds, '.', millis].join('');
+    var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds].join('');
+
+    return ts;
+}
+
+exports.getUTCTimeStamp = getUTCTimeStamp;
+
+//
+// get a UTC date string from a passed date object
+//
+function getUTCDateString(date) {
+    var year = date.getUTCFullYear();
+    var month = date.getUTCMonth() + 1; // flip 0-11 -> 1-12
+    var day = date.getUTCDate();
+
+    if (month < 10) {month = '0' + month;}
+
+    if (day < 10) {day = '0' + day;}
+
+    var utcdate = "" + year + month + day;
+
+    return utcdate;
+}
+
+exports.getUTCDateString = getUTCDateString;
+
+function getReasonDesc(reason) {
+  var desc;
+
+  switch (parseInt(reason)) {
+  case 1001:
+    desc = "No currency held for this instrument";
+    break;
+  case 1002:
+    desc = "Insufficient cash in settlement currency";
+    break;
+  case 1003:
+    desc = "No position held in this instrument";
+    break;
+  case 1004:
+    desc = "Insufficient position size in this instrument";
+    break;
+  case 1005:
+    desc = "System error";
+    break;
+  case 1006:
+    desc = "Invalid order";
+    break;
+  case 1007:
+    desc = "Invalid instrument";
+    break;
+  case 1008:
+    desc = "Order already cancelled";
+    break;
+  case 1009:
+    desc = "Order not found";
+    break;
+  case 1010:
+    desc = "Order already filled";
+    break;
+  case 1011:
+    desc = "Order currency does not match symbol currency";
+    break;
+  case 1012:
+    desc = "Order already rejected";
+    break;
+  case 1013:
+    desc = "Ordercancelrequest not found";
+    break;
+  case 1014:
+    desc = "Quoterequest not found";
+    break;
+  case 1015:
+    desc = "Symbol not found";
+    break;
+  case 1016:
+    desc = "Proquote symbol not found";
+    break;
+  case 1017:
+    desc = "Client not found";
+    break;
+  case 1018:
+    desc = "Client not authorised to trade this type of product";
+    break;
+  case 1019:
+    desc = "Quantity greater than position quantity";
+    break;
+  case 1020:
+    desc = "Insufficient free margin";
+    break;
+  default:
+    desc = "Unknown reason";
+  }
+
+  return desc;
+}
+
+exports.getReasonDesc = getReasonDesc;
+
+/*
+* Get the nuber of seconds between two UTC datetimes
+*/
+function getSeconds(startutctime, finishutctime) {
+  var startdt = new Date(getDateString(startutctime));
+  var finishdt = new Date(getDateString(finishutctime));
+  return ((finishdt - startdt) / 1000);
+}
+
+exports.getSeconds = getSeconds;
+
+/*
+* Convert a UTC datetime to a valid string for creating a date object
+*/
+function getDateString(utcdatetime) {
+    return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
+}
+
+exports.getDateString = getDateString;
+
+function dateFromUTCString(utcdatestring) {
+  var dt = new Date(utcdatestring.substr(0,4), utcdatestring.substr(4,2), utcdatestring.substr(6,2));
+  return dt;
+}
+
+exports.dateFromUTCString = dateFromUTCString;
+
+function getPTPQuoteRejectReason(reason) {
+  var desc;
+
+  switch (parseInt(reason)) {
+  case 1:
+    desc = "Unknown symbol";
+    break;
+  case 2:
+    desc = "Exchange closed";
+    break;
+  case 3:
+    desc = "Quote Request exceeds limit";
+    break;
+  case 4:
+    desc = "Too late to enter";
+    break;
+  case 5:
+    desc = "Unknown Quote";
+    break;
+  case 6:
+    desc = "Duplicate Quote";
+    break;
+  case 7:
+    desc = "Invalid bid/ask spread";
+    break;
+  case 8:
+    desc = "Invalid price";
+    break;
+  case 9:
+    desc = "Not authorized to quote security";
+    break;
+  }
+
+  return desc;
+}
+
+exports.getPTPQuoteRejectReason = getPTPQuoteRejectReason;
+
 exports.registerCommonScripts = function () {
 	var subscribeinstrument;
 	var unsubscribeinstrument;
@@ -14,6 +256,17 @@ exports.registerCommonScripts = function () {
   var getcash;
   var getfreemargin;
   var getunrealisedpandl;
+  var calcfinance;
+  var round;
+
+  round = '\
+  local round = function(num, dp) \
+    local mult = 10 ^ (dp or 0) \
+    return math.floor(num * mult + 0.5) / mult \
+  end \
+  ';
+
+  exports.round = round;
 
   updatecash = '\
   local updatecash = function(clientid, currency, transtype, amount, drcr, desc, reference, timestamp, settldate, operatortype, operatorid) \
@@ -61,6 +314,35 @@ exports.registerCommonScripts = function () {
   ';
 
   exports.getcash = getcash;
+
+  calcfinance = round + '\
+  local calcfinance = function(instrumenttype, consid, currency, side, nosettdays) \
+    local finance = 0 \
+    local costkey = "cost:" .. instrumenttype .. ":" .. currency .. ":" .. side \
+    local financerate = redis.call("hget", costkey, "finance") \
+    if financerate and tonumber(financerate) ~= nil then \
+      local daystofinance = 0 \
+      --[[ nosettdays = 0 represents rolling settlement, so set it to 1 day for interest calculation ]] \
+      if tonumber(nosettdays) == 0 then \
+        daystofinance = 1 \
+      else \
+        local defaultnosettdays = redis.call("hget", costkey, "defaultnosettdays") \
+        if defaultnosettdays and tonumber(defaultnosettdays) ~= nil then \
+          defaultnosettdays = tonumber(defaultnosettdays) \
+        else \
+          defaultnosettdays = 0 \
+        end \
+        if tonumber(nosettdays) > defaultnosettdays then \
+          daystofinance = tonumber(nosettdays) - defaultnosettdays \
+        end \
+      end \
+      finance = round(consid * daystofinance / 365 * tonumber(financerate) / 100, 2) \
+   end \
+   return finance \
+  end \
+  ';
+
+  exports.calcfinance = calcfinance;
 
   getunrealisedpandl = '\
   local getunrealisedpandl = function(symbol, quantity, side, avgcost) \

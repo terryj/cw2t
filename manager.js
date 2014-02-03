@@ -83,6 +83,7 @@ var scriptgetreserves;
 var scriptgetmargin;
 var scriptgetcashhistory;
 var scriptgetaccount;
+var scriptendofday;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -246,6 +247,8 @@ function listen() {
             reservesRequest(obj.reservesrequest, conn);
           } else if ("pendingchatrequest" in obj) {
             pendingChatRequest(obj.pendingchatrequest, conn);
+          } else if ("endofday" in obj) {
+            endOfDay(userid);
           } else if ("ping" in obj) {
             conn.write("pong");
           } else {
@@ -463,7 +466,7 @@ function newClient(client, conn) {
       if (err) throw err;
 
       if (ret[0] != 0) {
-        console.log("Error in scriptnewclient:" + getReasonDesc(ret[0]));
+        console.log("Error in scriptnewclient:" + common.getReasonDesc(ret[0]));
         return;
       }
 
@@ -474,7 +477,7 @@ function newClient(client, conn) {
       if (err) throw err;
 
       if (ret != 0) {
-        console.log("Error in scriptupdateclient:" + getReasonDesc(ret));
+        console.log("Error in scriptupdateclient:" + common.getReasonDesc(ret));
         return;
       }
 
@@ -488,7 +491,7 @@ function newIfa(ifa, conn) {
     if (err) throw err;
 
     if (ret[0] != 0) {
-      console.log("Error in scriptifa:" + getReasonDesc(ret[0]));
+      console.log("Error in scriptifa:" + common.getReasonDesc(ret[0]));
       return;
     }
 
@@ -505,13 +508,13 @@ function getSendIfa(ifaid, conn) {
 }
 
 function cashTrans(cashtrans, userid, conn) {
-  cashtrans.timestamp = getUTCTimeStamp();
+  cashtrans.timestamp = common.getUTCTimeStamp(new Date());
 
   db.eval(common.scriptcashtrans, 11, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.settldate, operatortype, userid, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
-      console.log("Error in scriptcashtrans:" + getReasonDesc(ret[0]));
+      console.log("Error in scriptcashtrans:" + common.getReasonDesc(ret[0]));
       return;
     }
 
@@ -837,7 +840,7 @@ function orderCancelReject(orgclientkey, ocr, reason) {
 
   ordercancelreject.orderid = ocr.orderid;
 
-  console.log("Order cancel request #" + ordercancelreject.orderid + " rejected, reason: " + getReasonDesc(reason));
+  console.log("Order cancel request #" + ordercancelreject.orderid + " rejected, reason: " + common.getReasonDesc(reason));
 
   if (orgclientkey in connections) {
     connections[orgclientkey].write("{\"ordercancelreject\":" + JSON.stringify(ordercancelreject) + "}");
@@ -1346,77 +1349,6 @@ function getTimeInForceDesc(timeinforce) {
 6 = Good Till Date*/
 }
 
-function getReasonDesc(reason) {
-  var desc;
-
-  switch (parseInt(reason)) {
-  case 1001:
-    desc = "No currency held for this instrument";
-    break;
-  case 1002:
-    desc = "Insufficient cash in settlement currency";
-    break;
-  case 1003:
-    desc = "No position held in this instrument";
-    break;
-  case 1004:
-    desc = "Insufficient position size in this instrument";
-    break;
-  case 1005:
-    desc = "System error";
-    break;
-  case 1006:
-    desc = "Invalid order";
-    break;
-  case 1007:
-    desc = "Invalid instrument";
-    break;
-  case 1008:
-    desc = "Order already cancelled";
-    break;
-  case 1009:
-    desc = "Order not found";
-    break;
-  case 1010:
-    desc = "Order already filled";
-    break;
-  case 1011:
-    desc = "Order currency does not match symbol currency";
-    break;
-  case 1012:
-    desc = "Order already rejected";
-    break;
-  case 1013:
-    desc = "Ordercancelrequest not found";
-    break;
-  case 1014:
-    desc = "Quoterequest not found";
-    break;
-  case 1015:
-    desc = "Symbol not found";
-    break;
-  case 1016:
-    desc = "Proquote symbol not found";
-    break;
-  case 1017:
-    desc = "Client not found";
-    break;
-  case 1018:
-    desc = "Client not authorised to trade this type of product";
-    break;
-  case 1019:
-    desc = "Quantity greater than position quantity";
-    break;
-  case 1020:
-    desc = "Insufficient free margin";
-    break;
-  default:
-    desc = "Unknown reason";
-  }
-
-  return desc;
-}
-
 function start(userid, brokerid, conn) {
   sendOrderBooks(userid, conn);
   sendInstruments(conn);
@@ -1511,69 +1443,6 @@ function registerClient(reg, conn) {
   });
 }
 
-function getUTCTimeStamp() {
-    var timestamp = new Date();
-
-    var year = timestamp.getUTCFullYear();
-    var month = timestamp.getUTCMonth() + 1; // flip 0-11 -> 1-12
-    var day = timestamp.getUTCDate();
-    var hours = timestamp.getUTCHours();
-    var minutes = timestamp.getUTCMinutes();
-    var seconds = timestamp.getUTCSeconds();
-    //var millis = timestamp.getUTCMilliseconds();
-
-    if (month < 10) {month = '0' + month;}
-
-    if (day < 10) {day = '0' + day;}
-
-    if (hours < 10) {hours = '0' + hours;}
-
-    if (minutes < 10) {minutes = '0' + minutes;}
-
-    if (seconds < 10) {seconds = '0' + seconds;}
-
-    /*if (millis < 10) {
-        millis = '00' + millis;
-    } else if (millis < 100) {
-        millis = '0' + millis;
-    }*/
-
-    //var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds, '.', millis].join('');
-    var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds].join('');
-
-    return ts;
-}
-
-function getUTCDateString(date) {
-    var year = date.getUTCFullYear();
-    var month = date.getUTCMonth() + 1; // flip 0-11 -> 1-12
-    var day = date.getUTCDate();
-
-    if (month < 10) {month = '0' + month;}
-
-    if (day < 10) {day = '0' + day;}
-
-    var utcdate = "" + year + month + day;
-
-    return utcdate;
-}
-
-/*
-* Get the nuber of seconds between two UTC datetimes
-*/
-function getSeconds(startutctime, finishutctime) {
-  var startdt = new Date(getDateString(startutctime));
-  var finishdt = new Date(getDateString(finishutctime));
-  return ((finishdt - startdt) / 1000);
-}
-
-/*
-* Convert a UTC datetime to a valid string for creating a date object
-*/
-function getDateString(utcdatetime) {
-    return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
-}
-
 function sendClients(userid, brokerid, conn) {
   // get sorted set of clients for specified broker
   db.eval(scriptgetclients, 1, brokerid, function(err, ret) {
@@ -1659,7 +1528,7 @@ function sendQuoteack(quotereqid) {
     quoteack.quotereqid = quoterequest.quotereqid;
     quoteack.clientid = quoterequest.clientid;
     quoteack.symbol = quoterequest.symbol;
-    quoteack.quoterejectreasondesc = getPTPQuoteRejectReason(quoterequest.quoterejectreason);
+    quoteack.quoterejectreasondesc = common.getPTPQuoteRejectReason(quoterequest.quoterejectreason);
     if ('text' in quoterequest) {
       quoteack.text = quoterequest.text;
     }
@@ -1685,7 +1554,7 @@ function sendQuote(quoteid) {
     }
 
     // get the number of seconds the quote is valid for
-    quote.noseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+    quote.noseconds = common.getSeconds(quote.transacttime, quote.validuntiltime);
 
     // send quote to the user who placed the quote request
     db.hget("quoterequest:" + quote.quotereqid, "operatorid", function(err, operatorid) {
@@ -1712,7 +1581,7 @@ function sendConnections(connectionreq, conn) {
 // chat from a user
 //
 function newChat(chat, userid) {
-  chat.timestamp = getUTCTimeStamp();
+  chat.timestamp = common.getUTCTimeStamp(new Date());
 
   db.eval(scriptnewchat, 5, chat.clientid, chat.text, chat.timestamp, chat.chatid, userid, function(err, ret) {
     if (err) throw err;
@@ -1734,7 +1603,7 @@ function newChatClient(msg) {
   try {    
     var chatobj = JSON.parse(msg);
 
-    chatobj.chat.timestamp = getUTCTimeStamp();
+    chatobj.chat.timestamp = common.getUTCTimeStamp(new Date());
 
     db.eval(scriptnewchat, 5, chatobj.chat.clientid, chatobj.chat.text, chatobj.chat.timestamp, chatobj.chat.chatid, userid, function(err, ret) {
       if (err) throw err;
@@ -1791,43 +1660,29 @@ function sendChat(chatid, conn) {
   });
 }
 
-//
-// todo: make common
-//
-function getPTPQuoteRejectReason(reason) {
-  var desc;
+function endOfDay(userid) {
+  var eoddate;
+  var nexteoddate;
 
-  switch (parseInt(reason)) {
-  case 1:
-    desc = "Unknown symbol";
-    break;
-  case 2:
-    desc = "Exchange closed";
-    break;
-  case 3:
-    desc = "Quote Request exceeds limit";
-    break;
-  case 4:
-    desc = "Too late to enter";
-    break;
-  case 5:
-    desc = "Unknown Quote";
-    break;
-  case 6:
-    desc = "Duplicate Quote";
-    break;
-  case 7:
-    desc = "Invalid bid/ask spread";
-    break;
-  case 8:
-    desc = "Invalid price";
-    break;
-  case 9:
-    desc = "Not authorized to quote security";
-    break;
-  }
+  db.get("eoddate", function(err, eoddatestr) {
+    if (err) throw err;
+    console.log(eoddatestr);
 
-  return desc;
+    eoddate = common.dateFromUTCString(eoddatestr);
+    console.log(eoddate);
+
+    nexteoddate = getUTCDateString(common.getSettDate(eoddate, 1));
+
+    db.smembers("clients", function(err, clients) {
+      if (err) throw err;
+
+      clients.forEach(function(clientid, i) {
+        db.eval(scriptendofday, 1, clientid, eoddate, userid, function(err, ret) {
+          if (err) throw err;
+        });
+      });
+    });
+  });
 }
 
 function registerScripts() {
@@ -1835,6 +1690,7 @@ function registerScripts() {
   var gettotalpositions = common.gettotalpositions;
   var getcash = common.getcash;
   var getunrealisedpandl = common.getunrealisedpandl;
+  var calcfinance = common.calcfinance;
 
   //
   // function to split a string into an array of substrings, based on a character
@@ -2306,5 +2162,35 @@ function registerScripts() {
   --[[ get chat id for this client ]] \
   local chatid = redis.call("get", "client:" .. KEYS[1] .. "chat") \
   return {1, chatid} \
+  ';
+
+  //
+  // pass client id, end of day date, user id
+  //
+  scriptendofday = '\
+    local clientid = KEYS[1] \
+    local positions = redis.call("smembers", clientid .. ":positions") \
+    local fields = {"symbol","side","quantity","cost","currency"} \
+    local vals \
+    for index = 1, #positions do \
+      local vals = redis.call("hmget", clientid .. ":position:" .. positions[index], unpack(fields)) \
+      if vals[1] then \
+        local instrumenttype = redis.call("hget", "symbol:" .. vals[1], "instrumenttype") \
+        local finance = calcfinance(instrumenttype, vals[4], vals[5], vals[2], 1) \
+        if finance ~= 0 then \
+          local drcr \
+          local desc \
+          if tonumber(vals[2]) == 1 then \
+            drcr = 1 \
+            desc = "finance charge" \
+          else \
+            drcr = 2 \
+            desc = "finance" \
+          end \
+          updatecash(clientid, vals[5], "FI", finance, drcr, desc, positions[index], KEYS[2], KEYS[2], 2, KEYS[3]) \
+        end \
+      end \
+    end \
+  end \
   ';
 }
