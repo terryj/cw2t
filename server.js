@@ -1394,53 +1394,6 @@ function positionHistory(clientid, symbol, conn) {
   //bo.getPositionHistory(clientid, symbol);
 }
 
-function getUTCTimeStamp() {
-    var timestamp = new Date();
-
-    var year = timestamp.getUTCFullYear();
-    var month = timestamp.getUTCMonth() + 1; // flip 0-11 -> 1-12
-    var day = timestamp.getUTCDate();
-    var hours = timestamp.getUTCHours();
-    var minutes = timestamp.getUTCMinutes();
-    var seconds = timestamp.getUTCSeconds();
-    //var millis = timestamp.getUTCMilliseconds();
-
-    if (month < 10) {month = '0' + month;}
-
-    if (day < 10) {day = '0' + day;}
-
-    if (hours < 10) {hours = '0' + hours;}
-
-    if (minutes < 10) {minutes = '0' + minutes;}
-
-    if (seconds < 10) {seconds = '0' + seconds;}
-
-    /*if (millis < 10) {
-        millis = '00' + millis;
-    } else if (millis < 100) {
-        millis = '0' + millis;
-    }*/
-
-    //var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds, '.', millis].join('');
-    var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds].join('');
-
-    return ts;
-}
-
-function getUTCDateString(date) {
-    var year = date.getUTCFullYear();
-    var month = date.getUTCMonth() + 1; // flip 0-11 -> 1-12
-    var day = date.getUTCDate();
-
-    if (month < 10) {month = '0' + month;}
-
-    if (day < 10) {day = '0' + day;}
-
-    var utcdate = "" + year + month + day;
-
-    return utcdate;
-}
-
 function sendQuoteack(quotereqid) {
   var quoteack = {};
 
