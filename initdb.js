@@ -28,15 +28,15 @@ db.on("error", function (err) {
 function initdb() {
   // Comment out one or the other...
   // keep fix sequence numbers the same
-  /*db.get("fixseqnumin", function(err, fixseqnumin) {
+  db.get("fixseqnumin", function(err, fixseqnumin) {
     db.set("fixseqnumin", fixseqnumin);
   });
   db.get("fixseqnumout", function(err, fixseqnumout) {
     db.set("fixseqnumout", fixseqnumout);
-  });*/
+  });
   // or set them to start at 1
-  db.set("fixseqnumin", 0);
-  db.set("fixseqnumout", 0); // first out will be 1
+  //db.set("fixseqnumin", 0);
+  //db.set("fixseqnumout", 0); // first out will be 1
 
   // clear all key values
   db.flushdb();
@@ -181,6 +181,9 @@ function initdb() {
   db.set("ordertype:D", "Quoted");
   db.sadd("ordertypes", "X");
   db.set("ordertype:X", "Hedge");
+
+  db.sadd("costs", "cost:DE:GBP:1");
+  db.hset("cost:DE:GBP:1", "defaultnosettdays", 3);
 
   console.log("done");
 }

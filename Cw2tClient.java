@@ -110,6 +110,9 @@ class Cw2tSubscriber extends JedisPubSub {
             // bid/offer price
             s.add(Tag.makeTag("4332/1"));
             s.add(Tag.makeTag("4333/1"));
+            
+            // last traded price
+            //s.add(Tag.makeTag("4300"));
             /*s.add(Tag.makeTag("4332/2"));
             s.add(Tag.makeTag("4333/2"));
             s.add(Tag.makeTag("4332/3"));
@@ -401,7 +404,6 @@ public class Cw2tClient implements ISessionObserver {
         
         // complete the message
         jsonmsg = jsonmsg + "]";
-        System.out.println(fieldmap);
         
         // publish message to channel
         jedispublisher.publish(Tpc, jsonmsg);
@@ -611,6 +613,7 @@ public class Cw2tClient implements ISessionObserver {
         // update instruments
         symbol = symbol + "." + market;
         String key = "symbol:" + symbol;
+        fieldmap.put("symbol", symbol);
         String status = jedispublisher.hmset(key, fieldmap);
         jedispublisher.sadd("instruments", symbol);
         jedispublisher.sadd("instrumenttypes", insttype);

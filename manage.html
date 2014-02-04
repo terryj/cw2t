@@ -777,7 +777,6 @@
                 } else if ("instruments" in obj) {
                     loadInstruments(obj.instruments);
                 } else if ("instrument" in obj) {
-                    console.log(obj);
                     updateInstrument(obj.instrument);
                 } else if ("margins" in obj) {
                     clearMargins();
@@ -2926,8 +2925,8 @@
 
             var lnkpositions = newlink("lnkpositions", "Positions", "", frmpositions);
             var lnkcash = newlink("lnkcash", "Cash", "", frmpositions);
-            var lnkmargin = newlink("lnkmargin", "Margin", "", frmpositions);
-            var lnkreserves = newlink("lnkreserves", "Reserves", "", frmpositions);
+            //var lnkmargin = newlink("lnkmargin", "Margin", "", frmpositions);
+            //var lnkreserves = newlink("lnkreserves", "Reserves", "", frmpositions);
             var lnkaccount = newlink("lnkaccount", "Account", "", frmpositions);
 
             lnkpositions.onclick = function() {
@@ -2950,7 +2949,7 @@
                 sockjs.send("{\"cashrequest\":" + JSON.stringify(cashrequest) + "}");
             }
 
-            lnkmargin.onclick = function() {
+            /*lnkmargin.onclick = function() {
                 var marginrequest = {};
 
                 if (!validateClientid()) {return;}
@@ -2968,7 +2967,7 @@
                 setSelected(lnkreserves);
                 reservesrequest.clientid = inpclientid.value;
                 sockjs.send("{\"reservesrequest\":" + JSON.stringify(reservesrequest) + "}");
-            }
+            }*/
 
             lnkaccount.onclick = function() {
                 var accountrequest = {};
@@ -3002,8 +3001,8 @@
             function setSelected(link) {
                 lnkpositions.className = "";
                 lnkcash.className = "";
-                lnkmargin.className = "";
-                lnkreserves.className = "";
+                //lnkmargin.className = "";
+                //lnkreserves.className = "";
                 lnkaccount.className = "";
 
                 link.className = "linkselected";
