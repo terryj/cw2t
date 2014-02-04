@@ -1671,7 +1671,7 @@ function endOfDay(userid) {
     eoddate = common.dateFromUTCString(eoddatestr);
     console.log(eoddate);
 
-    nexteoddate = getUTCDateString(common.getSettDate(eoddate, 1));
+    //nexteoddate = getUTCDateString(common.getSettDate(eoddate, 1));
 
     db.smembers("clients", function(err, clients) {
       if (err) throw err;

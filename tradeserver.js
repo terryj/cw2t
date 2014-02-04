@@ -29,6 +29,7 @@ var redisport;
 var redisauth;
 var redispassword;
 var redislocal = true; // local or external server
+var holidays = {};
 
 if (redislocal) {
   // local
@@ -55,6 +56,7 @@ var scriptquote;
 var scriptquoteack;
 var scriptrejectorder;
 var scriptgetinst;
+var scriptgetholidays;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -152,7 +154,7 @@ function quoteRequest(quoterequest) {
   quoterequest.timestamp = common.getUTCTimeStamp(today);
 
   // get settlement date from T+n no. of days
-  quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, quoterequest.nosettdays));
+  quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, quoterequest.nosettdays, holidays));
 
   // store the quote request & get an id
   db.eval(scriptquoterequest, 11, quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, function(err, ret) {
@@ -175,7 +177,7 @@ function quoteRequest(quoterequest) {
       // make the quote request to proquote for the default equity settlement date
       // the stored settlement date stays as requested
       // the different settlement will be dealt with using finance
-      quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[5]));
+      quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[5], holidays));
     }
 
     // forward the request to Proquote
@@ -295,7 +297,7 @@ function newOrder(order) {
 
     // set the settlement date to equity default date for cfd orders, in case they are being hedged with the market
     if (order.instrumenttype == "CFD") {
-      order.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[11]));
+      order.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[11], holidays));
     }
 
     // todo: check
@@ -1046,6 +1048,17 @@ function getTimeInForceDesc(timeinforce) {
 function initDb() {
   common.registerCommonScripts();
   registerScripts();
+  loadHolidays();
+}
+
+function loadHolidays() {
+  db.eval(scriptgetholidays, 0, function(err, ret) {
+    if (err) throw err;
+
+    for (var i = 0; i < ret.length; ++i) {
+      holidays[ret[i]] = ret[i];
+    }
+  });
 }
 
 function orderBookRequest(orgclientkey, symbol, conn) {
@@ -2212,5 +2225,10 @@ function registerScripts() {
     end \
   end \
   return cjson.encode(inst) \
+  ';
+
+  scriptgetholidays = '\
+  local holidays = redis.call("smembers", "holidays") \
+  return holidays \
   ';
 }

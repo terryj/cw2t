@@ -7,27 +7,27 @@
 ****************/
 
 //
-// returns trading day, number of days after passed date
+// returns valid trading day as date object, taking into account weekends and holidays
+// from passed date, number of settlement days (i.e. T+n) and list of holidays
 //
-function getSettDate(dt, nosettdays) {
+function getSettDate(dt, nosettdays, holidays) {
   var days = 0;
 
   if (nosettdays > 0) {
     while (true) {
-      // ignore weekends & holidays
-      if (dt.getDay() == 6) {
-        dt.setDate(dt.getDate() + 2);
-      } else if (dt.getDay() == 0) {
-        dt.setDate(dt.getDate() + 1);
-      } else if (isHoliday(dt)) {
-        dt.setDate(dt.getDate() + 1);
-      } else {
-        dt.setDate(dt.getDate() + 1);
-        days++;
-      }
+      // add a day
+      dt.setDate(dt.getDate() + 1);
 
-      if (days >= nosettdays) {
-        break;
+      // ignore weekends & holidays
+      if (dt.getDay() == 6 || dt.getDay() == 0) {
+      } else if (isHoliday(dt, holidays)) {
+      } else {
+        // add to days & check to see if we are there
+        days++;
+
+        if (days >= nosettdays) {
+          break;
+        }
       }
     }
   }
@@ -37,23 +37,17 @@ function getSettDate(dt, nosettdays) {
 
 exports.getSettDate = getSettDate;
 
-function isHoliday(datetocheck) {
-  var ret;
-  var datetocheckstr = "";
+function isHoliday(datetocheck, holidays) {
+  var found = false;
 
-  datetocheckstr += datetocheck.getFullYear();
-  datetocheckstr += datetocheck.getMonth() + 1;
-  datetocheckstr += datetocheck.getDate();
+  var datetocheckstr = getUTCDateString(datetocheck);
 
-  db.sismember("holidays", datetocheckstr, function(err, found) {
-    if (err) throw err;
-    ret = found;
-  });
+  if (datetocheckstr in holidays) {
+    found = true;
+  }
 
-  return ret;
+  return found;
 }
-
-exports.isHoliday = isHoliday;
 
 //
 // returns a UTC datetime string from a passed date object
@@ -346,19 +340,27 @@ exports.registerCommonScripts = function () {
 
   getunrealisedpandl = '\
   local getunrealisedpandl = function(symbol, quantity, side, avgcost) \
-    local price = redis.call("get", "price:" .. symbol) \
+    local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
+    --[[ get delayed topic - todo: review ]] \
+    topic = topic .. "D" \
+    local bidprice = redis.call("hget", "topic:" .. topic, "bid1") \
+    local offerprice = redis.call("hget", "topic:" .. topic, "offer1") \
     local unrealisedpandl = 0 \
+    local price = 0 \
     --[[ only calculate a p&l if we have a price ]] \
-    if price then \
-      --[[ take account of short positions ]] \
-      local qty = tonumber(quantity) \
-      if tonumber(side) == 2 then \
-        qty = -qty \
+    local qty = tonumber(quantity) \
+    if tonumber(side) == 1 then \
+      if bidprice then \
+        price = tonumber(bidprice) / 100 \
       end \
-      unrealisedpandl = qty * (tonumber(price) - tonumber(avgcost)) \
     else \
-      price = 0 \
+      if offerprice then \
+        price = tonumber(offerprice) / 100 \
+      end \
+      --[[ take account of short positions ]] \
+      qty = -qty \
     end \
+    unrealisedpandl = qty * (price - tonumber(avgcost)) \
     return {unrealisedpandl, price} \
   end \
   ';
