@@ -667,7 +667,7 @@ public class Cw2tClient implements ISessionObserver {
         
         s.add(Tag.makeTag("4332/1"));
         s.add(Tag.makeTag("4333/1"));
-        s.add(Tag.makeTag("4332/2"));
+        /*s.add(Tag.makeTag("4332/2"));
         s.add(Tag.makeTag("4333/2"));
         s.add(Tag.makeTag("4332/3"));
         s.add(Tag.makeTag("4333/3"));
@@ -676,7 +676,7 @@ public class Cw2tClient implements ISessionObserver {
         s.add(Tag.makeTag("4332/5"));
         s.add(Tag.makeTag("4333/5"));
         s.add(Tag.makeTag("4332/6"));
-        s.add(Tag.makeTag("4333/6"));
+        s.add(Tag.makeTag("4333/6"));*/
         
         // get existing topics
         Set<String> topics = new HashSet<String>();
