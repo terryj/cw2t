@@ -5045,7 +5045,7 @@
                 client.clientid = inpclientid.value;
                 client.address = inpaddress.value;
                 client.email = inpemail.value;
-                client.commpercent = inpcommpercent.value;
+                client.commissionpercent = inpcommpercent.value;
 
                 if (selifa.selectedIndex == 0) {
                     client.ifaid = "";
@@ -5138,7 +5138,7 @@
                         insttypes: [],
                         type: 1,
                         hedge: 1,
-                        commpercent: ''
+                        commissionpercent: ''
                     };
                 }
 
@@ -5152,7 +5152,7 @@
                     inpemail.value = client.email;
                     populateIfas(selifa, client.ifaid, 0);
                     populateClientTypes(seltype, client.type);
-                    inpcommpercent.value = client.commpercent;
+                    inpcommpercent.value = client.commissionpercent;
 
                     if (parseInt(client.hedge)) {
                         opthedgeyes.checked = true;

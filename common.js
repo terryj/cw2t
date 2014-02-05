@@ -341,26 +341,28 @@ exports.registerCommonScripts = function () {
   getunrealisedpandl = '\
   local getunrealisedpandl = function(symbol, quantity, side, avgcost) \
     local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
+    if not topic then return {0, 0} end \
     --[[ get delayed topic - todo: review ]] \
     topic = topic .. "D" \
     local bidprice = redis.call("hget", "topic:" .. topic, "bid1") \
     local offerprice = redis.call("hget", "topic:" .. topic, "offer1") \
     local unrealisedpandl = 0 \
     local price = 0 \
-    --[[ only calculate a p&l if we have a price ]] \
     local qty = tonumber(quantity) \
     if tonumber(side) == 1 then \
-      if bidprice then \
+      if bidprice and tonumber(bidprice) ~= 0 then \
         price = tonumber(bidprice) / 100 \
       end \
     else \
-      if offerprice then \
+      if offerprice and tonumber(offerprice) ~= 0 then \
         price = tonumber(offerprice) / 100 \
       end \
-      --[[ take account of short positions ]] \
+      --[[ take account of short position ]] \
       qty = -qty \
     end \
-    unrealisedpandl = qty * (price - tonumber(avgcost)) \
+    if price ~= 0 then \
+      unrealisedpandl = qty * (price - tonumber(avgcost)) \
+    end \
     return {unrealisedpandl, price} \
   end \
   ';

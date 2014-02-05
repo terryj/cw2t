@@ -63,7 +63,7 @@ function initdb() {
   db.sadd("clients", "999999");
 
   // clients - hash for each
-  db.hmset("client:999999", "email", "999999@thomasgrant.co.uk", "password", "999999", "brokerid", 1, "clientid", 999999, "marketext", "D", "name", "Thomas Grant Hedgebook", "address", "", "mobile", "", "hedge", 0, "type", 2, "brokerclientcode", 999999, "commissionpercent", 0);
+  db.hmset("client:999999", "email", "999999@thomasgrant.co.uk", "password", "999999", "brokerid", 1, "clientid", 999999, "marketext", "D", "name", "Thomas Grant Hedgebook", "address", "", "mobile", "", "hedge", 0, "type", 2, "brokerclientcode", 999999, "commpercent", 0);
 
   // link between client email & id
   db.set("client:999999@thomasgrant.co.uk", "999999");
@@ -74,6 +74,10 @@ function initdb() {
   db.sadd("999999:instrumenttypes", "DE");
   db.sadd("999999:instrumenttypes", "IE");
   db.sadd("999999:instrumenttypes", "CCFD");
+
+  // GBP cash record for hedge book, required for summary
+  db.sadd("999999:cash", "GBP");
+  db.set("999999:cash:GBP", 0);
 
   // set of users
   db.sadd("users", "1");
@@ -182,8 +186,12 @@ function initdb() {
   db.sadd("ordertypes", "X");
   db.set("ordertype:X", "Hedge");
 
-  db.sadd("costs", "cost:DE:GBP:1");
-  db.hset("cost:DE:GBP:1", "defaultnosettdays", 3);
+  db.sadd("costs", "DE:GBP:1");
+  db.hmset("cost:DE:GBP:1","defaultnosettdays",3,"costkey","DE:GBP:1","commissionpercent","","commissionmin","","ptmlevylimit","","ptmlevy","","stampdutylimit","","stampdutypercent","","contractcharge","","finance",""
+);
+  db.sadd("costs", "DE:GBP:2");
+  db.hmset("cost:DE:GBP:2","defaultnosettdays",3,"costkey","DE:GBP:2","commissionpercent","","commissionmin","","ptmlevylimit","","ptmlevy","","stampdutylimit","","stampdutypercent","","contractcharge","","finance",""
+);
 
   console.log("done");
 }

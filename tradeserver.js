@@ -298,17 +298,13 @@ function newOrder(order) {
     // set the settlement date to equity default date for cfd orders, in case they are being hedged with the market
     if (order.instrumenttype == "CFD") {
       order.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[11], holidays));
-    }
-
-    // todo: check
-    /*if (order.nosettdays != ret[11]) {
-      order.futsettdate = getUTCDateString(getSettDate(ret[11]));
+      console.log(ret);
 
       // update the stored order settlement details if it is a hedge
       if (ret[8] != "") {
         db.hmset("order:" + ret[8], "nosettdays", ret[11], "futsettdate", order.futsettdate);
       }
-    }*/
+    }
 
     processOrder(order, ret[8], ret[9], ret[10]);
   });
@@ -1381,7 +1377,7 @@ function registerScripts() {
     local stampduty = 0 \
     local contractcharge = 0 \
     --[[ commission ]] \
-    local commpercent = redis.call("hget", "client:" .. clientid, "commpercent") \
+    local commpercent = redis.call("hget", "client:" .. clientid, "commissionpercent") \
     if not commpercent or tonumber(commpercent) == nil then \
       if vals[1] and tonumber(vals[1]) ~= nil then \
         commpercent = vals[1] \
