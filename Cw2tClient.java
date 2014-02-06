@@ -610,6 +610,9 @@ public class Cw2tClient implements ISessionObserver {
             return;
         }
         
+        // ptm levy exempt default
+        fieldmap.put("ptmexempt", "0");
+        
         // update instruments
         symbol = symbol + "." + market;
         String key = "symbol:" + symbol;

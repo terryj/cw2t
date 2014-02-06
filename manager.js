@@ -84,6 +84,7 @@ var scriptgetmargin;
 var scriptgetcashhistory;
 var scriptgetaccount;
 var scriptendofday;
+var scriptgetalltrades;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -343,8 +344,6 @@ function unsubscribeConnection(id) {
   db.eval(common.scriptunsubscribeid, 2, id, servertype, function(err, ret) {
     if (err) throw err;
 
-    console.log(ret);
-
     // unsubscribe returned topics
     for (var i = 0; i < ret.length; i++) {
       dbsub.unsubscribe(ret[i]);
@@ -523,7 +522,7 @@ function cashTrans(cashtrans, userid, conn) {
 }
 
 function instUpdate(inst, userid, conn) {
-  db.eval(scriptinstupdate, 3, inst.symbol, inst.marginpercent, inst.hedge, function(err, ret) {
+  db.eval(scriptinstupdate, 4, inst.symbol, inst.marginpercent, inst.hedge, inst.ptmexempt, function(err, ret) {
     if (err) throw err;
 
     getSendInst(inst.symbol, conn);
@@ -1014,10 +1013,17 @@ function sendTrade(trade, conn) {
 }
 
 function tradeHistory(req, conn) {
-  db.eval(scriptgettrades, 1, req.clientid, function(err, ret) {
-    if (err) throw err;
-    conn.write("{\"trades\":" + ret + "}");
-  });
+  if (req.clientid == "0") {
+    db.eval(scriptgetalltrades, 0, function(err, ret) {
+      if (err) throw err;
+      conn.write("{\"trades\":" + ret + "}");
+    });
+  } else {
+    db.eval(scriptgettrades, 1, req.clientid, function(err, ret) {
+      if (err) throw err;
+      conn.write("{\"trades\":" + ret + "}");
+    });
+  }
 }
 
 function cashHistory(req, conn) {
@@ -1691,6 +1697,7 @@ function registerScripts() {
   var getcash = common.getcash;
   var getunrealisedpandl = common.getunrealisedpandl;
   var calcfinance = common.calcfinance;
+  var gettrades;
 
   //
   // function to split a string into an array of substrings, based on a character
@@ -1709,6 +1716,19 @@ function registerScripts() {
     end \
     table.insert(outResults, string.sub(str, theStart)) \
     return outResults \
+  end \
+  ';
+
+  gettrades = '\
+  local gettrades = function(trades) \
+    local tblresults = {} \
+    local fields = {"clientid","orderid","symbol","side","quantity","price","currency","currencyratetoorg","currencyindtoorg","commission","ptmlevy","stampduty","contractcharge","counterpartyid","markettype","externaltradeid","futsettdate","timestamp","lastmkt","externalorderid","tradeid","settlcurrency","settlcurramt","settlcurrfxrate","settlcurrfxratecalc","nosettdays","margin","finance"} \
+    local vals \
+    for index = 1, #trades do \
+      vals = redis.call("hmget", "trade:" .. trades[index], unpack(fields)) \
+      table.insert(tblresults, {clientid=vals[1],orderid=vals[2],symbol=vals[3],side=vals[4],quantity=vals[5],price=vals[6],currency=vals[7],currencyratetoorg=vals[8],currencyindtoorg=vals[9],commission=vals[10],ptmlevy=vals[11],stampduty=vals[12],contractcharge=vals[13],counterpartyid=vals[14],markettype=vals[15],externaltradeid=vals[16],futsettdate=vals[17],timestamp=vals[18],lastmkt=vals[19],externalorderid=vals[20],tradeid=vals[21],settlcurrency=vals[22],settlcurramt=vals[23],settlcurrfxrate=vals[24],settlcurrfxratecalc=vals[25],nosettdays=vals[26],margin=vals[27],finance=vals[28]}) \
+    end \
+    return tblresults \
   end \
   ';
 
@@ -1851,7 +1871,7 @@ function registerScripts() {
   //
   scriptgetinst = '\
   local instruments = redis.call("sort", "instruments", "ALPHA") \
-  local fields = {"instrumenttype", "description", "currency", "marginpercent", "market", "isin", "sedol", "sector", "hedge"} \
+  local fields = {"instrumenttype", "description", "currency", "marginpercent", "market", "isin", "sedol", "sector", "hedge", "ptmexempt"} \
   local vals \
   local inst = {} \
   local marginpc \
@@ -1863,14 +1883,14 @@ function registerScripts() {
       else \
         marginpc = 100 \
       end \
-      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc, market = vals[5], isin = vals[6], sedol = vals[7], sector = vals[8], hedge = vals[9]}) \
+      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc, market = vals[5], isin = vals[6], sedol = vals[7], sector = vals[8], hedge = vals[9], ptmexempt=vals[10]}) \
     end \
   end \
   return cjson.encode(inst) \
   ';
 
   scriptinstupdate = '\
-  redis.call("hmset", "symbol:" .. KEYS[1], "marginpercent", KEYS[2], "hedge", KEYS[3]) \
+  redis.call("hmset", "symbol:" .. KEYS[1], "marginpercent", KEYS[2], "hedge", KEYS[3], "ptmexempt", KEYS[4]) \
   ';
 
   scripthedgeupdate = '\
@@ -1973,15 +1993,18 @@ function registerScripts() {
   //
   // pass client id
   //
-  scriptgettrades = '\
-  local tblresults = {} \
+  scriptgettrades = gettrades + '\
   local trades = redis.call("smembers", KEYS[1] .. ":trades") \
-  local fields = {"clientid","orderid","symbol","side","quantity","price","currency","currencyratetoorg","currencyindtoorg","commission","ptmlevy","stampduty","contractcharge","counterpartyid","markettype","externaltradeid","futsettdate","timestamp","lastmkt","externalorderid","tradeid","settlcurrency","settlcurramt","settlcurrfxrate","settlcurrfxratecalc","nosettdays","margin"} \
-  local vals \
-  for index = 1, #trades do \
-    vals = redis.call("hmget", "trade:" .. trades[index], unpack(fields)) \
-    table.insert(tblresults, {clientid=vals[1],orderid=vals[2],symbol=vals[3],side=vals[4],quantity=vals[5],price=vals[6],currency=vals[7],currencyratetoorg=vals[8],currencyindtoorg=vals[9],commission=vals[10],ptmlevy=vals[11],stampduty=vals[12],contractcharge=vals[13],counterpartyid=vals[14],markettype=vals[15],externaltradeid=vals[16],futsettdate=vals[17],timestamp=vals[18],lastmkt=vals[19],externalorderid=vals[20],tradeid=vals[21],settlcurrency=vals[22],settlcurramt=vals[23],settlcurrfxrate=vals[24],settlcurrfxratecalc=vals[25],nosettdays=vals[26],margin=vals[27]}) \
-  end \
+  local tblresults = gettrades(trades) \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // all trades - todo: limit by date...add date index?
+  //
+  scriptgetalltrades = gettrades + '\
+  local trades = redis.call("smembers", "trades") \
+  local tblresults = gettrades(trades) \
   return cjson.encode(tblresults) \
   ';
 

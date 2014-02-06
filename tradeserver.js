@@ -1369,7 +1369,7 @@ function registerScripts() {
   var getrealisedpandl;
 
   getcosts = round + '\
-  local getcosts = function(clientid, instrumenttype, side, consid, currency) \
+  local getcosts = function(clientid, symbol, instrumenttype, side, consid, currency) \
     local fields = {"commissionpercent", "commissionmin", "ptmlevylimit", "ptmlevy", "stampdutylimit", "stampdutypercent", "contractcharge"} \
     local vals = redis.call("hmget", "cost:" .. instrumenttype .. ":" .. currency .. ":" .. side, unpack(fields)) \
     local commission = 0 \
@@ -1394,10 +1394,15 @@ function registerScripts() {
       end \
     end \
     --[[ ptm levy ]] \
-    if vals[3] and tonumber(vals[3]) ~= nil then \
-      if consid > tonumber(vals[3]) then \
-        if vals[4] and tonumber(vals[4]) ~= nil then \
-          ptmlevy = tonumber(vals[4]) \
+    local ptmexempt = redis.call("hget", "symbol:" .. symbol, "ptmexempt") \
+    if ptmexempt and tonumber(ptmexempt) == 1 then \
+    else \
+      --[[ only calculate ptm levy if product is not exempt ]] \
+      if vals[3] and tonumber(vals[3]) ~= nil then \
+        if consid > tonumber(vals[3]) then \
+          if vals[4] and tonumber(vals[4]) ~= nil then \
+            ptmlevy = tonumber(vals[4]) \
+          end \
         end \
       end \
     end \
@@ -1418,8 +1423,8 @@ function registerScripts() {
   ';
 
   gettotalcost = getcosts + '\
-  local gettotalcost = function(clientid, instrumenttype, side, consid, currency) \
-    local costs =  getcosts(clientid, instrumenttype, side, consid, currency) \
+  local gettotalcost = function(clientid, symbol, instrumenttype, side, consid, currency) \
+    local costs =  getcosts(clientid, symbol, instrumenttype, side, consid, currency) \
     return {costs[1] + costs[2] + costs[3] + costs[4], costs} \
   end \
   ';
@@ -1643,7 +1648,7 @@ function registerScripts() {
     --[[ calculate initial margin, costs & finance, as a trade may be generated now ]] \
     local consid = tonumber(quantity) * tonumber(price) \
     local initialmargin = getinitialmargin(symbol, consid) \
-    local totalcost = gettotalcost(clientid, instrumenttype, side, consid, currency) \
+    local totalcost = gettotalcost(clientid, symbol, instrumenttype, side, consid, currency) \
     local finance = calcfinance(instrumenttype, consid, currency, side, nosettdays) \
     local position = getposition(clientid, symbol, currency, settldate) \
     --[[ always allow closing trades ]] \
@@ -1968,8 +1973,8 @@ function registerScripts() {
       local tradeprice = tonumber(matchvals[6]) \
       local consid = tradequantity * tradeprice \
       --[[ create trades for active & passive orders ]] \
-      local costs = getcosts(vals[2], instrumenttype, vals[4], consid, vals[7]) \
-      local matchcosts = getcosts(matchvals[2], instrumenttype, matchside, consid, matchvals[7]) \
+      local costs = getcosts(vals[2], vals[3], instrumenttype, vals[4], consid, vals[7]) \
+      local matchcosts = getcosts(matchvals[2], vals[3], instrumenttype, matchside, consid, matchvals[7]) \
       local finance = 0 \
       local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], vals[4], tradequantity, tradeprice, vals[7], costs, matchorder[2], matchorder[4], "1", "", vals[10], vals[11], "", "", vals[7], "", "", 1, 1, finance) \
       local matchtradeid = newtrade(matchvals[2], matchvals[4], matchorders[i], matchvals[3], matchside, tradequantity, tradeprice, matchvals[7], matchcosts, order[2], order[4], "1", "", matchvals[10], matchvals[11], "", "", vals[7], "", "", 1, 1, finance) \
@@ -2012,7 +2017,7 @@ function registerScripts() {
   local consid = quantity * price \
   local instrumenttype = redis.call("hget", "symbol:" .. vals[2], "instrumenttype") \
   local initialmargin = getinitialmargin(vals[2], consid) \
-  local costs = getcosts(vals[1], instrumenttype, vals[3], consid, KEYS[17]) \
+  local costs = getcosts(vals[1], vals[2], instrumenttype, vals[3], consid, KEYS[17]) \
   local finance = calcfinance(instrumenttype, consid, KEYS[17], vals[3], vals[8]) \
   local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], 0, KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance) \
   --[[ adjust order related margin/reserve ]] \

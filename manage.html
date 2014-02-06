@@ -1646,6 +1646,7 @@
             clearTable("tblpositions");
             clearTable("tblaccount");
             clearTable("tblcashhistory");
+            clearTable("tbltrades");
         }
 
         function clearDivs() {
@@ -2334,7 +2335,7 @@
             }
         }
 
-        function displayTrades() {
+        /*function displayTrades() {
             var firsttrade = true;
             var msg;
             var list;
@@ -2363,6 +2364,198 @@
 
                     viewTrade(element.value);
                 }
+            }
+        }*/
+
+        function displayTrades() {
+            var tbltrades;
+            var tblbody;
+            var traderow;
+            var headingrow;
+            var numcols = 19;
+
+            clearLists();
+            clearEmptyLines();
+            clearHeadings();
+            clearTables();
+
+            var emptyline = addNewLine(main);
+            emptyline.id = "emptyline:" + "1";
+
+            if (Object.keys(trades).length == 0) {
+                var list = getList("list1");
+                addElement("No trades", list, 0);
+                return;
+            }
+
+            tbltrades = document.createElement("table");
+            tbltrades.id = "tblpositions";
+            tbltrades.setAttribute("border", "1");
+
+            tblbody = document.createElement("tbody");
+            tblbody.id = "tblbody";
+
+            tbltrades.appendChild(tblbody);
+            main.appendChild(tbltrades);
+
+            headingrow = document.createElement("tr");
+
+            for (var i = 0; i < numcols; ++i) {
+                var col = document.createElement("td");
+
+                switch (i) {
+                case 0:
+                    col.innerHTML = "Client";
+                    break;
+                case 1:
+                    col.innerHTML = "Symbol";
+                    break;
+                case 2:
+                    col.innerHTML = "Side";
+                    break;
+                case 3:
+                    col.innerHTML = "Quantity";
+                    col.className = "colrightalign";
+                    break;
+                case 4:
+                    col.innerHTML = "Price";
+                    col.className = "colrightalign";
+                    break;
+                case 5:
+                    col.innerHTML = "Settlcurramt";
+                    col.className = "colrightalign";
+                    break;
+                case 6:
+                    col.innerHTML = "Nosettdays";
+                    break;                
+                case 7:
+                    col.innerHTML = "Settl. Date";
+                    break;
+                case 8:
+                    col.innerHTML = "Currency";
+                    break;
+                case 9:
+                    col.innerHTML = "Commission";
+                    col.className = "colrightalign";
+                    break;
+                case 10:
+                    col.innerHTML = "Ptm Levy";
+                    col.className = "colrightalign";
+                    break;
+                case 11:
+                    col.innerHTML = "Stamp Duty";
+                    col.className = "colrightalign";
+                    break;
+                case 12:
+                    col.innerHTML = "Contract Charge";
+                    col.className = "colrightalign";
+                    break;
+                case 13:
+                    col.innerHTML = "Counterparty";
+                    break;
+                case 14:
+                    col.innerHTML = "External Trade Id";
+                    break;
+                case 15:
+                    col.innerHTML = "Timestamp";
+                    break;
+                case 16:
+                    col.innerHTML = "Trade Id";
+                    break;
+                case 17:
+                    col.innerHTML = "Finance";
+                    col.className = "colrightalign";
+                    break;
+                case 18:
+                    col.innerHTML = "Margin";
+                    col.className = "colrightalign";
+                    break;
+                default:
+                }
+
+                headingrow.appendChild(col);
+            }
+
+            tblbody.appendChild(headingrow);
+
+            for (var x in trades) {
+                var traderow = document.createElement("tr");
+
+                for (var i = 0; i < numcols; ++i) {
+                    var col = document.createElement("td");
+
+                    switch (i) {
+                    case 0:
+                        col.innerHTML = trades[x].clientid;
+                        break;
+                    case 1:
+                        col.innerHTML = trades[x].symbol;
+                        break;
+                    case 2:
+                        col.innerHTML = getSideDesc(trades[x].side);
+                        break;
+                    case 3:
+                        col.innerHTML = trades[x].quantity;
+                        col.className = "colrightalign";
+                        break;
+                    case 4:
+                        col.innerHTML = trades[x].price;
+                        col.className = "colrightalign";
+                        break;
+                    case 5:
+                        col.innerHTML = trades[x].settlcurramt;
+                        col.className = "colrightalign";
+                        break;
+                    case 6:
+                        col.innerHTML = "T+" + trades[x].nosettdays;
+                        break;
+                    case 7:
+                        col.innerHTML = formatUTCDate(trades[x].futsettdate);
+                        break;
+                    case 8:
+                        col.innerHTML = trades[x].settlcurrency;
+                        break;
+                    case 9:
+                        col.innerHTML = trades[x].commission;
+                        col.className = "colrightalign";
+                        break;
+                    case 10:
+                        col.innerHTML = trades[x].ptmlevy;
+                        col.className = "colrightalign";
+                        break;
+                    case 11:
+                        col.innerHTML = trades[x].stampduty;
+                        col.className = "colrightalign";
+                        break;
+                    case 12:
+                        col.innerHTML = trades[x].contractcharge;
+                        col.className = "colrightalign";
+                        break;
+                    case 13:
+                        col.innerHTML = trades[x].counterpartyid;
+                        break;
+                    case 14:
+                        col.innerHTML = trades[x].externaltradeid;
+                        break;
+                    case 15:
+                        col.innerHTML = formatUTCDateTime(trades[x].timestamp);
+                        break;
+                    case 16:
+                        col.innerHTML = trades[x].tradeid;
+                        break;
+                    case 17:
+                        col.innerHTML = trades[x].finance;
+                        break;
+                    case 18:
+                        col.innerHTML = trades[x].margin;
+                        break;
+                    default:
+                    }
+
+                    traderow.appendChild(col);
+                }
+
+                tblbody.appendChild(traderow);
             }
         }
 
@@ -2921,7 +3114,7 @@
 
             var frmpositions = getForm("frmpositions");
 
-            selectClient("frmpositions", null, null, true, "", "inpclientid", "");
+            selectClient("frmpositions", null, null, true, "", "inpclientid", "", false);
 
             var lnkpositions = newlink("lnkpositions", "Positions", "", frmpositions);
             var lnkcash = newlink("lnkcash", "Cash", "", frmpositions);
@@ -3775,7 +3968,8 @@
             inpclientidstr = "inpclientid:" + symbol;
             quotereqqtystr = "quotereqquantity:" + symbol;
             focusfldstr = "clientboxinput:" + symbol;
-            selectClient("orderdiv", orderdiv, symbol, true, null, inpclientidstr, quotereqqtystr);
+
+            selectClient("orderdiv", orderdiv, symbol, true, null, inpclientidstr, quotereqqtystr, false);
 
             quotereqqty = document.createElement("input");
             quotereqqty.className = "quotereqquantity";
@@ -4816,7 +5010,7 @@
             }
         }
 
-        function selectClient(frm, clientbox, symbol, displayname, namefld, idfld, focusfldstr) {
+        function selectClient(frm, clientbox, symbol, displayname, namefld, idfld, focusfldstr, allclientopt) {
             var clientboxinput;
             var clientlist;
             var searchtext;
@@ -4849,6 +5043,10 @@
                         for (var i in clients) {
                             addElement(clients[i].name, clientlist, i);
                         }
+
+                        if (allclientopt) {
+                            addElement("All clients", clientlist, 0);                            
+                        }
                     }
                 } else {
                     searchtext = clientboxinput.value.toLowerCase();
@@ -4861,6 +5059,10 @@
                                 addElement(clients[i].name, clientlist, i);
                             }
                         }
+                    }
+
+                    if (allclientopt) {
+                        addElement("All clients", clientlist, 0);                            
                     }
                 }
 
@@ -4885,6 +5087,7 @@
 
             clientlist.onclick = function(e) {
                 var element;
+                var client = {};
                 
                 if (!e) e = window.event;
                 element = e.target || e.srcElement;
@@ -4892,7 +5095,14 @@
                 clientlist.style.visibility = "hidden";
                 clientboxinput.value = "";
 
-                displayClient(clients[element.value], frm, "", namefld, idfld, "");
+                if (element.value == 0) {
+                    client.name = "All clients";
+                    client.clientid = 0;
+                } else {
+                    client = clients[element.value];
+                }
+
+                displayClient(client, frm, "", namefld, idfld, "");
 
                 clearHeadings();
                 clearLists();
@@ -4943,7 +5153,7 @@
         }
 
         function maintainClients() {
-            selectClient("frmclient", null, null, false, "inpname", "inpclientid", "");
+            selectClient("frmclient", null, null, false, "inpname", "inpclientid", "", false);
 
             var frmclient = getForm("frmclient");
 
@@ -5007,7 +5217,7 @@
             var lblhedgeno = newlabel("lblhedgeno", "No", "", frmclient);
 
             addNewLine(frmclient);
-            var lblcommpercent = newlabel("lblcommpercent", "Commission %:", "formlabel", frmclient);
+            var lblcommpercent = newlabel("lblcommpercent", "Commission Override %:", "formlabel", frmclient);
             var inpcommpercent = newinput("inpcommpercent", "forminput", frmclient);
 
             addNewLine(frmclient);
@@ -5242,7 +5452,7 @@
             var settlmonth;
             var settlyear;
 
-            selectClient("frmcash", null, null, false, "inpclient", "inpclientid", "");
+            selectClient("frmcash", null, null, false, "inpclient", "inpclientid", "", false);
 
             frmcash = getForm("frmcash");
 
@@ -5419,6 +5629,12 @@
             var lblsymbol;
             var inpsymbol;
             var lblinstconf;
+            var lblptmlevy;
+            var inpptmlevy;
+            var optptmexempt;
+            var lblptmexempt;
+            var optptmnotexempt;
+            var lblptmnotexempt;
 
             selectStock("frmproduct", null, false, true, null);
 
@@ -5462,6 +5678,12 @@
             opthedgeno = newoption("opthedgeno", "opthedge", "formcheckbox", frmproduct);
             lblhedgeno = newlabel("lblhedgeno", "No", "", frmproduct);
             addNewLine(frmproduct);
+            lblptmlevy = newlabel("lblptmlevy", "PTM Levy exempt", "formlabel", frmproduct);
+            optptmexempt = newoption("optptmexempt", "optptm", "formcheckbox", frmproduct);
+            lblptmexempt = newlabel("lblptmexempt", "Yes", "", frmproduct);
+            optptmnotexempt = newoption("optptmnotexempt", "optptm", "formcheckbox", frmproduct);
+            lblptmnotexempt = newlabel("lblhedgeno", "No", "", frmproduct);
+            addNewLine(frmproduct);
             btnupdate = newbutton("btnupdate", "Update", "formbutton", frmproduct);
             addNewLine(frmproduct);
             lblinstconf = newlabel("lblinstconf", "", "", frmproduct);
@@ -5487,6 +5709,12 @@
                     inst.hedge = 0;                    
                 }
 
+                if (optptmexempt.checked) {
+                    inst.ptmexempt = 1;
+                } else {
+                    inst.ptmexempt = 0;
+                }
+
                 sockjs.send("{\"instupdate\":" + JSON.stringify(inst) + "}");
             }
 
@@ -5505,6 +5733,8 @@
             var opthedgeyes = document.getElementById("opthedgeyes");
             var opthedgeno = document.getElementById("opthedgeno");
             var lblinstconf = document.getElementById("lblinstconf");
+            var optptmexempt = document.getElementById("optptmexempt");
+            var optptmnotexempt = document.getElementById("optptmnotexempt");
 
             inpsymbol.value = inst.symbol;
             inpdesc.value = inst.description;
@@ -5520,6 +5750,12 @@
                 opthedgeyes.checked = true;
             } else {
                 opthedgeno.checked = true;                
+            }
+
+            if (parseInt(inst.ptmexempt)) {
+                optptmexempt.checked = true;
+            } else {
+                optptmnotexempt.checked = true;                
             }
 
             lblinstconf.innerHTML = "";
@@ -6016,7 +6252,7 @@
 
             var frmhistory = getForm("frmhistory");
 
-            selectClient("frmhistory", null, null, true, "", "inpclientid", "");
+            selectClient("frmhistory", null, null, true, "", "inpclientid", "", true);
 
             var lnkquoterequests = newlink("lnkquoterequests", "Quote Requests", "", frmhistory);
             var lnkquotes = newlink("lnkquotes", "Quotes", "", frmhistory);
