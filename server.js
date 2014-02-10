@@ -34,6 +34,10 @@ var userserverchannel = 2;
 var tradeserverchannel = 3;
 var servertype = "client";
 
+// scripts
+//var scriptgetpositions;
+//var scriptgetaccount;
+
 // redis
 var redishost;
 var redisport;
@@ -166,7 +170,7 @@ function listen() {
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 6) == "order\"") {
         db.publish(tradeserverchannel, msg);
-      } else if (msg.substr(2, 12) == "quoterequest") {
+      } else if (msg.substr(2, 13) == "quoterequest\"") {
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 4) == "chat") {
         db.publish(userserverchannel, msg);
@@ -178,14 +182,28 @@ function listen() {
             orderBookRequest(clientid, obj.orderbookrequest, conn);
           } else if ("orderbookremoverequest" in obj) {
             orderBookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
-          } else if ("register" in obj) {
-            registerClient(obj.register, conn);
+          } else if ("positionrequest" in obj) {
+            positionRequest(obj.positionrequest, clientid, conn);
           } else if ("signin" in obj) {
             signIn(obj.signin);
-          } else if ("positionhistoryrequest" in obj) {
-            positionHistory(clientid, obj.positionhistoryrequest, conn);
+          } else if ("cashrequest" in obj) {
+            cashRequest(obj.cashrequest, clientid, conn);
+          } else if ("accountrequest" in obj) {
+            accountRequest(obj.accountrequest, clientid, conn);
+          } else if ("quoterequesthistoryrequest" in obj) {
+            quoteRequestHistory(obj.quoterequesthistoryrequest, clientid, conn);
+          } else if ("quotehistoryrequest" in obj) {
+            quoteHistory(obj.quotehistoryrequest, clientid, conn);
+          } else if ("tradehistoryrequest" in obj) {
+            tradeHistory(obj.tradehistoryrequest, clientid, conn);
+          } else if ("orderhistoryrequest" in obj) {
+            orderHistory(obj.orderhistoryrequest, clientid, conn);
+          } else if ("cashhistoryrequest" in obj) {
+            cashHistory(obj.cashhistoryrequest, clientid, conn);
           } else if ("index" in obj) {
             sendIndex(clientid, obj.index, conn);
+          } else if ("register" in obj) {
+            registerClient(obj.register, conn);
           } else if ("ping" in obj) {
             conn.write("pong");
           } else {
@@ -1223,11 +1241,11 @@ function start(clientid, conn) {
   sendOrderBooksClient(clientid, conn);
   sendInstruments(clientid, conn);
   sendOrderTypes(conn);
-  sendPositions(clientid, conn);
-  sendOrders(clientid, conn);
-  sendCash(clientid, conn);
-  sendMargins(clientid, conn);
-  sendReserves(clientid, conn);
+  //sendPositions(clientid, conn);
+  //sendOrders(clientid, conn);
+  //sendCash(clientid, conn);
+  //sendMargins(clientid, conn);
+  //sendReserves(clientid, conn);
 
   // may not be last, but...
   sendReadyToTrade(conn);
@@ -1293,7 +1311,6 @@ function registerClient(reg, conn) {
 }
 
 function orderBookRequest(clientid, symbol, conn) {
-  console.log('orderBookRequest');
   db.eval(common.scriptsubscribeinstrument, 3, symbol, clientid, servertype, function(err, ret) {
     if (err) throw err;
 
@@ -1386,12 +1403,68 @@ function orderBookRemoveRequest(clientid, symbol, conn) {
   });
 }
 
-function positionHistory(clientid, symbol, conn) {
+/*function positionHistory(clientid, symbol, conn) {
   // todo: remove
   clientid = 5020;
   symbol = "LOOK";
 
   //bo.getPositionHistory(clientid, symbol);
+}*/
+
+function quoteRequestHistory(req, clientid, conn) {
+  db.eval(common.scriptgetquoterequests, 1, clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"quoterequests\":" + ret + "}");
+  });
+}
+
+function quoteHistory(req, clientid, conn) {
+  db.eval(common.scriptgetquotes, 1, clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"quotes\":" + ret + "}");
+  });
+}
+
+function orderHistory(req, clientid, conn) {
+  db.eval(common.scriptgetorders, 1, clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"orders\":" + ret + "}");
+  });
+}
+
+function tradeHistory(req, clientid, conn) {
+  db.eval(common.scriptgettrades, 1, clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"trades\":" + ret + "}");
+  });
+}
+
+function cashHistory(req, clientid, conn) {
+  db.eval(common.scriptgetcashhistory, 2, clientid, req.currency, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"cashhistory\":" + ret + "}");
+  });  
+}
+
+function positionRequest(posreq, clientid, conn) {
+  db.eval(common.scriptgetpositions, 1, clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"positions\":" + ret + "}");
+  });
+}
+
+function cashRequest(cashreq, clientid, conn) {
+  db.eval(common.scriptgetcash, 1, clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"cash\":" + ret + "}");
+  });  
+}
+
+function accountRequest(acctreq, clientid, conn) {
+  db.eval(common.scriptgetaccount, 1, clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"account\":" + ret + "}");
+  });
 }
 
 function sendQuoteack(quotereqid) {

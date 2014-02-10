@@ -6262,7 +6262,7 @@
             var lnkchat = newlink("lnkchat", "Chat", "", frmhistory);
 
             lnkquoterequests.onclick = function() {
-                if (!validateClientid()) {return;}
+                if (!validateClientid(false)) {return;}
 
                 setSelected(lnkquoterequests);
                 historyrequest.clientid = inpclientid.value;
@@ -6270,7 +6270,7 @@
             }
 
             lnkquotes.onclick = function() {
-                if (!validateClientid()) {return;}
+                if (!validateClientid(false)) {return;}
 
                 setSelected(lnkquotes);
                 historyrequest.clientid = inpclientid.value;
@@ -6278,7 +6278,7 @@
             }
 
             lnkorders.onclick = function() {
-                if (!validateClientid()) {return;}
+                if (!validateClientid(false)) {return;}
 
                 setSelected(lnkorders);
                 historyrequest.clientid = inpclientid.value;
@@ -6286,7 +6286,7 @@
             }
 
             lnktrades.onclick = function() {
-                if (!validateClientid()) {return;}
+                if (!validateClientid(true)) {return;}
 
                 setSelected(lnktrades);
                 historyrequest.clientid = inpclientid.value;
@@ -6294,7 +6294,7 @@
             }
 
             lnkcash.onclick = function() {
-                if (!validateClientid()) {return;}
+                if (!validateClientid(false)) {return;}
 
                 setSelected(lnkcash);
                 historyrequest.clientid = inpclientid.value;
@@ -6303,7 +6303,7 @@
             }
 
             lnkchat.onclick = function() {
-                if (!validateClientid()) {return;}
+                if (!validateClientid(false)) {return;}
 
                 setSelected(lnkchat);
                 historyrequest.clientid = inpclientid.value;
@@ -6322,14 +6322,20 @@
             
             main.appendChild(frmhistory);
 
-            function validateClientid() {
+            function validateClientid(zeroclientidok) {
                 var validclient = true;
 
                 if (inpclientid.value == "") {
                     alert("Please select a client");
                     validclient = false;
                     selectClientFocus("clientboxinput");
-                    return;
+                }
+
+                // only allow "All clients" for trades
+                if (inpclientid.value == "0" && zeroclientidok == false) {
+                    alert("Please select an individual client");
+                    validclient = false;
+                    selectClientFocus("clientboxinput");
                 }
 
                 return validclient;

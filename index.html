@@ -4,6 +4,27 @@
     <title>TG-Online v0.9</title/>
     <script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
     <style>
+        table {
+            font-size: 21px;
+        }
+        table .tr {
+            border-bottom: none;
+        }
+        table .colrightalign {
+            text-align: right;
+       }
+        table .colleftalign {
+            text-align: left;
+        }
+        table .colunderline {
+            text-align: right;
+            border-bottom: 1px solid #000;
+        }
+        table .coldoubleunderline {
+            text-align: right;
+            border-bottom: 1px double #000;
+            text-decoration: underline;
+        }
         .list {
             display: block;
             font-size: 24px;
@@ -530,6 +551,10 @@
         .quantitycashsel {
             font-size: 21px;
         }
+        .linkselected {
+            color: #666666;
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body lang="en">
@@ -537,16 +562,6 @@
         <div id="cw2t" class="cw2t">Thomas Grant & Company</div>
     </div>
     <div id="main">
-    <ul id="list1" class="list">
-    </ul>
-    <ul id="list2" class="list">
-    </ul>
-    <ul id="list3" class="list">
-    </ul>
-    <ul id="list4" class="list">
-    </ul>
-    <ul id="list5" class="list">
-    </ul>
     </div>
 
     <script>
@@ -582,6 +597,9 @@
         var restarttimer;
         var operatortype = 1; // client
         var clientid;
+        var account = {};
+        var quoterequests = {};
+        var cashhistory = {};
 
         var datain = function(msg) {
             try {
@@ -592,7 +610,9 @@
                 } else if ("orderbook" in obj) {
                     updateOrderBook(obj.orderbook);
                 } else if ("orders" in obj) {
+                    clearOrders();
                     loadOrders(obj.orders);
+                    displayOrders();
                 } else if ("ordercancelreject" in obj) {
                     orderCancelReject(obj.ordercancelreject);
                 } else if ("ordertypes" in obj) {
@@ -600,25 +620,46 @@
                 } else if ("order" in obj) {
                     updateOrder(obj.order);
                 } else if ("trades" in obj) {
-                    loadTrades(obj.trades);             
+                    clearTrades();
+                    loadTrades(obj.trades);
+                    displayTrades();
                 } else if ("trade" in obj) {
                     updateTrade(obj.trade);
+                } else if ("quoterequests" in obj) {
+                    console.log('yep');
+                    clearQuoteRequests();
+                    loadQuoteRequests(obj.quoterequests);
+                    displayQuoteRequests();
                 } else if ("quotes" in obj) {
+                    clearQuotes();
                     loadQuotes(obj.quotes);
+                    displayQuotes();
                 } else if ("quoteack" in obj) {
                     quoteAckReceived(obj.quoteack);
                 } else if ("quote" in obj) {
                     quoteReceived(obj.quote);
                 } else if ("positions" in obj) {
+                    clearPositions();
                     loadPositions(obj.positions);
+                    displayPositions();
                 } else if ("position" in obj) {
                     updatePosition(obj.position);            
                 } else if ("positionhistory" in obj) {
-                    positionHistory(obj.positionhistory);            
+                    positionHistory(obj.positionhistory);
                 } else if ("cashitem" in obj) {
                     updateCash(obj.cashitem);
                 } else if ("cash" in obj) {
+                    clearCash();
                     loadCash(obj.cash);
+                    displayCash();
+                } else if ("cashhistory" in obj) {
+                    clearCashHistory();
+                    loadCashHistory(obj.cashhistory);
+                    displayCashHistory();
+                } else if ("account" in obj) {
+                    clearAccount();
+                    loadAccount(obj.account);
+                    displayAccount();
                 } else if ("instruments" in obj) {
                     loadInstruments(obj.instruments);
                 } else if ("instrument" in obj) {
@@ -668,19 +709,15 @@
 
         function loadOrders(orderarr) {
             for (var i = 0; i < orderarr.length; ++i) {
-                updateOrderVol(orderarr[i]);
+                //updateOrderVol(orderarr[i]);
                 orders[orderarr[i].orderid] = orderarr[i];
             }
         }
 
         function loadPositions(positionarr) {
-            var poskey;
-            // todo: remove
-            return;
-
+            console.log(positionarr);
             for (var i = 0; i < positionarr.length; ++i) {
-                poskey = positionarr[i].positionid;
-                positions[poskey] = positionarr[i];
+                positions[positionarr[i].positionid] = positionarr[i];
             }            
         }
 
@@ -727,15 +764,71 @@
             }
 
             loadTimeinforces();                     
-         }
+        }
 
-         function loadTimeinforces() {
+        function loadTimeinforces() {
             timeinforces[0] = "Good For Day";
             timeinforces[1] = "Good Till Date";
             timeinforces[2] = "Good Till Cancelled";
-         }
+        }
 
-         function displayIndex(index) {
+        function loadAccount(acctarr) {
+            for (var i = 0; i < acctarr.length; ++i) {
+                account[acctarr[i].currency] = acctarr[i];
+            }
+        }
+
+        function loadQuoteRequests(quotereqarr) {
+            for (var i = 0; i < quotereqarr.length; ++i) {
+                quoterequests[quotereqarr[i].quotereqid] = quotereqarr[i];
+            }                                    
+        }
+
+        function loadQuotes(quotearr) {
+            for (var i = 0; i < quotearr.length; ++i) {
+                quotes[quotearr[i].quoteid] = quotearr[i];
+            }                                    
+        }
+
+        function loadCashHistory(cashhistarr) {
+            for (var i = 0; i < cashhistarr.length; ++i) {
+                cashhistory[cashhistarr[i].cashtransid] = cashhistarr[i];
+            }            
+        }
+
+        function clearPositions() {
+            positions = [];
+        }
+
+        function clearCash() {
+            cash = [];
+        }
+
+        function clearAccount() {
+            account = [];
+        }
+
+        function clearQuoteRequests() {
+            quoterequests = [];
+        }
+
+        function clearQuotes() {
+            quotes = [];
+        }
+
+        function clearOrders() {
+            orders = [];
+        }
+
+        function clearTrades() {
+            trades = [];
+        }
+
+        function clearCashHistory() {
+            cashhistory = [];
+        }
+
+        function displayIndex(index) {
             var s;
             var sym;
 
@@ -748,12 +841,6 @@
                     addElement(s, list1, sym);
                 }
             }
-         }
-
-        function loadQuotes(quotearr) {
-            for (var i = 0; i < quotearr.length; ++i) {
-                quotes[quotearr[i].quoteid] = quotearr[i];
-            }                                    
         }
 
         function start() {
@@ -923,7 +1010,7 @@
 
         function clearHeadings() {
             for (var i = 0; i < main.childNodes.length; ++i) {
-                if (main.childNodes[i].nodeType == 3) {
+                if (main.childNodes[i].nodeType == Node.TEXT_NODE) {
                     main.removeChild(main.childNodes[i]);
                 }
             }
@@ -939,9 +1026,12 @@
             }
         }
 
-        function clearList(list) {
-            while(list.hasChildNodes()){
-                list.removeChild(list.childNodes[0])
+        function clearList(liststr) {
+            var list = document.getElementById(liststr);
+            if (list != null) {
+                while(list.hasChildNodes()){
+                    list.removeChild(list.childNodes[0])
+                }
             }
         }
 
@@ -1019,23 +1109,49 @@
             clearSelectStockDivs();
             clearAllSymbolDivs();
             clearDivs();
+            clearEmptyLines();
+            clearTables();
         }
 
         function clearLists() {
-            clearList(list1);
-            clearList(list2);
-            clearList(list3);
-            clearList(list4);
-            clearList(list5);
+            clearList("list1");
+            clearList("list2");
+            clearList("list3");
+            clearList("list4");
+            clearList("list5");
         }
 
         function clearForms() {
             clearForm("frmsignin", true);
             clearForm("frminstrument", true);
+            clearForm("frmpositions", true);
+            clearForm("frmhistory", true);
         }
 
         function clearDivs() {
             clearDiv("chatdiv");
+        }
+
+        function clearTable(tablestr) {
+            var tbl = document.getElementById(tablestr);
+            if (tbl != null) {
+                while(tbl.hasChildNodes()){
+                    tbl.removeChild(tbl.childNodes[0])
+                }
+                main.removeChild(tbl);
+            }
+        }
+
+        function clearTables() {
+            clearTable("tblpositions");
+            clearTable("tblaccount");
+            clearTable("tblcashhistory");
+        }
+
+        function clearEmptyLines() {
+            for (var i = 1; i < 6; ++i) {
+                clearElementById("emptyline:" + i);
+            }
         }
 
         function addElement(msg, list, index) {
@@ -1048,6 +1164,11 @@
             list.appendChild(listelem);
 
             return listelem;
+        }
+
+        function formatCurrency(num) {
+            num = isNaN(num) || num === '' || num === null ? 0.00 : num;
+            return parseFloat(num).toFixed(2);
         }
 
         /*function orderCancel(event) {
@@ -1096,6 +1217,30 @@
             var firstordercancelled = true;
             var msg;
             var listelement;
+            var list1;
+            var list2;
+            var list3;
+            var list4;
+            var list5;
+
+            clearLists();
+            clearHeadings();
+            clearEmptyLines();
+            clearTables();
+
+            list1 = getList("list1");
+            var emptyline1 = addNewLine(main);
+            emptyline1.id = "emptyline:1";
+            list2 = getList("list2");
+            var emptyline2 = addNewLine(main);
+            emptyline2.id = "emptyline:2";
+            list3 = getList("list3");
+            var emptyline3 = addNewLine(main);
+            emptyline3.id = "emptyline:3";
+            list4 = getList("list4");
+            var emptyline4 = addNewLine(main);
+            emptyline4.id = "emptyline:4";
+            list5 = getList("list5");
 
             displayOrderHeadings();
 
@@ -1115,7 +1260,6 @@
 
                     msg = orderFillMsg(orders[x]);
                     listelement = addElement(msg, list2, orders[x].orderid);
-                    optionToViewCancel(listelement, true);
                 } else if (orders[x].status == "2") { // filled
                     if (firstorderfilled) {
                         firstorderfilled = false;
@@ -1123,7 +1267,6 @@
 
                     msg = orderFillMsg(orders[x]);
                     listelement = addElement(msg, list3, orders[x].orderid);
-                    optionToViewCancel(listelement, false);
                 } else if (orders[x].status == "8") { // rejected
                     if (firstorderrejected) {
                         firstorderrejected = false;
@@ -1131,7 +1274,6 @@
 
                     msg = orderRejectMsg(orders[x]);
                     listelement = addElement(msg, list4, orders[x].orderid);
-                    optionToViewCancel(listelement, false);
                 } else if (orders[x].status == "4") { // cancelled
                     if (firstordercancelled) {
                         firstordercancelled = false;
@@ -1139,28 +1281,63 @@
 
                     msg = orderCancelMsg(orders[x]);
                     listelement = addElement(msg, list5, orders[x].orderid);
-                    optionToViewCancel(listelement, false);
                 }
             }
 
             if (firstorder) {
-                addElement("No new orders", list1, 0);
+                addElement("No new orders", list1, 0)
             }
 
             if (firstorderpartfilled) {
-                addElement("No part-filled orders", list2, 0);
+                addElement("No part-filled orders", list2, 0)
+            } else {
+                list2.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                
             }
 
             if (firstorderfilled) {
-                addElement("No filled orders", list3, 0);
+                addElement("No filled orders", list3, 0)
+            } else {
+                list3.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                                
             }
 
             if (firstorderrejected) {
-                addElement("No rejected orders", list4, 0);
+                addElement("No rejected orders", list4, 0)
+            } else {
+                list4.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                                
             }
 
             if (firstordercancelled) {
-                addElement("No cancelled orders", list5, 0);
+                addElement("No cancelled orders", list5, 0)
+            } else {
+                list5.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                                
             }
         }
 
@@ -1172,7 +1349,7 @@
             addHeading("Cancelled", list5);
         }
 
-        function displayPositions() {
+        /*function displayPositions() {
             var firstposition = true;
             var msg;
             var poskey;
@@ -1191,6 +1368,273 @@
 
             if (firstposition) {
                 addElement("No positions", list1, "");
+            }
+        }*/
+
+        function displayPositions() {
+            var tblpositions;
+            var tblbody;
+            var posrow;
+            var headingrow;
+            var numcols = 11;
+
+            clearLists();
+            clearEmptyLines();
+            clearHeadings();
+            clearTables();
+
+            var emptyline = addNewLine(main);
+            emptyline.id = "emptyline:" + "1";
+
+            if (Object.keys(positions).length == 0) {
+                var list = getList("list1");
+                addElement("No positions", list, 0);
+                return;
+            }
+
+            tblpositions = document.createElement("table");
+            tblpositions.id = "tblpositions";
+            tblpositions.setAttribute("border", "1");
+
+            tblbody = document.createElement("tbody");
+            tblbody.id = "tblbody";
+
+            tblpositions.appendChild(tblbody);
+            main.appendChild(tblpositions);
+
+            headingrow = document.createElement("tr");
+
+            for (var i = 0; i < numcols; ++i) {
+                var col = document.createElement("td");
+
+                switch (i) {
+                case 0:
+                    col.innerHTML = "Symbol";
+                    break;
+                case 1:
+                    col.innerHTML = "Currency";
+                    break;
+                case 2:
+                    col.innerHTML = "Settl. Date";
+                    break;
+                case 3:
+                    col.innerHTML = "Long/Short";
+                    break;
+                case 4:
+                    col.innerHTML = "Quantity";
+                    col.className = "colrightalign";
+                    break;
+                case 5:
+                    col.innerHTML = "Cost";
+                    col.className = "colrightalign";
+                    break;
+                case 6:
+                    col.innerHTML = "Avg. Cost";
+                    col.className = "colrightalign";
+                    break;
+                case 7:
+                    col.innerHTML = "Margin";
+                    col.className = "colrightalign";
+                    break;
+                case 8:
+                    col.innerHTML = "Realised P&L";
+                    col.className = "colrightalign";
+                    break;
+                case 9:
+                    col.innerHTML = "Market Price";
+                    col.className = "colrightalign";
+                    break;
+                case 10:
+                    col.innerHTML = "Unrealised P&L";
+                    col.className = "colrightalign";
+                    break;
+                default:
+                }
+
+                headingrow.appendChild(col);
+            }
+
+            tblbody.appendChild(headingrow);
+
+            for (var x in positions) {
+                var posrow = document.createElement("tr");
+
+                for (var i = 0; i < numcols; ++i) {
+                    var col = document.createElement("td");
+
+                    switch (i) {
+                    case 0:
+                        col.innerHTML = positions[x].symbol;
+                        break;
+                    case 1:
+                        col.innerHTML = positions[x].currency;
+                        break;
+                    case 2:
+                        col.innerHTML = formatUTCDate(positions[x].settldate);
+                        break;
+                    case 3:
+                        if (positions[x].side == 1) {
+                            col.innerHTML = "Long";
+                            posrow.className = "rowlong";
+                        } else {
+                            col.innerHTML = "Short";                            
+                            posrow.className = "rowshort";
+                        }
+                        break;
+                    case 4:
+                        col.innerHTML = positions[x].quantity;
+                        col.className = "colrightalign";
+                        break;
+                    case 5:
+                        col.innerHTML = positions[x].cost;
+                        col.className = "colrightalign";
+                        break;
+                    case 6:
+                        col.innerHTML = positions[x].averagecostpershare;
+                        col.className = "colrightalign";
+                        break;
+                    case 7:
+                        col.innerHTML = positions[x].margin;
+                        col.className = "colrightalign";
+                        break;
+                    case 8:
+                        col.innerHTML = positions[x].realisedpandl;
+                        col.className = "colrightalign";
+                        break;
+                    case 9:
+                        col.innerHTML = positions[x].mktprice;
+                        col.className = "colrightalign";
+                        break;
+                    case 10:
+                        col.innerHTML = positions[x].unrealisedpandl;
+                        col.className = "colrightalign";
+                        break;
+                    default:
+                    }
+
+                    posrow.appendChild(col);
+                }
+
+                tblbody.appendChild(posrow);
+            }
+        }
+
+        function displayAccount() {
+            var tblaccount;
+            var tblbody;
+            var numrows = 7;
+
+            clearLists();
+            clearEmptyLines();
+            clearHeadings();
+            clearTables();
+
+            var emptyline = addNewLine(main);
+            emptyline.id = "emptyline:" + "1";
+
+            if (Object.keys(account).length == 0) {
+                var list = getList("list1");
+                addElement("No cash or transactions", list, 0);
+                return;
+            }
+
+            tblaccount = document.createElement("table");
+            tblaccount.id = "tblaccount";
+
+            tblbody = document.createElement("tbody");
+            tblbody.id = "tblbody";
+
+            tblaccount.appendChild(tblbody);
+            main.appendChild(tblaccount);
+
+            for (var x in account) {
+                var headingrow = document.createElement("tr");
+
+                var col = document.createElement("td");
+                col.innerHTML = account[x].currency;
+                col.className = "colleftalign";
+
+                headingrow.appendChild(col);
+
+                var emptyrow = document.createElement("tr");
+
+                tblbody.appendChild(headingrow);
+                tblbody.appendChild(emptyrow);
+
+                for (var i = 0; i < numrows; ++i) {
+                    var row = document.createElement("tr");
+                    var col = document.createElement("td");
+                    var colval = document.createElement("td");
+
+                    row.appendChild(col);
+
+                    switch (i) {
+                    case 0:
+                        col.innerHTML = "Cash";
+                        col.className = "colleftalign";
+                        colval.innerHTML = formatCurrency(account[x].cash);
+                        colval.className = "colrightalign";
+                        break;
+                    case 1:
+                        col.innerHTML = "Realised P&L";
+                        col.className = "colleftalign";
+                        colval.innerHTML = formatCurrency(account[x].realisedpandl);
+                        colval.className = "colunderline";
+                        break;
+                    case 2:
+                        col.innerHTML = "Trading Balance";
+                        col.className = "colleftalign";
+                        colval.innerHTML = formatCurrency(account[x].balance);
+                        colval.className = "colrightalign";
+                        var colempty = document.createElement("td");
+                        row.appendChild(colempty);
+                        break;
+                    case 3:
+                        col.innerHTML = "Unrealised P&L";
+                        col.className = "colleftalign";
+                        colval.innerHTML = formatCurrency(account[x].unrealisedpandl);
+                        colval.className = "colunderline";
+                        var colempty = document.createElement("td");
+                        row.appendChild(colempty);
+                        break;
+                    case 4:
+                        col.innerHTML = "Equity";
+                        col.className = "colleftalign";
+                        colval.innerHTML = formatCurrency(account[x].equity);
+                        colval.className = "colrightalign";
+                        var colempty1 = document.createElement("td");
+                        row.appendChild(colempty1);
+                        var colempty2 = document.createElement("td");
+                        row.appendChild(colempty2);
+                        break;
+                    case 5:
+                        col.innerHTML = "Margin";
+                        col.className = "colleftalign";
+                        colval.innerHTML = "(" + formatCurrency(account[x].margin) + ")";
+                        colval.className = "colunderline";
+                        var colempty1 = document.createElement("td");
+                        row.appendChild(colempty1);
+                        var colempty2 = document.createElement("td");
+                        row.appendChild(colempty2);
+                        break;
+                    case 6:
+                        col.innerHTML = "Free Margin";
+                        col.className = "colleftalign";
+                        colval.innerHTML = formatCurrency(account[x].freemargin);
+                        colval.className = "coldoubleunderline";
+                        var colempty1 = document.createElement("td");
+                        row.appendChild(colempty1);
+                        var colempty2 = document.createElement("td");
+                        row.appendChild(colempty2);
+                        var colempty3 = document.createElement("td");
+                        row.appendChild(colempty3);
+                        break;
+                    default:
+                    }
+
+                    row.appendChild(colval);
+                    tblbody.appendChild(row);
+                }
             }
         }
 
@@ -1214,7 +1658,7 @@
             stockboxinput.placeholder = "Enter Symbol";
 
             stockboxinput.onkeyup = function() {
-                clearList(stocklist);
+                clearList(stocklist.id);
 
                 if (stockboxinput.value.length == 0) {
                     stocklist.style.visibility = "hidden";
@@ -1287,6 +1731,14 @@
         function displayTrades() {
             var firsttrade = true;
             var msg;
+            var list;
+
+            clearLists();
+            clearHeadings();
+            clearEmptyLines();
+            clearTables();
+
+            list = getList("list1");
 
             for (var x in trades) {
                 msg = tradeMsg(trades[x]);
@@ -1296,9 +1748,8 @@
 
             if (firsttrade) {
                 addElement("No fills this session", list1, 0);                
-            }
-
-                 list1.onclick = function(e) {
+            } else {
+                list1.onclick = function(e) {
                     var element;
                     
                     if (!e) e = window.event;
@@ -1306,22 +1757,63 @@
 
                     viewTrade(element.value);
                 }
+            }
+        }
+
+        function displayQuoteRequests() {
+            console.log("dqr");
+            var firstquoterequest = true;
+            var msg;
+            var list;
+
+            clearLists();
+            clearHeadings();
+            clearEmptyLines();
+            clearTables();
+
+            list = getList("list1");
+
+            for (var x in quoterequests) {
+                msg = quoteRequestMsg(quoterequests[x]);
+                addElement(msg, list, quoterequests[x].quotereqid);
+                firstquoterequest = false;
+            }
+
+            if (firstquoterequest) {
+                addElement("No quote requests", list, 0);                
+            } else {
+                list.onclick = function(e) {
+                    var element;
+
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewQuoteRequest(element.value);
+                }
+            }
         }
 
         function displayQuotes() {
             var firstquote = true;
             var msg;
 
+            clearLists();
+            clearHeadings();
+            clearEmptyLines();
+            clearTables();
+
+            var list = getList("list1");
+
             for (var x in quotes) {
                 msg = quoteMsg(quotes[x]);
-                addElement(msg, list1, quotes[x].quoteid);
+                addElement(msg, list, quotes[x].quoteid);
                 firstquote = false;
             }
 
             if (firstquote) {
-                addElement("No quotes this session", list1, 0);                
+                addElement("No quotes", list, 0);                
             } else {
-                list1.onclick = function(e) {
+                list.onclick = function(e) {
                     var element;
 
                     if (!e) e = window.event;
@@ -1332,18 +1824,168 @@
             }
         }
 
+        function displayCashHistory() {
+            var tblcashhistory;
+            var tblbody;
+            var posrow;
+            var headingrow;
+            var numcols = 7;
+            var firstrow;
+
+            clearLists();
+            clearEmptyLines();
+            clearHeadings();
+            clearTables();
+
+            if (Object.keys(cashhistory).length == 0) {
+                var list = getList("list1");
+                addElement("No cash transactions", list, 0);
+                return;
+            }
+
+            tblcashhistory = document.createElement("table");
+            tblcashhistory.id = "tblcashhistory";
+            tblcashhistory.setAttribute("border", "1");
+
+            tblbody = document.createElement("tbody");
+            tblbody.id = "tblbody";
+
+            tblcashhistory.appendChild(tblbody);
+            main.appendChild(tblcashhistory);
+
+            headingrow = document.createElement("tr");
+
+            for (var i = 0; i < numcols; ++i) {
+                var col = document.createElement("td");
+
+                switch (i) {
+                case 0:
+                    col.innerHTML = "Datetime";
+                    col.className = "colleftalign";
+                    break;
+                case 1:
+                    col.innerHTML = "Type";
+                    col.className = "colleftalign";
+                    break;
+                case 2:
+                    col.innerHTML = "Description";
+                    col.className = "colleftalign";
+                    break;
+                case 3:
+                    col.innerHTML = "Reference";
+                    col.className = "colleftalign";
+                    break;
+                case 4:
+                    col.innerHTML = "Debit";
+                    col.className = "colrightalign";
+                    break;
+                case 5:
+                    col.innerHTML = "Credit";
+                    col.className = "colrightalign";
+                    break;
+                case 6:
+                    col.innerHTML = "Balance";
+                    col.className = "colrightalign";
+                    break;
+                default:
+                }
+
+                headingrow.appendChild(col);
+            }
+
+            tblbody.appendChild(headingrow);
+
+            firstrow = document.createElement("tr");
+
+            for (var i = 0; i < numcols-1; ++i) {
+                var col = document.createElement("td");
+                if (i == 2) {
+                    col.innerHTML = "Start Balance";
+                } else {
+                    col.innerHTML = "";
+                }
+                firstrow.appendChild(col);
+            }
+
+            var col = document.createElement("td");
+            col.innerHTML = "0.00";
+            col.className = "colrightalign";
+            firstrow.appendChild(col);
+
+            tblbody.appendChild(firstrow);
+
+            for (var x in cashhistory) {
+                var row = document.createElement("tr");
+
+                for (var i = 0; i < numcols; ++i) {
+                    var col = document.createElement("td");
+
+                    switch (i) {
+                    case 0:
+                        col.innerHTML = formatUTCDateTime(cashhistory[x].timestamp);
+                        break;
+                    case 1:
+                        col.innerHTML = cashhistory[x].transtype;
+                        break;
+                    case 2:
+                        col.innerHTML = cashhistory[x].description;
+                        break;
+                    case 3:
+                        col.innerHTML = cashhistory[x].reference;
+                        break;
+                    case 4:
+                        if (cashhistory[x].drcr == 1) {
+                            var amount = formatCurrency(cashhistory[x].amount);
+                            col.innerHTML = amount;
+                        } else {
+                            col.innerHTML = "";                            
+                        }
+                        col.className = "colrightalign";
+                        break;
+                    case 5:
+                        if (cashhistory[x].drcr == 2) {
+                            var amount = formatCurrency(cashhistory[x].amount);                            
+                            col.innerHTML = amount;
+                        } else {
+                            col.innerHTML = "";                            
+                        }
+                        col.className = "colrightalign";
+                        break;
+                    case 6:
+                        var balance = formatCurrency(cashhistory[x].balance);
+                        col.innerHTML = balance;
+                        col.className = "colrightalign";
+                        break;
+                    default:
+                    }
+
+                    row.appendChild(col);
+                }
+
+                tblbody.appendChild(row);
+            }
+        }
+
         function displayCash() {
             var firstCash = true;
 
-            addHeading("Cash", list1);
+            clearLists();
+            clearEmptyLines();
+            clearHeadings();
+            clearTables();
+
+            var emptyline = addNewLine(main);
+            emptyline.id = "emptyline:" + "1";
+
+            var list = getList("list1");
 
             for (var x in cash) {
-                addElement(cashMsg(cash[x]), list1, cash[x].currency);
+                addElement(cashMsg(cash[x]), list, cash[x].currency);
                 firstCash = false;
             }
 
             if (firstCash) {
-                addElement("No cash", list1, "");                
+                addElement("No cash", list, "");                
             }
         }
 
@@ -1385,7 +2027,7 @@
             var msg;
             var listelement;
 
-            updateOrderVol(order);
+            //updateOrderVol(order);
 
             orders[order.orderid] = order;
 
@@ -1559,6 +2201,19 @@
             alert(msg);
         }
 
+        function viewQuoteRequest(quotereqid) {
+            var msg = "";
+            var quoterequest;
+
+            quoterequest = quoterequests[quotereqid];
+
+            for (var field in quoterequest) {
+                msg += field + ": " + quoterequest[field] + "\n";
+            }
+
+            alert(msg);
+        }
+
         function viewQuote(quoteid) {
             var msg = "";
             var quote;
@@ -1668,7 +2323,7 @@
             return desc;
         }
 
-        function updateOrderVol(order) {
+        /*function updateOrderVol(order) {
             var key = order.symbol + order.side + order.price;
  
             if (order.status == "0" || order.status == "1") {
@@ -1686,14 +2341,14 @@
                     ordervol[key] -= parseInt(orders[order.orderid].remquantity);
                 }
             }
-        }
+        }*/
 
-        function requestPositionHistory(event) {
+        /*function requestPositionHistory(event) {
             var element = ((window.event)?(event.srcElement):(event.target));
             var poskey = element.value;
 
             sockjs.send("{\"positionhistoryrequest\":\"" + poskey + "\"}");
-        }
+        }*/
 
         function positionHistory(trades) {
         }
@@ -1734,6 +2389,20 @@
                     break;
                 }
             }
+        }
+
+        function quoteRequestMsg(quoterequest) {
+            var msg;
+
+            if (quoterequest.quantity != "") {
+                msg = quoterequest.quantity;
+            } else {
+                msg = quoterequest.cashorderqty + " (value)";                
+            }
+
+            msg += " " + quoterequest.symbol + " requested in " + quoterequest.settlcurrency + ", T+" + quoterequest.nosettdays + " at " + formatUTCDateTime(quoterequest.timestamp);
+
+            return msg;
         }
 
         function quoteMsg(quote) {
@@ -2086,6 +2755,7 @@
             var newline = document.createElement("label");
             newline.innerHTML = "<br>";
             frm.appendChild(newline);
+            return newline;
         }
 
         function displayChat() {
@@ -3228,6 +3898,41 @@
             addMessageToDiv(msg, "orderdiv:" + symbol, symbol);
         }
 
+        function getForm(id) {
+            var form = document.getElementById(id);
+            if (form == null) {
+                form = document.createElement("form");
+                form.id = id;
+            }
+            return form;  
+        }
+
+        function getList(liststr) {
+            var list = document.getElementById(liststr);
+
+            if (list == null) {
+                list = document.createElement("list");
+                list.className = "list";
+                list.id = liststr;
+            }
+
+            main.appendChild(list);
+
+            return list;
+        }
+
+        function newlink(id, text, classname, form) {
+            var link = document.createElement('a');
+            link.id = id;
+            link.innerHTML = text;
+            link.href = "javascript:void(0);";
+            if (classname != "") {
+                newlink.className = classname;
+            }
+            form.appendChild(link);
+            return link;
+        }
+
         function getSideDesc(side) {
             if (side == '1') {
                 return 'Buy';
@@ -3429,7 +4134,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Watch List", "Quotes", "Orders", "Fills", "Positions", "Cash/Margin", "History", "Settings", "Chat"];
+            menuarr = ["Watch List", "Portfolio", "History", "Settings", "Chat"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -3464,6 +4169,9 @@
                     displayOrderBooks();
                     break;
                 case 1:
+                    requestPortfolio();
+                    break;
+                /*case 1:
                     displayQuotes();
                     break;
                 case 2:
@@ -3479,14 +4187,14 @@
                     displayCash();
                     displayMargins();
                     displayReserves();
-                    break;
-                case 6:
+                    break;*/
+                case 2:
                     requestHistory();
                     break;
-                case 7:
+                case 3:
                     settings();
                     break;
-                case 8:
+                case 4:
                     displayChat();
                     break;
                 }
@@ -3494,11 +4202,124 @@
         }
 
         function displayWaitMsg() {
-            addElement("Loading, please wait...", list1, "");
+            //addElement("Loading, please wait...", list1, "");
         }
 
         function requestHistory() {
-            addElement("Not done yet", list1, "");
+            var historyrequest = {};
+
+            var frmhistory = getForm("frmhistory");
+
+            var lnkquoterequests = newlink("lnkquoterequests", "Quote Requests", "", frmhistory);
+            var lnkquotes = newlink("lnkquotes", "Quotes", "", frmhistory);
+            var lnkorders = newlink("lnkorders", "Orders", "", frmhistory);
+            var lnktrades = newlink("lnktrades", "Trades", "", frmhistory);
+            var lnkcash = newlink("lnkcash", "Cash", "", frmhistory);
+            var lnkchat = newlink("lnkchat", "Chat", "", frmhistory);
+
+            lnkquoterequests.onclick = function() {
+                setSelected(lnkquoterequests);
+                sockjs.send("{\"quoterequesthistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            lnkquotes.onclick = function() {
+                setSelected(lnkquotes);
+                sockjs.send("{\"quotehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            lnkorders.onclick = function() {
+                setSelected(lnkorders);
+                sockjs.send("{\"orderhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            lnktrades.onclick = function() {
+                setSelected(lnktrades);
+                sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            lnkcash.onclick = function() {
+                setSelected(lnkcash);
+                historyrequest.currency = "GBP";
+                sockjs.send("{\"cashhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            lnkchat.onclick = function() {
+                setSelected(lnkchat);
+                sockjs.send("{\"chathistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            addNewLine(frmhistory);
+            addNewLine(frmhistory);
+            
+            main.appendChild(frmhistory);
+
+            function setSelected(link) {
+                lnkquoterequests.className = "";
+                lnkquotes.className = "";
+                lnkorders.className = "";
+                lnktrades.className = "";
+                lnkchat.className = "";
+                lnkcash.className = "";
+
+                link.className = "linkselected";
+            }
+        }
+
+        function requestPortfolio() {
+            var frmpositions = getForm("frmpositions");
+
+            var lnkpositions = newlink("lnkpositions", "Positions", "", frmpositions);
+            var lnkcash = newlink("lnkcash", "Cash", "", frmpositions);
+            //var lnkmargin = newlink("lnkmargin", "Margin", "", frmpositions);
+            //var lnkreserves = newlink("lnkreserves", "Reserves", "", frmpositions);
+            var lnkaccount = newlink("lnkaccount", "Account", "", frmpositions);
+
+            lnkpositions.onclick = function() {
+                var positionrequest = {};
+
+                setSelected(lnkpositions);
+                sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
+            }
+
+            lnkcash.onclick = function() {
+                var cashrequest = {};
+
+                setSelected(lnkcash);
+                sockjs.send("{\"cashrequest\":" + JSON.stringify(cashrequest) + "}");
+            }
+
+            /*lnkmargin.onclick = function() {
+                var marginrequest = {};
+
+                setSelected(lnkmargin);
+                sockjs.send("{\"marginrequest\":" + JSON.stringify(marginrequest) + "}");
+            }
+
+            lnkreserves.onclick = function() {
+                var reservesrequest = {};
+
+                setSelected(lnkreserves);
+                sockjs.send("{\"reservesrequest\":" + JSON.stringify(reservesrequest) + "}");
+            }*/
+
+            lnkaccount.onclick = function() {
+                var accountrequest = {};
+
+                setSelected(lnkaccount);
+                sockjs.send("{\"accountrequest\":" + JSON.stringify(accountrequest) + "}");
+            }
+
+            main.appendChild(frmpositions);
+
+            function setSelected(link) {
+                lnkpositions.className = "";
+                lnkcash.className = "";
+                //lnkmargin.className = "";
+                //lnkreserves.className = "";
+                lnkaccount.className = "";
+
+                link.className = "linkselected";
+            }
         }
 
         function settings () {

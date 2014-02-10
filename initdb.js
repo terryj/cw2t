@@ -86,6 +86,7 @@ function initdb() {
   db.sadd("users", "4");
   db.sadd("users", "5");
   db.sadd("users", "6");
+  db.sadd("users", "7");
 
   // user hash
   db.hmset("user:1", "email", "terry@cw2t.com", "password", "terry", "brokerid", 1, "userid", 1, "name", "Terry Johnston", "marketext", "D");
@@ -94,6 +95,7 @@ function initdb() {
   db.hmset("user:4", "email", "patrick@thomasgrant.co.uk", "password", "patrick", "brokerid", 1, "userid", 4, "name", "Patrick Waldron", "marketext", "D");
   db.hmset("user:5", "email", "sheila@thomasgrant.co.uk", "password", "sheila", "brokerid", 1, "userid", 5, "name", "Sheila", "marketext", "D");
   db.hmset("user:6", "email", "kevin@thomasgrant.co.uk", "password", "kevin", "brokerid", 1, "userid", 6, "name", "Kevin", "marketext", "D");
+  db.hmset("user:7", "email", "louisa@thomasgrant.co.uk", "password", "louisa", "brokerid", 1, "userid", 7, "name", "Louisa", "marketext", "D");
 
   // link between user email & id
   db.set("user:terry@cw2t.com", "1");
@@ -102,6 +104,7 @@ function initdb() {
   db.set("user:patrick@thomasgrant.co.uk", "4");
   db.set("user:sheila@thomasgrant.co.uk", "5");
   db.set("user:kevin@thomasgrant.co.uk", "6");
+  db.set("user:louisa@thomasgrant.co.uk", "7");
 
   // stocks - add international stocks to set of stocks & hash
   /*db.hset("symbol:AMZN", "currency", "USD");

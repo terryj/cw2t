@@ -1799,10 +1799,10 @@ function registerScripts() {
     redis.call("sadd", "order:" .. orderid .. ":trades", tradeid) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
     if totalcost > 0 then \
-      updatecash(clientid, settlcurrency, "TC", totalcost, 1, "trade costs", tradekey, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "TC", totalcost, 1, "trade costs", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
     if tonumber(finance) > 0 then \
-      updatecash(clientid, settlcurrency, "FI", finance, 1, "finance", tradekey, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "FI", finance, 1, "finance", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
     updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, futsettdate, initialmargin) \
     return tradeid \
