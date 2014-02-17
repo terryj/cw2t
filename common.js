@@ -303,7 +303,7 @@ exports.registerCommonScripts = function () {
   local getcash = function(clientid, currency) \
     local cash = redis.call("get", clientid .. ":cash:" .. currency) \
     if not cash then \
-      return 0 \
+      cash = 0 \
     end \
     return cash \
   end \

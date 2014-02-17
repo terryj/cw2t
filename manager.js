@@ -720,14 +720,16 @@ function getSendTrade(tradeid) {
       return;
     }
 
-    db.hget("order:" + trade.orderid, "operatorid", function(err, operatorid) {
+    db.hgetall("order:" + trade.orderid, function(err, order) {
       if (err) {
         console.log(err);
         return;
       }
 
-      if (operatorid in connections) {
-        sendTrade(trade, connections[operatorid]);
+      trade.orderdivnum = order.orderdivnum;
+
+      if (order.operatorid in connections) {
+        sendTrade(trade, connections[order.operatorid]);
       }
     });
   });
@@ -1538,6 +1540,7 @@ function sendQuoteack(quotereqid) {
     if ('text' in quoterequest) {
       quoteack.text = quoterequest.text;
     }
+    quoteack.orderdivnum = quoterequest.orderdivnum;
 
     // send the quote acknowledgement
     if (quoterequest.operatorid in connections) {
@@ -1563,14 +1566,17 @@ function sendQuote(quoteid) {
     quote.noseconds = common.getSeconds(quote.transacttime, quote.validuntiltime);
 
     // send quote to the user who placed the quote request
-    db.hget("quoterequest:" + quote.quotereqid, "operatorid", function(err, operatorid) {
+    db.hgetall("quoterequest:" + quote.quotereqid, function(err, quoterequest) {
       if (err) {
         console.log(err);
         return;
       }
 
-      if (operatorid in connections) {
-        connections[operatorid].write("{\"quote\":" + JSON.stringify(quote) + "}");
+      // add the orderdivnum so the front-end knows which orderdiv
+      quote.orderdivnum = quoterequest.orderdivnum;
+
+      if (quoterequest.operatorid in connections) {
+        connections[quoterequest.operatorid].write("{\"quote\":" + JSON.stringify(quote) + "}");
       }
     });
   });

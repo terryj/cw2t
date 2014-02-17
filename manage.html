@@ -711,6 +711,7 @@
         var showvolume = false;
         var account = {};
         var coheading = "Thomas Grant & Company";
+        var orderdiv = {};
 
         //
         // incoming data function
@@ -1071,11 +1072,13 @@
 
         function updateTrade(trade) {
             var msg;
+            var orderdivstr;
 
             msg = tradeMsg(trade);
 
             if (selectedmenu == 0) {
-                addMessageToDiv(msg, "orderdiv:" + trade.symbol);
+                orderdivstr = "orderdiv:" + trade.symbol + ":" + trade.orderdivnum;
+                addMessageToDiv(msg, orderdivstr);
             } else {
                 addMessageToDiv(msg, "orderdiv");
             }
@@ -1263,6 +1266,7 @@
         function updateOrder(order) {
             var msg;
             var listelement;
+            var orderdivstr;
 
             if (order.status == "0") {
                 msg = "Order acknowledged, id: " + order.orderid;
@@ -1284,7 +1288,8 @@
             }
 
             if (selectedmenu == 0) {
-                addMessageToDiv(msg, "orderdiv:" + order.symbol);
+                orderdivstr = "orderdiv:" + order.symbol + ":" + order.orderdivnum;
+                addMessageToDiv(msg, orderdivstr);
             } else {
                 addMessageToDiv(msg, "orderdiv");
             }
@@ -1560,7 +1565,12 @@
         }
 
         function clearSymbolDiv(symbol) {
-            clearDiv("orderdiv:" + symbol);
+            var orderdivnum = getOrderDivNum(symbol);
+
+            for (var i = 1; i <= orderdivnum; i++) {
+                var orderdivstr = "orderdiv:" + symbol + ":" + i;
+                clearDiv(orderdivstr);
+            }
         }
 
         function clearAllSymbolDivs() {
@@ -3610,6 +3620,7 @@
             var reqquotelnk;
             var placebuyorderlnk;
             var placesellorderlnk;
+            var clearquotelnk;
 
             if (!(symbol in orderbooks)) {
                 return;
@@ -3690,28 +3701,30 @@
                         reqquotelnk.innerHTML = "Request Quote";
                         reqquotelnk.href = "javascript:void(0);";
                         reqquotelnk.onclick = function() {
-                            if (reqquotelnk.innerHTML == "Request Quote") {
-                                requestQuote(symbol);
-                                reqquotelnk.innerHTML = "Clear Quote";
-                            } else {
-                                clearQuote(symbol);
-                                reqquotelnk.innerHTML = "Request Quote";
-                            }
+                            requestQuote(symbol);
+                        }
+
+                        clearquotelnk = document.createElement('a');
+                        clearquotelnk.innerHTML = "Clear Quote";
+                        clearquotelnk.href = "javascript:void(0);";
+                        clearquotelnk.onclick = function() {
+                            clearQuote(symbol);
                         }
 
                         placebuyorderlnk = document.createElement('a');
-                        placebuyorderlnk.innerHTML = "Limit Buy Order";
+                        placebuyorderlnk.innerHTML = "Limit Buy";
                         placebuyorderlnk.href = "javascript:void(0);";
                         placebuyorderlnk.onclick = function() {placeOrder(symbol, '1', 0, 0);}
 
                         placesellorderlnk = document.createElement('a');
-                        placesellorderlnk.innerHTML = "Limit Sell order";
+                        placesellorderlnk.innerHTML = "Limit Sell";
                         placesellorderlnk.href = "javascript:void(0);";
                         placesellorderlnk.onclick = function() {placeOrder(symbol, '2', 0, 0);}
 
                         links = document.createElement('div');
                         links.style.visibility = "hidden";
                         links.appendChild(reqquotelnk);
+                        links.appendChild(clearquotelnk);
                         links.appendChild(placebuyorderlnk);
                         links.appendChild(placesellorderlnk);
 
@@ -3943,6 +3956,30 @@
             main.appendChild(headingstrip);
         }
 
+        function getOrderDivNum(symbol) {
+            var orderdivnum = 0;
+
+            if (symbol in orderdiv) {
+                orderdivnum = orderdiv[symbol];
+            }
+
+            return orderdivnum;
+        }
+
+        function incrOrderDivNum(symbol) {
+            var orderdivnum = 0;
+
+            if (symbol in orderdiv) {
+                orderdivnum = orderdiv[symbol];
+                orderdiv[symbol]++;
+            } else {
+                orderdivnum = 1;
+                orderdiv[symbol] = 1;
+            }
+
+            return orderdivnum;
+        }
+
         function requestQuote(symbol) {
             var quotereqbutton;
             var quotereqqty;
@@ -3961,15 +3998,30 @@
             var orderdivstr;
             var quotereqqtystr;
             var inpclientidstr;
+            var orderdivnum;
+            var orderdivid;
 
-            clearSymbolDiv(symbol);
-            orderdivstr = "orderdiv:" + symbol;
-            orderdiv = getDiv("orderdiv:" + symbol, symbol);
-            inpclientidstr = "inpclientid:" + symbol;
-            quotereqqtystr = "quotereqquantity:" + symbol;
-            focusfldstr = "clientboxinput:" + symbol;
+            // get the order div. number for this symbol as there may be more than one
+            orderdivnum = incrOrderDivNum(symbol);
 
-            selectClient("orderdiv", orderdiv, symbol, true, null, inpclientidstr, quotereqqtystr, false);
+            orderdivstr = "orderdiv:" + symbol + ":" + orderdivnum;
+            orderdiv = getDiv("orderdiv:" + symbol + ":" + orderdivnum, symbol);
+            inpclientidstr = "inpclientid:" + symbol + ":" + orderdivnum;
+            quotereqqtystr = "quotereqquantity:" + symbol + ":" + orderdivnum;
+            focusfldstr = "clientboxinput:" + symbol + ":" + orderdivnum;
+
+            selectClient("orderdiv", orderdiv, symbol+":"+orderdivnum, true, null, inpclientidstr, quotereqqtystr, false);
+
+            // remember the orderdiv number
+            orderdivid = document.createElement("input");
+            orderdivid.type = "hidden";
+            orderdivid.id = orderdivstr;
+            orderdivid.value = orderdivnum;
+
+            // remember the client
+            inpclientid = document.createElement("input");
+            inpclientid.type = "hidden";
+            inpclientid.id = inpclientidstr;
 
             quotereqqty = document.createElement("input");
             quotereqqty.className = "quotereqquantity";
@@ -3982,12 +4034,8 @@
                 }
             }
 
-            inpclientid = document.createElement("input");
-            inpclientid.type = "hidden";
-            inpclientid.id = inpclientidstr;
-
             quantitycashsel = document.createElement("select");
-            quantitycashsel.id = "quantitycashsel:" + symbol;
+            quantitycashsel.id = "quantitycashsel:" + symbol + ":" + orderdivnum;
 
             quantitycashsel[0] = new Option("Number of shares", 1, true, true);
             quantitycashsel[1] = new Option("Cash amount", 2, false, false);
@@ -4063,7 +4111,7 @@
                         quantity = "";                        
                     }
 
-                    sendRequestQuote(inpclientid.value, symbol, quantity, cashorderqty, instruments[symbol].currency, currencysel[currencysel.selectedIndex].value, settlperiod[settlperiod.selectedIndex].value, orderdivstr);
+                    sendRequestQuote(inpclientid.value, symbol, quantity, cashorderqty, instruments[symbol].currency, currencysel[currencysel.selectedIndex].value, settlperiod[settlperiod.selectedIndex].value, orderdivnum);
 
                     disable();
                 } else {
@@ -4141,10 +4189,11 @@
             return div;
         }
 
-        function sendRequestQuote(clientid, symbol, quantity, cashorderqty, currency, settlcurrency, nosettdays, orderdivstr) {
+        function sendRequestQuote(clientid, symbol, quantity, cashorderqty, currency, settlcurrency, nosettdays, orderdivnum) {
             var quotereq = {};
             var orderdiv;
             var msg;
+            var orderdivstr;
 
             quotereq.clientid = clientid;
             quotereq.quantity = quantity;
@@ -4155,6 +4204,7 @@
             quotereq.nosettdays = nosettdays;
             quotereq.operatortype = operatortype;
             quotereq.operatorid = userid;
+            quotereq.orderdivnum = orderdivnum;
 
             sockjs.send("{\"quoterequest\":" + JSON.stringify(quotereq) + "}");
 
@@ -4171,6 +4221,7 @@
                 msg += " in " + settlcurrency;
             }
 
+            orderdivstr = "orderdiv:" + symbol + ":" + orderdivnum;
             addMessageToDiv(msg, orderdivstr);
         }
 
@@ -4216,13 +4267,17 @@
         }
 
         function quoteAckReceived(quoteack) {
+            var orderdivstr;
+            var msg;
+
             msg = " Quote request rejected, reason: " + quoteack.quoterejectreasondesc;
             if ('text' in quoteack && quoteack.text != "") {
                 msg += ", " + quoteack.text;
             }
 
             if (selectedmenu == 0) {
-                addMessageToDiv(msg, "orderdiv:" + quoteack.symbol);
+                orderdivstr = "orderdiv:" + quoteack.symbol + ":" + quoteack.orderdivnum;
+                addMessageToDiv(msg, orderdivstr);
             } else {
                 addMessageToDiv(msg, "orderdiv");
             }
@@ -4239,6 +4294,7 @@
             var msg;
             var sellmsg;
             var buymsg;
+            var orderdivstr;
 
             quotes[quote.quoteid] = quote;
 
@@ -4277,7 +4333,7 @@
             sellbutton.value = sellmsg;
 
             sellbutton.onclick = function() {
-                sendOrder(quote.clientid, quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
+                sendOrder(quote.clientid, quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", quote.orderdivnum);
                 disable();
             }
 
@@ -4287,7 +4343,7 @@
             buybutton.value = buymsg;
 
             buybutton.onclick = function() {
-                sendOrder(quote.clientid, quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
+                sendOrder(quote.clientid, quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", quote.orderdivnum);
                 disable();
             }
 
@@ -4310,7 +4366,8 @@
             // todo: clear if form is closed
 
             if (selectedmenu == 0) {
-                orderdiv = getDiv("orderdiv:" + quote.symbol, quote.symbol);
+                orderdivstr = "orderdiv:" + quote.symbol + ":" + quote.orderdivnum;
+                orderdiv = getDiv(orderdivstr, quote.symbol);
             } else {
                 orderdiv = getDiv("orderdiv", null);                
             }
@@ -4661,9 +4718,10 @@
             }
         }
 
-        function sendOrder(clientid, symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
+        function sendOrder(clientid, symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime, orderdivnum) {
             var neworder = {};
             var msg;
+            var orderdivstr;
 
             neworder.clientid = clientid;
             neworder.side = side;
@@ -4684,7 +4742,8 @@
             neworder.expiredate = expiredate;
             neworder.expiretime = expiretime;
             neworder.operatortype = operatortype;
-            neworder.operatorid = userid;            
+            neworder.operatorid = userid;
+            neworder.orderdivnum = orderdivnum;
 
             sockjs.send("{\"order\":" + JSON.stringify(neworder) + "}");
 
@@ -4708,7 +4767,8 @@
                 msg += ", quote id " + quoteid;
             }
 
-            addMessageToDiv(msg, "orderdiv");
+            orderdivstr = "orderdiv:" + symbol + ":" + orderdivnum;
+            addMessageToDiv(msg, orderdivstr);
         }
 
         function getSideDesc(side) {
