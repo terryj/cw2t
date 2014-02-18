@@ -89,7 +89,7 @@ class Cw2tSubscriber extends JedisPubSub {
         //tvm.put( ISDictionary.T_SYMBOL, BaseValue.value( "sym_" + topics[i] ));
         //tvm.put(ISDictionary.T_TYPE, BaseValue.value("DE"));
         
-        // to generate a message, use i.e. 'publish proquote instrument' on a Redis connection
+        // to generate a message, use i.e. 'publish proquote ***' on a Redis connection
         if (message.equals("instrument")) {
             // request a product list for specified market
             tvm.put(ISDictionary.T_MARKET, BaseValue.value("L"));
@@ -210,7 +210,7 @@ public class Cw2tClient implements ISessionObserver {
         System.out.println("Starting Jedis");
         
         // get a connection pool
-        jedispool = new JedisPool(new JedisPoolConfig(), "localhost");
+        jedispool = new JedisPool(new JedisPoolConfig(), "localhost", 6379, 0);
         
         // connection for subscribing
         jedissubscriber = jedispool.getResource();
