@@ -1571,6 +1571,8 @@
                 var orderdivstr = "orderdiv:" + symbol + ":" + i;
                 clearDiv(orderdivstr);
             }
+
+            delete orderdiv[symbol];
         }
 
         function clearAllSymbolDivs() {
@@ -3708,7 +3710,7 @@
                         clearquotelnk.innerHTML = "Clear Quote";
                         clearquotelnk.href = "javascript:void(0);";
                         clearquotelnk.onclick = function() {
-                            clearQuote(symbol);
+                            clearSymbolDiv(symbol);
                         }
 
                         placebuyorderlnk = document.createElement('a');
@@ -3970,8 +3972,8 @@
             var orderdivnum = 0;
 
             if (symbol in orderdiv) {
-                orderdivnum = orderdiv[symbol];
                 orderdiv[symbol]++;
+                orderdivnum = orderdiv[symbol];
             } else {
                 orderdivnum = 1;
                 orderdiv[symbol] = 1;
@@ -3999,7 +4001,6 @@
             var quotereqqtystr;
             var inpclientidstr;
             var orderdivnum;
-            var orderdivid;
 
             // get the order div. number for this symbol as there may be more than one
             orderdivnum = incrOrderDivNum(symbol);
@@ -4011,12 +4012,6 @@
             focusfldstr = "clientboxinput:" + symbol + ":" + orderdivnum;
 
             selectClient("orderdiv", orderdiv, symbol+":"+orderdivnum, true, null, inpclientidstr, quotereqqtystr, false);
-
-            // remember the orderdiv number
-            orderdivid = document.createElement("input");
-            orderdivid.type = "hidden";
-            orderdivid.id = orderdivstr;
-            orderdivid.value = orderdivnum;
 
             // remember the client
             inpclientid = document.createElement("input");
@@ -4124,10 +4119,6 @@
                 quotereqqty.disabled = true;
                 quotereqqty.onkeypress = null;
             }
-        }
-
-        function clearQuote(symbol) {
-            clearSymbolDiv(symbol);
         }
 
         function getQuantityDesc(qtyval) {

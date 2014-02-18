@@ -271,8 +271,6 @@ function newOrder(order) {
   db.eval(scriptneworder, 24, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, order.orderdivnum, function(err, ret) {
     if (err) throw err;
 
-    console.log(ret);
-
     // credit check failed
     if (ret[0] == 0) {
       db.publish(order.operatortype, "order:" + ret[1]);
