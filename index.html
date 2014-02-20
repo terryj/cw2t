@@ -59,7 +59,8 @@
         }
         .yellowstrip {
             background-color: yellow;
-            width: 740px;
+            /*width: 740px;*/
+            width: 460px;
             white-space: nowrap;
             margin: 3px;
         }
@@ -95,7 +96,8 @@
             margin: 3px;
         }
         .headingstrip {
-            width: 740px;
+            /*width: 740px;*/
+            width: 460px;
             white-space: nowrap;
             margin: 3px;
         }
@@ -496,6 +498,14 @@
             color: red;
             cursor: pointer;
         }
+        .refreshbutton {
+            height: 24px;
+            /*width: 120px;*/
+            font-size: 21px;
+            background-color: #C0C0C0;
+            color: gray;
+            cursor: pointer;
+        }
         .quotereqquantity {
             font-size: 21px;
             margin-left: 3px;
@@ -600,6 +610,7 @@
         var account = {};
         var quoterequests = {};
         var cashhistory = {};
+        var showvolume = false;
 
         var datain = function(msg) {
             try {
@@ -2884,8 +2895,12 @@
                     strip.onmouseout = function() {
                         links.style.visibility = "hidden";
                     }
-                    level2 = document.createElement('span');
-                    level2.className = "level2";
+
+                    if (showvolume) {
+                        level2 = document.createElement('span');
+                        level2.className = "level2";
+                    }
+
                     stock = document.createElement('span');
                     stock.className = "stock";
                     bidprice = document.createElement('span');
@@ -2896,16 +2911,20 @@
                     offerprice.id = "offerprice:" + symbol + ":" + y;
                     offerprice.title = "Place a new buy order";
                     offerprice.onclick = function() {setOrderPrice(this, "1", symbol);}
-                    bidquantity = document.createElement('span');
-                    bidquantity.className = "bidquantity";
-                    bidquantity.id = "bidquantity:" + symbol + ":" + y;
-                    bidquantity.title = "Place a new sell order";
-                    bidquantity.onclick = function() {setOrderQuantity(this, "2", symbol);}
-                    offerquantity = document.createElement('span');
-                    offerquantity.className = "offerquantity";
-                    offerquantity.id = "offerquantity:" + symbol + ":" + y;
-                    offerquantity.title = "Place a new buy order";
-                    offerquantity.onclick = function() {setOrderQuantity(this, "1", symbol);}
+
+                    if (showvolume) {
+                        bidquantity = document.createElement('span');
+                        bidquantity.className = "bidquantity";
+                        bidquantity.id = "bidquantity:" + symbol + ":" + y;
+                        bidquantity.title = "Place a new sell order";
+                        bidquantity.onclick = function() {setOrderQuantity(this, "2", symbol);}
+                        offerquantity = document.createElement('span');
+                        offerquantity.className = "offerquantity";
+                        offerquantity.id = "offerquantity:" + symbol + ":" + y;
+                        offerquantity.title = "Place a new buy order";
+                        offerquantity.onclick = function() {setOrderQuantity(this, "1", symbol);}
+                    }
+
                     slash = document.createElement('span');
                     slash.className = "slash";
                     slash.innerHTML = "/";
@@ -2936,18 +2955,20 @@
                         links.appendChild(placebuyorderlnk);
                         links.appendChild(placesellorderlnk);
 
-                        level2.onclick = function() {
-                            clearAllStrips(symbol);
-                            obdisplay[symbol].level2 = !obdisplay[symbol].level2;
-                            displayOrderBook(symbol);
-                        }
+                        if (showvolume) {
+                            level2.onclick = function() {
+                                clearAllStrips(symbol);
+                                obdisplay[symbol].level2 = !obdisplay[symbol].level2;
+                                displayOrderBook(symbol);
+                            }
 
-                        if (obdisplay[symbol].level2) {
-                            level2.title = "hide depth";
-                            level2.innerHTML = "-";
-                        } else {
-                            level2.title = "show depth";
-                            level2.innerHTML = "+";
+                            if (obdisplay[symbol].level2) {
+                                level2.title = "hide depth";
+                                level2.innerHTML = "-";
+                            } else {
+                                level2.title = "show depth";
+                                level2.innerHTML = "+";
+                            }
                         }
 
                         stock.innerHTML = symbol;
@@ -2972,13 +2993,19 @@
                         strip.className = "depthstrip";
                     }
 
-                    strip.appendChild(level2);
+                    if (showvolume) {
+                        strip.appendChild(level2);
+                    }
                     strip.appendChild(stock);
-                    strip.appendChild(bidquantity);
+                    if (showvolume) {
+                        strip.appendChild(bidquantity);
+                    }
                     strip.appendChild(bidprice);
                     strip.appendChild(slash);
                     strip.appendChild(offerprice);
-                    strip.appendChild(offerquantity);
+                    if (showvolume) {
+                        strip.appendChild(offerquantity);
+                    }
                     strip.appendChild(removestock);
 
                     if (y == 0) {
@@ -3000,10 +3027,12 @@
                 priceChange(symbol, y, bidprice, offerprice);
 
                 bidprice.innerHTML = orderbooks[symbol][y].bid;
-                offerprice.innerHTML = orderbooks[symbol][y].offer;                    
+                offerprice.innerHTML = orderbooks[symbol][y].offer;
 
-                bidquantity.innerHTML = orderbooks[symbol][y].bidsize;
-                offerquantity.innerHTML = orderbooks[symbol][y].offersize;
+                if (showvolume) {
+                    bidquantity.innerHTML = orderbooks[symbol][y].bidsize;
+                    offerquantity.innerHTML = orderbooks[symbol][y].offersize;
+                }
 
                 if (!obdisplay[symbol].level2) {break;}
             }
@@ -3111,34 +3140,46 @@
             headingstrip = document.createElement('div');
             headingstrip.id = "headingstrip";
             headingstrip.className = "headingstrip";
-            headinglevel2 = document.createElement('span');
-            headinglevel2.className = "level2heading";
+            if (showvolume) {
+                headinglevel2 = document.createElement('span');
+                headinglevel2.className = "level2heading";
+            }
             headingstock = document.createElement('span');
             headingstock.innerHTML = "Stock";
             headingstock.className = "stockheading";
-            headingbidquantity = document.createElement('span');
-            headingbidquantity.innerHTML = "Bid Vol";
-            headingbidquantity.className = "bidquantityheading";
+            if (showvolume) {
+                headingbidquantity = document.createElement('span');
+                headingbidquantity.innerHTML = "Bid Vol";
+                headingbidquantity.className = "bidquantityheading";
+            }
             headingbidprice = document.createElement('span');
             headingbidprice.innerHTML = "Bid Price";
             headingbidprice.className = "bidheading";
             headingofferprice = document.createElement('span');
             headingofferprice.innerHTML = "Offer Price";
             headingofferprice.className = "offerheading";
-            headingofferquantity = document.createElement('span');
-            headingofferquantity.innerHTML = "Offer Vol";
-            headingofferquantity.className = "offerquantityheading"
+            if (showvolume) {
+                headingofferquantity = document.createElement('span');
+                headingofferquantity.innerHTML = "Offer Vol";
+                headingofferquantity.className = "offerquantityheading";
+            }
             headingslash = document.createElement('span');
             headingslash.innerHTML = "/";
             headingslash.className = "slashheading";
 
-            headingstrip.appendChild(headinglevel2);
+            if (showvolume) {
+                headingstrip.appendChild(headinglevel2);
+            }
             headingstrip.appendChild(headingstock);
-            headingstrip.appendChild(headingbidquantity);
+            if (showvolume) {
+                headingstrip.appendChild(headingbidquantity);
+            }
             headingstrip.appendChild(headingbidprice);
             headingstrip.appendChild(headingslash);
             headingstrip.appendChild(headingofferprice);
-            headingstrip.appendChild(headingofferquantity);
+            if (showvolume) {
+                headingstrip.appendChild(headingofferquantity);
+            }
 
             main.appendChild(headingstrip);
         }
@@ -3432,6 +3473,8 @@
             var buymsg;
             var positionopenclose = 1;
             var positioncloseid = "";
+            var refreshbutton;
+            var clearbutton;
 
             quotes[quote.quoteid] = quote;
 
@@ -3486,6 +3529,25 @@
                 disable();
             }
 
+            refreshbutton = document.createElement("input");
+            refreshbutton.type = "button";
+            refreshbutton.className = "refreshbutton";
+            refreshbutton.value = "Refresh Quote";
+
+            refreshbutton.onclick = function() {
+                sendRequestQuote(quote.symbol, quote.bidquantity, "", instruments[quote.symbol].currency, quote.settlcurrency, quote.nosettdays);
+                disable();
+            }
+
+            clearbutton = document.createElement("input");
+            clearbutton.type = "button";
+            clearbutton.className = "refreshbutton";
+            clearbutton.value = "Clear Quote";
+
+            clearbutton.onclick = function() {
+                clearSymbolDiv(quote.symbol);
+            }
+
             numsecsremaining = parseInt(quote.noseconds);
 
             timerlabel = document.createElement("label");
@@ -3509,6 +3571,9 @@
             orderdiv.appendChild(sellbutton);
             orderdiv.appendChild(timerlabel);
             orderdiv.appendChild(buybutton);
+            addNewLine(orderdiv);
+            orderdiv.appendChild(refreshbutton);
+            orderdiv.appendChild(clearbutton);
 
             function disable() {
                 clearInterval(timer);
@@ -3516,6 +3581,8 @@
                 buybutton.style.cursor = 'default';
                 sellbutton.disabled = true;
                 sellbutton.style.cursor = 'default';
+                refreshbutton.disabled = true;
+                refreshbutton.style.cursor = 'default';
             }
         }
 

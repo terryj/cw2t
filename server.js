@@ -295,8 +295,6 @@ function unsubscribeConnection(id) {
   db.eval(common.scriptunsubscribeid, 2, id, servertype, function(err, ret) {
     if (err) throw err;
 
-    console.log(ret);
-
     // unsubscribe returned topics
     for (var i = 0; i < ret.length; i++) {
       dbsub.unsubscribe(ret[i]);
@@ -1314,8 +1312,6 @@ function orderBookRequest(clientid, symbol, conn) {
   db.eval(common.scriptsubscribeinstrument, 3, symbol, clientid, servertype, function(err, ret) {
     if (err) throw err;
 
-    console.log(ret);
-
     // the script tells us if we need to subscribe to a topic
     if (ret[0]) {
       dbsub.subscribe(ret[1]);
@@ -1393,8 +1389,6 @@ function sendCurrentOrderBook(symbol, topic, conn) {
 function orderBookRemoveRequest(clientid, symbol, conn) {
   db.eval(common.scriptunsubscribeinstrument, 3, symbol, clientid, servertype, function(err, ret) {
     if (err) throw err;
-
-    console.log(ret);
 
     // the script will tell us if we need to unsubscribe from the topic
     if (ret[0]) {
@@ -1530,8 +1524,6 @@ function sendQuote(quoteid) {
 // this is chat received from a user that needs to be forwarded to a client
 //
 function newChat(chat) {
-  console.log(chat);
-
   // we need to parse the message to find out which client to forward it to
   try {
     var chatobj = JSON.parse(chat);
