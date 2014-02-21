@@ -1319,6 +1319,7 @@ function sendOrderBook(symbol, level1arr, send, conn) {
 //
 function sendOrderBooks(userid, conn) {
   // get all the instruments in the order book for this user
+  // todo: script?
   db.smembers("user:" + userid + ":orderbooks", function(err, instruments) {
     if (err) {
       console.log("Error in sendOrderBooks:" + err);

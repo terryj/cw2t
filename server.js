@@ -1042,7 +1042,8 @@ function sendOrderBook(symbol, level1arr, send, conn) {
 //
 function sendOrderBooksClient(clientid, conn) {
   // get all the instruments in the order book for this client
-  db.smembers(clientid + ":orderbooks", function(err, instruments) {
+  // todo: script?
+  db.smembers("client:" + clientid + ":orderbooks", function(err, instruments) {
     if (err) {
       console.log("Error in sendOrderBooksClient:" + err);
       return;

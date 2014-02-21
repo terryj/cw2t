@@ -611,6 +611,7 @@
         var quoterequests = {};
         var cashhistory = {};
         var showvolume = false;
+        var quotetimer;
 
         var datain = function(msg) {
             try {
@@ -3465,7 +3466,6 @@
             var sellbutton;
             var timerlabel;
             var numsecsremaining;
-            var timer;
             var timertext = "Seconds Remaining";
             var orderdiv;
             var msg;
@@ -3545,6 +3545,7 @@
             clearbutton.value = "Clear Quote";
 
             clearbutton.onclick = function() {
+                clearQuoteTimer();
                 clearSymbolDiv(quote.symbol);
             }
 
@@ -3555,7 +3556,7 @@
             timerlabel.className = "timerlabel";
 
             numsecsremaining = parseInt(quote.noseconds);
-            timer = setInterval(function() {
+            quotetimer = setInterval(function() {
                 numsecsremaining -= 1;
                 if (numsecsremaining == 0) {
                     disable();
@@ -3564,7 +3565,6 @@
                     timerlabel.innerHTML = numsecsremaining + " " + timertext;
                 }
             }, 1000);
-            // todo: clear if form is closed
 
             orderdiv = getDiv("orderdiv:" + quote.symbol, quote.symbol);
 
@@ -3576,7 +3576,7 @@
             orderdiv.appendChild(clearbutton);
 
             function disable() {
-                clearInterval(timer);
+                clearQuoteTimer();
                 buybutton.disabled = true;
                 buybutton.style.cursor = 'default';
                 sellbutton.disabled = true;
@@ -3584,6 +3584,10 @@
                 refreshbutton.disabled = true;
                 refreshbutton.style.cursor = 'default';
             }
+        }
+
+        function clearQuoteTimer() {
+            clearInterval(quotetimer);
         }
 
         function placeOrder(symbol, side, quantity, price) {
@@ -4223,6 +4227,7 @@
                 element = e.target || e.srcElement;
 
                 clearScreen();
+                clearQuoteTimer();
 
                 element.className = "menuitemselected";
                 if (lastElement != null) {
