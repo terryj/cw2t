@@ -553,7 +553,7 @@ exports.registerCommonScripts = function () {
 
   //
   // pass client id
-  //
+  // todo: need to guarantee order
   exports.scriptgetcashhistory = '\
   local tblresults = {} \
   local cashhistory = redis.call("smembers", KEYS[1] .. ":cashtrans") \

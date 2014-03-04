@@ -10,8 +10,8 @@
 ****************/
 
 // node libraries
-var http = require('http');
-var net = require('net');
+var https = require('https');
+var fs = require("fs");
 
 // external libraries
 var sockjs = require('sockjs');
@@ -33,10 +33,6 @@ var clientserverchannel = 1;
 var userserverchannel = 2;
 var tradeserverchannel = 3;
 var servertype = "client";
-
-// scripts
-//var scriptgetpositions;
-//var scriptgetaccount;
 
 // redis
 var redishost;
@@ -132,16 +128,26 @@ function pubsub() {
 var sockjs_opts = {sockjs_url: "http://cdn.sockjs.org/sockjs-0.3.min.js"};
 var sockjs_svr = sockjs.createServer(sockjs_opts);
 
-// ssl
-/*var options = {
-  key: fs.readFileSync('ssl.key'),
-  cert: fs.readFileSync('ssl.crt')
-};
-var server = http.createServer();*/
+//
+// ssl - how to generate a self-signed certificate
+//
+// openssl genrsa -out key.pem
+// openssl req -new -key key.pem -out csr.pem
+// openssl x509 -req -days 9999 -in csr.pem -signkey key.pem -out cert.pem
+// rm csr.pem
+//
+// connection from browser...https://localhost:8080
+//
 
-// http server
+// options for https server
+var options = {
+  key: fs.readFileSync('key.pem'),
+  cert: fs.readFileSync('cert.pem')
+};
+
+// https server
 function listen() {
-  var server = http.createServer();
+  var server = https.createServer(options);
 
   server.addListener('request', function(req, res) {
     static_directory.serve(req, res);
