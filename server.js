@@ -24,7 +24,7 @@ var common = require('./common.js');
 // globals
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
-var cw2tport = 8080; // client listen port
+var cw2tport = 443; // client listen port
 var outofhours = false; // in or out of market hours - todo: replace with markettype?
 var ordertypes = {};
 var orgid = "1"; // todo: via logon
@@ -128,17 +128,6 @@ function pubsub() {
 var sockjs_opts = {sockjs_url: "http://cdn.sockjs.org/sockjs-0.3.min.js"};
 var sockjs_svr = sockjs.createServer(sockjs_opts);
 
-//
-// ssl - how to generate a self-signed certificate
-//
-// openssl genrsa -out key.pem
-// openssl req -new -key key.pem -out csr.pem
-// openssl x509 -req -days 9999 -in csr.pem -signkey key.pem -out cert.pem
-// rm csr.pem
-//
-// connection from browser...https://localhost:8080
-//
-
 // options for https server
 var options = {
   key: fs.readFileSync('key.pem'),
@@ -158,8 +147,10 @@ function listen() {
 
   sockjs_svr.installHandlers(server, {prefix:'/echo'});
 
-  server.listen(cw2tport, '0.0.0.0');
-  console.log('Listening on port ' + cw2tport);
+  //server.listen(cw2tport, '0.0.0.0');
+  server.listen(cw2tport, function() {
+    console.log('Listening on port ' + cw2tport);
+  });
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a client logs on
