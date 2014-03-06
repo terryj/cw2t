@@ -147,7 +147,6 @@ function listen() {
 
   sockjs_svr.installHandlers(server, {prefix:'/echo'});
 
-  //server.listen(cw2tport, '0.0.0.0');
   server.listen(cw2tport, function() {
     console.log('Listening on port ' + cw2tport);
   });
@@ -159,7 +158,6 @@ function listen() {
     console.log('new connection');
 
     // data callback
-    // todo: multiple messages in one data event
     conn.on('data', function(msg) {
       console.log('recd:' + msg);
 
@@ -199,6 +197,8 @@ function listen() {
             cashHistory(obj.cashhistoryrequest, clientid, conn);
           } else if ("index" in obj) {
             sendIndex(clientid, obj.index, conn);
+          } else if ("pwdrequest" in obj) {
+            passwordRequest(clientid, obj.pwdrequest, conn);
           } else if ("register" in obj) {
             registerClient(obj.register, conn);
           } else if ("ping" in obj) {
@@ -1457,6 +1457,10 @@ function accountRequest(acctreq, clientid, conn) {
     if (err) throw err;
     conn.write("{\"account\":" + ret + "}");
   });
+}
+
+function passwordRequest(clientid, obj.pwdrequest, conn) {
+
 }
 
 function sendQuoteack(quotereqid) {

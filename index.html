@@ -565,6 +565,28 @@
             color: #666666;
             text-decoration: underline;
         }
+        .formlabel {
+            display: inline-block;
+            width: 150px;
+            font-size: 21px;
+            text-align: right;
+            color: gray;
+        }
+        .forminput {
+            display: inline-block;
+            font-size: 18px;
+            border: solid 1px #aacfe4;
+            width: 450px;
+            margin: 2px 0 15px 10px;
+        }​
+        .formbutton {
+            border-style: none;
+            background-color: #C0C0C0;
+            font-size: 15px;
+            cursor: pointer;
+            height: 24px;
+            width: 80px;
+        }
     </style>
 </head>
 <body lang="en">
@@ -1138,6 +1160,8 @@
             clearForm("frminstrument", true);
             clearForm("frmpositions", true);
             clearForm("frmhistory", true);
+            clearForm("frmsettings", true);
+            clearForm("frmpassword", true);
         }
 
         function clearDivs() {
@@ -3992,6 +4016,32 @@
             return list;
         }
 
+        function newlabel(id, text, classname, form) {
+            var label = document.createElement("label");
+            label.id = id;
+            if (classname != "") {
+                label.className = classname;
+            }
+            label.innerHTML = text;
+            if (form != null) {
+                form.appendChild(label);
+            }
+            return label;    
+        }
+
+        function newinput(id, classname, form, disabled) {
+            var input = document.createElement("input");
+            input.id = id;
+            if (classname != "") {
+                input.className = classname;
+            }
+            if (disabled) {
+                input.disabled = true;
+            }
+            form.appendChild(input);   
+            return input;
+        }
+
         function newlink(id, text, classname, form) {
             var link = document.createElement('a');
             link.id = id;
@@ -4394,8 +4444,48 @@
             }
         }
 
-        function settings () {
-            addElement("Real soon now", list1, "");
+        function settings() {
+            var frmsettings = getForm("frmsettings");
+
+            var lnkpassword = newlink("lnkpassword", "Password", "", frmsettings);
+
+            lnkpassword.onclick = function() {
+                changePassword();
+            }
+
+            main.appendChild(frmsettings);
+
+            function setSelected(link) {
+                lnkpassword.className = "";
+
+                link.className = "linkselected";
+            }
+        }
+
+        function changePassword() {
+            var frmpassword = getForm("frmpassword");
+
+            addNewLine(frmpassword);
+            var lbloldpwd = newlabel("lbloldpwd", "Old Password:", "formlabel", frmpassword);
+            var inpoldpwd = newinput("inpoldpwd", "forminput", frmpassword, false);
+            addNewLine(frmpassword);
+            var lblnewpwd = newlabel("lblnewpwd", "New Password:", "formlabel", frmpassword);
+            var inpnewpwd = newinput("inpnewpwd", "forminput", frmpassword, false);
+            addNewLine(frmpassword);
+            var btnpwd = newbutton("btnpwd", "Update", "formbutton", frmpassword);
+            addNewLine(frmpassword);
+            var lblpwdconf = newlabel("lblpwdconf", "", "", frmpassword);
+
+            btnpwd.onclick = function() {
+                var pwdrequest = {};
+
+                pwdrequest.oldpwd = inpoldpwd.value;
+                pwdrequest.newpwd = inpnewpwd.value;
+
+                sockjs.send("{\"pwdrequest\":" + JSON.stringify(pwdrequest) + "}");
+            }
+
+            main.appendChild(frmpassword);
         }
 
         function populateDate(day, month, year, defaultdate) {
