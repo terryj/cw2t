@@ -708,6 +708,8 @@
                     updateReserve(obj.reserve);
                 } else if ("signinreply" in obj) {
                     replySignIn(obj.signinreply);
+                } else if ("pwdupdate" in obj) {
+                    passwordUpdate(obj.pwdupdate);
                 } else if ("index" in obj) {
                     loadIndex(obj.index);
                 } else if ("status" in obj) {
@@ -4029,7 +4031,7 @@
             return label;    
         }
 
-        function newinput(id, classname, form, disabled) {
+        function newinput(id, classname, form, disabled, focus) {
             var input = document.createElement("input");
             input.id = id;
             if (classname != "") {
@@ -4038,7 +4040,10 @@
             if (disabled) {
                 input.disabled = true;
             }
-            form.appendChild(input);   
+            if (focus) {
+                input.focus();
+            }
+            form.appendChild(input);
             return input;
         }
 
@@ -4447,7 +4452,7 @@
         function settings() {
             var frmsettings = getForm("frmsettings");
 
-            var lnkpassword = newlink("lnkpassword", "Password", "", frmsettings);
+            var lnkpassword = newlink("lnkpassword", "Change Password", "", frmsettings);
 
             lnkpassword.onclick = function() {
                 changePassword();
@@ -4467,10 +4472,10 @@
 
             addNewLine(frmpassword);
             var lbloldpwd = newlabel("lbloldpwd", "Old Password:", "formlabel", frmpassword);
-            var inpoldpwd = newinput("inpoldpwd", "forminput", frmpassword, false);
+            var inpoldpwd = newinput("inpoldpwd", "forminput", frmpassword, false, true);
             addNewLine(frmpassword);
             var lblnewpwd = newlabel("lblnewpwd", "New Password:", "formlabel", frmpassword);
-            var inpnewpwd = newinput("inpnewpwd", "forminput", frmpassword, false);
+            var inpnewpwd = newinput("inpnewpwd", "forminput", frmpassword, false, false);
             addNewLine(frmpassword);
             var btnpwd = newbutton("btnpwd", "Update", "formbutton", frmpassword);
             addNewLine(frmpassword);
@@ -4486,6 +4491,18 @@
             }
 
             main.appendChild(frmpassword);
+        }
+
+        function passwordUpdate(pwdupdate) {
+            var lblpwdconf = document.getElementById("lblpwdconf");
+
+            if (lblpwdconf != null) {
+                if (pwdupdate == "1") {
+                    lblpwdconf.innerHTML = "Password updated";
+                } else {
+                    lblpwdconf.innerHTML = "Password not updated";
+                }
+            }
         }
 
         function populateDate(day, month, year, defaultdate) {

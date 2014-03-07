@@ -56,6 +56,7 @@ if (redislocal) {
 
 // redis scripts
 var scriptgetinst;
+var scriptupdatepassword;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -1459,8 +1460,11 @@ function accountRequest(acctreq, clientid, conn) {
   });
 }
 
-function passwordRequest(clientid, obj.pwdrequest, conn) {
-
+function passwordRequest(clientid, pwdrequest, conn) {
+  db.eval(scriptupdatepassword, 3, clientid, pwdrequest.oldpwd, pwdrequest.newpwd, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"pwdupdate\":" + JSON.stringify(ret) + "}");
+  });
 }
 
 function sendQuoteack(quotereqid) {
@@ -1562,5 +1566,15 @@ function registerScripts() {
     end \
   end \
   return cjson.encode(inst) \
+  ';
+
+  scriptupdatepassword = '\
+    local retval = 0 \
+    local oldpwd = redis.call("hget", "client:" .. KEYS[1], "password") \
+    if oldpwd == KEYS[2] then \
+      redis.call("hset", "client:" .. KEYS[1], "password", KEYS[3]) \
+      retval = 1 \
+    end \
+    return retval \
   ';
 }
