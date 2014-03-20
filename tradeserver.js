@@ -17,7 +17,7 @@ var ptpclient = require('./ptpclient.js'); // Proquote API connection
 var common = require('./common.js');
 
 // globals
-var outofhours = false; // in or out of market hours - todo: replace with markettype?
+var outofhours = true; // in or out of market hours - todo: replace with markettype?
 var orgid = "1"; // todo: via logon
 var tradeserverchannel = 3;
 var userserverchannel = 2;
@@ -252,10 +252,11 @@ function newOrder(order) {
 
   var today = new Date();
 
-  // todo: tie this in with in/out of hours
   order.timestamp = common.getUTCTimeStamp(today);
-  order.markettype = 0; // 0 = main market, 1 = ooh
   order.partfill = 1; // accept part-fill
+
+  // todo: tie this in with in/out of hours
+  order.markettype = 1; // 0 = main market, 1 = ooh
 
   // always put a price in the order
   if (!("price" in order)) {
@@ -601,10 +602,12 @@ function orderCancelReject(orgclientkey, ocr, reason) {
 }
 
 function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
-  // either forward to Proquote or trade immediately or attempt to match the order, depending on the type of instrument & whether the market is open
+  //
+  // the order has been credit checked
+  // now, either forward to Proquote or attempt to match the order, depending on the type of instrument & whether the market is open
+  //
   if (order.markettype == 1) {
-    // todo: remove the conn
-    matchOrder(order.orderid, conn);
+    matchOrder(order.orderid);
   } else {
     // equity orders
     if (order.instrumenttype == "DE") {
@@ -1915,22 +1918,22 @@ function registerScripts() {
   // quantity required as number of shares
   // todo: settlcurrency
   scriptmatchorder = addtoorderbook + removefromorderbook + adjustmarginreserve + newtrade + getcosts + '\
-  local fields = {"orgid", "clientid", "symbol", "side", "quantity", "price", "currency", "margin", "remquantity", "futsettdate", "timestamp", "nosettdays"} \
+  local fields = {"clientid", "symbol", "side", "quantity", "price", "currency", "margin", "remquantity", "futsettdate", "timestamp", "nosettdays"} \
   local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
-  local orgclientkey = vals[1] .. ":" .. vals[2] \
-  local remquantity = tonumber(vals[9]) \
+  local clientid = vals[1] \
+  local remquantity = tonumber(vals[8]) \
   if remquantity <= 0 then return "1010" end \
   local instrumenttype = redis.call("hget", "symbol:" .. vals[3], "instrumenttype") \
   local lowerbound \
   local upperbound \
   local matchside \
-  if tonumber(vals[4]) == 1 then \
+  if tonumber(vals[3]) == 1 then \
     lowerbound = 0 \
-    upperbound = vals[6] \
+    upperbound = vals[5] \
     matchside = 2 \
   else \
     lowerbound = "-inf" \
-    upperbound = "-" .. vals[6] \
+    upperbound = "-" .. vals[5] \
     matchside = 1 \
   end \
   local mo = {} \
@@ -1938,12 +1941,12 @@ function registerScripts() {
   local mt = {} \
   local mc = {} \
   local j = 1 \
-  local matchorders = redis.call("zrangebyscore", vals[3], lowerbound, upperbound) \
+  local matchorders = redis.call("zrangebyscore", vals[2], lowerbound, upperbound) \
   for i = 1, #matchorders do \
     local matchvals = redis.call("hmget", "order:" .. matchorders[i], unpack(fields)) \
-    local matchorgclientkey = matchvals[1] .. ":" .. matchvals[2] \
+    local matchclientid = matchvals[1] \
     local matchremquantity = tonumber(matchvals[9]) \
-    if matchremquantity > 0 and matchorgclientkey ~= orgclientkey then \
+    if matchremquantity > 0 and matchclientid ~= clientid then \
       local tradequantity \
       --[[ calculate trade & remaining order quantities ]] \
       if matchremquantity >= remquantity then \
@@ -1958,41 +1961,41 @@ function registerScripts() {
       --[[ adjust order book & update passive order ]] \
       local matchorderstatus \
       if matchremquantity == 0 then \
-        removefromorderbook(matchvals[3], matchorders[i]) \
+        removefromorderbook(matchvals[2], matchorders[i]) \
         matchorderstatus = 2 \
       else \
         matchorderstatus = 1 \
       end \
       redis.call("hmset", "order:" .. matchorders[i], "remquantity", matchremquantity, "status", matchorderstatus) \
       --[[ adjust margin/reserve ]] \
-      adjustmarginreserve(matchorders[i], matchorgclientkey, matchvals[3], matchvals[4], matchvals[6], matchvals[8], matchvals[7], matchvals[9], matchremquantity, matchvals[10], matchvals[12]) \
+      adjustmarginreserve(matchorders[i], matchclientid, matchvals[2], matchvals[3], matchvals[5], matchvals[7], matchvals[6], matchvals[8], matchremquantity, matchvals[9], matchvals[11]) \
       --[[ trade gets done at passive order price ]] \
-      local tradeprice = tonumber(matchvals[6]) \
+      local tradeprice = tonumber(matchvals[5]) \
       local consid = tradequantity * tradeprice \
       --[[ create trades for active & passive orders ]] \
-      local costs = getcosts(vals[2], vals[3], instrumenttype, vals[4], consid, vals[7]) \
-      local matchcosts = getcosts(matchvals[2], vals[3], instrumenttype, matchside, consid, matchvals[7]) \
+      local costs = getcosts(vals[1], vals[2], instrumenttype, vals[3], consid, vals[6]) \
+      local matchcosts = getcosts(matchvals[1], vals[2], instrumenttype, matchside, consid, matchvals[6]) \
       local finance = 0 \
-      local tradeid = newtrade(vals[1], vals[2], KEYS[1], vals[3], vals[4], tradequantity, tradeprice, vals[7], costs, matchorder[2], matchorder[4], "1", "", vals[10], vals[11], "", "", vals[7], "", "", 1, 1, finance) \
-      local matchtradeid = newtrade(matchvals[2], matchvals[4], matchorders[i], matchvals[3], matchside, tradequantity, tradeprice, matchvals[7], matchcosts, order[2], order[4], "1", "", matchvals[10], matchvals[11], "", "", vals[7], "", "", 1, 1, finance) \
+      local tradeid = newtrade(clientid, KEYS[1], vals[2], vals[3], tradequantity, tradeprice, vals[6], costs, matchorder[2], matchorder[4], "1", "", vals[9], vals[10], "", "", vals[6], "", "", 1, 1, finance) \
+      local matchtradeid = newtrade(matchclientid, matchvals[3], matchorders[i], matchvals[2], matchside, tradequantity, tradeprice, matchvals[6], matchcosts, order[2], order[4], "1", "", matchvals[9], matchvals[10], "", "", vals[6], "", "", 1, 1, finance) \
       --[[ update return values ]] \
       mo[j] = matchorders[i] \
       t[j] = tradeid \
       mt[j] = matchtradeid \
-      mc[j] = matchorgclientkey \
+      mc[j] = matchclientid \
       j = j + 1 \
     end \
     if remquantity == 0 then break end \
   end \
   local orderstatus = "0" \
   if remquantity > 0 then \
-    addtoorderbook(vals[3], KEYS[1], vals[4], vals[6]) \
+    addtoorderbook(vals[2], KEYS[1], vals[3], vals[5]) \
   else \
     orderstatus = "2" \
   end \
-  if remquantity < tonumber(vals[5]) then \
+  if remquantity < tonumber(vals[4]) then \
     --[[ reduce margin/reserve that has been added in the credit check ]] \
-    adjustmarginreserve(KEYS[1], orgclientkey, vals[3], vals[4], vals[6], vals[8], vals[7], vals[9], remquantity, vals[10], vals[12]) \
+    adjustmarginreserve(KEYS[1], orgclientkey, vals[2], vals[3], vals[5], vals[7], vals[6], vals[8], remquantity, vals[9], vals[11]) \
     if remquantity ~= 0 then \
       orderstatus = "1" \
     end \
