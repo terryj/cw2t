@@ -17,10 +17,12 @@ var events = require('events');
 // connect to local test server
 //var pqhost = '127.0.0.1';
 //var host = "Cw2t Proquote Simulator";
-// OR connect to proquote PTP UAT system
+// OR Proquote PTP UAT system
 //var pqhost = '195.26.26.67';
-var pqhost = '172.16.1.101';
-var host = "Proquote UAT";
+//var host = "Proquote UAT";
+// OR Proquote PTP live system
+var pqhost = '172.16.1.102';
+var host = "Proquote Live";
 
 var pqport = 50143;
 var fixver = 'FIX.4.2';
@@ -76,7 +78,7 @@ Ptp.prototype.connect = function() {
 exports.Ptp = Ptp;
 
 function tryToConnect(self) {
-	console.log("Trying to connect " + host);
+	console.log("Trying to connect to " + host);
 
 	// initialise
 	init();
