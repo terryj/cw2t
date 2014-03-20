@@ -1783,6 +1783,7 @@ function registerScripts() {
   local removefromorderbook = function(symbol, orderid) \
     redis.call("zrem", symbol, orderid) \
     if (redis.call("zcount", symbol, "-inf", "+inf") == 0) then \
+      --[[ todo: dont think so ]] \
       redis.call("srem", "orderbooks", symbol) \
     end \
   end \
@@ -1945,7 +1946,7 @@ function registerScripts() {
   for i = 1, #matchorders do \
     local matchvals = redis.call("hmget", "order:" .. matchorders[i], unpack(fields)) \
     local matchclientid = matchvals[1] \
-    local matchremquantity = tonumber(matchvals[9]) \
+    local matchremquantity = tonumber(matchvals[8]) \
     if matchremquantity > 0 and matchclientid ~= clientid then \
       local tradequantity \
       --[[ calculate trade & remaining order quantities ]] \
@@ -1958,7 +1959,7 @@ function registerScripts() {
         remquantity = remquantity - matchremquantity \
         matchremquantity = 0 \
       end \
-      --[[ adjust order book & update passive order ]] \
+      --[[ adjust order book & update passive order remaining quantity & status ]] \
       local matchorderstatus \
       if matchremquantity == 0 then \
         removefromorderbook(matchvals[2], matchorders[i]) \
@@ -1967,7 +1968,7 @@ function registerScripts() {
         matchorderstatus = 1 \
       end \
       redis.call("hmset", "order:" .. matchorders[i], "remquantity", matchremquantity, "status", matchorderstatus) \
-      --[[ adjust margin/reserve ]] \
+      --[[ adjust margin/reserve for passive order ]] \
       adjustmarginreserve(matchorders[i], matchclientid, matchvals[2], matchvals[3], matchvals[5], matchvals[7], matchvals[6], matchvals[8], matchremquantity, matchvals[9], matchvals[11]) \
       --[[ trade gets done at passive order price ]] \
       local tradeprice = tonumber(matchvals[5]) \
@@ -1976,8 +1977,12 @@ function registerScripts() {
       local costs = getcosts(vals[1], vals[2], instrumenttype, vals[3], consid, vals[6]) \
       local matchcosts = getcosts(matchvals[1], vals[2], instrumenttype, matchside, consid, matchvals[6]) \
       local finance = 0 \
-      local tradeid = newtrade(clientid, KEYS[1], vals[2], vals[3], tradequantity, tradeprice, vals[6], costs, matchorder[2], matchorder[4], "1", "", vals[9], vals[10], "", "", vals[6], "", "", 1, 1, finance) \
-      local matchtradeid = newtrade(matchclientid, matchvals[3], matchorders[i], matchvals[2], matchside, tradequantity, tradeprice, matchvals[6], matchcosts, order[2], order[4], "1", "", matchvals[9], matchvals[10], "", "", vals[6], "", "", 1, 1, finance) \
+      --[[ todo: adjust margin ]] \
+      local margin = consid \
+      local operatortype = 1 \
+      local operatorid = 1 \
+      local tradeid = newtrade(clientid, KEYS[1], vals[2], vals[3], tradequantity, tradeprice, vals[6], 1, 1, costs, matchclientid, "1", "", vals[9], vals[10], "", "", vals[6], consid, "", "", vals[11], margin, operatortype, operatorid, finance) \
+      local matchtradeid = newtrade(matchclientid, matchorders[i], matchvals[2], matchside, tradequantity, tradeprice, matchvals[6], 1, 1, matchcosts, clientid, "1", "", matchvals[9], vals[10], "", "", vals[6], consid, "", "", matchvals[11], margin, operatortype, operatorid, finance) \
       --[[ update return values ]] \
       mo[j] = matchorders[i] \
       t[j] = tradeid \
@@ -1995,7 +2000,7 @@ function registerScripts() {
   end \
   if remquantity < tonumber(vals[4]) then \
     --[[ reduce margin/reserve that has been added in the credit check ]] \
-    adjustmarginreserve(KEYS[1], orgclientkey, vals[2], vals[3], vals[5], vals[7], vals[6], vals[8], remquantity, vals[9], vals[11]) \
+    adjustmarginreserve(KEYS[1], clientid, vals[2], vals[3], vals[5], vals[7], vals[6], vals[8], remquantity, vals[9], vals[11]) \
     if remquantity ~= 0 then \
       orderstatus = "1" \
     end \
@@ -2019,7 +2024,7 @@ function registerScripts() {
   local initialmargin = getinitialmargin(vals[2], consid) \
   local costs = getcosts(vals[1], vals[2], instrumenttype, vals[3], consid, KEYS[17]) \
   local finance = calcfinance(instrumenttype, consid, KEYS[17], vals[3], vals[8]) \
-  local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], 0, KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance) \
+  local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance) \
   --[[ adjust order related margin/reserve ]] \
   adjustmarginreserve(KEYS[1], vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[17], vals[7], KEYS[15], KEYS[11], vals[8]) \
   --[[ adjust order ]] \

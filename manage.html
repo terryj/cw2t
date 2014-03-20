@@ -4937,7 +4937,7 @@
                 var signin = {};
 
                 signin.email = email.value;
-                signin.password = password.value;
+                signin.password = mm.value;
 
                 sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");
             }
