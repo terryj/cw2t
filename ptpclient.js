@@ -21,7 +21,7 @@ var events = require('events');
 //var pqhost = '195.26.26.67';
 //var host = "Proquote UAT";
 // OR Proquote PTP live system
-var pqhost = '172.16.1.102';
+var pqhost = '195.26.26.174';
 var host = "Proquote Live";
 
 var pqport = 50143;
