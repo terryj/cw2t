@@ -199,5 +199,11 @@ function initdb() {
   db.hmset("cost:DE:GBP:2","defaultnosettdays",3,"costkey","DE:GBP:2","commissionpercent","","commissionmin","","ptmlevylimit","","ptmlevy","","stampdutylimit","","stampdutypercent","","contractcharge","","finance",""
 );
 
+  // logon
+  db.set("trading:ipaddress", "195.26.26.67");
+  db.set("trading:port", "50143");
+  db.set("sendercompid", "CWTTUAT1");
+  db.set("targetcompid", "PTPUAT1");
+
   console.log("done");
 }

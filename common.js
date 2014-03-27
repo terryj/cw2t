@@ -277,8 +277,8 @@ exports.registerCommonScripts = function () {
     local cashkey = clientid .. ":cash:" .. currency \
     local cashskey = clientid .. ":cash" \
     local cash = redis.call("get", cashkey) \
-    --[[ adjust for debit / credit]] \
-    if drcr == 1 then \
+    --[[ adjust for credit]] \
+    if tonumber(drcr) == 2 then \
       amount = -amount \
     end \
     if not cash then \
@@ -566,9 +566,9 @@ exports.registerCommonScripts = function () {
     if vals[2] == KEYS[2] then \
       --[[ adjust balance according to debit/credit ]] \
       if tonumber(vals[5]) == 1 then \
-        balance = balance - tonumber(vals[3]) \
-      else \
         balance = balance + tonumber(vals[3]) \
+      else \
+        balance = balance - tonumber(vals[3]) \
       end \
       table.insert(tblresults, {datetime=vals[1],currency=vals[2],amount=vals[3],transtype=vals[4],drcr=vals[5],description=vals[6],reference=vals[7],timestamp=vals[8],settldate=vals[9],cashtransid=vals[10],balance=balance}) \
     end \

@@ -711,7 +711,7 @@
         var showvolume = false;
         var account = {};
         var coheading = "Thomas Grant & Company";
-        var orderdiv = {};
+        var orderdivnumarr = {};
 
         //
         // incoming data function
@@ -1072,15 +1072,11 @@
 
         function updateTrade(trade) {
             var msg;
-            var orderdivstr;
 
             msg = tradeMsg(trade);
 
             if (selectedmenu == 0) {
-                orderdivstr = "orderdiv:" + trade.symbol + ":" + trade.orderdivnum;
-                addMessageToDiv(msg, orderdivstr);
-            } else {
-                addMessageToDiv(msg, "orderdiv");
+                addMessageToDiv(msg, "orderdiv:" + trade.symbol + ":" + trade.orderdivnum);
             }
         }
 
@@ -1253,7 +1249,12 @@
             if (lblcashconf != null) {
                 msg += cashtranstypes[cashtrans.transtype].description;
                 msg += " of " + cashtrans.amount + " " + cashtrans.currency;
-                msg += " added for " + clients[cashtrans.clientid].name;
+                if (cashtrans.drcr == "1") {
+                    msg += " debited to ";
+                } else {
+                    msg += " credited against ";                    
+                }
+                msg += clients[cashtrans.clientid].name;
                 lblcashconf.innerHTML = msg;
             }
 
@@ -1266,7 +1267,6 @@
         function updateOrder(order) {
             var msg;
             var listelement;
-            var orderdivstr;
 
             if (order.status == "0") {
                 msg = "Order acknowledged, id: " + order.orderid;
@@ -1288,10 +1288,7 @@
             }
 
             if (selectedmenu == 0) {
-                orderdivstr = "orderdiv:" + order.symbol + ":" + order.orderdivnum;
-                addMessageToDiv(msg, orderdivstr);
-            } else {
-                addMessageToDiv(msg, "orderdiv");
+                addMessageToDiv(msg, "orderdiv:" + order.symbol + ":" + order.orderdivnum);
             }
         }
 
@@ -1568,11 +1565,10 @@
             var orderdivnum = getOrderDivNum(symbol);
 
             for (var i = 1; i <= orderdivnum; i++) {
-                var orderdivstr = "orderdiv:" + symbol + ":" + i;
-                clearDiv(orderdivstr);
+                clearDiv("orderdiv:" + symbol + ":" + i);
             }
 
-            delete orderdiv[symbol];
+            delete orderdivnumarr[symbol];
         }
 
         function clearAllSymbolDivs() {
@@ -1664,7 +1660,6 @@
         function clearDivs() {
             clearDiv("clientbox");
             clearDiv("stockbox");
-            clearDiv("orderdiv");
         }
 
         function clearEmptyLines() {
@@ -3707,7 +3702,7 @@
                         }
 
                         clearquotelnk = document.createElement('a');
-                        clearquotelnk.innerHTML = "Clear Quote";
+                        clearquotelnk.innerHTML = "Clear";
                         clearquotelnk.href = "javascript:void(0);";
                         clearquotelnk.onclick = function() {
                             clearSymbolDiv(symbol);
@@ -3726,9 +3721,9 @@
                         links = document.createElement('div');
                         links.style.visibility = "hidden";
                         links.appendChild(reqquotelnk);
-                        links.appendChild(clearquotelnk);
                         links.appendChild(placebuyorderlnk);
                         links.appendChild(placesellorderlnk);
+                        links.appendChild(clearquotelnk);
 
                         if (showvolume) {
                             level2.onclick = function() {
@@ -3787,7 +3782,7 @@
                         strip.appendChild(links);
                     }
 
-                    orderdiv = document.getElementById("orderdiv:" + symbol);
+                    orderdiv = document.getElementById("orderdiv:" + symbol + ":1");
 
                     if (orderdiv != null) {
                         main.insertBefore(strip, orderdiv);
@@ -3961,25 +3956,21 @@
         function getOrderDivNum(symbol) {
             var orderdivnum = 0;
 
-            if (symbol in orderdiv) {
-                orderdivnum = orderdiv[symbol];
+            if (symbol in orderdivnumarr) {
+                orderdivnum = orderdivnumarr[symbol];
             }
 
             return orderdivnum;
         }
 
         function incrOrderDivNum(symbol) {
-            var orderdivnum = 0;
-
-            if (symbol in orderdiv) {
-                orderdiv[symbol]++;
-                orderdivnum = orderdiv[symbol];
+            if (symbol in orderdivnumarr) {
+                orderdivnumarr[symbol]++;
             } else {
-                orderdivnum = 1;
-                orderdiv[symbol] = 1;
+                orderdivnumarr[symbol] = 1;
             }
 
-            return orderdivnum;
+            return orderdivnumarr[symbol];
         }
 
         function requestQuote(symbol) {
@@ -3997,7 +3988,6 @@
             var lblcurrency;
             var focusfield;
             var focusfldstr;
-            var orderdivstr;
             var quotereqqtystr;
             var inpclientidstr;
             var orderdivnum;
@@ -4005,13 +3995,13 @@
             // get the order div. number for this symbol as there may be more than one
             orderdivnum = incrOrderDivNum(symbol);
 
-            orderdivstr = "orderdiv:" + symbol + ":" + orderdivnum;
-            orderdiv = getDiv("orderdiv:" + symbol + ":" + orderdivnum, symbol);
-            inpclientidstr = "inpclientid:" + symbol + ":" + orderdivnum;
-            quotereqqtystr = "quotereqquantity:" + symbol + ":" + orderdivnum;
-            focusfldstr = "clientboxinput:" + symbol + ":" + orderdivnum;
+            symbolstr = symbol + ":" + orderdivnum;
+            orderdiv = getDiv("orderdiv:" + symbolstr, symbol);
+            inpclientidstr = "inpclientid:" + symbolstr;
+            quotereqqtystr = "quotereqquantity:" + symbolstr;
+            focusfldstr = "clientboxinput:" + symbolstr;
 
-            selectClient("orderdiv", orderdiv, symbol+":"+orderdivnum, true, null, inpclientidstr, quotereqqtystr, false);
+            selectClient("orderdiv", orderdiv, symbolstr, true, null, inpclientidstr, quotereqqtystr, false);
 
             // remember the client
             inpclientid = document.createElement("input");
@@ -4030,7 +4020,7 @@
             }
 
             quantitycashsel = document.createElement("select");
-            quantitycashsel.id = "quantitycashsel:" + symbol + ":" + orderdivnum;
+            quantitycashsel.id = "quantitycashsel:" + symbolstr;
 
             quantitycashsel[0] = new Option("Number of shares", 1, true, true);
             quantitycashsel[1] = new Option("Cash amount", 2, false, false);
@@ -4182,9 +4172,7 @@
 
         function sendRequestQuote(clientid, symbol, quantity, cashorderqty, currency, settlcurrency, nosettdays, orderdivnum) {
             var quotereq = {};
-            var orderdiv;
             var msg;
-            var orderdivstr;
 
             quotereq.clientid = clientid;
             quotereq.quantity = quantity;
@@ -4212,8 +4200,7 @@
                 msg += " in " + settlcurrency;
             }
 
-            orderdivstr = "orderdiv:" + symbol + ":" + orderdivnum;
-            addMessageToDiv(msg, orderdivstr);
+            addMessageToDiv(msg, "orderdiv:" + symbol + ":" + orderdivnum);
         }
 
         function validateNumeric(field, fieldname) {
@@ -4258,7 +4245,6 @@
         }
 
         function quoteAckReceived(quoteack) {
-            var orderdivstr;
             var msg;
 
             msg = " Quote request rejected, reason: " + quoteack.quoterejectreasondesc;
@@ -4267,10 +4253,7 @@
             }
 
             if (selectedmenu == 0) {
-                orderdivstr = "orderdiv:" + quoteack.symbol + ":" + quoteack.orderdivnum;
-                addMessageToDiv(msg, orderdivstr);
-            } else {
-                addMessageToDiv(msg, "orderdiv");
+                addMessageToDiv(msg, "orderdiv:" + quoteack.symbol + ":" + quoteack.orderdivnum);
             }
         }
 
@@ -4285,7 +4268,6 @@
             var msg;
             var sellmsg;
             var buymsg;
-            var orderdivstr;
 
             quotes[quote.quoteid] = quote;
 
@@ -4357,16 +4339,13 @@
             // todo: clear if form is closed
 
             if (selectedmenu == 0) {
-                orderdivstr = "orderdiv:" + quote.symbol + ":" + quote.orderdivnum;
-                orderdiv = getDiv(orderdivstr, quote.symbol);
-            } else {
-                orderdiv = getDiv("orderdiv", null);                
-            }
+                orderdiv = getDiv("orderdiv:" + quote.symbol + ":" + quote.orderdivnum, quote.symbol);
 
-            addNewLine(orderdiv);
-            orderdiv.appendChild(sellbutton);
-            orderdiv.appendChild(timerlabel);
-            orderdiv.appendChild(buybutton);
+                addNewLine(orderdiv);
+                orderdiv.appendChild(sellbutton);
+                orderdiv.appendChild(timerlabel);
+                orderdiv.appendChild(buybutton);
+            }
 
             function disable() {
                 clearInterval(timer);
@@ -4400,8 +4379,25 @@
             var expireyear;
             var settlperiod;
             var nosettdays;
+            var inpclientid;
+            var inpclientidstr;
+            var focusfldstr;
+            var orderdivnum;
 
             clearSymbolDiv(symbol);
+
+            orderdivnum = incrOrderDivNum(symbol);
+
+            orderdiv = getDiv("orderdiv:" + symbol + ":" + orderdivnum, symbol);
+            focusfldstr = "orderquantity:" + symbol;
+            inpclientidstr = "inpclientid:" + symbol;
+
+            selectClient("orderdiv", orderdiv, symbol, true, null, inpclientidstr, focusfldstr, false);
+
+            // remember the client
+            inpclientid = document.createElement("input");
+            inpclientid.type = "hidden";
+            inpclientid.id = inpclientidstr;
 
             btn = document.createElement("input");
             btn.type = "button";
@@ -4575,18 +4571,18 @@
 
             settlperiod = document.createElement("select");
             settlperiod.id = "settlperiod:" + symbol;
+            settlperiod.className = "formselect";
 
             //settlperiod[0] = new Option("GBP", defaultsettlcurrency, true, true);
 
-            populateSettlPeriod(settlperiod, 3);
+            populateSettlPeriod(settlperiod, instruments[symbol].instrumenttype);
 
-            orderdiv = getDiv("orderdiv:" + symbol, symbol);
-
+            addNewLine(orderdiv);
             orderdiv.appendChild(btn);
             orderdiv.appendChild(quantityinput);
             orderdiv.appendChild(stocklabel);
-            orderdiv.appendChild(priceinput);
             orderdiv.appendChild(atlabel);
+            orderdiv.appendChild(priceinput);
             //orderdiv.appendChild(ordertypesel);
             orderdiv.appendChild(timeinforcesel);
             orderdiv.appendChild(settlabel);
@@ -4597,6 +4593,7 @@
             //orderdiv.appendChild(settmonth);
             //orderdiv.appendChild(settyear);
             orderdiv.appendChild(settlperiod);
+            orderdiv.appendChild(inpclientid);
 
             //pricedisplay();
 
@@ -4646,10 +4643,11 @@
             }*/
 
             function sendIt() {
-                alert("Limit orders: coming soon...");
-                return;
+                // todo: reinstate
+                //alert("Limit orders: coming soon...");
+                //return;
 
-                var settdate;
+                var settdate = ""; // calculated by server
 
                 if ((!validateNumeric(quantityinput, getQuantityDesc(qtyascashorshares))) || (!validateNumeric(priceinput, pricedesc))) {
                     return;
@@ -4663,9 +4661,9 @@
                     expiretime = "00:00:00";//formatToUTCTime(expirehour.value, expireminute.value, expiresecond.value);
                 }
 
-                settdate = formatToUTCDate(settday[settday.selectedIndex].value, settmonth[settmonth.selectedIndex].value, settyear[settyear.selectedIndex].value);
+                nosettdays = settlperiod[settlperiod.selectedIndex].value;
 
-                sendOrder(symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, nosettdays, settlcurrency, settdate, null, timeinforce, expiredate, expiretime);
+                sendOrder(inpclientid.value, symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, settlcurrency, nosettdays, settdate, null, timeinforce, expiredate, expiretime, 1);
 
                 disable();
                 //pricedisable();
@@ -4686,8 +4684,6 @@
                     }
                 }*/
             }
-
-            quantityinput.focus();
         }
 
         function populateSettlPeriod(settlperiod, instrumenttype) {
@@ -4712,7 +4708,6 @@
         function sendOrder(clientid, symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime, orderdivnum) {
             var neworder = {};
             var msg;
-            var orderdivstr;
 
             neworder.clientid = clientid;
             neworder.side = side;
@@ -4745,7 +4740,10 @@
             msg += ", " + getOrdertypeDesc(ordertype);
 
             if (instruments[symbol].instrumenttype == "DE") {
-                msg += ", for settlement T+" + nosettdays + " (" + formatUTCDate(settdate) + ")";
+                msg += ", for settlement T+" + nosettdays;
+                if (settdate != "") {
+                    msg += " (" + formatUTCDate(settdate) + ")";
+                }
             } else {
                 msg += ", for rolling settlement";
             }
@@ -4758,8 +4756,7 @@
                 msg += ", quote id " + quoteid;
             }
 
-            orderdivstr = "orderdiv:" + symbol + ":" + orderdivnum;
-            addMessageToDiv(msg, orderdivstr);
+            addMessageToDiv(msg, "orderdiv:" + symbol + ":" + orderdivnum);
         }
 
         function getSideDesc(side) {
@@ -4937,7 +4934,7 @@
                 var signin = {};
 
                 signin.email = email.value;
-                signin.password = mm.value;
+                signin.password = password.value;
 
                 sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");
             }

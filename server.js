@@ -25,7 +25,6 @@ var common = require('./common.js');
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
 var cw2tport = 443; // client listen port
-var outofhours = false; // in or out of market hours - todo: replace with markettype?
 var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;

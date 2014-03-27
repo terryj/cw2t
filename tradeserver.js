@@ -87,7 +87,6 @@ db.on("error", function(err) {
 function initialise() {
   initDb();
   pubsub();
-  connectToTrading();
 }
 
 // pubsub connections
@@ -138,10 +137,14 @@ ptp.on("connected", function() {
 ptp.on('finished', function(message) {
     console.log(message);
 });
+ptp.on("initialised", function() {
+  connectToTrading();
+});
 
 function connectToTrading() {
   // try to connect
   //winner.connect();
+
   ptp.connect();
 }
 
@@ -256,7 +259,7 @@ function newOrder(order) {
   order.partfill = 1; // accept part-fill
 
   // todo: tie this in with in/out of hours
-  order.markettype = 1; // 0 = main market, 1 = ooh
+  order.markettype = 0; // 0 = main market, 1 = ooh
 
   // always put a price in the order
   if (!("price" in order)) {
@@ -266,6 +269,11 @@ function newOrder(order) {
   // and always have a quote id
   if (!("quoteid" in order)) {
     order.quoteid = "0";
+  }
+
+  // get settlement date from T+n no. of days
+  if (order.futsettdate == "") {
+    order.futsettdate = common.getUTCDateString(common.getSettDate(today, order.nosettdays, holidays));
   }
 
   // store the order, get an id & credit check it
@@ -317,8 +325,8 @@ function getSideDesc(side) {
   }
 }
 
-function matchOrder(orderid) {
-  db.eval(scriptmatchorder, 1, orderid, function(err, ret) {
+function matchOrder(order) {
+  db.eval(scriptmatchorder, 1, order.orderid, function(err, ret) {
     if (err) throw err;
 
     /*if (orderid == 2000 || orderid == 4000) {
@@ -330,59 +338,25 @@ function matchOrder(orderid) {
     // todo: replace with getsendorder?
 
     // todo: check ret value
+    console.log(ret);
 
-    // get order here as we need a number of order values
-    db.hgetall("order:" + orderid, function(err, order) {
-      if (err) {
-        console.log(err);
-        return;
-      }
+    // return the active order to the sending operator type
+    db.publish(order.operatortype, "order:" + order.orderid);
 
-      var orgclientkey = order.orgid + ":" + order.clientid;
+    // send any trades for active order client
+    for (var i = 0; i < ret[1].length; ++i) {
+      db.publish(order.operatortype, "trade:" + ret[1][i]);
+    }
 
-      // send to client, if connected
-      if (orgclientkey in connections) {
-        sendOrder(order, connections[orgclientkey]);
-      }
+    // send any matched orders
+    for (var i = 0; i < ret[0].length; ++i) {
+      db.publish(order.operatortype, "order:" + ret[0][i]);
+    }
 
-      // broadcast market - todo: timer based? - pubsub?
-      broadcastLevelTwo(order.symbol, null);
-
-      // send any trades for active order client
-      for (var i = 0; i < ret[1].length; ++i) {
-        getSendTrade(ret[1][i]);
-      }
-
-      // send cash
-      if (ret[1].length > 0) {
-        getSendCash(orgclientkey, order.settlcurrency);
-      }
-
-      // send margin/reserve
-      if (parseInt(order.side) == 1) {
-        getSendMargin(orgclientkey, order.settlcurrency);
-      } else {
-        getSendReserve(orgclientkey, order.symbol, order.settlcurrency);
-      }
-
-      // send any matched orders
-      for (var i = 0; i < ret[0].length; ++i) {
-        // todo: send margin/reserve/cash
-        getSendOrder(ret[0][i], false, false);
-      }
-
-      // send any matched trades
-      for (var i = 0; i < ret[2].length; ++i) {
-        getSendTrade(ret[2][i]);
-      }
-
-      // send cash/position/margin/reserve for matched clients
-      for (var i = 0; i < ret[3].length; ++i) {
-        getSendCash(ret[3][i], order.settlcurrency);
-        getSendMargin(ret[3][i], order.settlcurrency);
-        getSendReserve(ret[3][i], order.symbol, order.settlcurrency);
-      }
-    });
+    // send any matched trades
+    for (var i = 0; i < ret[2].length; ++i) {
+      db.publish(order.operatortype, "trade:" + ret[2][i]);
+    }
   });
 }
 
@@ -607,7 +581,7 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
   // now, either forward to Proquote or attempt to match the order, depending on the type of instrument & whether the market is open
   //
   if (order.markettype == 1) {
-    matchOrder(order.orderid);
+    matchOrder(order);
   } else {
     // equity orders
     if (order.instrumenttype == "DE") {
@@ -1069,6 +1043,7 @@ function orderBookRequest(orgclientkey, symbol, conn) {
 }
 
 function orderBookOut(orgclientkey, symbol, conn) {
+  // todo: remove 'outofhours'
   if (outofhours) {
     broadcastLevelTwo(symbol, conn);
   }

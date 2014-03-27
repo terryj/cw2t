@@ -13,21 +13,11 @@
 var util = require('util');
 var net = require('net');
 var events = require('events');
-
-// connect to local test server
-//var pqhost = '127.0.0.1';
-//var host = "Cw2t Proquote Simulator";
-// OR Proquote PTP UAT system
-//var pqhost = '195.26.26.67';
-//var host = "Proquote UAT";
-// OR Proquote PTP live system
-var pqhost = '195.26.26.174';
-var host = "Proquote Live";
-
-var pqport = 50143;
 var fixver = 'FIX.4.2';
-var sendercompid = 'CWTTUAT1'; // cw2t id
-var targetcompid = 'PTPUAT1'; // proquote id
+var pqhost; // ip address
+var pqport; // port
+var sendercompid; // cw2t id
+var targetcompid; // proquote id
 var onbehalfofcompid = 'PTPTEST57';
 var SOH = '\001';
 var datainbuf = ''; // data buffer
@@ -65,8 +55,11 @@ function Ptp() {
 	if (false === (this instanceof Ptp)) {
         return new Ptp();
     }
-   
+
     events.EventEmitter.call(this);
+
+   	// initialise
+	init(this);
 }
 util.inherits(Ptp, events.EventEmitter);
 
@@ -78,10 +71,7 @@ Ptp.prototype.connect = function() {
 exports.Ptp = Ptp;
 
 function tryToConnect(self) {
-	console.log("Trying to connect to " + host);
-
-	// initialise
-	init();
+	console.log("trying to connect to " + pqhost + ":" + pqport);
 
 	pqconn = net.connect({port: pqport, host: pqhost}, function() {
 		// connected
@@ -118,7 +108,7 @@ function tryToConnect(self) {
 
 		// connection termination
 		pqconn.on('end', function() {
-			console.log('Disconnected from ' + host);
+			console.log('Disconnected from ' + pqhost);
 		});
 
 		// todo: do i need this
@@ -140,13 +130,71 @@ function tryToConnect(self) {
 	});
 }
 
-function init() {
+function init(self) {
 	messagerecoveryinrequested = false;
 	messagerecoveryinstarted = false;
 	messagerecoveryout = false;
 	logoutinitiated = false;
 	logoutrequired = false;
 	resendrequestrequired = false;
+
+  	db.get("trading:ipaddress", function(err, ipaddr) {
+    	if (err) {
+      		console.log(err);
+      		return;
+    	}
+
+    	if (ipaddr == null) {
+      		console.log("ip address not found");
+      		return;
+    	}
+
+    	pqhost = ipaddr;
+    });
+
+    db.get("trading:port", function(err, port) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      if (port == null) {
+        console.log("port not found");
+        return;
+      }
+
+      pqport = port;
+    });
+
+    db.get("sendercompid", function(err, senderid) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      if (senderid == null) {
+        console.log("sendercompid not found");
+        return;
+      }
+
+      sendercompid = senderid;
+    });
+
+    db.get("targetcompid", function(err, targetid) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      if (targetid == null) {
+        console.log("targetcompid not found");
+        return;
+      }
+
+      targetcompid = targetid;
+
+      self.emit("initialised");
+    });
 }
 
 function sendLogon() {

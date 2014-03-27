@@ -22,7 +22,6 @@ var common = require('./common.js');
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
 var cw2tport = 8081; // user listen port
-var outofhours = false; // in or out of market hours - todo: replace with markettype?
 var ordertypes = {};
 var brokerid = "1"; // todo: via logon
 var defaultnosettdays = 3;
@@ -509,8 +508,12 @@ function getSendIfa(ifaid, conn) {
 function cashTrans(cashtrans, userid, conn) {
   cashtrans.timestamp = common.getUTCTimeStamp(new Date());
 
+  console.log(cashtrans);
+
   db.eval(common.scriptcashtrans, 11, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.settldate, operatortype, userid, function(err, ret) {
     if (err) throw err;
+
+    console.log(ret);
 
     if (ret[0] != 0) {
       console.log("Error in scriptcashtrans:" + common.getReasonDesc(ret[0]));
@@ -701,8 +704,9 @@ function getSendOrder(orderid) {
       return;
     }
 
-    // send to client, if connected
+    // send to user, if connected
     if (order.operatorid in connections) {
+      console.log("sending order");
       sendOrder(order, connections[order.operatorid]);
     }
   });
