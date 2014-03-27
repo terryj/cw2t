@@ -102,15 +102,20 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    var obj;
-    console.log("channel:" + channel + " " + message);
+    try {
+      console.log("channel:" + channel + " " + message);
+      var obj = JSON.parse(msg);
 
-    if (message.substr(2, 12) == "quoterequest") {
-      obj = JSON.parse(message);
-      quoteRequest(obj.quoterequest);
-    } else if (message.substr(2, 5) == "order") {
-      obj = JSON.parse(message);
-      newOrder(obj.order);
+      if ("quoterequest" in obj) {
+        quoteRequest(obj.quoterequest);
+      } else if ("ordercancelrequest" in obj) {
+        orderCancelRequest(obj.ordercancelrequest) {
+      } else if ("order" in obj) {
+        newOrder(obj.order);
+      }
+    } catch(e) {
+      console.log(e);
+      return;
     }
   });
 
@@ -519,12 +524,12 @@ function getSendReserve(orgclientkey, symbol, currency) {
   });
 }
 
-function orderCancelRequest(clientid, ocr) {
+function orderCancelRequest(ocr) {
   console.log("Order cancel request received for order#" + ocr.orderid);
 
   ocr.timestamp = common.getUTCTimeStamp(new Date());
 
-  db.eval(scriptordercancelrequest, 4, orgid, clientid, ocr.orderid, ocr.timestamp, function(err, ret) {
+  db.eval(scriptordercancelrequest, 3, ocr.clientid, ocr.orderid, ocr.timestamp, function(err, ret) {
     if (err) throw err;
 
     console.log(ret);
@@ -1104,8 +1109,8 @@ ptp.on("orderAck", function(exereport) {
   db.eval(scriptorderack, 5, exereport.clordid, exereport.orderid, exereport.ordstatus, exereport.execid, text, function(err, ret) {
     if (err) throw err;
 
-    // ok, so send confirmation
-    getSendOrder(exereport.clordid, true, false);
+    // send confirmation to operator type
+    db.publish(ret, "order:" + exereport.clordid);
   });
 });
 
@@ -2073,7 +2078,8 @@ function registerScripts() {
   scriptorderack = '\
   --[[ update external limit reference ]] \
   redis.call("hmset", "order:" .. KEYS[1], "externalorderid", KEYS[2], "status", KEYS[3], "execid", KEYS[4], "text", KEYS[5]) \
-  return \
+  local operatortype = redis.call("hget", "order:" .. KEYS[1], "operatortype") \
+  return operatortype \
   ';
 
   scriptorderexpire = cancelorder + '\

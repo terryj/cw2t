@@ -18,7 +18,7 @@ var pqhost; // ip address
 var pqport; // port
 var sendercompid; // cw2t id
 var targetcompid; // proquote id
-var onbehalfofcompid = 'PTPTEST57';
+var onbehalfofcompid; // who we are trading for - TG, at least in the first instance
 var SOH = '\001';
 var datainbuf = ''; // data buffer
 var connectDelay = 5000; // re-try connection timer delay in milliseconds
@@ -192,9 +192,26 @@ function init(self) {
       }
 
       targetcompid = targetid;
+    });
 
+    db.get("onbehalfofcompid", function(err, onbehalfofid) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      if (onbehalfofid == null) {
+        console.log("onbehalfofcompid not found");
+        return;
+      }
+
+      onbehalfofcompid = onbehalfofid;
+
+      // make this last
       self.emit("initialised");
     });
+
+    // if anything is added here, move the initialised event
 }
 
 function sendLogon() {

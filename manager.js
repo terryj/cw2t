@@ -188,7 +188,6 @@ function listen() {
       if (msg.substr(2, 13) == "quoterequest\"") {
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 18) == "ordercancelrequest") {
-        // todo: test
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 6) == "order\"") {
         db.publish(tradeserverchannel, msg);
@@ -508,12 +507,8 @@ function getSendIfa(ifaid, conn) {
 function cashTrans(cashtrans, userid, conn) {
   cashtrans.timestamp = common.getUTCTimeStamp(new Date());
 
-  console.log(cashtrans);
-
   db.eval(common.scriptcashtrans, 11, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.settldate, operatortype, userid, function(err, ret) {
     if (err) throw err;
-
-    console.log(ret);
 
     if (ret[0] != 0) {
       console.log("Error in scriptcashtrans:" + common.getReasonDesc(ret[0]));
