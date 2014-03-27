@@ -204,6 +204,7 @@ function initdb() {
   db.set("trading:port", "50143");
   db.set("sendercompid", "CWTTUAT1");
   db.set("targetcompid", "PTPUAT1");
+  db.set("onbehalfofcompid", "PTPTEST57");
 
   console.log("done");
 }

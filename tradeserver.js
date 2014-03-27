@@ -104,7 +104,7 @@ function pubsub() {
   dbsub.on("message", function(channel, message) {
     try {
       console.log("channel:" + channel + " " + message);
-      var obj = JSON.parse(msg);
+      var obj = JSON.parse(message);
 
       if ("quoterequest" in obj) {
         quoteRequest(obj.quoterequest);
