@@ -109,7 +109,7 @@ function pubsub() {
       if ("quoterequest" in obj) {
         quoteRequest(obj.quoterequest);
       } else if ("ordercancelrequest" in obj) {
-        orderCancelRequest(obj.ordercancelrequest) {
+        orderCancelRequest(obj.ordercancelrequest);
       } else if ("order" in obj) {
         newOrder(obj.order);
       }
