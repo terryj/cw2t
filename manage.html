@@ -1266,7 +1266,6 @@
 
         function updateOrder(order) {
             var msg;
-            var listelement;
 
             if (order.status == "0") {
                 msg = "Order acknowledged, id: " + order.orderid;
@@ -1289,6 +1288,13 @@
 
             if (selectedmenu == 0) {
                 addMessageToDiv(msg, "orderdiv:" + order.symbol + ":" + order.orderdivnum);
+            } else if (selectedmenu == 7) {
+                removeElementFromList(order.orderid, list1);
+                if (list1.childNodes.length == 0) {
+                    addElement("No new orders", list1, 0)
+                }
+                msg = orderCancelMsg(order);
+                addElement(msg, list5, order.orderid);
             }
         }
 
@@ -1721,7 +1727,11 @@
 
             var result = confirm(msg);
             if (result == true) {
+                ordercancelrequest.clientid = orders[orderid].clientid;
                 ordercancelrequest.orderid = orderid;
+                ordercancelrequest.operatortype = operatortype;
+                ordercancelrequest.operatorid = userid;
+
                 sockjs.send("{\"ordercancelrequest\":" + JSON.stringify(ordercancelrequest) + "}");
             }
         }
@@ -2436,7 +2446,7 @@
                     col.innerHTML = "Nosettdays";
                     break;                
                 case 7:
-                    col.innerHTML = "Settl. Date";
+                    col.innerHTML = "Settl.Date";
                     break;
                 case 8:
                     col.innerHTML = "Currency";
@@ -3551,7 +3561,6 @@
         function orderCancelReject(ordercancelreject) {
             alert("Request to cancel order #" + ordercancelreject.orderid + " rejected, reason: " + ordercancelreject.reasondesc);
         }
-
 
         function removeOrderBook(symbol) {
             var stockboxinput;

@@ -425,15 +425,25 @@ function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, m
 	}
 }
 
+function startHeartbeatTimer() {
+	heartbeatouttimer = setTimeout(function() {
+		heartbeat();
+	}, heartbtint * 1000);
+}
+
+function stopHeartbeatTimer() {
+	if (heartbeatouttimer != null) {
+		clearTimeout(heartbeatouttimer);
+		heartbeatouttimer = null;
+	}
+}
+
 function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, timestamp, origtimestamp) {
 	var msg;
 	var checksumstr;
 
 	// we are sending, so don't need a heartbeat, so turn the heartbeat timer off
-	if (heartbeatouttimer != null) {
-		clearTimeout(heartbeatouttimer);
-		heartbeatouttimer = null;
-	}
+	stopHeartbeatTimer();
 
 	// create the part of the header included in the body length
 	msg = '35=' + msgtype + SOH
@@ -475,9 +485,7 @@ function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgs
 	console.log("-------------");
 
 	// start the heartbeat timer
-	heartbeatouttimer = setTimeout(function() {
-		heartbeat();
-	}, heartbtint * 1000);
+	startHeartbeatTimer();
 }
 
 function parseData(self) {
@@ -838,6 +846,24 @@ function getBody(msgtype, tagvalarr) {
 			case 159:
 				body.accruedinterest = tagvalarr[i].value;
 				break;
+			case 5814:
+				body.bestbidpx = tagvalarr[i].value;
+				break;
+			case 5815:
+				body.bestofferpx = tagvalarr[i].value;
+				break;
+			case 5816:
+				body.bidquotedepth = tagvalarr[i].value;
+				break;
+			case 5817:
+				body.offerquotedepth = tagvalarr[i].value;
+				break;
+			case 5818:
+				body.maxquotedepth = tagvalarr[i].value;
+				break;
+			case 5819:
+				// list of individual quotes, ignore, at least for time being
+				break;
 			default:
 				unknownTag(tagvalarr[i].tag);
 			}
@@ -945,7 +971,7 @@ function getBody(msgtype, tagvalarr) {
 			case 155:
 				body.settlcurrfxrate = tagvalarr[i].value;
 				break;
-			case 40:
+			case 41:
 				body.origclordid = tagvalarr[i].value;
 				break;
 			default:
@@ -1235,7 +1261,18 @@ function heartbeatReceived(heartbeat, self) {
 }
 
 function testRequestReceived(testrequest, self) {
+	console.log(testrequest);
 	console.log('test request received');
+
+	stopHeartbeatTimer();
+	testRequestReply(testrequest.testreqid);
+	startHeartbeatTimer();
+}
+
+function testRequestReply(reqid) {	
+	var msg = '112=' + reqid + SOH;
+
+	sendMessage('0', "", "", msg, false, null, null);
 }
 
 function resendRequestReceived(resendrequest) {

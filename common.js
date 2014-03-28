@@ -235,12 +235,38 @@ function getPTPQuoteRejectReason(reason) {
   case 9:
     desc = "Not authorized to quote security";
     break;
+  default:
+    desc = "Unknown reason";
   }
 
   return desc;
 }
 
 exports.getPTPQuoteRejectReason = getPTPQuoteRejectReason;
+
+function getPTPOrderCancelRejectReason(reason) {
+  var desc;
+
+  switch (parseInt(reason)) {
+  case 0:
+    desc = "Too late to cancel";
+    break;
+  case 1:
+    desc = "Unknown order";
+    break;
+  case 2:
+    desc = "Broker Option";
+    break;
+  case 3:
+    desc = "Order already in Pending Cancel or Pending Replace status";
+    break;
+  }
+
+  return desc;
+}
+
+exports.getPTPOrderCancelRejectReason = getPTPOrderCancelRejectReason;
+
 
 exports.registerCommonScripts = function () {
 	var subscribeinstrument;

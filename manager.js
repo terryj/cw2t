@@ -138,6 +138,8 @@ function pubsub() {
       sendQuoteack(message.substr(9));
     } else if (message.substr(0, 5) == "quote") {
       sendQuote(message.substr(6));
+    } else if (message.substr(0, 17) == "ordercancelreject") {
+      orderCancelReject(message.substr(18));
     } else if (message.substr(0, 5) == "order") {
       getSendOrder(message.substr(6));
     } else if (message.substr(0, 5) == "trade") {
@@ -701,7 +703,6 @@ function getSendOrder(orderid) {
 
     // send to user, if connected
     if (order.operatorid in connections) {
-      console.log("sending order");
       sendOrder(order, connections[order.operatorid]);
     }
   });
@@ -835,16 +836,28 @@ function getSendReserve(orgclientkey, symbol, currency) {
   });
 }
 
-function orderCancelReject(orgclientkey, ocr, reason) {
-  var ordercancelreject = {};
+function orderCancelReject(ocrid) {
+  // get the order cancel request
+  db.hgetall("ordercancelrequest:" + ocrid, function(err, ordercancelrequest) {
+    if (err) {
+      console.log(err); // can't get order cancel request, so just log
+      return;
+    }
 
-  ordercancelreject.orderid = ocr.orderid;
+    if (ordercancelrequest == null) {
+      console.log("Order cancel request not found, id:" + ocrid);
+      return;
+    }
 
-  console.log("Order cancel request #" + ordercancelreject.orderid + " rejected, reason: " + common.getReasonDesc(reason));
+    ordercancelrequest.reasondesc = common.getPTPOrderCancelRejectReason(ordercancelrequest.reason);
+    if ('text' in ordercancelrequest && ordercancelrequest.text != "") {
+      ordercancelrequest.reasondesc += ", " + ordercancelrequest.text;
+    }
 
-  if (orgclientkey in connections) {
-    connections[orgclientkey].write("{\"ordercancelreject\":" + JSON.stringify(ordercancelreject) + "}");
-  }
+    if (ordercancelrequest.operatorid in connections) {
+      connections[ordercancelrequest.operatorid].write("{\"ordercancelreject\":" + JSON.stringify(ordercancelrequest) + "}");
+    }
+  });
 }
 
 function getValue(trade) {
