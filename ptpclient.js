@@ -109,6 +109,7 @@ function tryToConnect(self) {
 		// connection termination
 		pqconn.on('end', function() {
 			console.log('Disconnected from ' + pqhost);
+			stopHeartbeatTimer();
 		});
 
 		// todo: do i need this
@@ -121,7 +122,9 @@ function tryToConnect(self) {
 
 	// need to handle error event
 	pqconn.on('error', function(err) {
-		console.log(err);
+		console.log("pqconn error event:" + err);
+
+		//stopHeartbeatTimer();
 
 		// set a timer to re-try - todo: do we need to base this on error?
 		setTimeout(function() {
@@ -246,7 +249,7 @@ function sendLogout(text) {
 	logoutinitiated = true;
 }
 
-function heartbeat() {
+function sendHeartbeat() {
 	sendMessage('0', "", "", "", false, null, null);
 }
 
@@ -426,8 +429,9 @@ function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, m
 }
 
 function startHeartbeatTimer() {
+	console.log("starting hearbeat timer");
 	heartbeatouttimer = setTimeout(function() {
-		heartbeat();
+		sendHeartbeat();
 	}, heartbtint * 1000);
 }
 
@@ -443,7 +447,7 @@ function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgs
 	var checksumstr;
 
 	// we are sending, so don't need a heartbeat, so turn the heartbeat timer off
-	stopHeartbeatTimer();
+	//stopHeartbeatTimer();
 
 	// create the part of the header included in the body length
 	msg = '35=' + msgtype + SOH
@@ -485,7 +489,7 @@ function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgs
 	console.log("-------------");
 
 	// start the heartbeat timer
-	startHeartbeatTimer();
+	//startHeartbeatTimer();
 }
 
 function parseData(self) {
@@ -1160,6 +1164,8 @@ function logonReplyReceived(logon, self) {
 		// return a logon message with the reset flag set
 		logon(true);
 	}
+
+	//startHeartbeatTimer();
 }
 
 function logoutReceived(logout, self) {
@@ -1257,6 +1263,8 @@ function heartbeatReceived(heartbeat, self) {
 				testrequesttimer = null;
 			}
 		}
+	} else {
+		sendHeartbeat();
 	}
 }
 
@@ -1264,9 +1272,9 @@ function testRequestReceived(testrequest, self) {
 	console.log(testrequest);
 	console.log('test request received');
 
-	stopHeartbeatTimer();
+	//stopHeartbeatTimer();
 	testRequestReply(testrequest.testreqid);
-	startHeartbeatTimer();
+	//startHeartbeatTimer();
 }
 
 function testRequestReply(reqid) {	
