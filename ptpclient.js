@@ -109,28 +109,28 @@ function tryToConnect(self) {
 		// connection termination
 		pqconn.on('end', function() {
 			console.log('Disconnected from ' + pqhost);
-			stopHeartbeatTimer();
 		});
-
-		// todo: do i need this
-		/*setTimeout(function() {
-			sendLogon();
-    	}, 1000);*/
 
 		logon(false);
 	});
 
 	// need to handle error event
 	pqconn.on('error', function(err) {
-		console.log("pqconn error event:" + err);
+		console.log(err);
 
-		//stopHeartbeatTimer();
+		stopHeartbeatTimers();
 
 		// set a timer to re-try - todo: do we need to base this on error?
 		setTimeout(function() {
 			tryToConnect(self);
     	}, connectDelay);
 	});
+}
+
+function stopHeartbeatTimers() {
+	stopHeartBeatIn();
+	stopHeartbeatOut();
+	stopTestRequestTimer();
 }
 
 function init(self) {
@@ -272,9 +272,7 @@ function testRequest() {
 	sendMessage('1', "", "", msg, false, null, null);
 
 	// need to receive a signed heartbeat within agreed time period, otherwise we are history
-	testrequesttimer = setTimeout(function() {
-		TestRequestTimeout();
-	}, (heartbtint * 1000) + (transmissiontime * 1000));
+	startTestRequestTimer();
 }
 
 function TestRequestTimeout() {
@@ -428,14 +426,13 @@ function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, m
 	}
 }
 
-function startHeartbeatTimer() {
-	console.log("starting hearbeat timer");
+function startHeartbeatOut() {
 	heartbeatouttimer = setTimeout(function() {
 		sendHeartbeat();
 	}, heartbtint * 1000);
 }
 
-function stopHeartbeatTimer() {
+function stopHeartbeatOut() {
 	if (heartbeatouttimer != null) {
 		clearTimeout(heartbeatouttimer);
 		heartbeatouttimer = null;
@@ -445,9 +442,6 @@ function stopHeartbeatTimer() {
 function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, timestamp, origtimestamp) {
 	var msg;
 	var checksumstr;
-
-	// we are sending, so don't need a heartbeat, so turn the heartbeat timer off
-	//stopHeartbeatTimer();
 
 	// create the part of the header included in the body length
 	msg = '35=' + msgtype + SOH
@@ -487,9 +481,6 @@ function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgs
 	console.log(msg);
 	pqconn.write(msg, 'ascii'); // todo: need ascii option?
 	console.log("-------------");
-
-	// start the heartbeat timer
-	//startHeartbeatTimer();
 }
 
 function parseData(self) {
@@ -1164,8 +1155,6 @@ function logonReplyReceived(logon, self) {
 		// return a logon message with the reset flag set
 		logon(true);
 	}
-
-	//startHeartbeatTimer();
 }
 
 function logoutReceived(logout, self) {
@@ -1259,8 +1248,7 @@ function heartbeatReceived(heartbeat, self) {
 	if (testrequesttimer != null) {
 		if ('testreqid' in heartbeat) {
 			if (heartbeat.testreqid == matchtestreqid) {
-				clearTimeout(testrequesttimer);
-				testrequesttimer = null;
+				stopTestRequestTimer();
 			}
 		}
 	} else {
@@ -1268,13 +1256,21 @@ function heartbeatReceived(heartbeat, self) {
 	}
 }
 
+function startTestRequestTimer() {
+	testrequesttimer = setTimeout(function() {
+		TestRequestTimeout();
+	}, (heartbtint * 1000) + (transmissiontime * 1000));
+}
+
+function stopTestRequestTimer() {
+	clearTimeout(testrequesttimer);
+	testrequesttimer = null;	
+}
+
 function testRequestReceived(testrequest, self) {
-	console.log(testrequest);
 	console.log('test request received');
 
-	//stopHeartbeatTimer();
 	testRequestReply(testrequest.testreqid);
-	//startHeartbeatTimer();
 }
 
 function testRequestReply(reqid) {	
