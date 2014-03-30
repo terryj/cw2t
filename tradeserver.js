@@ -464,6 +464,7 @@ function orderCancelRequest(ocr) {
 
   db.eval(scriptordercancelrequest, 5, ocr.clientid, ocr.orderid, ocr.timestamp, ocr.operatortype, ocr.operatorid, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
 
     // error, so send an ordercancelreject message
     if (ret[0] != 0) {
@@ -471,8 +472,8 @@ function orderCancelRequest(ocr) {
       return;
     }
 
-    // if normal market, forward to Proquote & wait for outcome
-    if (ret[1] == "0") {
+    // forward to Proquote & wait for outcome
+    if (ret[4] != "") {
       ocr.ordercancelreqid = ret[2];
       ocr.symbol = ret[3];
       ocr.isin = ret[4];
@@ -485,7 +486,7 @@ function orderCancelRequest(ocr) {
       return;
     }
 
-    // ooh order, so send result
+    // not forwarded, so publish the result
     db.publish(ocr.operatortype, "order:" + ocr.orderid);
 
     // todo: distribute any changes to the order book
@@ -519,12 +520,18 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
         ptp.newOrder(order);
       }
     } else {
-      // publish the regular order & trade to whence it came
+      // publish the order to whence it came
       db.publish(order.operatortype, "order:" + order.orderid);
-      db.publish(order.operatortype, "trade:" + tradeid);
 
-      // publish the hedge to the client server, so anyone viewing the hedgebook receives it
-      db.publish(clientserverchannel, "trade:" + hedgetradeid);
+      // publish the trade if there is one
+      if (tradeid != "") {
+        db.publish(order.operatortype, "trade:" + tradeid);
+      }
+
+      // publish any hedge to the client server, so anyone viewing the hedgebook receives it
+      if (hedgetradeid != "") {
+        db.publish(clientserverchannel, "trade:" + hedgetradeid);
+      }
 
       // if we are hedging, change the order id to that of the hedge & forward to proquote
       if (hedgeorderid != "") {
@@ -1744,37 +1751,41 @@ function registerScripts() {
   local hedgetradeid = "" \
   local defaultnosettdays = 0 \
   if instrumenttype == "CFD" or instrumenttype == "SPB" or instrumenttype == "CCFD" then \
-    --[[ create trades for client & hedge book for off-exchange products ]] \
-    hedgebookid = redis.call("get", "hedgebook:" .. instrumenttype .. ":" .. KEYS[18]) \
-    if not hedgebookid then hedgebookid = 999999 end \
-    local reverseside \
-    if side == 1 then \
-      reverseside = 2 \
-    else \
-      reverseside = 1 \
-    end \
-    local hedgecosts = {0,0,0,0} \
-    tradeid = newtrade(KEYS[1], orderid, KEYS[2], side, KEYS[4], KEYS[5], KEYS[11], 1, 1, cc[3], hedgebookid, KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], cc[2], KEYS[22], KEYS[23], cc[4]) \
-    hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
-    --[[ adjust order as filled ]] \
-    redis.call("hmset", "order:" .. orderid, "remquantity", 0, "status", 2) \
-    --[[ todo: may need to adjust margin here ]] \
-    --[[ see if we need to hedge this trade in the market ]] \
-    local hedgeclient = tonumber(redis.call("hget", "client:" .. KEYS[1], "hedge")) \
-    local hedgeinst = tonumber(redis.call("hget", "symbol:" .. KEYS[2], "hedge")) \
-    if hedgeclient == 1 or hedgeinst == 1 then \
-      --[[ create a hedge order in the underlying product ]] \
-      proquotesymbol = getproquotesymbol(KEYS[2]) \
-      if proquotesymbol[4] then \
-        hedgeorderid = neworder(hedgebookid, proquotesymbol[4], KEYS[3], KEYS[4], KEYS[5], "X", KEYS[4], 0, KEYS[7], KEYS[8], KEYS[9], "", KEYS[11], KEYS[12], KEYS[13], KEYS[14], 0, KEYS[15], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], "", "", KEYS[21], KEYS[22], KEYS[23], orderid, "") \
-        --[[ get proquote values ]] \
-        proquotequote = getproquotequote(KEYS[10], side) \
-        --[[ assume uk equity as underlying for default settl days ]] \
-        defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. KEYS[18] .. ":" .. side, "defaultnosettdays") \
+    --[[ ignore limit orders for derivatives as they will be handled manually, at least for the time being ]] \
+    if KEYS[6] ~= "2" then \
+      --[[ create trades for client & hedge book for off-exchange products ]] \
+      hedgebookid = redis.call("get", "hedgebook:" .. instrumenttype .. ":" .. KEYS[18]) \
+      if not hedgebookid then hedgebookid = 999999 end \
+      local reverseside \
+      if side == 1 then \
+        reverseside = 2 \
+      else \
+        reverseside = 1 \
+      end \
+      local hedgecosts = {0,0,0,0} \
+      tradeid = newtrade(KEYS[1], orderid, KEYS[2], side, KEYS[4], KEYS[5], KEYS[11], 1, 1, cc[3], hedgebookid, KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], cc[2], KEYS[22], KEYS[23], cc[4]) \
+      hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
+      --[[ adjust order as filled ]] \
+      redis.call("hmset", "order:" .. orderid, "remquantity", 0, "status", 2) \
+      --[[ todo: may need to adjust margin here ]] \
+      --[[ see if we need to hedge this trade in the market ]] \
+      local hedgeclient = tonumber(redis.call("hget", "client:" .. KEYS[1], "hedge")) \
+      local hedgeinst = tonumber(redis.call("hget", "symbol:" .. KEYS[2], "hedge")) \
+      if hedgeclient == 1 or hedgeinst == 1 then \
+        --[[ create a hedge order in the underlying product ]] \
+        proquotesymbol = getproquotesymbol(KEYS[2]) \
+        if proquotesymbol[4] then \
+          hedgeorderid = neworder(hedgebookid, proquotesymbol[4], KEYS[3], KEYS[4], KEYS[5], "X", KEYS[4], 0, KEYS[7], KEYS[8], KEYS[9], "", KEYS[11], KEYS[12], KEYS[13], KEYS[14], 0, KEYS[15], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], "", "", KEYS[21], KEYS[22], KEYS[23], orderid, "") \
+          --[[ get proquote values ]] \
+          proquotequote = getproquotequote(KEYS[10], side) \
+          --[[ assume uk equity as underlying for default settl days ]] \
+          defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. KEYS[18] .. ":" .. side, "defaultnosettdays") \
+        end \
       end \
     end \
   else \
     --[[ this is an equity - just consider external orders for the time being - todo: internal ]] \
+    --[[ todo: consider equity limit orders ]] \
     if markettype == 0 then \
       --[[ see if we need to send this trade to the market - if either product or client hedge, then send ]] \
       local hedgeclient = tonumber(redis.call("hget", "client:" .. KEYS[1], "hedge")) \
@@ -1923,15 +1934,17 @@ function registerScripts() {
 
   scriptordercancelrequest = removefromorderbook + cancelorder + getproquotesymbol + '\
   local errorcode = 0 \
+  local orderid = KEYS[2] \
   local ordercancelreqid = redis.call("incr", "ordercancelreqid") \
   --[[ store the order cancel request ]] \
-  redis.call("hmset", "ordercancelrequest:" .. ordercancelreqid, "clientid", KEYS[1], "orderid", KEYS[2], "timestamp", KEYS[3], "operatortype", KEYS[4], "operatorid", KEYS[5]) \
-  local fields = {"status", "markettype", "symbol", "side", "quantity"} \
-  local vals = redis.call("hmget", "order:" .. KEYS[2], unpack(fields)) \
+  redis.call("hmset", "ordercancelrequest:" .. ordercancelreqid, "clientid", KEYS[1], "orderid", orderid, "timestamp", KEYS[3], "operatortype", KEYS[4], "operatorid", KEYS[5]) \
+  local fields = {"status", "markettype", "symbol", "side", "quantity", "externalorderid"} \
+  local vals = redis.call("hmget", "order:" .. orderid, unpack(fields)) \
   local markettype = "" \
   local symbol = "" \
   local side \
   local quantity = "" \
+  local externalorderid = "" \
   if vals == nil then \
     --[[ order not found ]] \
     errorcode = 1009 \
@@ -1940,6 +1953,7 @@ function registerScripts() {
     symbol = vals[3] \
     side = vals[4] \
     quantity = vals[5] \
+    externalorderid = vals[6] \
     if vals[1] == "2" then \
       --[[ already filled ]] \
       errorcode = 1010 \
@@ -1953,17 +1967,24 @@ function registerScripts() {
   end \
   --[[ process according to market type ]] \
   local proquotesymbol = {"", "", ""} \
-  if vals[2] == "1" then \
+  if markettype == "1" then \
     if errorcode ~= 0 then \
       redis.call("hset", "ordercancelrequest:" .. ordercancelreqid, "reason", errorcode) \
     else \
-      removefromorderbook(symbol, KEYS[2]) \
-      cancelorder(KEYS[2], "4") \
+      removefromorderbook(symbol, orderid) \
+      cancelorder(orderid, "4") \
     end \
   else \
-    --[[ get required instrument values for proquote ]] \
-    if errorcode == 0 then \
-      proquotesymbol = getproquotesymbol(symbol) \
+    --[[ if the order is with proquote, it will be forwarded, else if request ok, we can go ahead and cancel the order ]] \
+    if externalorderid == "" then \
+      if errorcode == 0 then \
+        cancelorder(orderid, "4") \
+      end \
+    else \
+      --[[ get required instrument values for proquote ]] \
+      if errorcode == 0 then \
+        proquotesymbol = getproquotesymbol(symbol) \
+      end \
     end \
   end \
   return {errorcode, markettype, ordercancelreqid, symbol, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], side, quantity} \

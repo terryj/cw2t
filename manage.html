@@ -1736,6 +1736,16 @@
             }
         }
 
+        function manualFill() {
+            var msg;
+
+            msg = "Manual fill on its way";
+
+            var result = confirm(msg);
+            if (result == true) {
+            }
+        }
+
         //
         // routine to display an selection box for products
         //
@@ -2248,7 +2258,7 @@
 
                     msg = orderNewMsg(orders[x]);
                     listelement = addElement(msg, list1, orders[x].orderid);
-                    optionToViewCancel(listelement, true);
+                    optionToViewCancel(listelement, true, true);
                 } else if (orders[x].status == "1") { // part-filled
                     if (firstorderpartfilled) {
                         firstorderpartfilled = false;
@@ -2926,10 +2936,11 @@
             }
         }
 
-        function optionToViewCancel(listelement, cancelorder) {
+        function optionToViewCancel(listelement, cancelorder, fillorder) {
             var addfuncdiv;
             var vieworderlnk;
             var cancelorderlnk;
+            var fillorderlnk;
 
             listelement.onmouseover = function() {
                 addfuncdiv.style.visibility = "visible";
@@ -2961,6 +2972,18 @@
                 }
 
                 addfuncdiv.appendChild(cancelorderlnk);
+            }
+
+            if (fillorder) {
+                fillorderlnk = document.createElement('a');
+                fillorderlnk.innerHTML = "Manual Fill";
+                fillorderlnk.href = "javascript:void(0);";
+
+                fillorderlnk.onclick = function() {
+                    manualFill(listelement.value);
+                }
+
+                addfuncdiv.appendChild(fillorderlnk);                
             }
 
             listelement.appendChild(addfuncdiv);
