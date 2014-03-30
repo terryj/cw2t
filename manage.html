@@ -1267,6 +1267,8 @@
         function updateOrder(order) {
             var msg;
 
+            orders[order.orderid] = order;
+
             if (order.status == "0") {
                 msg = "Order acknowledged, id: " + order.orderid;
                 if ('text' in order && order.text != "") {
@@ -1736,13 +1738,27 @@
             }
         }
 
-        function manualFill() {
+        function confirmOrderFill(orderid) {
             var msg;
+            var orderfillrequest = {};
 
-            msg = "Manual fill on its way";
-
+            msg = "Fill order #" + orderid;
+            msg += " to " + getSideDesc(orders[orderid].side);
+            msg += " " + orders[orderid].remquantity;
+            msg += " " + orders[orderid].symbol;
+            if ('price' in orders[orderid]) {
+                msg += " @ " + orders[orderid].price;
+            }
+            msg += " " + getOrdertypeDesc(orders[orderid].ordertype);
+            
             var result = confirm(msg);
             if (result == true) {
+                orderfillrequest.clientid = orders[orderid].clientid;
+                orderfillrequest.orderid = orderid;
+                orderfillrequest.operatortype = operatortype;
+                orderfillrequest.operatorid = userid;
+
+                sockjs.send("{\"orderfillrequest\":" + JSON.stringify(orderfillrequest) + "}");
             }
         }
 
@@ -2976,11 +2992,11 @@
 
             if (fillorder) {
                 fillorderlnk = document.createElement('a');
-                fillorderlnk.innerHTML = "Manual Fill";
+                fillorderlnk.innerHTML = "Fill Order";
                 fillorderlnk.href = "javascript:void(0);";
 
                 fillorderlnk.onclick = function() {
-                    manualFill(listelement.value);
+                    confirmOrderFill(listelement.value);
                 }
 
                 addfuncdiv.appendChild(fillorderlnk);                
