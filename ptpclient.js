@@ -82,9 +82,9 @@ function tryToConnect(self) {
 
 		// any received data
 		pqconn.on('data', function(data) {
-			console.log("----- received --------");
+			console.log("--- received ---");
 			console.log(data);
-			console.log("-----------------------");
+			console.log("----------------");
 
 			// add new data to buffer
 			datainbuf += data;
@@ -413,9 +413,10 @@ function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, m
 
 			// store the message in case it needs to be resent later
 			// just store the body as the header & footer will be affected by a resend
-			db.hset("messageout:" + msgseqnumout, "body", body);
-			db.hset("messageout:" + msgseqnumout, "msgtype", msgtype);
-			db.hset("messageout:" + msgseqnumout, "timestamp", timestamp);
+			//db.hset("fixmessageout:" + msgseqnumout, "body", body);
+			//db.hset("fixmessageout:" + msgseqnumout, "msgtype", msgtype);
+			//db.hset("fixmessageout:" + msgseqnumout, "timestamp", timestamp);
+			db.hmset("fixmessageout:" + msgseqnumout, "body", body, "msgtype", msgtype, "timestamp", timestamp);
 
 			// this is a new message, but if we are in a recovery phase, don't send now
 			// instead, the message should be sent by the recovery process itself
@@ -477,10 +478,10 @@ function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgs
 	msg += checksumstr;
 
 	// send the message
-	console.log("---sending---");
+	console.log("--- sending ---");
 	console.log(msg);
+	console.log("---------------");
 	pqconn.write(msg, 'ascii'); // todo: need ascii option?
-	console.log("-------------");
 }
 
 function parseData(self) {
@@ -523,8 +524,6 @@ function parseData(self) {
     			// clear array
     			tagvalarr = [];
 
-    			//count++;
-
     			// may be another message, so reset state
     			messagestate = 0;
     		}
@@ -559,8 +558,9 @@ function completeMessage(tagvalarr, self) {
 	body = getBody(header.msgtype, tagvalarr);
 
 	// store the message, will overwrite if duplicate
-	db.hset("messagein:" + header.msgseqnum, "msgtype", header.msgtype);
-	db.hset("messagein:" + header.msgseqnum, "body", body);
+	// todo: not storing as need to store body as string, not object & string is logged anyway
+	//db.hset("fixmessagein:" + header.msgseqnum, "msgtype", header.msgtype);
+	//db.hset("fixmessagein:" + header.msgseqnum, "body", body);
 
 	if (header.possdupflag == 'Y') {
 		if (messagerecoveryinrequested) {
@@ -591,7 +591,6 @@ function completeMessage(tagvalarr, self) {
 			console.log(err);
 			return;
 		}
-		console.log('fixseqnumin='+msgseqnumin);
 
 		// check fix sequence number matches what we expect
 		if (parseInt(header.msgseqnum) < parseInt(msgseqnumin)) {
@@ -669,8 +668,7 @@ function completeMessage(tagvalarr, self) {
 				}
 			}
 		}
-		console.log('header.msgtype='+header.msgtype);
-
+	
 		// message numbers match, so do the processing on our data object
 		switch (header.msgtype) {
 			case 'S':
@@ -714,7 +712,8 @@ function completeMessage(tagvalarr, self) {
 		}
 
 		// mark our incomimg message as processed
-		db.hset("messagein:" + header.msgseqnum, "read", "Y");
+		// todo: ignore until storing rest of message, see above
+		//db.hset("fixmessagein:" + header.msgseqnum, "read", "Y");
 	});
 }
 
@@ -1194,7 +1193,7 @@ function sequenceReset(body, nextnumin) {
 function resendRequest(beginseqno) {
 	var msg;
 
-	console.log('sending resend request');
+	console.log("sending resend request, starting from msg. no. " + beginseqno);
 
 	msg = '7=' + beginseqno + SOH
 		+ '16=' + '0' + SOH;
@@ -1301,7 +1300,7 @@ function businessRejectReceived(businessreject, self) {
 
 function resendMessage(msgno, endseqno) {
 	// get requested message
-	db.hgetall("messageout:" + msgno, function(err, msg) {
+	db.hgetall("fixmessageout:" + msgno, function(err, msg) {
 		if (err) {
 			console.log(err);
 			disconnect();

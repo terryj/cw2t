@@ -1095,8 +1095,6 @@ ptp.on("orderExpired", function(exereport) {
       return
     }
 
-    console.log(ret);
-
     if (ret[0] != 0) {
       // todo: send to client
       console.log("Error in scriptorderexpire, reason:" + common.getReasonDesc(ret[0]));

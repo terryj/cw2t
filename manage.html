@@ -1642,6 +1642,7 @@
             clearList("list3", true);
             clearList("list4", true);
             clearList("list5", true);
+            clearList("list6", true);
         }
 
         function clearForms() {
@@ -1912,6 +1913,7 @@
             addHeading("Filled", list3);
             addHeading("Rejected", list4);
             addHeading("Cancelled", list5);
+            addHeading("Expired", list6);
         }
 
         /*function displayPositions() {
@@ -2236,6 +2238,7 @@
             var firstorderfilled = true;
             var firstorderrejected = true;
             var firstordercancelled = true;
+            var firstorderexpired = true;
             var msg;
             var listelement;
             var list1;
@@ -2243,6 +2246,7 @@
             var list3;
             var list4;
             var list5;
+            var list6;
             var lblnopartfilled;
 
             clearLists();
@@ -2263,6 +2267,9 @@
             var emptyline4 = addNewLine(main);
             emptyline4.id = "emptyline:4";
             list5 = getList("list5");
+            var emptyline5 = addNewLine(main);
+            emptyline5.id = "emptyline:5";
+            list6 = getList("list6");
 
             displayOrderHeadings();
 
@@ -2303,6 +2310,13 @@
 
                     msg = orderCancelMsg(orders[x]);
                     listelement = addElement(msg, list5, orders[x].orderid);
+                } else if (orders[x].status == "C") { // expired
+                    if (firstorderexpired) {
+                        firstorderexpired = false;
+                    }
+
+                    msg = orderExpireMsg(orders[x]);
+                    listelement = addElement(msg, list6, orders[x].orderid);
                 }
             }
 
@@ -2353,6 +2367,19 @@
                 addElement("No cancelled orders", list5, 0)
             } else {
                 list5.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                                
+            }
+
+            if (firstorderexpired) {
+                addElement("No expired orders", list6, 0)
+            } else {
+                list6.onclick = function(e) {
                     var element;
                     
                     if (!e) e = window.event;
@@ -3530,6 +3557,18 @@
             }
 
             msg += " " + getOrdertypeDesc(order.ordertype) + ", cancelled, order id " + order.orderid + ", at " + formatUTCDateTime(order.timestamp);
+
+            return msg;
+        }
+
+        function orderExpireMsg(order) {
+            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbol + ", " + order.remquantity + " remaining";
+
+            if ('price' in order) {
+                msg += " @ " + order.price;
+            }
+
+            msg += " " + getOrdertypeDesc(order.ordertype) + ", expired, order id " + order.orderid + ", at " + formatUTCDateTime(order.timestamp);
 
             return msg;
         }
