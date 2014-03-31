@@ -168,6 +168,9 @@ function getReasonDesc(reason) {
   case 1020:
     desc = "Insufficient free margin";
     break;
+  case 1021:
+    desc = "Order held externally";
+    break;
   default:
     desc = "Unknown reason";
   }

@@ -95,9 +95,9 @@ function tryToConnect(self) {
 			}*/
 
 			// parse it
-			stopHeartBeatIn();
+			//stopHeartBeatIn();
 			parseData(self);
-			startHeartBeatIn();
+			//startHeartBeatIn();
 
     		/*if (count == 20000) {
     			console.log("nummsg="+count);
@@ -253,7 +253,7 @@ function sendHeartbeat() {
 	sendMessage('0', "", "", "", false, null, null);
 }
 
-function testRequest() {
+function sendTestRequest() {
 	var msg;
 
 	console.log('sending test request');
@@ -537,7 +537,7 @@ function startHeartBeatIn() {
 	if (heartbeatintimer == null) {
 		// send a test request after agreed quiet time period
 		heartbeatintimer = setTimeout(function() {
-			testRequest();
+			sendTestRequest();
 		}, (heartbtint * 1000) + (transmissiontime * 1000));
 	}
 }

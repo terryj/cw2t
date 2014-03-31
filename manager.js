@@ -191,6 +191,8 @@ function listen() {
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 18) == "ordercancelrequest") {
         db.publish(tradeserverchannel, msg);
+      } else if (msg.substr(2, 16) == "orderfillrequest") {
+        db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 6) == "order\"") {
         db.publish(tradeserverchannel, msg);
       } else {

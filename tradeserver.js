@@ -56,6 +56,7 @@ var scriptquoteack;
 var scriptrejectorder;
 var scriptgetinst;
 var scriptgetholidays;
+var scriptorderfillrequest;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -109,6 +110,8 @@ function pubsub() {
         quoteRequest(obj.quoterequest);
       } else if ("ordercancelrequest" in obj) {
         orderCancelRequest(obj.ordercancelrequest);
+      } else if ("orderfillrequest" in obj) {
+        orderfillrequest(obj.orderfillrequest);
       } else if ("order" in obj) {
         newOrder(obj.order);
       }
@@ -464,7 +467,6 @@ function orderCancelRequest(ocr) {
 
   db.eval(scriptordercancelrequest, 5, ocr.clientid, ocr.orderid, ocr.timestamp, ocr.operatortype, ocr.operatorid, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
 
     // error, so send an ordercancelreject message
     if (ret[0] != 0) {
@@ -496,6 +498,34 @@ function orderCancelRequest(ocr) {
 
 function orderCancelReject(operatortype, ocrid) {
   db.publish(operatortype, "ordercancelreject:" + ocrid);
+}
+
+function orderFillRequest(ofr) {
+  console.log("orderfillrequest");
+  console.log(ofr);
+
+  ofr.timestamp = common.getUTCTimeStamp(new Date());
+
+  if (!('price' in ofr)) {
+    ofr.price = "";
+  }
+
+  db.eval(scriptorderfillrequest, 6, ofr.clientid, ofr.orderid, ofr.timestamp, ofr.operatortype, ofr.operatorid, ofr.price, function(err, ret) {
+    if (err) throw err;
+
+    // error, so send an orderfillreject message
+    if (ret[0] != 0) {
+      orderFillReject(ofr.operatortype, ret[2]);
+      return;
+    }
+
+    // publish the result
+    db.publish(ocr.operatortype, "order:" + ofr.orderid);
+    db.publish(ocr.operatortype, "trade:" + ret[1]); // todo:
+
+    // todo: distribute any changes to the order book
+    //broadcastLevelTwo(ret[3], null);
+  });
 }
 
 function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
@@ -1949,18 +1979,19 @@ function registerScripts() {
     --[[ order not found ]] \
     errorcode = 1009 \
   else \
+    local status = vals[1] \
     markettype = vals[2] \
     symbol = vals[3] \
     side = vals[4] \
     quantity = vals[5] \
     externalorderid = vals[6] \
-    if vals[1] == "2" then \
+    if status == "2" then \
       --[[ already filled ]] \
       errorcode = 1010 \
-    elseif vals[1] == "4" then \
+    elseif status == "4" then \
       --[[ already cancelled ]] \
       errorcode = 1008 \
-    elseif vals[1] == "8" then \
+    elseif status == "8" then \
       --[[ already rejected ]] \
       errorcode = 1012 \
     end \
@@ -2004,6 +2035,48 @@ function registerScripts() {
   --[[ get the operatortype to enable on-sending ]] \
   local operatortype = redis.call("hget", "order:" .. orderid, "operatortype") \
   return {errorcode, orderid, operatortype} \
+  ';
+
+  scriptorderfillrequest = '\
+  local errorcode = 0 \
+  local orderid = KEYS[2] \
+  local fields = {"clientid", "symbol", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "operatortype", "hedgeorderid", "futsettdate", "operatorid", "status"} \
+  local vals = redis.call("hmget", "order:" .. orderid, unpack(fields)) \
+  if vals == nil then \
+    --[[ order not found ]] \
+    errorcode = 1009 \
+  else \
+    local status = vals[1] \
+    markettype = vals[2] \
+    symbol = vals[3] \
+    side = vals[4] \
+    quantity = vals[5] \
+    externalorderid = vals[6] \
+    if status == "2" then \
+      --[[ already filled ]] \
+      errorcode = 1010 \
+    elseif status == "4" then \
+      --[[ already cancelled ]] \
+      errorcode = 1008 \
+    elseif status == "8" then \
+      --[[ already rejected ]] \
+      errorcode = 1012 \
+    end \
+    if externalorderid == "" then \
+      --[[ order held externally, so cannot fill ]] \
+      errorcode = 1021 \
+    end \
+  end \
+  if errorcode == 0 then \
+    local quantity = tonumber(KEYS[4]) \
+    local price = tonumber(KEYS[5]) \
+    local consid = quantity * price \
+    local instrumenttype = redis.call("hget", "symbol:" .. vals[2], "instrumenttype") \
+    local initialmargin = getinitialmargin(vals[2], consid) \
+    local costs = getcosts(vals[1], vals[2], instrumenttype, vals[3], consid, KEYS[17]) \
+    local finance = calcfinance(instrumenttype, consid, KEYS[17], vals[3], vals[8]) \
+    local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance) \
+  end \
   ';
 
   scriptorderack = '\
