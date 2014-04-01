@@ -171,6 +171,9 @@ function getReasonDesc(reason) {
   case 1021:
     desc = "Order held externally";
     break;
+  case 1022:
+    desc = "Order already expired";
+    break;
   default:
     desc = "Unknown reason";
   }

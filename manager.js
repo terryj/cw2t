@@ -21,7 +21,7 @@ var common = require('./common.js');
 // globals
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
-var cw2tport = 8081; // user listen port
+var cw2tport = 8080; // user listen port
 var ordertypes = {};
 var brokerid = "1"; // todo: via logon
 var defaultnosettdays = 3;
@@ -678,7 +678,7 @@ function getFixDate(date) {
   quote.bidsize = 0;
   quote.offersize = 0;
   quote.quoterejectreason = reason;
-  quote.reasondesc = getReasonDesc(reason);
+  quote.reasondesc = common.getReasonDesc(reason);
 
   conn.write("{\"quote\":" + JSON.stringify(quote) + "}");
 }*/

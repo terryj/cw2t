@@ -111,7 +111,7 @@ function pubsub() {
       } else if ("ordercancelrequest" in obj) {
         orderCancelRequest(obj.ordercancelrequest);
       } else if ("orderfillrequest" in obj) {
-        orderfillrequest(obj.orderfillrequest);
+        orderFillRequest(obj.orderfillrequest);
       } else if ("order" in obj) {
         newOrder(obj.order);
       }
@@ -504,13 +504,18 @@ function orderFillRequest(ofr) {
   console.log("orderfillrequest");
   console.log(ofr);
 
-  ofr.timestamp = common.getUTCTimeStamp(new Date());
+  var today = new Date();
+
+  ofr.timestamp = common.getUTCTimeStamp(today);
 
   if (!('price' in ofr)) {
     ofr.price = "";
   }
 
-  db.eval(scriptorderfillrequest, 6, ofr.clientid, ofr.orderid, ofr.timestamp, ofr.operatortype, ofr.operatorid, ofr.price, function(err, ret) {
+  // calculate a settlement date from the nosettdays
+  ofr.futsettdate = common.getUTCDateString(common.getSettDate(today, ofr.nosettdays, holidays));
+
+  db.eval(scriptorderfillrequest, 7, ofr.clientid, ofr.orderid, ofr.timestamp, ofr.operatortype, ofr.operatorid, ofr.price, ofr.futsettdate, function(err, ret) {
     if (err) throw err;
 
     // error, so send an orderfillreject message
@@ -520,8 +525,8 @@ function orderFillRequest(ofr) {
     }
 
     // publish the result
-    db.publish(ocr.operatortype, "order:" + ofr.orderid);
-    db.publish(ocr.operatortype, "trade:" + ret[1]); // todo:
+    db.publish(ofr.operatortype, "order:" + ofr.orderid);
+    db.publish(ofr.operatortype, "trade:" + ret[1]);
 
     // todo: distribute any changes to the order book
     //broadcastLevelTwo(ret[3], null);
@@ -2038,43 +2043,52 @@ function registerScripts() {
   scriptorderfillrequest = '\
   local errorcode = 0 \
   local orderid = KEYS[2] \
-  local fields = {"clientid", "symbol", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "operatortype", "hedgeorderid", "futsettdate", "operatorid", "status"} \
+  local fields = {"clientid", "symbol", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "operatortype", "hedgeorderid", "futsettdate", "operatorid", "status", "externalorderid", "settlcurrency", "markettype"} \
   local vals = redis.call("hmget", "order:" .. orderid, unpack(fields)) \
   if vals == nil then \
     --[[ order not found ]] \
     errorcode = 1009 \
   else \
-    local status = vals[1] \
-    markettype = vals[2] \
-    symbol = vals[3] \
-    side = vals[4] \
-    quantity = vals[5] \
-    externalorderid = vals[6] \
+    local status = vals[13] \
     if status == "2" then \
-      --[[ already filled ]] \
+      --[[ filled ]] \
       errorcode = 1010 \
     elseif status == "4" then \
-      --[[ already cancelled ]] \
+      --[[ cancelled ]] \
       errorcode = 1008 \
     elseif status == "8" then \
-      --[[ already rejected ]] \
+      --[[ rejected ]] \
       errorcode = 1012 \
+    elseif status == "C" then \
+      --[[ expired ]] \
+      errorcode = 1022 \
     end \
+    local externalorderid = vals[14] \
     if externalorderid == "" then \
       --[[ order held externally, so cannot fill ]] \
       errorcode = 1021 \
     end \
   end \
+  local tradeid = 0 \
   if errorcode == 0 then \
-    local quantity = tonumber(KEYS[4]) \
-    local price = tonumber(KEYS[5]) \
-    local consid = quantity * price \
-    local instrumenttype = redis.call("hget", "symbol:" .. vals[2], "instrumenttype") \
-    local initialmargin = getinitialmargin(vals[2], consid) \
-    local costs = getcosts(vals[1], vals[2], instrumenttype, vals[3], consid, KEYS[17]) \
-    local finance = calcfinance(instrumenttype, consid, KEYS[17], vals[3], vals[8]) \
-    local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance) \
+    --[[ can only fill the remaining quantity ]] \
+    local remquantity = tonumber(vals[7]) \
+    --[[ fill at the passed price, may be different from the order price ]] \
+    local symbol = vals[2] \
+    local price = tonumber(KEYS[6]) \
+    --[[ todo: round? ]] \
+    local consid = remquantity * price \
+    local side = vals[3] \
+    local settlcurrency = vals[15] \
+    local instrumenttype = redis.call("hget", "symbol:" .. symbol, "instrumenttype") \
+    local initialmargin = getinitialmargin(symbol, consid) \
+    local costs = getcosts(vals[1], symbol, instrumenttype, side, consid, settlcurrency) \
+    local finance = calcfinance(instrumenttype, consid, settlcurrency, side, vals[8]) \
+    local hedgebookid = redis.call("get", "hedgebook:" .. instrumenttype .. ":" .. settlcurrency) \
+    if not hedgebookid then hedgebookid = 999999 end \
+    tradeid = newtrade(vals[1], orderid, symbol, side, quantity, price, settlcurrency, 1, 1, costs, hedgebookid, vals[16], "", KEYS[7], KEYS[3], "", "", settlcurrency, consid, 1, 1, vals[8], initialmargin, vals[9], vals[12], finance) \
   end \
+  return {errorcode, tradeid} \
   ';
 
   scriptorderack = '\

@@ -382,7 +382,7 @@ function getFixDate(date) {
   quote.bidsize = 0;
   quote.offersize = 0;
   quote.quoterejectreason = reason;
-  quote.reasondesc = getReasonDesc(reason);
+  quote.reasondesc = common.getReasonDesc(reason);
 
   conn.write("{\"quote\":" + JSON.stringify(quote) + "}");
 }*/
