@@ -109,6 +109,8 @@ function tryToConnect(self) {
 		// connection termination
 		pqconn.on('end', function() {
 			console.log('Disconnected from ' + pqhost);
+
+			stopHeartbeatTimers();
 		});
 
 		logon(false);
@@ -1165,11 +1167,13 @@ function logoutReceived(logout, self) {
 		}
 
 		// return a logout
-		sendLogout('');
+		// commented out as socket is closed by server immediately after it sends a logout message
+		// so nothing further to do
+		//sendLogout('');
+	} else {
+		// we are done
+		disconnect();
 	}
-
-	// we are done
-	disconnect();
 }
 
 function resetSequenceNumbers() {
