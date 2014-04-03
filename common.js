@@ -475,7 +475,7 @@ exports.registerCommonScripts = function () {
   local subscribeinstrument = function(symbol, id, servertype) \
     local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
     local marketext = redis.call("hget", servertype .. ":" .. id, "marketext") \
-    if marketext then \
+    if marketext ~= nil then \
       	topic = topic .. marketext \
     end \
     redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbol) \
@@ -501,7 +501,7 @@ exports.registerCommonScripts = function () {
   local unsubscribeinstrument = function(symbol, id, servertype) \
     local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
     local marketext = redis.call("hget", servertype .. ":" .. id, "marketext") \
-    if marketext then \
+    if marketext ~= nil then \
       topic = topic .. marketext \
     end \
     local needtounsubscribe = 0 \
@@ -657,7 +657,7 @@ exports.registerCommonScripts = function () {
 
   //
   // subscribe to a new instrument
-  // params: symbol, id, servertype
+  // params: symbol, client/user id, servertype
   //
   exports.scriptsubscribeinstrument = subscribeinstrument + '\
   redis.call("sadd", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
@@ -668,7 +668,7 @@ exports.registerCommonScripts = function () {
 
   //
   // unsubscribe from an instrument
-  // params: symbol, id, servertype
+  // params: symbol, client/user id, servertype
   //
   exports.scriptunsubscribeinstrument = unsubscribeinstrument + '\
   redis.call("srem", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
@@ -679,7 +679,7 @@ exports.registerCommonScripts = function () {
 
   //
   // unsubscribe a user/client/other connection
-  // params: servertype, id
+  // params: servertype, client/user id
   //
   exports.scriptunsubscribeid = unsubscribeinstrument + '\
   local orderbooks = redis.call("smembers", KEYS[2] .. ":" .. KEYS[1] .. ":orderbooks") \
