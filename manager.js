@@ -381,8 +381,6 @@ function orderBookRequest(userid, symbol, conn) {
   db.eval(common.scriptsubscribeinstrument, 3, symbol, userid, servertype, function(err, ret) {
     if (err) throw err;
 
-    console.log(ret);
-
     // the script tells us if we need to subscribe to a topic
     if (ret[0]) {
       dbsub.subscribe(ret[1]);
@@ -450,11 +448,8 @@ function sendCurrentOrderBook(symbol, topic, conn) {
 }
 
 function orderBookRemoveRequest(userid, symbol, conn) {
-  console.log("orderBookRemoveRequest");
   db.eval(common.scriptunsubscribeinstrument, 3, symbol, userid, servertype, function(err, ret) {
     if (err) throw err;
-
-    console.log(ret);
 
     // the script will tell us if we need to unsubscribe from the topic
     if (ret[0]) {

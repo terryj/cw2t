@@ -719,6 +719,8 @@
         //
         var datain = function(msg) {
             try {
+                console.log("data in");
+                console.log(msg);
                 var obj = JSON.parse(msg);
 
                 if ("orderbooks" in obj) {
@@ -1348,7 +1350,8 @@
 
         function startHeartbeatTimer() {
             stopHeartbeatTimer();
-            heartbeattimer = setTimeout(connectionTest, 30000);            
+            // todo: either need to remove or JSONify the ping message
+            //heartbeattimer = setTimeout(connectionTest, 30000);            
         }
 
         function stopHeartbeatTimer() {
@@ -1422,6 +1425,7 @@
             };
 
             sockjs.onheartbeat = function() {
+                console.log("onheartbeat");
                 startHeartbeatTimer();
             };
         }
