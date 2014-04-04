@@ -195,6 +195,8 @@ function listen() {
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 6) == "order\"") {
         db.publish(tradeserverchannel, msg);
+      //} else if (msg.substr(0, 4) == "ping") {
+        //conn.write("pong");
       } else {
         // need to parse
         try {
@@ -252,8 +254,6 @@ function listen() {
             pendingChatRequest(obj.pendingchatrequest, conn);
           } else if ("endofday" in obj) {
             endOfDay(userid);
-          } else if ("ping" in obj) {
-            conn.write("pong");
           } else {
             console.log("unknown msg received:" + msg);
           }

@@ -719,8 +719,6 @@
         //
         var datain = function(msg) {
             try {
-                console.log("data in");
-                console.log(msg);
                 var obj = JSON.parse(msg);
 
                 if ("orderbooks" in obj) {
@@ -834,9 +832,9 @@
                     displayChatHistory();
                 } else if ("status" in obj) {
                     statusMsg(obj.status);
-                } else if ("pong" in obj) {
-                    console.log("received pong");
-                    inconnectiontest = false;
+                //} else if ("pong" in obj) {
+                    //console.log("received pong");
+                    //inconnectiontest = false;
                 } else {
                     console.log("Unknown message:" + msg);
                 }
@@ -1351,7 +1349,7 @@
         function startHeartbeatTimer() {
             stopHeartbeatTimer();
             // todo: either need to remove or JSONify the ping message
-            //heartbeattimer = setTimeout(connectionTest, 30000);            
+            heartbeattimer = setTimeout(connectionTest, 30000);            
         }
 
         function stopHeartbeatTimer() {
@@ -1383,8 +1381,8 @@
                 return;
             }
 
-            console.log("sending ping");
-            sockjs.send("ping");
+            //console.log("sending ping");
+            //sockjs.send("ping");
             startHeartbeatTimer();
             inconnectiontest = true;
         }
