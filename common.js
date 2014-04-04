@@ -474,6 +474,9 @@ exports.registerCommonScripts = function () {
 	subscribeinstrument = '\
   local subscribeinstrument = function(symbol, id, servertype) \
     local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
+    if not topic then \
+      return {45, ""} \
+    end \
     if topic == nil then \
       return {0, ""} \
     end \
