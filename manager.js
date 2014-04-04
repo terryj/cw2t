@@ -327,6 +327,7 @@ function listen() {
 }
 
 function tidy(userid) {
+  console.log("tidy");
   if (userid != "0") {
     if (userid in connections) {
       console.log("user:" + userid + " logged off");
