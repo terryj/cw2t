@@ -450,6 +450,7 @@ function sendCurrentOrderBook(symbol, topic, conn) {
 }
 
 function orderBookRemoveRequest(userid, symbol, conn) {
+  console.log("orderBookRemoveRequest");
   db.eval(common.scriptunsubscribeinstrument, 3, symbol, userid, servertype, function(err, ret) {
     if (err) throw err;
 
