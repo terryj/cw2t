@@ -475,9 +475,6 @@ exports.registerCommonScripts = function () {
   local subscribeinstrument = function(symbol, id, servertype) \
     local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
     if not topic then \
-      return {45, ""} \
-    end \
-    if topic == nil then \
       return {0, ""} \
     end \
     local marketext = redis.call("hget", servertype .. ":" .. id, "marketext") \
@@ -506,6 +503,9 @@ exports.registerCommonScripts = function () {
   unsubscribeinstrument = '\
   local unsubscribeinstrument = function(symbol, id, servertype) \
     local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
+    if not topic then \
+      return {0, ""} \
+    end \
     local marketext = redis.call("hget", servertype .. ":" .. id, "marketext") \
     if marketext ~= nil then \
       topic = topic .. marketext \
