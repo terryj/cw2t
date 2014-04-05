@@ -313,8 +313,8 @@ public class Cw2tClient implements ISessionObserver {
 				System.out.println("Received " + receivedMessages +  " messages");
 			}
 		} else {
-			System.out.println("Received update on " + Tpc + ": " 
-				+ tvm.toString());
+            // todo: consider adding as an option
+			//System.out.println("Received update on " + Tpc + ": " + tvm.toString());
 		}
         /*for ( int i = 0; i < topics.length; i ++ ) {
             TagValueMap tvm = new TagValueMap();

@@ -132,7 +132,7 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    console.log("channel:" + channel + ", " + message);
+    //console.log("channel:" + channel + ", " + message);
 
     if (message.substr(0, 8) == "quoteack") {
       sendQuoteack(message.substr(9));
@@ -327,7 +327,6 @@ function listen() {
 }
 
 function tidy(userid) {
-  console.log("tidy");
   if (userid != "0") {
     if (userid in connections) {
       console.log("user:" + userid + " logged off");
