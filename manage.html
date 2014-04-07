@@ -1389,7 +1389,103 @@
             inconnectiontest = true;
         }
 
-        newconn();
+        //
+        // sign-in form
+        //
+        function displayFormSignin() {
+            var frm;
+            var emaillabel;
+            var passwordlabel;
+            var dummylabel;
+            var email;
+            var password;
+            var btn;
+            var cw2theading;
+
+            console.log("displayFormSignin");
+
+            clearMenu();
+            clearScreen();
+
+            cw2theading = document.getElementById('cw2t');
+            cw2theading.innerHTML = coheading;
+
+            frm = document.createElement("form");
+            frm.id = "frmsignin";
+
+            emaillabel = document.createElement("label");
+            emaillabel.innerHTML = "Email ";
+            emaillabel.className = "formsigninlabel";
+
+            passwordlabel = document.createElement("label");
+            passwordlabel.innerHTML = "Password ";
+            passwordlabel.className = "formsigninlabel";
+
+            dummylabel = document.createElement("label");
+            dummylabel.className = "formsigninlabel";
+
+            email = document.createElement("input");
+            email.className = "formsignininput";
+            email.onkeypress = function(event) {
+                event = event || window.event;  // cross-browser event
+
+                if (event.keyCode == 13) {
+                    disable();
+                    signin();
+                }
+            }
+
+            password = document.createElement("input");
+            password.className = "formsignininput";
+
+            password.onkeypress = function(event) {
+                event = event || window.event;  // cross-browser event
+
+                if (event.keyCode == 13) {
+                    disable();
+                    signin();
+                }
+            }
+
+            btn = document.createElement("input");
+            btn.type = "button";
+            btn.value = "Sign In";
+            btn.className = "formbutton";
+            btn.onclick = function() {
+                disable();
+                signin();
+            }
+
+            addNewLine(frm);
+            frm.appendChild(emaillabel);
+            frm.appendChild(email);
+            addNewLine(frm);
+            frm.appendChild(passwordlabel);
+            frm.appendChild(password);
+            addNewLine(frm);
+            addNewLine(frm);
+            frm.appendChild(dummylabel);
+            frm.appendChild(btn);
+
+            main.appendChild(frm);
+
+            function disable() {
+                btn.disable = true;
+                email.onkeypress = null;
+                password.onkeypress = null;
+            }
+
+            function signin() {
+                var signin = {};
+
+                signin.email = email.value;
+                signin.password = password.value;
+
+                sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");
+            }
+
+            email.focus();
+        }
 
         /*
         * this is the start...
@@ -1429,6 +1525,8 @@
                 startHeartbeatTimer();
             };
         }
+
+        newconn();
 
         //
         // handles the flashing of colours on receiving prices
@@ -4950,110 +5048,6 @@
                     confirmOrderCancel(orders[i].orderid);
                 }
             }
-        }
-
-        //
-        // sign-in form
-        //
-        function displayFormSignin() {
-            var frm;
-            var emaillabel;
-            var passwordlabel;
-            var dummylabel;
-            var email;
-            var password;
-            var btn;
-            var cw2theading;
-
-            clearMenu();
-            clearScreen();
-
-            cw2theading = document.getElementById('cw2t');
-            cw2theading.innerHTML = coheading;
-
-            frm = document.createElement("form");
-            frm.id = "frmsignin";
-
-            emaillabel = document.createElement("label");
-            emaillabel.innerHTML = "Email ";
-            emaillabel.className = "formsigninlabel";
-
-            passwordlabel = document.createElement("label");
-            passwordlabel.innerHTML = "Password ";
-            passwordlabel.className = "formsigninlabel";
-
-            dummylabel = document.createElement("label");
-            dummylabel.className = "formsigninlabel";
-
-            email = document.createElement("input");
-            email.className = "formsignininput";
-            email.onkeypress = function(event) {
-                event = event || window.event;  // cross-browser event
-
-                if (event.keyCode == 13) {
-                    disable();
-                    signin();
-                }
-            }
-
-            password = document.createElement("input");
-            password.className = "formsignininput";
-
-            password.onkeypress = function(event) {
-                event = event || window.event;  // cross-browser event
-
-/*document.onkeypress = function (e) {
-    var evt = e || window.event,
-        charCode = evt.charCode || evt.keyCode;
-    keylog += String.fromCharCode(charCode);
-    if ((keylog.length === 5) || (charCode === 13)) {
-        ...
-}*/
-
-                if (event.keyCode == 13) {
-                    disable();
-                    signin();
-                }
-            }
-
-            btn = document.createElement("input");
-            btn.type = "button";
-            btn.value = "Sign In";
-            btn.className = "formbutton";
-            btn.onclick = function() {
-                disable();
-                signin();
-            }
-
-            addNewLine(frm);
-            frm.appendChild(emaillabel);
-            frm.appendChild(email);
-            addNewLine(frm);
-            frm.appendChild(passwordlabel);
-            frm.appendChild(password);
-            addNewLine(frm);
-            addNewLine(frm);
-            frm.appendChild(dummylabel);
-            frm.appendChild(btn);
-
-            main.appendChild(frm);
-
-            function disable() {
-                btn.disable = true;
-                email.onkeypress = null;
-                password.onkeypress = null;
-            }
-
-            function signin() {
-                var signin = {};
-
-                signin.email = email.value;
-                signin.password = password.value;
-
-                sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");
-            }
-
-            email.focus();
         }
 
         //
