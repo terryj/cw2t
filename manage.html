@@ -1335,6 +1335,7 @@
         }
 
         function start() {
+            console.log("start");
             init();
             clearScreen();
             displayMenu();
@@ -1901,6 +1902,8 @@
         //
 
         function displayOrderBooks() {
+
+    console.log("displayOrderBooks");
             selectStock("watchlist", null, false, true, null);
 
             displayOrderBookHeadings();
