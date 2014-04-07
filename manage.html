@@ -1529,7 +1529,7 @@
         function clearHeadings() {
             console.log("clearHeadings");
             for (var i = main.childNodes.length - 1; i >= 0; --i) {
-                if (main.childNodes[i].nodeType == Node.TEXT_NODE) {
+                if (main.childNodes[i].nodeType == 3) { // changed for IE from...Node.TEXT_NODE) {
                     main.removeChild(main.childNodes[i]);
                 }                
             }
@@ -3477,7 +3477,7 @@
 
         function removeHeading(text) {
             for (var i = 0; i < main.childNodes.length; ++i) {
-                if (main.childNodes[i].nodeType == Node.TEXT_NODE && main.childNodes[i].nodeValue == text) {
+                if (main.childNodes[i].nodeType == 3 && main.childNodes[i].nodeValue == text) {
                     main.removeChild(main.childNodes[i]);
                     break;
                 }
