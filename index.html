@@ -751,7 +751,6 @@
         }
 
         function loadPositions(positionarr) {
-            console.log(positionarr);
             for (var i = 0; i < positionarr.length; ++i) {
                 positions[positionarr[i].positionid] = positionarr[i];
             }            
@@ -880,6 +879,7 @@
         }
 
         function start() {
+            init();
             clearScreen();
             displayMenu();
             selectedmenu = 0;
@@ -972,7 +972,7 @@
             for (var symbol in priceflash) {
                 removesymbol = true;
 
-                for (i = 0; i < orderbooks[symbol].length; i++) {
+                for (var i = 0; i < orderbooks[symbol].length; i++) {
                     // bid prices
                     orderbooks[symbol][i].bidflashcount--;
                     if (orderbooks[symbol][i].bidflashcount == 0) {
@@ -4576,7 +4576,7 @@
         function getDefaultSettleDate() {
             var today = new Date();
 
-            for (i = 0; i < 3; i++) {
+            for (var i = 0; i < 3; i++) {
                 today.setDate(today.getDate() + 1);
 
                 // ignore weekends
@@ -4674,6 +4674,39 @@
             }
 
             return desc;
+        }
+
+        function init() {
+            if (!Array.prototype.indexOf) {
+                Array.prototype.indexOf = function (searchElement, fromIndex) {
+                    if ( this === undefined || this === null ) {
+                        throw new TypeError( '"this" is null or not defined' );
+                    }
+
+                    var length = this.length >>> 0; // Hack to convert object.length to a UInt32
+
+                    fromIndex = +fromIndex || 0;
+
+                    if (Math.abs(fromIndex) === Infinity) {
+                        fromIndex = 0;
+                    }
+
+                    if (fromIndex < 0) {
+                        fromIndex += length;
+                        if (fromIndex < 0) {
+                            fromIndex = 0;
+                        }
+                    }
+
+                    for (;fromIndex < length; fromIndex++) {
+                        if (this[fromIndex] === searchElement) {
+                            return fromIndex;
+                        }
+                    }
+
+                    return -1;
+                };
+            }
         }
 
     </script>

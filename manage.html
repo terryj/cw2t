@@ -1445,7 +1445,7 @@
 
                 console.log("oblen="+orderbooks[symbol].length);
 
-                for (i = 0; i < orderbooks[symbol].length; i++) {
+                for (var i = 0; i < orderbooks[symbol].length; i++) {
                     // bid prices
                     orderbooks[symbol][i].bidflashcount--;
                     if (orderbooks[symbol][i].bidflashcount == 0) {
@@ -6584,7 +6584,7 @@
         function getDefaultSettleDate() {
             var today = new Date();
 
-            for (i = 0; i < 3; i++) {
+            for (var i = 0; i < 3; i++) {
                 today.setDate(today.getDate() + 1);
 
                 // ignore weekends
@@ -6738,7 +6738,6 @@
         }
 
         function init() {
-            console.log("init");
             if (!Array.prototype.indexOf) {
                 Array.prototype.indexOf = function (searchElement, fromIndex) {
                     if ( this === undefined || this === null ) {
