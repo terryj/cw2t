@@ -1436,8 +1436,13 @@
             var offerprice;
             var removesymbol;
 
+            console.log("flashText");
+
             for (var symbol in priceflash) {
                 removesymbol = true;
+                console.log(symbol);
+
+                console.log("oblen="+orderbooks[symbol].length);
 
                 for (i = 0; i < orderbooks[symbol].length; i++) {
                     // bid prices
@@ -1497,6 +1502,7 @@
                 }
 
                 if (removesymbol) {
+                    console.log("deleting "+symbol);
                     delete priceflash[symbol];
                 }
             }
