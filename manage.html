@@ -1336,16 +1336,12 @@
 
         function start() {
             init();
-            console.log("clearScreen");
             clearScreen();
-            console.log("aftclearScreen");
             displayMenu();
 
             selectedmenu = 0;
 
-            console.log("displayOrderBooks");
             displayOrderBooks();
-            console.log("done");
         }
 
         function statusMsg(status) {
@@ -1443,9 +1439,6 @@
 
             for (var symbol in priceflash) {
                 removesymbol = true;
-                console.log(symbol);
-
-                console.log("oblen="+orderbooks[symbol].length);
 
                 for (var i = 0; i < orderbooks[symbol].length; i++) {
                     // bid prices
@@ -1516,7 +1509,6 @@
         //
 
         function clearMenu() {
-            console.log("clearMenu");
             var menu = document.getElementById("menu");
             if (menu != null) {
                 for (var i = 0; i < menu.childNodes.length; ++i) {
@@ -1527,7 +1519,6 @@
         }
 
         function clearHeadings() {
-            console.log("clearHeadings");
             for (var i = main.childNodes.length - 1; i >= 0; --i) {
                 if (main.childNodes[i].nodeType == 3) { // changed for IE from...Node.TEXT_NODE) {
                     main.removeChild(main.childNodes[i]);
@@ -1538,7 +1529,6 @@
         }
 
         function clearOrderBookHeadings() {
-            console.log("clearOrderBookHeadings");
             var headingstrip = document.getElementById("headingstrip");
             if (headingstrip != null) {
                 while(headingstrip.hasChildNodes()){
@@ -1786,8 +1776,6 @@
             var inpsymboldesc;
             var inpsymbol;
 
-            console.log("selectStock");
-
             if (stockbox == null) {
                 stockbox = document.createElement("div");
                 stockbox.id = "stockbox";
@@ -1802,7 +1790,6 @@
             stockboxinput.placeholder = "Symbol";
 
             stockboxinput.onkeyup = function() {
-                console.log("onkeyup");
                 clearList(stocklist.id, false);
 
                 if (stockboxinput.value.length == 0) {
@@ -1831,7 +1818,6 @@
             stocklist.style.visibility = "hidden";
 
             stocklist.onclick = function(e) {
-                console.log("stocklistonclick");
                 var firstspace;
                 var symbol;
                 var element;
@@ -1881,8 +1867,6 @@
             main.onclick = function(e) {
                 var elem;
 
-                console.log("main.onclick");
-
                 if (!e) e = window.event;
                 elem = e.target || e.srcElement;
 
@@ -1894,7 +1878,6 @@
             }
 
             if (focus) {
-                console.log("focus");
                 stockboxinput.focus();
             }
         }
@@ -1918,7 +1901,6 @@
         //
 
         function displayOrderBooks() {
-            console.log("displayOrderBooks");
             selectStock("watchlist", null, false, true, null);
 
             displayOrderBookHeadings();
@@ -3727,8 +3709,6 @@
             var placesellorderlnk;
             var clearquotelnk;
 
-            console.log("displayOrderBook"+symbol);
-
             if (!(symbol in orderbooks)) {
                 return;
             }
@@ -4007,8 +3987,6 @@
             var headingofferprice;
             var headingofferquantity;
             var headingslash;
-
-            console.log("displayOrderBookHeadings");
 
             if (Object.keys(orderbooks).length == 0) {
                 return;
