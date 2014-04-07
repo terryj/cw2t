@@ -1786,6 +1786,8 @@
             var inpsymboldesc;
             var inpsymbol;
 
+            console.log("selectStock");
+
             if (stockbox == null) {
                 stockbox = document.createElement("div");
                 stockbox.id = "stockbox";
@@ -1800,6 +1802,7 @@
             stockboxinput.placeholder = "Symbol";
 
             stockboxinput.onkeyup = function() {
+                console.log("onkeyup");
                 clearList(stocklist.id, false);
 
                 if (stockboxinput.value.length == 0) {
@@ -1828,6 +1831,7 @@
             stocklist.style.visibility = "hidden";
 
             stocklist.onclick = function(e) {
+                console.log("stocklistonclick");
                 var firstspace;
                 var symbol;
                 var element;
@@ -1877,6 +1881,8 @@
             main.onclick = function(e) {
                 var elem;
 
+                console.log("main.onclick");
+
                 if (!e) e = window.event;
                 elem = e.target || e.srcElement;
 
@@ -1888,6 +1894,7 @@
             }
 
             if (focus) {
+                console.log("focus");
                 stockboxinput.focus();
             }
         }
@@ -1911,6 +1918,7 @@
         //
 
         function displayOrderBooks() {
+            console.log("displayOrderBooks");
             selectStock("watchlist", null, false, true, null);
 
             displayOrderBookHeadings();
@@ -3719,6 +3727,8 @@
             var placesellorderlnk;
             var clearquotelnk;
 
+            console.log("displayOrderBook"+symbol);
+
             if (!(symbol in orderbooks)) {
                 return;
             }
@@ -3997,6 +4007,8 @@
             var headingofferprice;
             var headingofferquantity;
             var headingslash;
+
+            console.log("displayOrderBookHeadings");
 
             if (Object.keys(orderbooks).length == 0) {
                 return;
