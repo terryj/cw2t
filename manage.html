@@ -4103,6 +4103,8 @@
             quotereqqty.id = quotereqqtystr;
 
             quotereqqty.onkeypress = function(event) {
+                event = event || window.event;  // cross-browser event
+
                 if (event.keyCode == 13) {
                     sendIt();
                 }
@@ -4512,6 +4514,8 @@
             }
 
             quantityinput.onkeypress = function(event) {
+                event = event || window.event;  // cross-browser event
+
                 if (event.keyCode == 13) {
                     sendIt();
                 }
@@ -4546,6 +4550,8 @@
             priceinput.placeholder = pricedesc;
 
             priceinput.onkeypress = function(event) {
+                event = event || window.event;  // cross-browser event
+
                 if (event.keyCode == 13) {
                     sendIt();
                 }
@@ -4720,6 +4726,8 @@
                         }
 
                         priceinput.onkeypress = function(event) {
+                            event = event || window.event;  // cross-browser event
+
                             if (event.keyCode == 13) {
                                 sendIt();
                             }
@@ -4976,6 +4984,8 @@
             email = document.createElement("input");
             email.className = "formsignininput";
             email.onkeypress = function(event) {
+                event = event || window.event;  // cross-browser event
+
                 if (event.keyCode == 13) {
                     disable();
                     signin();
@@ -4984,7 +4994,18 @@
 
             password = document.createElement("input");
             password.className = "formsignininput";
+
             password.onkeypress = function(event) {
+                event = event || window.event;  // cross-browser event
+
+/*document.onkeypress = function (e) {
+    var evt = e || window.event,
+        charCode = evt.charCode || evt.keyCode;
+    keylog += String.fromCharCode(charCode);
+    if ((keylog.length === 5) || (charCode === 13)) {
+        ...
+}*/
+
                 if (event.keyCode == 13) {
                     disable();
                     signin();

@@ -3257,6 +3257,8 @@
             quotereqqty.placeholder = getQuantityDesc(qtyascashorshares);
 
             quotereqqty.onkeypress = function(event) {
+                event = event || window.event;  // cross-browser event
+
                 if (event.keyCode == 13) {
                     sendIt();
                 }
@@ -3667,6 +3669,8 @@
             }
 
             quantityinput.onkeypress = function(event) {
+                event = event || window.event;  // cross-browser event
+
                 if (event.keyCode == 13) {
                     sendIt();
                 }
@@ -3698,6 +3702,8 @@
             priceinput.placeholder = pricedesc;
 
             priceinput.onkeypress = function(event) {
+                event = event || window.event;  // cross-browser event
+
                 if (event.keyCode == 13) {
                     sendIt();
                 }
@@ -3870,6 +3876,8 @@
                         }
 
                         priceinput.onkeypress = function(event) {
+                            event = event || window.event;  // cross-browser event
+
                             if (event.keyCode == 13) {
                                 sendIt();
                             }
@@ -4161,7 +4169,10 @@
 
             email = document.createElement("input");
             email.className = "formsignininput";
+
             email.onkeypress = function(event) {
+                event = event || window.event;  // cross-browser event
+
                 if (event.keyCode == 13) {
                     disable();
                     signin();
@@ -4170,7 +4181,10 @@
 
             password = document.createElement("input");
             password.className = "formsignininput";
+
             password.onkeypress = function(event) {
+                event = event || window.event;  // cross-browser event
+
                 if (event.keyCode == 13) {
                     disable();
                     signin();
