@@ -1492,7 +1492,8 @@
         * set-up a sockjs connection & display the sign-in form
         * if the connection is lost, try to reconnect periodically
         */
-        function newconn() {
+        var newconn = function() {
+            console.log("newconn");
             var cw2theading;
 
             sockjs = new SockJS(sockjs_url);
@@ -1524,7 +1525,7 @@
                 console.log("onheartbeat");
                 startHeartbeatTimer();
             };
-        }
+        };
 
         newconn();
 
