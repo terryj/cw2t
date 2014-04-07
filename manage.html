@@ -1336,12 +1336,16 @@
 
         function start() {
             init();
+            console.log("clearScreen");
             clearScreen();
+            console.log("aftclearScreen");
             displayMenu();
 
             selectedmenu = 0;
 
+            console.log("displayOrderBooks");
             displayOrderBooks();
+            console.log("done");
         }
 
         function statusMsg(status) {
@@ -1437,8 +1441,6 @@
             var offerprice;
             var removesymbol;
 
-            console.log("flashText");
-
             for (var symbol in priceflash) {
                 removesymbol = true;
                 console.log(symbol);
@@ -1503,7 +1505,6 @@
                 }
 
                 if (removesymbol) {
-                    console.log("deleting "+symbol);
                     delete priceflash[symbol];
                 }
             }
@@ -1515,6 +1516,7 @@
         //
 
         function clearMenu() {
+            console.log("clearMenu");
             var menu = document.getElementById("menu");
             if (menu != null) {
                 for (var i = 0; i < menu.childNodes.length; ++i) {
@@ -1525,6 +1527,7 @@
         }
 
         function clearHeadings() {
+            console.log("clearHeadings");
             for (var i = main.childNodes.length - 1; i >= 0; --i) {
                 if (main.childNodes[i].nodeType == Node.TEXT_NODE) {
                     main.removeChild(main.childNodes[i]);
@@ -1535,6 +1538,7 @@
         }
 
         function clearOrderBookHeadings() {
+            console.log("clearOrderBookHeadings");
             var headingstrip = document.getElementById("headingstrip");
             if (headingstrip != null) {
                 while(headingstrip.hasChildNodes()){
