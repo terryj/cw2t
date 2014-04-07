@@ -3102,7 +3102,7 @@
 
             vieworderlnk = document.createElement('a');
             vieworderlnk.innerHTML = "View Order";
-            vieworderlnk.href = "javascript:void(0);";
+            //vieworderlnk.href = "javascript:void(0);";
 
             vieworderlnk.onclick = function() {
                 viewOrder(listelement.value);
@@ -3113,7 +3113,7 @@
             if (cancelorder) {
                 cancelorderlnk = document.createElement('a');
                 cancelorderlnk.innerHTML = "Cancel Order";
-                cancelorderlnk.href = "javascript:void(0);";
+                //cancelorderlnk.href = "javascript:void(0);";
 
                 cancelorderlnk.onclick = function() {
                     confirmOrderCancel(listelement.value);
@@ -3125,7 +3125,7 @@
             if (fillorder) {
                 fillorderlnk = document.createElement('a');
                 fillorderlnk.innerHTML = "Fill Order";
-                fillorderlnk.href = "javascript:void(0);";
+                //fillorderlnk.href = "javascript:void(0);";
 
                 fillorderlnk.onclick = function() {
                     confirmOrderFill(listelement.value);
@@ -3888,26 +3888,26 @@
 
                         reqquotelnk = document.createElement('a');
                         reqquotelnk.innerHTML = "Request Quote";
-                        reqquotelnk.href = "javascript:void(0);";
+                        //reqquotelnk.href = "javascript:void(0);";
                         reqquotelnk.onclick = function() {
                             requestQuote(symbol);
                         }
 
                         clearquotelnk = document.createElement('a');
                         clearquotelnk.innerHTML = "Clear";
-                        clearquotelnk.href = "javascript:void(0);";
+                        //clearquotelnk.href = "javascript:void(0);";
                         clearquotelnk.onclick = function() {
                             clearSymbolDiv(symbol);
                         }
 
                         placebuyorderlnk = document.createElement('a');
                         placebuyorderlnk.innerHTML = "Limit Buy";
-                        placebuyorderlnk.href = "javascript:void(0);";
+                        //placebuyorderlnk.href = "javascript:void(0);";
                         placebuyorderlnk.onclick = function() {placeOrder(symbol, '1', 0, 0);}
 
                         placesellorderlnk = document.createElement('a');
                         placesellorderlnk.innerHTML = "Limit Sell";
-                        placesellorderlnk.href = "javascript:void(0);";
+                        //placesellorderlnk.href = "javascript:void(0);";
                         placesellorderlnk.onclick = function() {placeOrder(symbol, '2', 0, 0);}
 
                         links = document.createElement('div');
@@ -6274,7 +6274,7 @@
             var link = document.createElement('a');
             link.id = id;
             link.innerHTML = text;
-            link.href = "javascript:void(0);";
+            //link.href = "javascript:void(0);";
             if (classname != "") {
                 newlink.className = classname;
             }
