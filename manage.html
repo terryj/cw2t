@@ -90,6 +90,7 @@
         a:hover {
             text-decoration: underline;
             color: #666666;
+            cursor: pointer;
         }
         .linkselected {
             color: #666666;
@@ -1426,6 +1427,7 @@
 
             email = document.createElement("input");
             email.className = "formsignininput";
+
             email.onkeypress = function(event) {
                 event = event || window.event;  // cross-browser event
 
@@ -1451,6 +1453,7 @@
             btn.type = "button";
             btn.value = "Sign In";
             btn.className = "formbutton";
+
             btn.onclick = function() {
                 disable();
                 signin();
@@ -3086,9 +3089,6 @@
 
         function optionToViewCancel(listelement, cancelorder, fillorder) {
             var addfuncdiv;
-            var vieworderlnk;
-            var cancelorderlnk;
-            var fillorderlnk;
 
             listelement.onmouseover = function() {
                 addfuncdiv.style.visibility = "visible";
@@ -3100,38 +3100,26 @@
             addfuncdiv = document.createElement('div');
             addfuncdiv.style.visibility = "hidden";
 
-            vieworderlnk = document.createElement('a');
-            vieworderlnk.innerHTML = "View Order";
-            //vieworderlnk.href = "javascript:void(0);";
+            var vieworderlnk = newlink("vieworderlnk", "View Order", "", addfuncdiv);
 
             vieworderlnk.onclick = function() {
                 viewOrder(listelement.value);
             }
 
-            addfuncdiv.appendChild(vieworderlnk);
-
             if (cancelorder) {
-                cancelorderlnk = document.createElement('a');
-                cancelorderlnk.innerHTML = "Cancel Order";
-                //cancelorderlnk.href = "javascript:void(0);";
+                var cancelorderlnk = newlink("cancelorderlnk", "Cancel Order", "", addfuncdiv);
 
                 cancelorderlnk.onclick = function() {
                     confirmOrderCancel(listelement.value);
                 }
-
-                addfuncdiv.appendChild(cancelorderlnk);
             }
 
             if (fillorder) {
-                fillorderlnk = document.createElement('a');
-                fillorderlnk.innerHTML = "Fill Order";
-                //fillorderlnk.href = "javascript:void(0);";
+                var fillorderlnk = newlink("fillorderlnk", "Fill Order", "", addfuncdiv);
 
                 fillorderlnk.onclick = function() {
                     confirmOrderFill(listelement.value);
                 }
-
-                addfuncdiv.appendChild(fillorderlnk);                
             }
 
             listelement.appendChild(addfuncdiv);
@@ -3806,10 +3794,6 @@
             var orderdiv;
             var nextsymbol;
             var links;
-            var reqquotelnk;
-            var placebuyorderlnk;
-            var placesellorderlnk;
-            var clearquotelnk;
 
             if (!(symbol in orderbooks)) {
                 return;
@@ -3886,36 +3870,25 @@
                     if (y == 0) {
                         strip.className = "yellowstrip";
 
-                        reqquotelnk = document.createElement('a');
-                        reqquotelnk.innerHTML = "Request Quote";
-                        //reqquotelnk.href = "javascript:void(0);";
+                        links = document.createElement('div');
+                        links.style.visibility = "hidden";
+
+                        var reqquotelnk = newlink("reqquotelnk", "Request Quote", "", links);
+                        var clearquotelnk = newlink("clearquotelnk", "Clear", "", links);
+                        var buyorderlnk = newlink("buyorderlnk", "Limit Buy", "", links);
+                        var sellorderlnk = newlink("sellorderlnk", "Limit Sell", "", links);
+
                         reqquotelnk.onclick = function() {
                             requestQuote(symbol);
                         }
 
-                        clearquotelnk = document.createElement('a');
-                        clearquotelnk.innerHTML = "Clear";
-                        //clearquotelnk.href = "javascript:void(0);";
                         clearquotelnk.onclick = function() {
                             clearSymbolDiv(symbol);
                         }
 
-                        placebuyorderlnk = document.createElement('a');
-                        placebuyorderlnk.innerHTML = "Limit Buy";
-                        //placebuyorderlnk.href = "javascript:void(0);";
-                        placebuyorderlnk.onclick = function() {placeOrder(symbol, '1', 0, 0);}
+                        buyorderlnk.onclick = function() {placeOrder(symbol, '1', 0, 0);}
 
-                        placesellorderlnk = document.createElement('a');
-                        placesellorderlnk.innerHTML = "Limit Sell";
-                        //placesellorderlnk.href = "javascript:void(0);";
-                        placesellorderlnk.onclick = function() {placeOrder(symbol, '2', 0, 0);}
-
-                        links = document.createElement('div');
-                        links.style.visibility = "hidden";
-                        links.appendChild(reqquotelnk);
-                        links.appendChild(placebuyorderlnk);
-                        links.appendChild(placesellorderlnk);
-                        links.appendChild(clearquotelnk);
+                        sellorderlnk.onclick = function() {placeOrder(symbol, '2', 0, 0);}
 
                         if (showvolume) {
                             level2.onclick = function() {
@@ -5383,7 +5356,8 @@
 
             addNewLine(frmclient);
             var btnupdate = newbutton("btnupdate", "Add", "formbutton", frmclient);
-            var lnknewclient = newlink("lnknewclient", "New Client", "", frmclient);
+            var lblspace = newlabel("lblspace", " ", "", frmclient);
+            var btnnewclient = newbutton("btnnewclient", "New Client", "formbuttonwide", frmclient);
 
             addNewLine(frmclient);
             var lblclientconf = newlabel("lblclientconf", "", "", frmclient);
@@ -5441,7 +5415,7 @@
                 sockjs.send("{\"newclient\":" + JSON.stringify(client) + "}");
             }
 
-            lnknewclient.onclick = function() {
+            btnnewclient.onclick = function() {
                 displayClient(null, "frmclient", "", "inpname", "inpclientid", "");
                 inpname.focus();
             }
@@ -5470,7 +5444,7 @@
             var opthedgeyes;
             var opthedgeno;
             var btnupdate;
-            var lnknewclient;
+            var btnnewclient;
             var inpclientid;
             var focusfld;
             var inpcommpercent;
@@ -5488,7 +5462,7 @@
                 opthedgeyes = document.getElementById("opthedgeyes");
                 opthedgeno = document.getElementById("opthedgeno");
                 btnupdate = document.getElementById("btnupdate");
-                lnknewclient = document.getElementById("lnknewclient");
+                btnnewclient = document.getElementById("btnnewclient");
                 inpcommpercent = document.getElementById("inpcommpercent");
 
                 // create an empty client
@@ -5551,10 +5525,10 @@
 
                     if (client.name == "") {
                         btnupdate.value = "Add";
-                        lnknewclient.style.visibility = "hidden";
+                        btnnewclient.style.visibility = "hidden";
                     } else {
                         btnupdate.value = "Update";
-                        lnknewclient.style.visibility = "visible";
+                        btnnewclient.style.visibility = "visible";
                     }
                 }
             } else {
@@ -6274,7 +6248,6 @@
             var link = document.createElement('a');
             link.id = id;
             link.innerHTML = text;
-            //link.href = "javascript:void(0);";
             if (classname != "") {
                 newlink.className = classname;
             }
