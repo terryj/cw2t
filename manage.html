@@ -501,6 +501,7 @@
             cursor: pointer;
             height: 24px;
             width: 140px;
+            margin-left: 3px;
         }
         .quotebuybutton {
             font-size: 21px;
@@ -714,6 +715,11 @@
         var coheading = "Thomas Grant & Company";
         var orderdivnumarr = {};
 
+        if (!console) {
+            console = {};
+            console.log = function(){};
+        }
+
         //
         // incoming data function
         // JSON data is parsed into an object & then processed
@@ -837,10 +843,10 @@
                     //console.log("received pong");
                     //inconnectiontest = false;
                 } else {
-                    //console.log("Unknown message:" + msg);
+                    console.log("Unknown message:" + msg);
                 }
             } catch(e) {
-                //console.log(e);
+                console.log(e);
                 return;
             }
         };
@@ -1369,7 +1375,7 @@
         function startRestartTimer() {
             // attempt restart after 1-10 seconds
             var randomonetoten = Math.floor((Math.random()*10)+1);
-            //console.log("attempt restart after " + randomonetoten + " seconds");
+            console.log("attempt restart after " + randomonetoten + " seconds");
             restarttimer = setTimeout(newconn, randomonetoten * 1000);
         }
 
@@ -1379,7 +1385,7 @@
 
         function connectionTest() {
             if (inconnectiontest) {
-                //console.log("need to reconnect");
+                console.log("need to reconnect");
                 return;
             }
 
@@ -1498,7 +1504,7 @@
             sockjs = new SockJS(sockjs_url);
 
             sockjs.onopen = function()  {
-                //console.log("connection open");
+                console.log("connection open");
                 stopRestartTimer();
                 startPriceTimer();
                 startHeartbeatTimer();
@@ -1510,7 +1516,7 @@
             };
 
             sockjs.onclose = function()  {
-                //console.log("connection closed");
+                console.log("connection closed");
                 cw2theading = document.getElementById('cw2t');
                 cw2theading.innerHTML = coheading + "- connection closed, retrying...";
                 stopRestartTimer();
@@ -1521,7 +1527,7 @@
             };
 
             sockjs.onheartbeat = function() {
-                //console.log("onheartbeat");
+                console.log("onheartbeat");
                 startHeartbeatTimer();
             };
         };
@@ -5350,7 +5356,6 @@
 
             addNewLine(frmclient);
             var btnupdate = newbutton("btnupdate", "Add", "formbutton", frmclient);
-            var lblspace = newlabel("lblspace", " ", "", frmclient);
             var btnnewclient = newbutton("btnnewclient", "New Client", "formbuttonwide", frmclient);
 
             addNewLine(frmclient);
@@ -6771,9 +6776,9 @@
                 }());
             }
 
-            if (!console) {
+            /*if (!console) {
                 console={}; console.log = function(){};
-            }
+            }*/
         }
 
     </script>
