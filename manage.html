@@ -4615,7 +4615,11 @@
             priceinput.id = "orderprice:" + symbol;
             priceinput.className = "orderprice";
             pricedesc = "PriceLimit";
-            priceinput.placeholder = pricedesc;
+
+            if (priceinput.placeholder == undefined) {
+            } else {
+                priceinput.placeholder = pricedesc;
+            }
 
             priceinput.onkeypress = function(event) {
                 event = event || window.event;  // cross-browser event
@@ -5152,8 +5156,7 @@
             clientboxinput.className = "clientboxinput";
 
             if (clientboxinput.placeholder == undefined) {
-                // Placeholder is not supported
-                var lblclientname = newlabel("lblclientname", "Client Name", "", clientbox);
+                // Placeholder is not supported - todo: consider writing alternative
             } else {
                 clientboxinput.placeholder = "Client Name";
             }
