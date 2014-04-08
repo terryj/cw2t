@@ -715,13 +715,10 @@
         var coheading = "Thomas Grant & Company";
         var orderdivnumarr = {};
 
-        /*if (!console) {
-            console = {};
-            console.log = function(){};
-        }*/
+        // redefine console.log for IE
         if (typeof console == "undefined") 
             var console = { log: function() {} };
-        
+
         //
         // incoming data function
         // JSON data is parsed into an object & then processed
@@ -3876,21 +3873,14 @@
                         links.style.visibility = "hidden";
 
                         var reqquotelnk = newlink("reqquotelnk", "Request Quote", "", links);
-                        var clearquotelnk = newlink("clearquotelnk", "Clear", "", links);
                         var buyorderlnk = newlink("buyorderlnk", "Limit Buy", "", links);
                         var sellorderlnk = newlink("sellorderlnk", "Limit Sell", "", links);
+                        var clearquotelnk = newlink("clearquotelnk", "Clear", "", links);
 
-                        reqquotelnk.onclick = function() {
-                            requestQuote(symbol);
-                        }
-
-                        clearquotelnk.onclick = function() {
-                            clearSymbolDiv(symbol);
-                        }
-
+                        reqquotelnk.onclick = function() {requestQuote(symbol);}
                         buyorderlnk.onclick = function() {placeOrder(symbol, '1', 0, 0);}
-
                         sellorderlnk.onclick = function() {placeOrder(symbol, '2', 0, 0);}
+                        clearquotelnk.onclick = function() {clearSymbolDiv(symbol);}
 
                         if (showvolume) {
                             level2.onclick = function() {
@@ -5160,7 +5150,13 @@
 
             clientboxinput = document.createElement("input");
             clientboxinput.className = "clientboxinput";
-            clientboxinput.placeholder = "Client Name";
+
+            if (clientboxinput.placeholder == undefined) {
+                // Placeholder is not supported
+                var lblclientname = newlabel("lblclientname", "Client Name", "", clientbox);
+            } else {
+                clientboxinput.placeholder = "Client Name";
+            }
 
             clientboxinput.onkeyup = function(e) {
                 clearList(clientlist.id, false);
@@ -6777,10 +6773,6 @@
                     };
                 }());
             }
-
-            /*if (!console) {
-                console={}; console.log = function(){};
-            }*/
         }
 
     </script>
