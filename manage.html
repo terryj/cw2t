@@ -837,10 +837,10 @@
                     //console.log("received pong");
                     //inconnectiontest = false;
                 } else {
-                    console.log("Unknown message:" + msg);
+                    //console.log("Unknown message:" + msg);
                 }
             } catch(e) {
-                console.log(e);
+                //console.log(e);
                 return;
             }
         };
@@ -1336,7 +1336,6 @@
         }
 
         function start() {
-            console.log("start");
             init();
             clearScreen();
             displayMenu();
@@ -1370,7 +1369,7 @@
         function startRestartTimer() {
             // attempt restart after 1-10 seconds
             var randomonetoten = Math.floor((Math.random()*10)+1);
-            console.log("attempt restart after " + randomonetoten + " seconds");
+            //console.log("attempt restart after " + randomonetoten + " seconds");
             restarttimer = setTimeout(newconn, randomonetoten * 1000);
         }
 
@@ -1380,7 +1379,7 @@
 
         function connectionTest() {
             if (inconnectiontest) {
-                console.log("need to reconnect");
+                //console.log("need to reconnect");
                 return;
             }
 
@@ -1402,8 +1401,6 @@
             var password;
             var btn;
             var cw2theading;
-
-            console.log("displayFormSignin");
 
             clearMenu();
             clearScreen();
@@ -1496,13 +1493,12 @@
         * if the connection is lost, try to reconnect periodically
         */
         var newconn = function() {
-            console.log("newconn");
             var cw2theading;
 
             sockjs = new SockJS(sockjs_url);
 
             sockjs.onopen = function()  {
-                console.log("connection open");
+                //console.log("connection open");
                 stopRestartTimer();
                 startPriceTimer();
                 startHeartbeatTimer();
@@ -1514,7 +1510,7 @@
             };
 
             sockjs.onclose = function()  {
-                console.log("connection closed");
+                //console.log("connection closed");
                 cw2theading = document.getElementById('cw2t');
                 cw2theading.innerHTML = coheading + "- connection closed, retrying...";
                 stopRestartTimer();
@@ -1525,7 +1521,7 @@
             };
 
             sockjs.onheartbeat = function() {
-                console.log("onheartbeat");
+                //console.log("onheartbeat");
                 startHeartbeatTimer();
             };
         };
@@ -2004,8 +2000,6 @@
         //
 
         function displayOrderBooks() {
-
-    console.log("displayOrderBooks");
             selectStock("watchlist", null, false, true, null);
 
             displayOrderBookHeadings();
