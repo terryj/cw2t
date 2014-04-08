@@ -635,6 +635,10 @@
         var showvolume = false;
         var quotetimer;
 
+        // redefine console.log for IE
+        if (typeof console == "undefined") 
+            var console = { log: function() {} };
+
         var datain = function(msg) {
             try {
                 var obj = JSON.parse(msg);
@@ -660,7 +664,6 @@
                 } else if ("trade" in obj) {
                     updateTrade(obj.trade);
                 } else if ("quoterequests" in obj) {
-                    console.log('yep');
                     clearQuoteRequests();
                     loadQuoteRequests(obj.quoterequests);
                     displayQuoteRequests();
@@ -928,20 +931,18 @@
 
             console.log("sending ping");
             sockjs.send("ping");
-            startHeartbeatTimer();
+            //startHeartbeatTimer();
             inconnectiontest = true;
         }
 
-        newconn();
-
-        function newconn() {
+        var newconn = function() {
             sockjs = new SockJS(sockjs_url);
 
             sockjs.onopen = function()  {
                 console.log("connection open");
                 stopRestartTimer();
                 startPriceTimer();
-                startHeartbeatTimer();
+                //startHeartbeatTimer();
                 displayFormSignin();
             };
 
@@ -953,16 +954,18 @@
                 console.log("connection closed");
                 stopRestartTimer();
                 stopPriceTimer();
-                stopHeartbeatTimer();
+                //stopHeartbeatTimer();
                 startRestartTimer();
                 signedin = false;
             };
 
             sockjs.onheartbeat = function() {
-                console.log("onheartbeat");
+                //console.log("onheartbeat");
                 //startHeartbeatTimer();
             };
-        }
+        };
+
+        newconn();
 
         function flashText() {
             var bidprice;
@@ -1800,7 +1803,6 @@
         }
 
         function displayQuoteRequests() {
-            console.log("dqr");
             var firstquoterequest = true;
             var msg;
             var list;
@@ -2162,8 +2164,6 @@
 
         function optionToViewCancel(listelement, cancelorder) {
             var addfuncdiv;
-            var vieworderlnk;
-            var cancelorderlnk;
 
             listelement.onmouseover = function() {
                 addfuncdiv.style.visibility = "visible";
@@ -2175,26 +2175,18 @@
             addfuncdiv = document.createElement('div');
             addfuncdiv.style.visibility = "hidden";
 
-            vieworderlnk = document.createElement('a');
-            vieworderlnk.innerHTML = "View Order";
-            vieworderlnk.href = "javascript:void(0);";
+            var vieworderlnk = newlink("vieworderlnk", "View Order", "", addfuncdiv);
 
             vieworderlnk.onclick = function() {
                 viewOrder(listelement.value);
             }
 
-            addfuncdiv.appendChild(vieworderlnk);
-
             if (cancelorder) {
-                cancelorderlnk = document.createElement('a');
-                cancelorderlnk.innerHTML = "Cancel Order";
-                cancelorderlnk.href = "javascript:void(0);";
+                var cancelorderlnk = newlink("cancelorderlnk", "Cancel Order", "", addfuncdiv);
 
                 cancelorderlnk.onclick = function() {
                     confirmOrderCancel(listelement.value);
                 }
-
-                addfuncdiv.appendChild(cancelorderlnk);
             }
 
             listelement.appendChild(addfuncdiv);
@@ -2883,9 +2875,6 @@
             var orderdiv;
             var nextsymbol;
             var links;
-            var reqquotelnk;
-            var placebuyorderlnk;
-            var placesellorderlnk;
 
             if (!(symbol in orderbooks)) {
                 return;
@@ -2962,26 +2951,18 @@
                     if (y == 0) {
                         strip.className = "yellowstrip";
 
-                        reqquotelnk = document.createElement('a');
-                        reqquotelnk.innerHTML = "Request Quote";
-                        reqquotelnk.href = "javascript:void(0);";
-                        reqquotelnk.onclick = function() {requestQuote(symbol);}
-
-                        placebuyorderlnk = document.createElement('a');
-                        placebuyorderlnk.innerHTML = "Buy Order";
-                        placebuyorderlnk.href = "javascript:void(0);";
-                        placebuyorderlnk.onclick = function() {placeOrder(symbol, '1', 0, 0);}
-
-                        placesellorderlnk = document.createElement('a');
-                        placesellorderlnk.innerHTML = "Sell order";
-                        placesellorderlnk.href = "javascript:void(0);";
-                        placesellorderlnk.onclick = function() {placeOrder(symbol, '2', 0, 0);}
-
                         links = document.createElement('div');
                         links.style.visibility = "hidden";
-                        links.appendChild(reqquotelnk);
-                        links.appendChild(placebuyorderlnk);
-                        links.appendChild(placesellorderlnk);
+
+                        var reqquotelnk = newlink("reqquotelnk", "Request Quote", "", links);
+                        var buyorderlnk = newlink("buyorderlnk", "Limit Buy", "", links);
+                        var sellorderlnk = newlink("sellorderlnk", "Limit Sell", "", links);
+                        var clearquotelnk = newlink("clearquotelnk", "Clear", "", links);
+
+                        reqquotelnk.onclick = function() {requestQuote(symbol);}
+                        buyorderlnk.onclick = function() {placeOrder(symbol, '1', 0, 0);}
+                        sellorderlnk.onclick = function() {placeOrder(symbol, '2', 0, 0);}
+                        clearquotelnk.onclick = function() {clearSymbolDiv(symbol);}
 
                         if (showvolume) {
                             level2.onclick = function() {
@@ -4060,7 +4041,6 @@
             var link = document.createElement('a');
             link.id = id;
             link.innerHTML = text;
-            link.href = "javascript:void(0);";
             if (classname != "") {
                 newlink.className = classname;
             }
