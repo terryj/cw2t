@@ -1299,9 +1299,9 @@
                 msg += cashtranstypes[cashtrans.transtype].description;
                 msg += " of " + cashtrans.amount + " " + cashtrans.currency;
                 if (cashtrans.drcr == "1") {
-                    msg += " debited to ";
+                    msg += " added to ";
                 } else {
-                    msg += " credited against ";                    
+                    msg += " taken from ";     
                 }
                 msg += clients[cashtrans.clientid].name;
                 lblcashconf.innerHTML = msg;
@@ -2960,11 +2960,11 @@
                     col.className = "colleftalign";
                     break;
                 case 4:
-                    col.innerHTML = "Debit";
+                    col.innerHTML = "In(+)";
                     col.className = "colrightalign";
                     break;
                 case 5:
-                    col.innerHTML = "Credit";
+                    col.innerHTML = "Out(-)";
                     col.className = "colrightalign";
                     break;
                 case 6:
@@ -5765,11 +5765,11 @@
             frmcash.appendChild(lbltranstype);
             frmcash.appendChild(seltranstype);
             addNewLine(frmcash);
-            var lbldrcr = newlabel("lbldrcr", "Debit/Credit:", "formlabel", frmcash);
+            var lbldrcr = newlabel("lbldrcr", "In(+)/Out(-):", "formlabel", frmcash);
             var optdr = newoption("optdr", "optdrcr", "formcheckbox", frmcash);
-            var lbldr = newlabel("lbldr", "Debit", "", frmcash);
+            var lbldr = newlabel("lbldr", "In", "", frmcash);
             var optcr = newoption("optcr", "optdrcr", "formcheckbox", frmcash);
-            var lblcr = newlabel("lblcr", "Credit", "", frmcash);
+            var lblcr = newlabel("lblcr", "Out", "", frmcash);
             optdr.checked = true;
             addNewLine(frmcash);
             frmcash.appendChild(lblamount);
