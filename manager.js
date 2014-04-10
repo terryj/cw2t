@@ -267,7 +267,7 @@ function listen() {
 
     // close connection callback
     conn.on('close', function() {
-      tidy(userid);
+      tidy(userid, conn);
 
       // todo: check for existence
       userid = "0";
@@ -278,7 +278,9 @@ function listen() {
       var reply = {};
       reply.success = false;
 
-      db.get("user:" + signin.email, function(err, emailuserid) {
+      // todo: replace with script
+
+      db.get(servertype + ":" + signin.email, function(err, emailuserid) {
         if (err) {
           console.log("Error in signIn:" + err);
           return;
@@ -292,7 +294,7 @@ function listen() {
         }
 
         // validate email/password
-        db.hgetall("user:" + emailuserid, function(err, user) {
+        db.hgetall(servertype + ":" + emailuserid, function(err, user) {
           if (err) {
             console.log("Error in signIn:" + err);
             return;
@@ -304,41 +306,60 @@ function listen() {
             return;
           }
 
-          // validated, so set user id
-          userid = user.userid;
-          connections[userid] = conn;
+          // check to see if this user is already logged on
+          db.sismember("connections:" + servertype, user.userid, function(err, found) {
+            if (err) {
+              console.log(err);
+              return;
+            }
 
-          // keep a record
-          db.sadd("connections:" + servertype, userid);
+            if (found) {
+              console.log("user " + user.userid + " already logged on");
 
-          // send a successful logon reply
-          reply.success = true;
-          reply.email = signin.email;
-          replySignIn(reply, conn);
+              if (user.userid in connections) {
+                connections[user.userid].close();
+              }
+            }
 
-          console.log("user:" + userid + " logged on");
+            // validated, so set user id
+            userid = user.userid;
+            connections[userid] = conn;
 
-          // send the data
-          start(userid, user.brokerid, conn);
+            // keep a record
+            db.sadd("connections:" + servertype, userid);
+
+            // send a successful logon reply
+            reply.success = true;
+            reply.email = signin.email;
+            replySignIn(reply, conn);
+
+            console.log("user:" + userid + " logged on");
+
+            // send the data
+            start(userid, user.brokerid, conn);
+          });
         });
       });
     }
   });
 }
 
-function tidy(userid) {
+function tidy(userid, conn) {
   if (userid != "0") {
     if (userid in connections) {
       console.log("user:" + userid + " logged off");
 
-      // remove from list
-      delete connections[userid];
+      // make sure this connection is still live, as may have been kicked off
+      if (connections[userid] == conn) {
+        // remove from list
+        delete connections[userid];
 
-      // remove from database
-      db.srem("connections:" + servertype, userid);
+        // remove from database
+        db.srem("connections:" + servertype, userid);
+
+        unsubscribeConnection(userid);
+      }
     }
-
-    unsubscribeConnection(userid);
   }
 }
 

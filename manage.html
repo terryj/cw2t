@@ -3131,11 +3131,13 @@
         function optionToViewCancel(listelement, cancelorder, fillorder) {
             var addfuncdiv;
 
-            listelement.onmouseover = function() {
-                addfuncdiv.style.visibility = "visible";
-            }
-            listelement.onmouseout = function() {
-                addfuncdiv.style.visibility = "hidden";
+            if (!isTouchDevice()) {
+                listelement.onmouseover = function() {
+                    addfuncdiv.style.visibility = "visible";
+                }
+                listelement.onmouseout = function() {
+                    addfuncdiv.style.visibility = "hidden";
+                }
             }
 
             addfuncdiv = document.createElement('div');
@@ -3868,12 +3870,16 @@
                     // first time through, so create elements
                     strip = document.createElement('div');
                     strip.id = "strip:" + symbol + ":" + y;
-                    strip.onmouseover = function() {
-                        links.style.visibility = "visible";
-                     }
-                    strip.onmouseout = function() {
-                        links.style.visibility = "hidden";
+
+                    if (!isTouchDevice()) {
+                        strip.onmouseover = function() {
+                            links.style.visibility = "visible";
+                        }
+                        strip.onmouseout = function() {
+                            links.style.visibility = "hidden";
+                        }
                     }
+
                     if (showvolume) {
                         level2 = document.createElement('span');
                         level2.className = "level2";
@@ -3912,7 +3918,10 @@
                         strip.className = "yellowstrip";
 
                         links = document.createElement('div');
-                        links.style.visibility = "hidden";
+
+                        if (!isTouchDevice()) {
+                            links.style.visibility = "hidden";
+                        }
 
                         var reqquotelnk = newlink("reqquotelnk", "Request Quote", "", links);
                         var buyorderlnk = newlink("buyorderlnk", "Limit Buy", "", links);
@@ -4004,6 +4013,16 @@
                 }
 
                 if (!obdisplay[symbol].level2) {break;}
+            }
+        }
+
+        function isTouchDevice() {
+            try {
+                document.createEvent("TouchEvent");
+                return true;
+            }
+            catch (e) {
+                return false;
             }
         }
 

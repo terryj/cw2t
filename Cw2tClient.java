@@ -189,7 +189,7 @@ public class Cw2tClient implements ISessionObserver {
 	int status;
     JedisPool jedispool;
     Jedis jedissubscriber;
-    Jedis jedispublisher;
+    //Jedis jedispublisher;
 	
 	public static final int st_start = 0;
 	public static final int st_connected = 1;
@@ -200,7 +200,7 @@ public class Cw2tClient implements ISessionObserver {
 	HashMap<String, TagSet> subscriptions = new HashMap<String, TagSet>();
 	int showEvery = 0;
 	int receivedMessages = 0;
-    	
+    
 	Cw2tClient(String[] args) {
 		System.out.println("Creating session layer");
 		status = st_start;
@@ -222,17 +222,18 @@ public class Cw2tClient implements ISessionObserver {
         new Cw2tSubscriberThread(jedissubscriber, cw2tsubscriber).start();
         
         // connection for publishing
-        jedispublisher = jedispool.getResource();
+        //jedispublisher = jedispool.getResource();
     }
     
     public void stopJedis() {
         System.out.println("Stopping Jedis");
         
         // send message to subscribe channel to terminate thread
+        Jedis jedispublisher = jedispool.getResource();
         jedispublisher.publish("proquote", "exit");
+        jedispool.returnResource(jedispublisher);
         
         // tidy jedis
-        jedispool.returnResource(jedispublisher);
         jedispool.returnResource(jedissubscriber);
         jedispool.destroy();
     }
@@ -405,11 +406,15 @@ public class Cw2tClient implements ISessionObserver {
         // complete the message
         jsonmsg = jsonmsg + "]";
         
+        Jedis jedispublisher = jedispool.getResource();
+        
         // publish message to channel
         jedispublisher.publish(Tpc, jsonmsg);
         
         // store prices
         String status = jedispublisher.hmset("topic:" + Tpc, fieldmap);
+        
+        jedispool.returnResource(jedispublisher);
 	}
     
     // old
@@ -516,7 +521,11 @@ public class Cw2tClient implements ISessionObserver {
         }
         
         symbol = symbol + "." + market;
+        
+        Jedis jedispublisher = jedispool.getResource();
         jedispublisher.sadd("index:" + index, symbol);
+        jedispool.returnResource(jedispublisher);
+        
         System.out.println("updated index:" + index + " with symbol:" + symbol);
     }
     
@@ -617,6 +626,9 @@ public class Cw2tClient implements ISessionObserver {
         symbol = symbol + "." + market;
         String key = "symbol:" + symbol;
         fieldmap.put("symbol", symbol);
+        
+        Jedis jedispublisher = jedispool.getResource();        
+
         String status = jedispublisher.hmset(key, fieldmap);
         jedispublisher.sadd("instruments", symbol);
         jedispublisher.sadd("instrumenttypes", insttype);
@@ -640,6 +652,8 @@ public class Cw2tClient implements ISessionObserver {
         // update instrument types
         String insttypedesc = getInstTypeDesc(insttype);
         jedispublisher.set("instrumenttype:" + insttype, insttypedesc);
+        
+        jedispool.returnResource(jedispublisher);
 
         System.out.println("symbol:" + symbol + " added, status:" + status);
     }
@@ -660,8 +674,10 @@ public class Cw2tClient implements ISessionObserver {
         fieldmap.put("bid6", "0");
         fieldmap.put("offer6", "0");
         
+        Jedis jedispublisher = jedispool.getResource();        
         String status = jedispublisher.hmset(topickey, fieldmap);
-        
+        jedispool.returnResource(jedispublisher);
+
         return status;
     }
     
@@ -683,7 +699,10 @@ public class Cw2tClient implements ISessionObserver {
         
         // get existing topics
         Set<String> topics = new HashSet<String>();
+        
+        Jedis jedispublisher = jedispool.getResource();
         topics = jedispublisher.smembers("topics");
+        jedispool.returnResource(jedispublisher);
             
         // & subscribe to them
         Iterator<String> iter = topics.iterator();
@@ -1048,7 +1067,7 @@ public class Cw2tClient implements ISessionObserver {
 		// session layer initialization
 		Cw2tClient ts = new Cw2tClient(args);
 		if (!ts.ReadSubscriptions("[Subscriptions]")) {
-			System.out.println("Sorry, subscriptions not found or incorrect in [Subscriptions] section");
+			//System.out.println("Sorry, subscriptions not found or incorrect in [Subscriptions] section");
 			//System.exit(1);
 		} else {
 			System.out.println("Read subscriptions");            
