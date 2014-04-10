@@ -220,9 +220,6 @@ public class Cw2tClient implements ISessionObserver {
         
         // create a separate thread as connection will be blocked
         new Cw2tSubscriberThread(jedissubscriber, cw2tsubscriber).start();
-        
-        // connection for publishing
-        //jedispublisher = jedispool.getResource();
     }
     
     public void stopJedis() {

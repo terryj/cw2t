@@ -711,7 +711,6 @@
         var selectedmenu = -1;
         var selectedlistelement = 0;
         var placeneworder = false;
-        var signedin = false;
         var orders = {};
         var orderbooks = {};
         var positions = {};
@@ -757,6 +756,7 @@
         var account = {};
         var coheading = "Thomas Grant & Company";
         var orderdivnumarr = {};
+        var loggedout = false;
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -1415,6 +1415,9 @@
         }
 
         function startRestartTimer() {
+            var cw2theading = document.getElementById('cw2t');
+            cw2theading.innerHTML = coheading + "- connection closed, retrying...";
+
             // attempt restart after 1-10 seconds
             var randomonetoten = Math.floor((Math.random()*10)+1);
             console.log("attempt restart after " + randomonetoten + " seconds");
@@ -1541,8 +1544,6 @@
         * if the connection is lost, try to reconnect periodically
         */
         var newconn = function() {
-            var cw2theading;
-
             sockjs = new SockJS(sockjs_url);
 
             sockjs.onopen = function()  {
@@ -1551,6 +1552,7 @@
                 startPriceTimer();
                 //startHeartbeatTimer();
                 displayFormSignin();
+                loggedout = false;
             };
 
             sockjs.onmessage = function(e) {
@@ -1559,13 +1561,14 @@
 
             sockjs.onclose = function()  {
                 console.log("connection closed");
-                cw2theading = document.getElementById('cw2t');
-                cw2theading.innerHTML = coheading + "- connection closed, retrying...";
                 stopRestartTimer();
                 stopPriceTimer();
                 //stopHeartbeatTimer();
-                startRestartTimer();
-                signedin = false;
+                if (!loggedout) {
+                    startRestartTimer();
+                } else {
+                    newconn();
+                }
             };
 
             sockjs.onheartbeat = function() {
@@ -5107,8 +5110,6 @@
 
                     cw2theading = document.getElementById('cw2t');
                     cw2theading.innerHTML = coheading + " - " + reply.email;
-
-                    signedin = true;
                 }
             }
         }
@@ -5126,7 +5127,7 @@
             menu.id = "menu";
 
             // build the main menu - reset chatmenuoption if changed
-            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Chat", "End Of Day"];
+            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Chat", "End Of Day", "Log Out"];
 
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
@@ -5193,8 +5194,16 @@
                 case 10:
                     endOfDay();
                     break;
+                case 11:
+                    logout();
+                    break;
                 }
             }
+        }
+
+        function logout() {
+            sockjs.close();
+            loggedout = true;
         }
 
         function selectClient(frm, clientbox, symbol, displayname, namefld, idfld, focusfldstr, allclientopt) {
