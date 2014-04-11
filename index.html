@@ -602,7 +602,6 @@
         var selectedmenu = -1;
         var selectedlistelement = 0;
         var placeneworder = false;
-        var signedin = false;
         var orders = {};
         var orderbooks = {};
         var positions = {};
@@ -634,6 +633,7 @@
         var cashhistory = {};
         var showvolume = false;
         var quotetimer;
+        var loggedout;
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -931,7 +931,6 @@
 
             console.log("sending ping");
             sockjs.send("ping");
-            //startHeartbeatTimer();
             inconnectiontest = true;
         }
 
@@ -942,8 +941,8 @@
                 console.log("connection open");
                 stopRestartTimer();
                 startPriceTimer();
-                //startHeartbeatTimer();
                 displayFormSignin();
+                loggedout = false;
             };
 
             sockjs.onmessage = function(e) {
@@ -954,14 +953,14 @@
                 console.log("connection closed");
                 stopRestartTimer();
                 stopPriceTimer();
-                //stopHeartbeatTimer();
-                startRestartTimer();
-                signedin = false;
+                if (!loggedout) {
+                    startRestartTimer();
+                } else {
+                    newconn();
+                }
             };
 
             sockjs.onheartbeat = function() {
-                //console.log("onheartbeat");
-                //startHeartbeatTimer();
             };
         };
 
@@ -4239,7 +4238,6 @@
 
                     clientid = reply.clientid;
 
-                    signedin = true;
                     displayWaitMsg();
                 }
             }
@@ -4255,7 +4253,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Watch List", "Portfolio", "History", "Settings", "Chat"];
+            menuarr = ["Watch List", "Portfolio", "History", "Settings", "Chat", "Logout"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -4319,8 +4317,16 @@
                 case 4:
                     displayChat();
                     break;
+                case 5:
+                    logout();
+                    break;
                 }
             }
+        }
+
+        function logout() {
+            sockjs.close();
+            loggedout = true;
         }
 
         function displayWaitMsg() {

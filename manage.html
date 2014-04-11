@@ -1550,7 +1550,6 @@
                 console.log("connection open");
                 stopRestartTimer();
                 startPriceTimer();
-                //startHeartbeatTimer();
                 displayFormSignin();
                 loggedout = false;
             };
@@ -1563,7 +1562,6 @@
                 console.log("connection closed");
                 stopRestartTimer();
                 stopPriceTimer();
-                //stopHeartbeatTimer();
                 if (!loggedout) {
                     startRestartTimer();
                 } else {
@@ -1572,7 +1570,6 @@
             };
 
             sockjs.onheartbeat = function() {
-                //startHeartbeatTimer();
             };
         };
 
