@@ -2266,6 +2266,7 @@
             var tblaccount;
             var tblbody;
             var numrows = 7;
+            var firstcurr = true;
 
             clearLists();
             clearEmptyLines();
@@ -2291,6 +2292,16 @@
             main.appendChild(tblaccount);
 
             for (var x in account) {
+                if (!firstcurr) {
+                    var emptyrow = document.createElement("tr");
+                    var emptycol = document.createElement("td");
+                    emptycol.innerHTML = "---";
+                    emptyrow.appendChild(emptycol);
+                    tblbody.appendChild(emptyrow);
+                } else {
+                    firstcurr = false;
+                }
+
                 var headingrow = document.createElement("tr");
 
                 var col = document.createElement("td");
@@ -2298,11 +2309,7 @@
                 col.className = "colleftalign";
 
                 headingrow.appendChild(col);
-
-                var emptyrow = document.createElement("tr");
-
                 tblbody.appendChild(headingrow);
-                tblbody.appendChild(emptyrow);
 
                 for (var i = 0; i < numrows; ++i) {
                     var row = document.createElement("tr");
@@ -2874,52 +2881,21 @@
             }
         }
 
-        /*function displayCashHistory() {
-            var firstcashhistory = true;
-            var msg;
-            var list;
-
-            clearLists();
-            clearHeadings();
-            clearEmptyLines();
-
-            list = getList("list1");
-
-            for (var x in cashhistory) {
-                if (firstcashhistory) {
-                    add
-                }
-                msg = cashHistoryMsg(cashhistory[x]);
-                addElement(msg, list, cashhistory[x].cashtransid);
-                firstcashhistory = false;
-            }
-
-            if (firstcashhistory) {
-                addElement("No cash items", list, 0);                
-            } else {
-                list.onclick = function(e) {
-                    var element;
-
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
-
-                    viewCashHistory(element.value);
-                }
-            }
-        }*/
-
         function displayCashHistory() {
             var tblcashhistory;
             var tblbody;
             var posrow;
             var headingrow;
-            var numcols = 7;
+            var numcols = 8;
             var firstrow;
 
             clearLists();
             clearEmptyLines();
             clearHeadings();
             clearTables();
+
+            var emptyline = addNewLine(main);
+            emptyline.id = "emptyline:" + "1";
 
             if (Object.keys(cashhistory).length == 0) {
                 var list = getList("list1");
@@ -2948,26 +2924,30 @@
                     col.className = "colleftalign";
                     break;
                 case 1:
-                    col.innerHTML = "Type";
+                    col.innerHTML = "Currency";
                     col.className = "colleftalign";
                     break;
                 case 2:
-                    col.innerHTML = "Description";
+                    col.innerHTML = "Type";
                     col.className = "colleftalign";
                     break;
                 case 3:
-                    col.innerHTML = "Reference";
+                    col.innerHTML = "Description";
                     col.className = "colleftalign";
                     break;
                 case 4:
+                    col.innerHTML = "Reference";
+                    col.className = "colleftalign";
+                    break;
+                case 5:
                     col.innerHTML = "In(+)";
                     col.className = "colrightalign";
                     break;
-                case 5:
+                case 6:
                     col.innerHTML = "Out(-)";
                     col.className = "colrightalign";
                     break;
-                case 6:
+                case 7:
                     col.innerHTML = "Balance";
                     col.className = "colrightalign";
                     break;
@@ -2983,7 +2963,7 @@
 
             for (var i = 0; i < numcols-1; ++i) {
                 var col = document.createElement("td");
-                if (i == 2) {
+                if (i == 3) {
                     col.innerHTML = "Start Balance";
                 } else {
                     col.innerHTML = "";
@@ -3009,15 +2989,18 @@
                         col.innerHTML = formatUTCDateTime(cashhistory[x].timestamp);
                         break;
                     case 1:
-                        col.innerHTML = cashhistory[x].transtype;
+                        col.innerHTML = cashhistory[x].currency;
                         break;
                     case 2:
-                        col.innerHTML = cashhistory[x].description;
+                        col.innerHTML = cashhistory[x].transtype;
                         break;
                     case 3:
-                        col.innerHTML = cashhistory[x].reference;
+                        col.innerHTML = cashhistory[x].description;
                         break;
                     case 4:
+                        col.innerHTML = cashhistory[x].reference;
+                        break;
+                    case 5:
                         if (cashhistory[x].drcr == 1) {
                             var amount = formatCurrency(cashhistory[x].amount);
                             col.innerHTML = amount;
@@ -3026,7 +3009,7 @@
                         }
                         col.className = "colrightalign";
                         break;
-                    case 5:
+                    case 6:
                         if (cashhistory[x].drcr == 2) {
                             var amount = formatCurrency(cashhistory[x].amount);                            
                             col.innerHTML = amount;
@@ -3035,7 +3018,7 @@
                         }
                         col.className = "colrightalign";
                         break;
-                    case 6:
+                    case 7:
                         var balance = formatCurrency(cashhistory[x].balance);
                         col.innerHTML = balance;
                         col.className = "colrightalign";
@@ -3052,11 +3035,16 @@
 
         function formatCurrency(num) {
             num = isNaN(num) || num === '' || num === null ? 0.00 : num;
-            return parseFloat(num).toFixed(2);
+            return parseFloat(num).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+        }
+
+        function marginMsg(margin) {
+            return parseFloat(margin.amount).toFixed(2) + " " + margin.currency;            
         }
 
         function displayCash() {
             var firstCash = true;
+            var tmpcasharr = [];
 
             clearLists();
             clearEmptyLines();
@@ -3068,13 +3056,30 @@
 
             var list = getList("list1");
 
+            var i = 0;
             for (var x in cash) {
-                addElement(cashMsg(cash[x]), list, cash[x].currency);
+                addElement(cashMsg(cash[x]), list, i);
+                tmpcasharr[i] = cash[x].currency;
+                i++;
                 firstCash = false;
             }
 
             if (firstCash) {
                 addElement("No cash", list, "");                
+            } else {
+                list.onclick = function(e) {
+                    var element;
+                    var historyrequest = {};
+
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    console.log(inpclientid.value);
+
+                    historyrequest.clientid = inpclientid.value;
+                    historyrequest.currency = tmpcasharr[element.value];
+                    sockjs.send("{\"cashhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+                }
             }
         }
 
@@ -3740,11 +3745,7 @@
         }
 
         function cashMsg(cash) {
-            return parseFloat(cash.amount).toFixed(2) + " " + cash.currency;
-        }
-
-        function marginMsg(margin) {
-            return parseFloat(margin.amount).toFixed(2) + " " + margin.currency;            
+            return formatCurrency(cash.amount) + " " + cash.currency;
         }
 
         function getSideDescTrade(side) {
@@ -4873,18 +4874,13 @@
             }*/
 
             function sendIt() {
-                // todo: reinstate
-                //alert("Limit orders: coming soon...");
-                //return;
-
                 var settdate = ""; // calculated by server
 
                 if ((!validateNumeric(quantityinput, getQuantityDesc(qtyascashorshares))) || (!validateNumeric(priceinput, pricedesc))) {
                     return;
                 }
 
-                // todo: validate sett date & timeinforce
- 
+                // todo: validate timeinforce
                 timeinforce = timeinforcesel[timeinforcesel.selectedIndex].value;
                 if (timeinforce == "6") {
                     expiredate = formatToUTCDate(expireday.value, expiremonth.value, expireyear.value);
@@ -4893,26 +4889,9 @@
 
                 nosettdays = settlperiod[settlperiod.selectedIndex].value;
 
-                sendOrder(inpclientid.value, symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, settlcurrency, nosettdays, settdate, null, timeinforce, expiredate, expiretime, 1);
+                sendOrder(inpclientid.value, symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, settlcurrency, nosettdays, settdate, "", timeinforce, expiredate, expiretime, "");
 
                 disable();
-                //pricedisable();
-
-                /*priceinput = document.getElementById("orderprice:" + symbol);
-                if (priceinput == null) {
-                    if (validateNumeric(quantityinput, qtydesc)) {
-                        sendOrder(symbol, getSide(btn.value), quantity, null, ordertype, settdate, null, timeinforce, expiredate, expiretime);
-                        disable();
-                    }
-                } else {
-                    if (validateNumeric(quantityinput, qtydesc)) {
-                        if (validateNumeric(priceinput, pricedesc)) {
-                            sendOrder(symbol, getSide(btn.value), quantity, priceinput.value, ordertype, settdate, null, timeinforce, expiredate, expiretime);
-                            disable();
-                            pricedisable();
-                        }
-                    }
-                }*/
             }
         }
 
@@ -4944,16 +4923,12 @@
             neworder.quantity = quantity;
             neworder.symbol = symbol;
             neworder.currency = instruments[symbol].currency;
-            if (price != null) {
-                neworder.price = price;
-            }
+            neworder.price = price;
             neworder.ordertype = ordertype;
             neworder.settlcurrency = settlcurrency;
             neworder.nosettdays = nosettdays;
             neworder.futsettdate = settdate;
-            if (quoteid != null) {
-                neworder.quoteid = quoteid;
-            }
+            neworder.quoteid = quoteid;
             neworder.timeinforce = timeinforce;
             neworder.expiredate = expiredate;
             neworder.expiretime = expiretime;
@@ -4964,7 +4939,7 @@
             sockjs.send("{\"order\":" + JSON.stringify(neworder) + "}");
 
             msg = "Placed order to " + getSideDesc(side) + " " + quantity + " " + symbol;
-            if (price != null) {
+            if (price != "") {
                 msg += " @ " + price;
             }
             msg += ", " + getOrdertypeDesc(ordertype);
@@ -4982,7 +4957,7 @@
                 msg += " in " + neworder.settlcurrency;
             }
 
-            if (quoteid != null) {
+            if (quoteid != "") {
                 msg += ", quote id " + quoteid;
             }
 

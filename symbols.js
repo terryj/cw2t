@@ -24,7 +24,7 @@ function addSymbols() {
   db.hset("symbol:AMZN", "description", "Amazon.com Inc");
   db.hset("symbol:AMZN", "proquotesymbol", "AMZN");
   db.hset("symbol:AMZN", "isin", "US0231351067");
-  db.hset("symbol:AMZN", "topic", "TIT.AMZN");
+  db.hset("symbol:AMZN", "topic", "TIT.AMZN.O");
   db.hset("symbol:AMZN", "symbol", "AMZN");
   db.hset("symbol:AMZN", "instrumenttype", "IE");
   db.hset("symbol:AMZN", "market", "O");

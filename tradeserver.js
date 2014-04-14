@@ -17,7 +17,7 @@ var ptpclient = require('./ptpclient.js'); // Proquote API connection
 var common = require('./common.js');
 
 // globals
-var outofhours = true; // in or out of market hours - todo: replace with markettype?
+var markettype;
 var tradeserverchannel = 3;
 var userserverchannel = 2;
 var clientserverchannel = 1;
@@ -265,8 +265,8 @@ function newOrder(order) {
   order.timestamp = common.getUTCTimeStamp(today);
   order.partfill = 1; // accept part-fill
 
-  // todo: tie this in with in/out of hours
-  order.markettype = 0; // 0 = main market, 1 = ooh
+  // default value is in hours
+  order.markettype = markettype;
 
   // always put a price in the order
   if (!("price" in order)) {
@@ -275,7 +275,7 @@ function newOrder(order) {
 
   // and always have a quote id
   if (!("quoteid" in order)) {
-    order.quoteid = "0";
+    order.quoteid = "";
   }
 
   // get settlement date from T+n no. of days
@@ -287,6 +287,8 @@ function newOrder(order) {
   db.eval(scriptneworder, 24, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, order.orderdivnum, function(err, ret) {
     if (err) throw err;
 
+    console.log(ret);
+
     // credit check failed
     if (ret[0] == 0) {
       db.publish(order.operatortype, "order:" + ret[1]);
@@ -296,6 +298,8 @@ function newOrder(order) {
     // update order details
     order.orderid = ret[1];
     order.instrumenttype = ret[7];
+
+    console.log(order.markettype);
 
     // use the returned instrument values required by proquote
     if (order.markettype == 0) {
@@ -538,11 +542,15 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
   // the order has been credit checked
   // now, either forward to Proquote or attempt to match the order, depending on the type of instrument & whether the market is open
   //
+  console.log("processOrder");
+  console.log(order);
   if (order.markettype == 1) {
     matchOrder(order);
   } else {
+    console.log("here");
     // equity orders
-    if (order.instrumenttype == "DE") {
+    if (order.instrumenttype == "DE" || order.instrumenttype == "IE") {
+      console.log(tradeid);
       if (tradeid != "") {
         // the order has been executed, so publish the order & trade
         db.publish(order.operatortype, "order:" + order.orderid);
@@ -984,6 +992,7 @@ function initDb() {
   common.registerCommonScripts();
   registerScripts();
   loadHolidays();
+  getMarkettype();
 }
 
 function loadHolidays() {
@@ -993,6 +1002,17 @@ function loadHolidays() {
     for (var i = 0; i < ret.length; ++i) {
       holidays[ret[i]] = ret[i];
     }
+  });
+}
+
+function getMarkettype() {
+  db.get("markettype", function(err, mkttype) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    markettype = parseInt(mkttype);
   });
 }
 
@@ -1007,8 +1027,7 @@ function orderBookRequest(orgclientkey, symbol, conn) {
 }
 
 function orderBookOut(orgclientkey, symbol, conn) {
-  // todo: remove 'outofhours'
-  if (outofhours) {
+  if (markettype == 0) {
     broadcastLevelTwo(symbol, conn);
   }
 }

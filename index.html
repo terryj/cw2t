@@ -74,6 +74,8 @@
         }
         a:hover {
             text-decoration: underline;
+            color: #666666;
+            cursor: pointer;
         }
         textarea {
             display: inline-block;
@@ -1207,9 +1209,13 @@
             return listelem;
         }
 
+        function cashMsg(cash) {
+            return formatCurrency(cash.amount) + " " + cash.currency;
+        }
+
         function formatCurrency(num) {
             num = isNaN(num) || num === '' || num === null ? 0.00 : num;
-            return parseFloat(num).toFixed(2);
+            return parseFloat(num).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
         }
 
         /*function orderCancel(event) {
@@ -1564,6 +1570,7 @@
             var tblaccount;
             var tblbody;
             var numrows = 7;
+            var firstcurr = true;
 
             clearLists();
             clearEmptyLines();
@@ -1589,6 +1596,16 @@
             main.appendChild(tblaccount);
 
             for (var x in account) {
+                if (!firstcurr) {
+                    var emptyrow = document.createElement("tr");
+                    var emptycol = document.createElement("td");
+                    emptycol.innerHTML = "---";
+                    emptyrow.appendChild(emptycol);
+                    tblbody.appendChild(emptyrow);
+               } else {
+                    firstcurr = false;
+               }
+
                 var headingrow = document.createElement("tr");
 
                 var col = document.createElement("td");
@@ -1596,11 +1613,7 @@
                 col.className = "colleftalign";
 
                 headingrow.appendChild(col);
-
-                var emptyrow = document.createElement("tr");
-
                 tblbody.appendChild(headingrow);
-                tblbody.appendChild(emptyrow);
 
                 for (var i = 0; i < numrows; ++i) {
                     var row = document.createElement("tr");
@@ -1869,13 +1882,16 @@
             var tblbody;
             var posrow;
             var headingrow;
-            var numcols = 7;
+            var numcols = 8;
             var firstrow;
 
             clearLists();
             clearEmptyLines();
             clearHeadings();
             clearTables();
+
+            var emptyline = addNewLine(main);
+            emptyline.id = "emptyline:" + "1";
 
             if (Object.keys(cashhistory).length == 0) {
                 var list = getList("list1");
@@ -1904,26 +1920,30 @@
                     col.className = "colleftalign";
                     break;
                 case 1:
-                    col.innerHTML = "Type";
+                    col.innerHTML = "Currency";
                     col.className = "colleftalign";
                     break;
                 case 2:
-                    col.innerHTML = "Description";
+                    col.innerHTML = "Type";
                     col.className = "colleftalign";
                     break;
                 case 3:
-                    col.innerHTML = "Reference";
+                    col.innerHTML = "Description";
                     col.className = "colleftalign";
                     break;
                 case 4:
-                    col.innerHTML = "Debit";
-                    col.className = "colrightalign";
+                    col.innerHTML = "Reference";
+                    col.className = "colleftalign";
                     break;
                 case 5:
-                    col.innerHTML = "Credit";
+                    col.innerHTML = "In(+)";
                     col.className = "colrightalign";
                     break;
                 case 6:
+                    col.innerHTML = "Out(-)";
+                    col.className = "colrightalign";
+                    break;
+                case 7:
                     col.innerHTML = "Balance";
                     col.className = "colrightalign";
                     break;
@@ -1939,7 +1959,7 @@
 
             for (var i = 0; i < numcols-1; ++i) {
                 var col = document.createElement("td");
-                if (i == 2) {
+                if (i == 3) {
                     col.innerHTML = "Start Balance";
                 } else {
                     col.innerHTML = "";
@@ -1965,15 +1985,18 @@
                         col.innerHTML = formatUTCDateTime(cashhistory[x].timestamp);
                         break;
                     case 1:
-                        col.innerHTML = cashhistory[x].transtype;
+                        col.innerHTML = cashhistory[x].currency;
                         break;
                     case 2:
-                        col.innerHTML = cashhistory[x].description;
+                        col.innerHTML = cashhistory[x].transtype;
                         break;
                     case 3:
-                        col.innerHTML = cashhistory[x].reference;
+                        col.innerHTML = cashhistory[x].description;
                         break;
                     case 4:
+                        col.innerHTML = cashhistory[x].reference;
+                        break;
+                    case 5:
                         if (cashhistory[x].drcr == 1) {
                             var amount = formatCurrency(cashhistory[x].amount);
                             col.innerHTML = amount;
@@ -1982,7 +2005,7 @@
                         }
                         col.className = "colrightalign";
                         break;
-                    case 5:
+                    case 6:
                         if (cashhistory[x].drcr == 2) {
                             var amount = formatCurrency(cashhistory[x].amount);                            
                             col.innerHTML = amount;
@@ -1991,7 +2014,7 @@
                         }
                         col.className = "colrightalign";
                         break;
-                    case 6:
+                    case 7:
                         var balance = formatCurrency(cashhistory[x].balance);
                         col.innerHTML = balance;
                         col.className = "colrightalign";
@@ -2008,6 +2031,7 @@
 
         function displayCash() {
             var firstCash = true;
+            var tmpcasharr = [];
 
             clearLists();
             clearEmptyLines();
@@ -2019,13 +2043,27 @@
 
             var list = getList("list1");
 
+            var i = 0;
             for (var x in cash) {
-                addElement(cashMsg(cash[x]), list, cash[x].currency);
+                addElement(cashMsg(cash[x]), list, i);
+                tmpcasharr[i] = cash[x].currency;
+                i++;
                 firstCash = false;
             }
 
             if (firstCash) {
                 addElement("No cash", list, "");                
+            } else {
+                list.onclick = function(e) {
+                    var element;
+                    var historyrequest = {};
+
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    historyrequest.currency = tmpcasharr[element.value];
+                    sockjs.send("{\"cashhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+                }                
             }
         }
 
@@ -2525,10 +2563,6 @@
             msg += ", trade id: " + trade.tradeid + ", order id: " + trade.orderid + ", executed " + formatUTCDateTime(trade.timestamp);
 
             return msg;
-        }
-
-        function cashMsg(cash) {
-            return parseFloat(cash.amount).toFixed(2) + " " + cash.currency;
         }
 
         function marginMsg(margin) {
@@ -3801,7 +3835,7 @@
 
             //settlperiod[0] = new Option("GBP", defaultsettlcurrency, true, true);
 
-            populateSettlPeriod(settlperiod, 3);
+            populateSettlPeriod(settlperiod, instruments[symbol].instrumenttype);
 
             orderdiv = getDiv("orderdiv:" + symbol, symbol);
 
@@ -3870,58 +3904,34 @@
             }*/
 
             function sendIt() {
-                var settdate;
-                // todo: client to choose
-                var positionopenclose = 1;
-                var positioncloseid = "";
+                var settdate = "";
 
                 if ((!validateNumeric(quantityinput, getQuantityDesc(qtyascashorshares))) || (!validateNumeric(priceinput, pricedesc))) {
                     return;
                 }
 
-                // todo: validate sett date & timeinforce
- 
+                // todo: validate timeinforce
                 timeinforce = timeinforcesel[timeinforcesel.selectedIndex].value;
                 if (timeinforce == "6") {
                     expiredate = formatToUTCDate(expireday.value, expiremonth.value, expireyear.value);
                     expiretime = "00:00:00";//formatToUTCTime(expirehour.value, expireminute.value, expiresecond.value);
                 }
 
-                settdate = formatToUTCDate(settday[settday.selectedIndex].value, settmonth[settmonth.selectedIndex].value, settyear[settyear.selectedIndex].value);
+                nosettdays = settlperiod[settlperiod.selectedIndex].value;
 
-                sendOrder(symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, positionopenclose, nosettdays, settlcurrency, settdate, null, timeinforce, expiredate, expiretime, positioncloseid);
+                sendOrder(symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, settlcurrency, nosettdays, settdate, "", timeinforce, expiredate, expiretime, "");
 
                 disable();
-                //pricedisable();
-
-                /*priceinput = document.getElementById("orderprice:" + symbol);
-                if (priceinput == null) {
-                    if (validateNumeric(quantityinput, qtydesc)) {
-                        sendOrder(symbol, getSide(btn.value), quantity, null, ordertype, settdate, null, timeinforce, expiredate, expiretime);
-                        disable();
-                    }
-                } else {
-                    if (validateNumeric(quantityinput, qtydesc)) {
-                        if (validateNumeric(priceinput, pricedesc)) {
-                            sendOrder(symbol, getSide(btn.value), quantity, priceinput.value, ordertype, settdate, null, timeinforce, expiredate, expiretime);
-                            disable();
-                            pricedisable();
-                        }
-                    }
-                }*/
             }
 
             quantityinput.focus();
         }
 
         function populateSettlPeriod(settlperiod, instrumenttype) {
-            if (instrumenttype != "DE") {
-                settlperiod[0] = new Option("T+0 (Rolling)", 0, true, true);
-                settlperiod[1] = new Option("T+10", 10, false, false);
-                settlperiod[2] = new Option("T+20", 20, false, false);
-                settlperiod[3] = new Option("T+50", 50, false, false);
-            } else {
-                for (var i = 0; i < 50; i++) {
+            settlperiod.options.length = 0;
+
+            if (instrumenttype == "DE" || instrumenttype == "IE") {
+                for (var i = 0; i < 10; i++) {
                     var s = i + 1;
                     if (s == 3) {
                         settlperiod[i] = new Option("T+" + s, s, true, true);
@@ -3929,10 +3939,14 @@
                         settlperiod[i] = new Option("T+" + s, s, false, false);
                     }
                 }
+            } else if (instrumenttype == "CCFD") {
+                settlperiod[0] = new Option("T+10", 10, true, true);
+            } else {
+                settlperiod[0] = new Option("T+0 (Rolling)", 0, true, true);
             }
         }
 
-        function sendOrder(symbol, side, quantity, price, ordertype, positionopenclose, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime, positioncloseid) {
+        function sendOrder(symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime, positioncloseid) {
             var neworder = {};
             var msg;
 
@@ -3941,17 +3955,12 @@
             neworder.quantity = quantity;
             neworder.symbol = symbol;
             neworder.currency = instruments[symbol].currency;
-            if (price != null) {
-                neworder.price = price;
-            }
+            neworder.price = price;
             neworder.ordertype = ordertype;
-            neworder.positionopenclose = positionopenclose;
             neworder.settlcurrency = settlcurrency;
             neworder.nosettdays = nosettdays;
             neworder.futsettdate = settdate;
-            if (quoteid != null) {
-                neworder.quoteid = quoteid;
-            }
+            neworder.quoteid = quoteid;
             neworder.timeinforce = timeinforce;
             neworder.expiredate = expiredate;
             neworder.expiretime = expiretime;
@@ -3962,13 +3971,13 @@
             sockjs.send("{\"order\":" + JSON.stringify(neworder) + "}");
 
             msg = "Placed order to " + getSideDesc(side) + " " + quantity + " " + symbol;
-            if (price != null) {
+            if (price != "") {
                 msg += " @ " + price;
             }
             msg += ", " + getOrdertypeDesc(ordertype);
 
             if (instruments[symbol].instrumenttype == "DE") {
-                msg += ", for settlement T+" + nosettdays + " (" + formatUTCDate(settdate) + ")";
+                msg += ", for settlement T+" + nosettdays;
             } else {
                 msg += ", for rolling settlement";
             }
@@ -3977,7 +3986,7 @@
                 msg += " in " + neworder.settlcurrency;
             }
 
-            if (quoteid != null) {
+            if (quoteid != "") {
                 msg += ", quote id " + quoteid;
             }
 

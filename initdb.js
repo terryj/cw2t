@@ -109,30 +109,6 @@ function initdb() {
   db.set("user:louisa@thomasgrant.co.uk", "7");
   db.set("user:info@yearstretch.com", "8");
 
-  // stocks - add international stocks to set of stocks & hash
-  /*db.hset("symbol:AMZN", "currency", "USD");
-  db.hset("symbol:AMZN", "description", "Amazon.com, Inc");
-  db.hset("symbol:AMZN", "proquotesymbol", "AMZN");
-  db.hset("symbol:AMZN", "isin", "US0231351067");
-  db.hset("symbol:AMZN", "exchange", "O");
-  db.hset("symbol:AMZN", "topic", "TIT.AMZN");
-  db.hset("symbol:AMZN", "symbol", "AMZN");
-  db.hset("symbol:AMZN", "instrumenttype", "IE");
-  db.hset("symbol:BARC.L", "market", "O");
-  db.set("proquotesymbol:AMZN", "AMZN");
-  db.sadd("instruments", "AMZN");
-  db.hset("symbol:BARC.L", "currency", "GBP");
-  db.hset("symbol:BARC.L", "description", "Barclays PLC");
-  db.hset("symbol:BARC.L", "proquotesymbol", "BARC");
-  db.hset("symbol:BARC.L", "isin", "GB0031348658");
-  db.hset("symbol:BARC.L", "exchange", "L");
-  db.hset("symbol:BARC.L", "topic", "TIT.BARC");
-  db.hset("symbol:BARC.L", "symbol", "BARC.L");
-  db.hset("symbol:BARC.L", "instrumenttype", "DE");
-  db.hset("symbol:BARC.L", "market", "L");
-  db.set("proquotesymbol:BARC", "BARC.L");
-  db.sadd("instruments", "BARC.L");*/
-
   // instrument types
   db.sadd("instrumenttypes", "DE");
   db.sadd("instrumenttypes", "IE");
@@ -205,6 +181,8 @@ function initdb() {
   db.set("sendercompid", "CWTTUAT1");
   db.set("targetcompid", "PTPUAT1");
   db.set("onbehalfofcompid", "PTPTEST57");
+
+  db.set("markettype", 0);
 
   console.log("done");
 }

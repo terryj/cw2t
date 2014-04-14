@@ -1451,6 +1451,7 @@ function tradeHistory(req, clientid, conn) {
 
 function cashHistory(req, clientid, conn) {
   db.eval(common.scriptgetcashhistory, 2, clientid, req.currency, function(err, ret) {
+    console.log(ret);
     if (err) throw err;
     conn.write("{\"cashhistory\":" + ret + "}");
   });  
