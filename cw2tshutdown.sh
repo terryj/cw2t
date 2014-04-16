@@ -6,5 +6,4 @@
 #- stop price server
 # ???
 #stop redis server
-cd
-sudo /etc/init.d/redis_6379 stop
+../etc/init.d/redis_6379 stop
