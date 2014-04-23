@@ -189,7 +189,6 @@ public class Cw2tClient implements ISessionObserver {
 	int status;
     JedisPool jedispool;
     Jedis jedissubscriber;
-    //Jedis jedispublisher;
 	
 	public static final int st_start = 0;
 	public static final int st_connected = 1;
@@ -1106,7 +1105,7 @@ public class Cw2tClient implements ISessionObserver {
 				case Cw2tClient.st_connected:
 					System.out.println("Connected");
                     ts.subscribeCw2tTopics();
-					ts.DoSubscriptions();
+					//ts.DoSubscriptions();
 					break;
 										
 				case Cw2tClient.st_disconnected:
