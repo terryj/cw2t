@@ -17,7 +17,7 @@ var ptpclient = require('./ptpclient.js'); // Proquote API connection
 var common = require('./common.js');
 
 // globals
-var markettype;
+var markettype; // comes from database, 0=normal market, 1=out of hours
 var tradeserverchannel = 3;
 var userserverchannel = 2;
 var clientserverchannel = 1;
@@ -238,20 +238,6 @@ function getFixDate(date) {
   return year + month + day;
 }
 
-/*function rejectQuoteRequest(quoterequest, reason, conn) {
-  var quote = {};
-
-  // send a quote with bid & offer size set to 0 to imply rejection
-  quote.quotereqid = quoterequest.quotereqid;
-  quote.symbol = quoterequest.symbol;
-  quote.bidsize = 0;
-  quote.offersize = 0;
-  quote.quoterejectreason = reason;
-  quote.reasondesc = getReasonDesc(reason);
-
-  conn.write("{\"quote\":" + JSON.stringify(quote) + "}");
-}*/
-
 function newOrder(order) {
   var currencyratetoorg = 1; // product currency to org curreny rate
   var currencyindtoorg = 1;
@@ -299,8 +285,6 @@ function newOrder(order) {
     order.orderid = ret[1];
     order.instrumenttype = ret[7];
 
-    console.log(order.markettype);
-
     // use the returned instrument values required by proquote
     if (order.markettype == 0) {
       order.isin = ret[2];
@@ -328,15 +312,8 @@ function newOrder(order) {
   });
 }
 
-function getSideDesc(side) {
-  if (parseInt(side) == 1) {
-    return "Buy";
-  } else {
-    return "Sell";
-  }
-}
-
 function matchOrder(order) {
+  console.log("matchOrder");
   db.eval(scriptmatchorder, 1, order.orderid, function(err, ret) {
     if (err) throw err;
 
@@ -359,107 +336,6 @@ function matchOrder(order) {
     // send any matched trades
     for (var i = 0; i < ret[2].length; ++i) {
       db.publish(order.operatortype, "trade:" + ret[2][i]);
-    }
-  });
-}
-
-function getSendPosition(positionid, orgclientid) {
-  var position = {};
-
-  db.hgetall("position:" + positionid, function(err, pos) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    // send anyway, even if no position, as may need to clear f/e - todo: review
-    if (pos == null) {
-      position.positionid = positionid;
-      position.quantity = "0";
-      position.cost = "0";
-      //position.symbol = symbol;
-      //position.currency = currency;
-    } else {
-      position = pos;
-    }
-
-    // send to client, if connected
-    if (orgclientid in connections) {
-      sendPosition(position, connections[orgclientid]);
-    }
-  });
-}
-
-function getSendCash(orgclientkey, currency) {
-  var cash = {};
-
-  db.get(orgclientkey + ":cash:" + currency, function(err, amount) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    // send regardless, as may need to clear f/e
-    if (amount == null) {
-      cash.amount = "0";      
-    } else {
-      cash.amount = amount;
-    }
-
-    cash.currency = currency;
-
-    // send to client, if connected
-    if (orgclientkey in connections) {
-      sendCashItem(cash, connections[orgclientkey]);
-    }
-  });
-}
-
-function getSendMargin(orgclientkey, currency) {
-  var margin = {};
-
-  db.get(orgclientkey + ":margin:" + currency, function(err, amount) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    // send regardless, as may need to clear f/e
-    if (amount == null) {
-      margin.amount = "0";
-    } else {
-      margin.amount = amount;
-    }
-
-    margin.currency = currency;
-
-    if (orgclientkey in connections) {
-      sendMargin(margin, connections[orgclientkey]);
-    }
-  });
-}
-
-function getSendReserve(orgclientkey, symbol, currency) {
-  var reserve = {};
-
-  db.get(orgclientkey + ":reserve:" + symbol + ":" + currency, function(err, res) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    // send regardless, as may need to clear f/e
-    if (res == null) {
-      reserve.quantity = "0";
-    } else {
-      reserve.quantity = res;
-    }
-
-    reserve.symbol = symbol;
-    reserve.currency = currency;
-
-    if (orgclientkey in connections) {
-      sendReserve(reserve, connections[orgclientkey]);
     }
   });
 }
@@ -494,9 +370,6 @@ function orderCancelRequest(ocr) {
 
     // not forwarded, so publish the result
     db.publish(ocr.operatortype, "order:" + ocr.orderid);
-
-    // todo: distribute any changes to the order book
-    //broadcastLevelTwo(ret[3], null);
   });
 }
 
@@ -531,9 +404,6 @@ function orderFillRequest(ofr) {
     // publish the result
     db.publish(ofr.operatortype, "order:" + ofr.orderid);
     db.publish(ofr.operatortype, "trade:" + ret[1]);
-
-    // todo: distribute any changes to the order book
-    //broadcastLevelTwo(ret[3], null);
   });
 }
 
@@ -597,397 +467,6 @@ function displayOrderBook(symbol, lowerbound, upperbound) {
   });
 }
 
-function getValue(trade) {
-  if (parseInt(trade.side) == 1) {
-    return trade.quantity * trade.price + trade.commission + trade.costs;
-  } else {
-    return trade.quantity * trade.price - trade.commission - trade.costs;
-  }
-}
-
-function sendIndex(orgclientkey, index, conn) {
-  var i = {symbols: []};
-  var count;
-
-  // todo: remove this stuff?
-  i.name = index;
-
-  db.smembers("index:" + index, function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = replies.length;
-    if (count == 0) {
-      console.log("Index: " + index + " not found");
-      return;
-    }
-
-    replies.forEach(function(symbol, j) {
-      db.hgetall("symbol:" + symbol, function(err, inst) {
-        var instrument = {};
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        if (inst == null) {
-          console.log("Symbol " + symbol + " not found");
-          count--;
-          return;
-        }
-
-        instrument.symbol = symbol;
-
-        // add the order to the array
-        i.symbols.push(instrument);
-
-        // send array if we have added the last item
-        //count--;
-        //if (count <= 0) {
-          //conn.write("{\"index\":" + JSON.stringify(i) + "}");
-          orderBookOut(orgclientkey, symbol, conn);
-        //}
-      });
-    });
-  });
-}
-
-function sendOrder(order, conn) {
-  if (conn != null) {
-    conn.write("{\"order\":" + JSON.stringify(order) + "}");
-  }
-}
-
-function sendTrade(trade, conn) {
-  if (conn != null) {
-    conn.write("{\"trade\":" + JSON.stringify(trade) + "}");
-  }
-}
-
-function sendTrades(orgclientkey, conn) {
-  var t = {trades: []};
-  var count;
-
-  db.smembers(orgclientkey + ":trades", function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = replies.length;
-    if (count == 0) {
-      return;
-    }
-
-    replies.forEach(function (tradeid, i) {
-      db.hgetall("trade:" + tradeid, function(err, trade) {
-        t.trades.push(trade);
-
-        // send array if we have added the last item
-        count--;
-        if (count <= 0) {
-          conn.write(JSON.stringify(t));
-        }
-      });
-    });
-  });
-}
-
-function sendPosition(position, conn) {
-  conn.write("{\"position\":" + JSON.stringify(position) + "}");
-}
-
-function sendCashItem(cash, conn) {
-  conn.write("{\"cashitem\":" + JSON.stringify(cash) + "}");
-}
-
-function sendMargin(margin, conn) {
-  conn.write("{\"margin\":" + JSON.stringify(margin) + "}");
-}
-
-function sendReserve(reserve, conn) {
-  conn.write("{\"reserve\":" + JSON.stringify(reserve) + "}");
-}
-
-function sendAllOrderBooks(conn) {
-  var level1arr = [];
-  var count;
-  var send = false;
-
-  // get all the instruments in the order book
-  db.smembers("orderbooks", function(err, instruments) {
-    if (err) {
-      console.log("error in sendAllOrderBooks:" + err);
-      return;
-    }
-
-    count = instruments.length;
-    if (count == 0) {
-      return;
-    }
-
-    // send the order book for each instrument
-    instruments.forEach(function(symbol, i) {
-      count--;
-      if (count <= 0) {
-        send = true;
-      }
-
-      sendOrderBook(symbol, level1arr, send, conn);
-    });
-  });
-}
-
-function sendOrderBook(symbol, level1arr, send, conn) {
-  var level1 = {};
-  var count;
-
-  level1.symbol = symbol;
-  level1.bestbid = 0;
-  level1.bestoffer = 0;
-
-  // we go through the entire order book to determine the best bid & offer
-  // todo: may be a better way
-  db.zrange(symbol, 0, -1, "WITHSCORES", function(err, orders) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    // we are assuming there is always at least 1 order
-    count = orders.length;
-
-    orders.forEach(function (reply, i) {
-      if (i % 2 != 0) {
-        if (i == 1) { // first score
-          if (reply < 0) {
-            level1.bestbid = -parseFloat(reply);
-          } else if (reply > 0) {
-            level1.bestoffer = parseFloat(reply);
-          }
-        } else if (level1.bestoffer == 0) {
-          if (reply > 0) {
-            level1.bestoffer = parseFloat(reply);
-          }
-        }
-      }
- 
-      // level 1 prices for a single instrument
-      count--;
-      if (count <= 0) {
-        // add level1 object to our array
-        level1arr.push(level1);
-
-        if (send) {
-          conn.write("{\"orderbooks\":" + JSON.stringify(level1arr) +"}");
-        }
-      }
-    });
-  });
-}
-
-function broadcastLevelOne(symbol) {
-  var level1 = {};
-  var count;
-
-  level1.bestbid = 0;
-  level1.bestoffer = 0;
-
-  db.zrange(symbol, 0, -1, "WITHSCORES", function(err, orders) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = orders.length;
-    if (count == 0) {
-      publishMessage("{\"orderbook\":" + JSON.stringify(level1) + "}");
-      return;
-    }
-
-    orders.forEach(function (reply, i) {
-      if (i % 2 != 0) {
-        if (i == 1) { // first score
-          if (reply < 0) {
-            level1.bestbid = -parseFloat(reply);
-          } else if (reply > 0) {
-            level1.bestoffer = parseFloat(reply);
-          }
-        } else if (level1.bestoffer == 0) {
-          if (reply > 0) {
-            level1.bestoffer = parseFloat(reply);
-          }
-        }
-      }
-
-      count--;
-      if (count <= 0) {
-        publishMessage("{\"orderbook\":" + JSON.stringify(level1) + "}");
-      }
-    });
-  });
-}
-
-/*
- * pass conn=null to send to all interested parties
- */
-function broadcastLevelTwo(symbol, conn) {
-  var orderbook = {pricelevels : []};
-  var lastprice = 0;
-  var lastside = 0;
-  var firstbid = true;
-  var firstoffer = true;
-  var bidlevel = 0;
-  var offerlevel = 0;
-  var count;
-
-  console.log("broadcastLevelTwo:"+symbol);
-
-  orderbook.symbol = symbol;
-
-  // get bids & offers in the same call as, despite code complexity, seems safest
-  db.zrange(symbol, 0, -1, function(err, orders) {
-    if (err) {
-      console.log("zrange error:" + err + ", symbol:" + symbol);
-      return;
-    }
-
-    count = orders.length;
-    if (count == 0) {
-      // build & send a message showing no orders in the order book
-      var pricelevel = {};
-      pricelevel.bid = 0;
-      pricelevel.bidsize = 0;
-      pricelevel.offer = 0;
-      pricelevel.offersize = 0;
-      orderbook.pricelevels[0] = pricelevel;
-
-      if (conn != null) {
-        conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-      } else {
-        publishMessage("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-      }
-      return;
-    }
-
-    orders.forEach(function (orderid, i) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      // get order hash
-      db.hgetall("order:" + orderid, function(err, order) {
-        var level1 = {};
-
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        if (order.price != lastprice || order.side != lastside) {
-          if (parseInt(order.side) == 1) {
-            if (!firstbid) {
-              bidlevel++;
-            } else {
-              firstbid = false;
-            }
-
-            level1.bid = order.price;
-            level1.bidsize = parseInt(order.remquantity);
-            level1.offer = 0;
-            level1.offersize = 0;
-            orderbook.pricelevels[bidlevel] = level1;
-          } else {
-            if (!firstoffer) {
-              offerlevel++;
-            } else {
-              firstoffer = false;
-            }
-
-            if (offerlevel <= bidlevel && !firstbid) {
-              orderbook.pricelevels[offerlevel].offer = order.price;
-              orderbook.pricelevels[offerlevel].offersize = parseInt(order.remquantity);
-            } else {
-              level1.bid = 0;
-              level1.bidsize = 0;
-              level1.offer = order.price;
-              level1.offersize = parseInt(order.remquantity);
-              orderbook.pricelevels[offerlevel] = level1;
-            }
-          }
-
-          lastprice = order.price;
-          lastside = order.side;
-        } else {
-          if (parseInt(order.side) == 1) {
-            orderbook.pricelevels[bidlevel].bidsize += parseInt(order.remquantity);
-          } else {
-            orderbook.pricelevels[offerlevel].offersize += parseInt(order.remquantity);
-          }
-        }
-
-        count--;
-        if (count <= 0) {
-          if (conn != null) {
-            conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-          } else {
-            // broadcast to all interested parties
-            publishMessage("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-          }
-        }
-      });
-    });
-  });
-}
-
-function publishMessage(message) {
-  // todo: alter to just cater for interested parties
-  for (var c in connections) {
-    if (connections.hasOwnProperty(c)) {
-      connections[c].write(message);
-    }
-  }
-}
-
-// todo: don't think we need this
-/*function cancelOrder(order, conn) {
-  // update stored order status
-  order.status = "4";
-  db.hset("order:" + order.orderid, "status", order.status);
-
-  console.log("Order #" + order.orderid + " cancelled");
-
-  // send to client, if connected
-  if (conn == null) {
-    if (order.clientid in connections) {
-        conn = connections[order.clientid];
-    }
-  }
-
-  if (conn != null) {
-    conn.write("{\"order\":" + JSON.stringify(order) + "}");
-  }
-}*/
-
-function getTimeInForceDesc(timeinforce) {
-/*0 = Day
-
-1 = Good Till Cancel (GTC)
-
-2 = At the Opening (OPG)
-
-3 = Immediate or Cancel (IOC)
-
-4 = Fill or Kill (FOK)
-
-5 = Good Till Crossing (GTX)
-
-6 = Good Till Date*/
-}
-
 function initDb() {
   common.registerCommonScripts();
   registerScripts();
@@ -1014,30 +493,6 @@ function getMarkettype() {
 
     markettype = parseInt(mkttype);
   });
-}
-
-function orderBookRequest(orgclientkey, symbol, conn) {
-  // add the client to the order book set for this instrument
-  db.sadd("orderbook:" + symbol, orgclientkey);
-
-  // & add the instrument to the watchlist for this client
-  db.sadd(orgclientkey + ":orderbooks", symbol);
-
-  orderBookOut(orgclientkey, symbol, conn);
-}
-
-function orderBookOut(orgclientkey, symbol, conn) {
-  if (markettype == 0) {
-    broadcastLevelTwo(symbol, conn);
-  }
-}
-
-function positionHistory(clientid, symbol, conn) {
-  // todo: remove
-  clientid = 5020;
-  symbol = "LOOK";
-
-  //bo.getPositionHistory(clientid, symbol);
 }
 
 ptp.on("orderReject", function(exereport) {
@@ -1242,10 +697,6 @@ ptp.on("quote", function(quote, header) {
     db.publish(ret[3], "quote:" + ret[2]);
   });
 });
-
-function sendQuote(quote, conn) {
-  conn.write("{\"quote\":" + JSON.stringify(quote) + "}");
-}
 
 //
 // quote rejection
@@ -1874,7 +1325,7 @@ function registerScripts() {
   local clientid = vals[1] \
   local remquantity = tonumber(vals[8]) \
   if remquantity <= 0 then return "1010" end \
-  local instrumenttype = redis.call("hget", "symbol:" .. vals[3], "instrumenttype") \
+  local instrumenttype = redis.call("hget", "symbol:" .. vals[2], "instrumenttype") \
   local lowerbound \
   local upperbound \
   local matchside \

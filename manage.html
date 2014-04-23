@@ -3725,6 +3725,10 @@
 
             msg += ", T+" + trade.nosettdays + ", trade id: " + trade.tradeid + ", order id: " + trade.orderid + ", executed " + formatUTCDateTime(trade.timestamp);
 
+            if (trade.clientid in clients) {
+                msg += " for " + clients[trade.clientid].name;
+            }
+
             return msg;
         }
 
@@ -4889,7 +4893,7 @@
 
                 nosettdays = settlperiod[settlperiod.selectedIndex].value;
 
-                sendOrder(inpclientid.value, symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, settlcurrency, nosettdays, settdate, "", timeinforce, expiredate, expiretime, "");
+                sendOrder(inpclientid.value, symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, settlcurrency, nosettdays, settdate, "", timeinforce, expiredate, expiretime, "1");
 
                 disable();
             }
