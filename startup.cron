@@ -1,1 +1,1 @@
-2 * * * * echo "Hello, there"
+55,56,57,58,59 * * * * echo "Hello, there"
