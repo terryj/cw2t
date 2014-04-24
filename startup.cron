@@ -1,2 +1,1 @@
-MAILTO="info@yearstretch.com"
-45 18 * * * cw2tstartup.sh
+2 * * * * echo "Hello, there"
