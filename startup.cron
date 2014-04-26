@@ -1,0 +1,2 @@
+MAILTO="info@yearstretch.com"
+01,02,03,04,05,06,07,08,09 18,19,20 * * * echo "Hello, there"
