@@ -711,7 +711,6 @@ function getSideDesc(side) {
 }
 
 function getSendOrder(orderid) {
-  console.log("getSendOrder:"+orderid);
   db.hgetall("order:" + orderid, function(err, order) {
     if (err) {
       console.log(err);
@@ -722,8 +721,6 @@ function getSendOrder(orderid) {
       console.log("Order #" + orderid + " not found");
       return;
     }
-
-    console.log(order);
 
     // send to user, if connected
     if (order.operatorid in connections) {
