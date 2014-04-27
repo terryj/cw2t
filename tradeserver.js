@@ -337,6 +337,9 @@ function matchOrder(order) {
     for (var i = 0; i < ret[2].length; ++i) {
       db.publish(order.operatortype, "trade:" + ret[2][i]);
     }
+
+    // indicate orderbook may have changed
+    db.publish(order.operatortype, "orderbookupdate:" + order.symbol);
   });
 }
 
@@ -417,7 +420,6 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
   if (order.markettype == 1) {
     matchOrder(order);
   } else {
-    console.log("here");
     // equity orders
     if (order.instrumenttype == "DE" || order.instrumenttype == "IE") {
       console.log(tradeid);

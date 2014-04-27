@@ -110,6 +110,8 @@ function pubsub() {
       sendQuoteack(message.substr(9));
     } else if (message.substr(0, 5) == "quote") {
       sendQuote(message.substr(6));
+    } else if (message.substr(0, 15) == "orderbookupdate") {
+      common.broadcastLevelOne(message.substr(16), connections);
     } else if (message.substr(0, 5) == "order") {
       getSendOrder(message.substr(6));
     } else if (message.substr(0, 5) == "trade") {
@@ -1071,170 +1073,6 @@ function sendOrderBooksClient(clientid, conn) {
   });
 }
 
-function broadcastLevelOne(symbol) {
-  var level1 = {};
-  var count;
-
-  level1.bestbid = 0;
-  level1.bestoffer = 0;
-
-  db.zrange(symbol, 0, -1, "WITHSCORES", function(err, orders) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = orders.length;
-    if (count == 0) {
-      publishMessage("{\"orderbook\":" + JSON.stringify(level1) + "}");
-      return;
-    }
-
-    orders.forEach(function (reply, i) {
-      if (i % 2 != 0) {
-        if (i == 1) { // first score
-          if (reply < 0) {
-            level1.bestbid = -parseFloat(reply);
-          } else if (reply > 0) {
-            level1.bestoffer = parseFloat(reply);
-          }
-        } else if (level1.bestoffer == 0) {
-          if (reply > 0) {
-            level1.bestoffer = parseFloat(reply);
-          }
-        }
-      }
-
-      count--;
-      if (count <= 0) {
-        publishMessage("{\"orderbook\":" + JSON.stringify(level1) + "}");
-      }
-    });
-  });
-}
-
-/*
- * pass conn=null to send to all interested parties
- */
-function broadcastLevelTwo(symbol, conn) {
-  var orderbook = {pricelevels : []};
-  var lastprice = 0;
-  var lastside = 0;
-  var firstbid = true;
-  var firstoffer = true;
-  var bidlevel = 0;
-  var offerlevel = 0;
-  var count;
-
-  console.log("broadcastLevelTwo:"+symbol);
-
-  orderbook.symbol = symbol;
-
-  // get bids & offers in the same call as, despite code complexity, seems safest
-  db.zrange(symbol, 0, -1, function(err, orders) {
-    if (err) {
-      console.log("zrange error:" + err + ", symbol:" + symbol);
-      return;
-    }
-
-    count = orders.length;
-    if (count == 0) {
-      // build & send a message showing no orders in the order book
-      var pricelevel = {};
-      pricelevel.bid = 0;
-      pricelevel.bidsize = 0;
-      pricelevel.offer = 0;
-      pricelevel.offersize = 0;
-      orderbook.pricelevels[0] = pricelevel;
-
-      if (conn != null) {
-        conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-      } else {
-        publishMessage("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-      }
-      return;
-    }
-
-    orders.forEach(function (orderid, i) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      // get order hash
-      db.hgetall("order:" + orderid, function(err, order) {
-        var level1 = {};
-
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        if (order.price != lastprice || order.side != lastside) {
-          if (parseInt(order.side) == 1) {
-            if (!firstbid) {
-              bidlevel++;
-            } else {
-              firstbid = false;
-            }
-
-            level1.bid = order.price;
-            level1.bidsize = parseInt(order.remquantity);
-            level1.offer = 0;
-            level1.offersize = 0;
-            orderbook.pricelevels[bidlevel] = level1;
-          } else {
-            if (!firstoffer) {
-              offerlevel++;
-            } else {
-              firstoffer = false;
-            }
-
-            if (offerlevel <= bidlevel && !firstbid) {
-              orderbook.pricelevels[offerlevel].offer = order.price;
-              orderbook.pricelevels[offerlevel].offersize = parseInt(order.remquantity);
-            } else {
-              level1.bid = 0;
-              level1.bidsize = 0;
-              level1.offer = order.price;
-              level1.offersize = parseInt(order.remquantity);
-              orderbook.pricelevels[offerlevel] = level1;
-            }
-          }
-
-          lastprice = order.price;
-          lastside = order.side;
-        } else {
-          if (parseInt(order.side) == 1) {
-            orderbook.pricelevels[bidlevel].bidsize += parseInt(order.remquantity);
-          } else {
-            orderbook.pricelevels[offerlevel].offersize += parseInt(order.remquantity);
-          }
-        }
-
-        count--;
-        if (count <= 0) {
-          if (conn != null) {
-            conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-          } else {
-            // broadcast to all interested parties
-            publishMessage("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-          }
-        }
-      });
-    });
-  });
-}
-
-function publishMessage(message) {
-  // todo: alter to just cater for interested parties
-  for (var c in connections) {
-    if (connections.hasOwnProperty(c)) {
-      connections[c].write(message);
-    }
-  }
-}
-
 function getTimeInForceDesc(timeinforce) {
 /*0 = Day
 
@@ -1337,14 +1175,6 @@ function orderBookRequest(clientid, symbol, conn) {
     sendCurrentOrderBook(symbol, ret[1], conn);
   });
 }
-
-/*function orderBookOut(clientid, symbol, conn) {
-  if (outofhours) {
-    broadcastLevelTwo(symbol, conn);
-  } else {
-    subscribeAndSend(clientid, symbol, conn);
-  }
-}*/
 
 function sendCurrentOrderBook(symbol, topic, conn) {
   var orderbook = {pricelevels : []};

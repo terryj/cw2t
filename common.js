@@ -6,6 +6,179 @@
 * December 2013
 ****************/
 
+function broadcastLevelOne(symbol, connections) {
+  var bestbid = 0.00;
+  var bestoffer = 0.00;
+  var count;
+
+  db.zrange(symbol, 0, -1, "WITHSCORES", function(err, orders) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    count = orders.length;
+    if (count == 0) {
+      sendLevelOne(symbol, bestbid, bestoffer, connections);
+      return;
+    }
+
+    orders.forEach(function (reply, i) {
+      if (i % 2 != 0) {
+        if (i == 1) { // first score
+          if (reply < 0) {
+            bestbid = -parseFloat(reply);
+          } else if (reply > 0) {
+            bestoffer = parseFloat(reply);
+          }
+        } else if (bestoffer == 0.00) {
+          if (reply > 0) {
+            bestoffer = parseFloat(reply);
+          }
+        }
+      }
+
+      count--;
+      if (count <= 0) {
+        sendLevelOne(symbol, bestbid, bestoffer, connections);
+      }
+    });
+  });
+}
+
+exports.broadcastLevelOne = broadcastLevelOne;
+
+/*function broadcastLevelTwo(symbol, connections) {
+  var orderbook = {prices : []};
+  var lastprice = 0;
+  var lastside = 0;
+  var firstbid = true;
+  var firstoffer = true;
+  var bidlevel = 0;
+  var offerlevel = 0;
+  var count;
+
+  console.log("broadcastLevelTwo:"+symbol);
+
+  orderbook.symbol = symbol;
+
+  db.zrange(symbol, 0, -1, "WITHSCORES", function(err, orders) {
+    if (err) {
+      console.log("zrange error:" + err + ", symbol:" + symbol);
+      return;
+    }
+
+    count = orders.length;
+    if (count == 0) {
+      // build & send a message showing no orders in the order book
+      var levelbid = {};
+      levelbid.bid = 0;
+      levelbid.bidsize = 0;
+      orderbook.prices[0] = levelbid;
+      var leveloffer = {};
+      leveloffer.offer = 0;
+      leveloffer.offersize = 0;
+      orderbook.prices[1] = leveloffer;
+
+      if (conn != null) {
+        conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
+      } else {
+        publishMessage("{\"orderbook\":" + JSON.stringify(orderbook) + "}", connections);
+      }
+      return;
+    }
+
+    orders.forEach(function (reply, i) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      console.log(reply);
+
+      if (i % 2 != 0) {
+        // get order hash
+        db.hgetall("order:" + orderid, function(err, order) {
+          if (err) {
+            console.log(err);
+            return;
+          }
+
+          var level = {};
+
+          if (order.price != lastprice || order.side != lastside) {
+            if (parseInt(order.side) == 1) {
+              level.bid = order.price;
+              level.bidsize = parseInt(order.remquantity);
+              orderbook.prices[bidlevel] = level;
+              bidlevel++;
+          } else {
+            if (!firstoffer) {
+              offerlevel++;
+            } else {
+              firstoffer = false;
+            }
+
+            if (offerlevel <= bidlevel && !firstbid) {
+              orderbook.prices[offerlevel].offer = order.price;
+              orderbook.prices[offerlevel].offersize = parseInt(order.remquantity);
+            } else {
+              level.offer = order.price;
+              level.offersize = parseInt(order.remquantity);
+              orderbook.prices[offerlevel] = level;
+            }
+          }
+
+          lastprice = order.price;
+          lastside = order.side;
+        } else {
+          if (parseInt(order.side) == 1) {
+            orderbook.prices[bidlevel].bidsize += parseInt(order.remquantity);
+          } else {
+            orderbook.prices[offerlevel].offersize += parseInt(order.remquantity);
+          }
+        }
+
+        count--;
+        if (count <= 0) {
+          if (conn != null) {
+            conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
+          } else {
+            // broadcast to all interested parties
+            publishMessage("{\"orderbook\":" + JSON.stringify(orderbook) + "}", connections);
+          }
+        }
+      });
+    });
+  });
+}
+
+exports.broadcastLevelTwo = broadcastLevelTwo;*/
+
+//
+// send level one to everyone
+//
+function sendLevelOne(symbol, bestbid, bestoffer, connections) {
+  var msg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\",\"prices\":[";
+  msg += "{\"level\":1,\"bid\":" + bestbid + "}";
+  msg += ",{\"level\":1,\"offer\":" + bestoffer + "}";
+  msg += "]}}";
+  console.log(msg);
+  publishMessage(msg, connections);
+}
+
+function publishMessage(message, connections) {
+  // todo: alter to just cater for interested parties
+  console.log(message);
+  for (var c in connections) {
+    if (connections.hasOwnProperty(c)) {
+      connections[c].write(message);
+    }
+  }
+}
+
+exports.publishMessage = publishMessage;
+
 //
 // returns valid trading day as date object, taking into account weekends and holidays
 // from passed date, number of settlement days (i.e. T+n) and list of holidays

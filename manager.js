@@ -140,6 +140,8 @@ function pubsub() {
       sendQuote(message.substr(6));
     } else if (message.substr(0, 17) == "ordercancelreject") {
       orderCancelReject(message.substr(18));
+    } else if (message.substr(0, 15) == "orderbookupdate") {
+      common.broadcastLevelOne(message.substr(16), connections);
     } else if (message.substr(0, 5) == "order") {
       getSendOrder(message.substr(6));
     } else if (message.substr(0, 5) == "trade") {
@@ -375,7 +377,7 @@ function unsubscribeConnection(id) {
 }
 
 function newPrice(topic, msg) {
-  // which symbols are subscribed to for this topic
+  // which symbols are subscribed to for this topic (may be more than 1 as covers derivatives)
   db.smembers("topic:" + topic + ":" + servertype + ":symbols", function(err, symbols) {
     if (err) throw err;
 
@@ -985,12 +987,6 @@ function sendIndex(orgclientkey, index, conn) {
   });
 }
 
-function orderBookOut(orgclientkey, symbol, conn) {
-  if (markettype == 1) {
-    broadcastLevelTwo(symbol, conn);
-  }
-}
-
 function quoteRequestHistory(req, conn) {
   db.eval(common.scriptgetquoterequests, 1, req.clientid, function(err, ret) {
     if (err) throw err;
@@ -1370,15 +1366,6 @@ function sendOrderBooks(userid, conn) {
       orderBookRequest(userid, symbol, conn);
     });
   });
-}
-
-function publishMessage(message) {
-  // todo: alter to just cater for interested parties
-  for (var c in connections) {
-    if (connections.hasOwnProperty(c)) {
-      connections[c].write(message);
-    }
-  }
 }
 
 function getTimeInForceDesc(timeinforce) {
