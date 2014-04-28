@@ -1033,7 +1033,7 @@ public class Cw2tClient implements ISessionObserver {
 	        props.put("ETIS_CLIENT.Transport", "[Remote]");
 	        props.put("ETIS_CLIENT.UserID", "apiwaittest1");
 	        props.put("ETIS_CLIENT.Password", "test123");
-            props.put( "ETIS_CLIENT.HeartBeat", "30");
+            props.put("ETIS_CLIENT.HeartBeat", "30");
 
 	        //props.put("Subscriptions.TIT.VOD.LD", "4040");
 	        /*props.put("Subscriptions.TIT.VOD.LD", "4040,4100,4101,4300,4301,4302,4330/1,4331/1,4332/1,4333/1,4334/1,4335/1,4330/2,4331/2,4332/2,4333/2,4334/2,4335/2");*/
@@ -1106,7 +1106,7 @@ public class Cw2tClient implements ISessionObserver {
 				case Cw2tClient.st_connected:
 					System.out.println("Connected");
                     ts.subscribeCw2tTopics();
-					//ts.DoSubscriptions();
+					ts.DoSubscriptions();
 					break;
 										
 				case Cw2tClient.st_disconnected:
