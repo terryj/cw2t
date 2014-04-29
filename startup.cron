@@ -1,1 +1,1 @@
-57 19 * * * /home/ec2-user/cw2t/cw2tstartup.sh
+00 * * * * /home/ec2-user/cw2t/cw2tstartup.sh
