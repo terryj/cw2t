@@ -1,1 +1,1 @@
-00 * * * * /home/ec2-user/cw2t/cw2tstartup.sh
+05 20 * * * /home/ec2-user/cw2t/cw2tstartup.sh
