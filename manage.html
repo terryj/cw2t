@@ -757,6 +757,7 @@
         var coheading = "Thomas Grant & Company";
         var orderdivnumarr = {};
         var loggedout = false;
+        var markets = {};
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -869,6 +870,8 @@
                     clearConnections();
                     loadConnections(obj.connections);
                     displayConnections();
+                } else if ("markets" in obj) {
+                    loadMarkets(obj.markets);
                 } else if ("cashhistory" in obj) {
                     clearCashHistory();
                     loadCashHistory(obj.cashhistory);
@@ -1062,6 +1065,12 @@
             for (var i = 0; i < cashhistarr.length; ++i) {
                 cashhistory[cashhistarr[i].cashtransid] = cashhistarr[i];
             }            
+        }
+
+        function loadMarkets(marketarr) {
+            for (var i = 0; i < marketarr.length; ++i) {
+                markets[marketarr[i].market] = marketarr[i];
+            }
         }
 
         // clear array routines
@@ -5103,7 +5112,7 @@
             menu.id = "menu";
 
             // build the main menu - reset chatmenuoption if changed
-            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Chat", "End Of Day", "Log Out"];
+            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Chat", "Holidays", "End Of Day", "Log Out"];
 
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
@@ -5168,9 +5177,12 @@
                     requestConnections();
                     break;
                 case 10:
-                    endOfDay();
+                    holidays();
                     break;
                 case 11:
+                    endOfDay();
+                    break;
+                case 12:
                     logout();
                     break;
                 }
@@ -6526,6 +6538,37 @@
                 lnkcash.className = "";
 
                 link.className = "linkselected";
+            }
+        }
+
+        function holidays() {
+            var divholidays = getDiv("div");
+
+            var lblmarket = newlabel("lblmarket", "Market:", "formlabel", divholidays);
+
+            var selmarket = newselect("selmarket", "formselect", divholidays);
+
+            populateMarkets(selmarket, "L");
+
+            selmarket.onchange = function() {
+                var holidayreq;
+
+                holidayreq.market = selmarket[selmarket.selectedIndex].value;
+                sockjs.send("{\"holidayrequest\":" + JSON.stringify(holidayreq) + "}");
+            }
+        }
+
+        function populateMarkets(mktselect, defaultid) {
+            var i = 0;
+
+            for (var j in markets) {
+                console.log(markets[j]);
+                if (j == defaultid) {
+                    mktselect[i] = new Option(markets[j].name, markets[j], true, true);
+                } else {
+                    mktselect[i] = new Option(markets[j].name, markets[j], false, false);                    
+                }
+                i++;
             }
         }
 

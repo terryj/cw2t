@@ -422,7 +422,6 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
   } else {
     // equity orders
     if (order.instrumenttype == "DE" || order.instrumenttype == "IE") {
-      console.log(tradeid);
       if (tradeid != "") {
         // the order has been executed, so publish the order & trade
         db.publish(order.operatortype, "order:" + order.orderid);

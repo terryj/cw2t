@@ -84,6 +84,7 @@ var scriptgetmargin;
 //var scriptgetaccount;
 var scriptendofday;
 var scriptgetalltrades;
+var scriptgetmarkets;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -254,6 +255,8 @@ function listen() {
             reservesRequest(obj.reservesrequest, conn);
           } else if ("pendingchatrequest" in obj) {
             pendingChatRequest(obj.pendingchatrequest, conn);
+          } else if ("holidayrequest" in obj) {
+            holidayRequest(obj.holidayrequest, conn);
           } else if ("endofday" in obj) {
             endOfDay(userid);
           } else {
@@ -1396,6 +1399,7 @@ function start(userid, brokerid, conn) {
   sendClientTypes(conn);
   sendHedgebooks(conn);
   sendCosts(conn);
+  sendMarkets(conn);
 
   // make this the last one, as sends ready status to f/e
   sendClients(userid, brokerid, conn);
@@ -1546,6 +1550,13 @@ function sendCosts(conn) {
   });      
 }
 
+function sendMarkets(conn) {
+  db.eval(scriptgetmarkets, 0, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"markets\":" + ret + "}");
+  });      
+}
+
 function sendQuoteack(quotereqid) {
   var quoteack = {};
 
@@ -1681,6 +1692,10 @@ function pendingChatRequest(req, conn) {
 
     sendChat(ret[1], conn);
   });
+}
+
+function holidayRequest(req, conn) {
+  
 }
 
 function sendChat(chatid, conn) {
@@ -2109,5 +2124,15 @@ function registerScripts() {
       end \
     end \
   end \
+  ';
+
+  scriptgetmarkets = '\
+  local tblresults = {} \
+  local markets = redis.call("smembers", "markets") \
+  for index = 1, #markets do \
+    local market = redis.call("get", "market:" .. markets[index]) \
+    table.insert(tblresults, {market=markets[index],name=market}) \
+  end \
+  return cjson.encode(tblresults) \
   ';
 }
