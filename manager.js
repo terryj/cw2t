@@ -85,6 +85,7 @@ var scriptgetmargin;
 var scriptendofday;
 var scriptgetalltrades;
 var scriptgetmarkets;
+var scriptgetholidays;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -256,7 +257,7 @@ function listen() {
           } else if ("pendingchatrequest" in obj) {
             pendingChatRequest(obj.pendingchatrequest, conn);
           } else if ("holidayrequest" in obj) {
-            holidayRequest(obj.holidayrequest, conn);
+            sendHolidays(obj.holidayrequest, conn);
           } else if ("endofday" in obj) {
             endOfDay(userid);
           } else {
@@ -1694,8 +1695,15 @@ function pendingChatRequest(req, conn) {
   });
 }
 
-function holidayRequest(req, conn) {
-  
+function sendHolidays(req, conn) {
+  console.log(req);
+
+  db.eval(scriptgetholidays, 1, req.market, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    conn.write("{\"holidays\":" + ret + "}");
+  });  
 }
 
 function sendChat(chatid, conn) {
@@ -2135,4 +2143,13 @@ function registerScripts() {
   end \
   return cjson.encode(tblresults) \
   ';
+
+  scriptgetholidays = '\
+  local tblresults = {} \
+  local holidays = redis.call("smembers", "holidays:" .. KEYS[1]) \
+  for index = 1, #holidays do \
+    table.insert(tblresults, {date=holidays[index]}) \
+  end \
+  return cjson.encode(tblresults) \
+  ';  
 }

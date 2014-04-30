@@ -6591,14 +6591,14 @@
             listholidays = document.getElementById("listholidays");
             if (listholidays != null) {
                 for (var j in holidays) {
-                    addElement(holidays[j], listholidays, i);
+                    addElement(holidays[j].date, listholidays, i);
                     i++;
                 }
             }
         }
-        
+
         //
-        // receive an addhiliday message
+        // receive an addholiday message
         //
         function addHoliday(holiday) {
             //get list
@@ -6606,7 +6606,7 @@
         }
 
         //
-        // receive an removhiliday message
+        // receive an removeholiday message
         //
         function removeHoliday(holiday) {
             //get list
@@ -6617,7 +6617,6 @@
             var i = 0;
 
             for (var j in markets) {
-                console.log(markets[j]);
                 if (j == defaultid) {
                     mktselect[i] = new Option(markets[j].name, markets[j].market, true, true);
                 } else {
