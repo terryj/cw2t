@@ -872,6 +872,8 @@
                     displayConnections();
                 } else if ("markets" in obj) {
                     loadMarkets(obj.markets);
+                } else if ("holidays" in obj) {
+                    displayHolidays(obj.holidays);
                 } else if ("cashhistory" in obj) {
                     clearCashHistory();
                     loadCashHistory(obj.cashhistory);
@@ -6542,6 +6544,8 @@
         }
 
         function holidays() {
+            var listholidays;
+
             var divholidays = getDiv("div");
 
             var lblmarket = newlabel("lblmarket", "Market:", "formlabel", divholidays);
@@ -6551,13 +6555,62 @@
             populateMarkets(selmarket, "L");
 
             selmarket.onchange = function() {
-                var holidayreq;
+                var holidayreq = {};
 
                 holidayreq.market = selmarket[selmarket.selectedIndex].value;
+                console.log(selmarket.selectedIndex);
+                console.log(selmarket[selmarket.selectedIndex].value);
+                console.log(JSON.stringify(holidayreq));
                 sockjs.send("{\"holidayrequest\":" + JSON.stringify(holidayreq) + "}");
             }
 
-            //test
+            listholidays = document.createElement('ul');
+            listholidays.id = "listholidays";
+            //listholidays.className = "***";
+
+            listholidays.onclick = function() {
+                // alert confirming delete list element
+                // if delete confirmed, send a message to server
+            }
+
+            // add a button to add a holiday
+            // if cliecked, send a message to server
+
+            divholidays.appendChild(listholidays);
+        }
+
+        //
+        // called when a holidays message arrives
+        //
+        function displayHolidays(holidays) {
+            var i = 0;
+            var listholidays;
+
+            console.log("displayHolidays");
+
+            listholidays = document.getElementById("listholidays");
+            if (listholidays != null) {
+                for (var j in holidays) {
+                    addElement(holidays[j], listholidays, i);
+                    i++;
+                }
+            }
+        }
+        
+        //
+        // receive an addhiliday message
+        //
+        function addHoliday(holiday) {
+            //get list
+            // add item to list
+        }
+
+        //
+        // receive an removhiliday message
+        //
+        function removeHoliday(holiday) {
+            //get list
+            //remove element from list
         }
 
         function populateMarkets(mktselect, defaultid) {
@@ -6566,9 +6619,9 @@
             for (var j in markets) {
                 console.log(markets[j]);
                 if (j == defaultid) {
-                    mktselect[i] = new Option(markets[j].name, markets[j], true, true);
+                    mktselect[i] = new Option(markets[j].name, markets[j].market, true, true);
                 } else {
-                    mktselect[i] = new Option(markets[j].name, markets[j], false, false);                    
+                    mktselect[i] = new Option(markets[j].name, markets[j].market, false, false);                    
                 }
                 i++;
             }
