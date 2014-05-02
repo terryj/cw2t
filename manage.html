@@ -1688,7 +1688,7 @@
         function clearOrderBookHeadings() {
             var headingstrip = document.getElementById("headingstrip");
             if (headingstrip != null) {
-                while(headingstrip.hasChildNodes()){
+                while (headingstrip.hasChildNodes()){
                     headingstrip.removeChild(headingstrip.childNodes[0]);
                 }
                 main.removeChild(headingstrip);
@@ -1698,7 +1698,7 @@
         function clearList(liststr, remove) {
             var list = document.getElementById(liststr);
             if (list != null) {
-                while(list.hasChildNodes()){
+                while (list.hasChildNodes()){
                     list.removeChild(list.childNodes[0])
                 }
                 if (remove) {
@@ -1710,7 +1710,7 @@
         function clearTable(tablestr) {
             var tbl = document.getElementById(tablestr);
             if (tbl != null) {
-                while(tbl.hasChildNodes()){
+                while (tbl.hasChildNodes()){
                     tbl.removeChild(tbl.childNodes[0])
                 }
                 main.removeChild(tbl);
@@ -1720,7 +1720,7 @@
         function clearForm(formid, remove) {
             var frm = document.getElementById(formid);
             if (frm != null) {
-                while(frm.hasChildNodes()){
+                while (frm.hasChildNodes()){
                     frm.removeChild(frm.childNodes[0]);
                 }
                 if (remove) {
@@ -1748,7 +1748,7 @@
         function clearStrip(stripid) {
             var strip = document.getElementById(stripid);
             if (strip != null) {
-                while(strip.hasChildNodes()){
+                while (strip.hasChildNodes()){
                     strip.removeChild(strip.childNodes[0]);
                 }
                 main.removeChild(strip);
@@ -2076,55 +2076,6 @@
             addHeading("Expired", list6);
         }
 
-        /*function displayPositions() {
-            var list;
-            var listid = 1;
-
-            clearLists();
-            clearEmptyLines();
-            clearHeadings();
-
-            for (var i in instrumenttypes) {
-                var emptyline = addNewLine(main);
-                emptyline.id = "emptyline:" + listid;
-                displayPositionsType(i, "list" + listid);
-                listid++;
-            }
-        }
-
-        function displayPositionsType(type, liststr) {
-            var list;
-            var firstposition = true;
-            var msg;
-
-            list = getList(liststr);
-
-            addHeading(instrumenttypes[type].description, list);
-
-            for (var x in positions) {
-                if (instruments[positions[x].symbol].instrumenttype == type) {
-                    if (firstposition) {
-                        firstposition = false;
-                    }
-                    msg = positionMsg(positions[x]);
-                    addElement(msg, list, x);
-                }
-            }
-
-            if (firstposition) {
-                addElement("No " + instrumenttypes[type].description, list, "");
-            } else {
-                list.onclick = function(e) {
-                    var element;
-                    
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
-
-                    viewPosition(element.value);
-                }                
-            }
-        }*/
-
         function displayPositions() {
             var tblpositions;
             var tblbody;
@@ -2169,38 +2120,38 @@
                     col.innerHTML = "Currency";
                     break;
                 case 2:
-                    col.innerHTML = "Settl. Date";
-                    break;
-                case 3:
                     col.innerHTML = "Long/Short";
                     break;
-                case 4:
+                case 3:
                     col.innerHTML = "Quantity";
                     col.className = "colrightalign";
                     break;
-                case 5:
+                case 4:
                     col.innerHTML = "Cost";
                     col.className = "colrightalign";
                     break;
-                case 6:
+                case 5:
                     col.innerHTML = "Avg. Cost";
                     col.className = "colrightalign";
                     break;
-                case 7:
+                case 6:
                     col.innerHTML = "Margin";
                     col.className = "colrightalign";
                     break;
-                case 8:
+                case 7:
                     col.innerHTML = "Realised P&L";
                     col.className = "colrightalign";
                     break;
-                case 9:
+                case 8:
                     col.innerHTML = "Market Price";
                     col.className = "colrightalign";
                     break;
-                case 10:
+                case 9:
                     col.innerHTML = "Unrealised P&L";
                     col.className = "colrightalign";
+                    break;
+                case 10:
+                    col.innerHTML = "View Trades";
                     break;
                 default:
                 }
@@ -2224,9 +2175,6 @@
                         col.innerHTML = positions[x].currency;
                         break;
                     case 2:
-                        col.innerHTML = formatUTCDate(positions[x].settldate);
-                        break;
-                    case 3:
                         if (positions[x].side == 1) {
                             col.innerHTML = "Long";
                             posrow.className = "rowlong";
@@ -2235,33 +2183,45 @@
                             posrow.className = "rowshort";
                         }
                         break;
-                    case 4:
+                    case 3:
                         col.innerHTML = positions[x].quantity;
                         col.className = "colrightalign";
                         break;
-                    case 5:
+                    case 4:
                         col.innerHTML = positions[x].cost;
                         col.className = "colrightalign";
                         break;
-                    case 6:
+                    case 5:
                         col.innerHTML = positions[x].averagecostpershare;
                         col.className = "colrightalign";
                         break;
-                    case 7:
+                    case 6:
                         col.innerHTML = positions[x].margin;
                         col.className = "colrightalign";
                         break;
-                    case 8:
+                    case 7:
                         col.innerHTML = positions[x].realisedpandl;
                         col.className = "colrightalign";
                         break;
-                    case 9:
+                    case 8:
                         col.innerHTML = positions[x].mktprice;
                         col.className = "colrightalign";
                         break;
-                    case 10:
+                    case 9:
                         col.innerHTML = positions[x].unrealisedpandl;
                         col.className = "colrightalign";
+                        break;
+                    case 10:
+                        var lnktrades = newlink(positions[x].symbol + ":" + positions[x].currency, "trades", "", col);
+                        lnktrades.onclick = function() {
+                            var tradehistoryrequest = {};
+                            var inpclientid = document.getElementById("inpclientid");
+                            if (inpclientid != null) {
+                                tradehistoryrequest.clientid = inpclientid.value;
+                                tradehistoryrequest.positionkey = this.id;
+                                sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(tradehistoryrequest) + "}");
+                            }
+                        }
                         break;
                     default:
                     }
@@ -2572,38 +2532,6 @@
             }
         }
 
-        /*function displayTrades() {
-            var firsttrade = true;
-            var msg;
-            var list;
-
-            clearLists();
-            clearHeadings();
-            clearEmptyLines();
-            clearTables();
-
-            list = getList("list1");
-
-            for (var x in trades) {
-                msg = tradeMsg(trades[x]);
-                addElement(msg, list, trades[x].tradeid);
-                firsttrade = false;
-            }
-
-            if (firsttrade) {
-                addElement("No trades", list, 0);                
-            } else {
-                list.onclick = function(e) {
-                    var element;
-                    
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
-
-                    viewTrade(element.value);
-                }
-            }
-        }*/
-
         function displayTrades() {
             var tbltrades;
             var tblbody;
@@ -2611,13 +2539,18 @@
             var headingrow;
             var numcols = 19;
 
-            clearLists();
-            clearEmptyLines();
-            clearHeadings();
-            clearTables();
+            if (selectedmenu == 7) {
+                clearLists();
+                clearEmptyLines();
+                clearHeadings();
+                clearTables();
+            } else {
+                clearElementById("emptyline:1");
+                clearTable("tbltrades");
+            }
 
             var emptyline = addNewLine(main);
-            emptyline.id = "emptyline:" + "1";
+            emptyline.id = "emptyline:1";
 
             if (Object.keys(trades).length == 0) {
                 var list = getList("list1");
@@ -2626,7 +2559,7 @@
             }
 
             tbltrades = document.createElement("table");
-            tbltrades.id = "tblpositions";
+            tbltrades.id = "tbltrades";
             tbltrades.setAttribute("border", "1");
 
             tblbody = document.createElement("tbody");
@@ -3317,31 +3250,6 @@
             }
 
             alert(msg);            
-        }
-
-        function viewPosition(positionid) {
-            var msg = "";
-            var position;
-            var fieldcontents;
-            var fielddesc;
-
-            position = positions[positionid];
-
-            for (var field in position) {
-                fieldcontents = position[field];
-
-                switch (field) {
-                    case 'settldate':
-                        fielddesc = formatUTCDate(fieldcontents);
-                        break;
-                    default:
-                        fielddesc = fieldcontents;
-                }
-
-                msg += field + ": " + fielddesc + "\n";
-           }
-
-            alert(msg);
         }
 
         function requestPortfolio() {

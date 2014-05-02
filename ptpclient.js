@@ -970,6 +970,12 @@ function getBody(msgtype, tagvalarr) {
 			case 41:
 				body.origclordid = tagvalarr[i].value;
 				break;
+			case 645:
+				body.mktbidx = tagvalarr[i].value;
+				break;
+			case 646:
+				body.mktofferpx = tagvalarr[i].value;
+				break;
 			default:
 				unknownTag(tagvalarr[i].tag);
 			}

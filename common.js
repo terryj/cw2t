@@ -763,6 +763,15 @@ exports.registerCommonScripts = function () {
   ';
 
   //
+  // pass client id, positionkey
+  //
+  exports.scriptgetpostrades = gettrades + '\
+  local postrades = redis.call("smembers", KEYS[1] .. ":" .. KEYS[2]) \
+  local tblresults = gettrades(postrades) \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
   // pass client id
   // todo: need to guarantee order
   exports.scriptgetcashhistory = '\
@@ -793,13 +802,13 @@ exports.registerCommonScripts = function () {
   exports.scriptgetpositions = getunrealisedpandl + '\
   local tblresults = {} \
   local positions = redis.call("smembers", KEYS[1] .. ":positions") \
-  local fields = {"clientid","symbol","side","quantity","cost","currency","settldate","margin","positionid","averagecostpershare","realisedpandl"} \
+  local fields = {"clientid","symbol","side","quantity","cost","currency","margin","positionid","averagecostpershare","realisedpandl"} \
   local vals \
   for index = 1, #positions do \
     vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
     --[[ value the position ]] \
-    local unrealisedpandl = getunrealisedpandl(vals[2], vals[4], vals[3], vals[10]) \
-    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],settldate=vals[7],margin=vals[8],positionid=vals[9],averagecostpershare=vals[10],realisedpandl=vals[11],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+    local unrealisedpandl = getunrealisedpandl(vals[2], vals[4], vals[3], vals[9]) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],margin=vals[7],positionid=vals[8],averagecostpershare=vals[9],realisedpandl=vals[10],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
   end \
   return cjson.encode(tblresults) \
   ';
@@ -903,4 +912,16 @@ exports.registerCommonScripts = function () {
   	for i = 1, #connections do \
   	end \
   	';*/
+
+  //
+  // get holidays for a market, i.e. "L" = London...assume "L" for the time being?
+  //
+  exports.scriptgetholidays = '\
+  local tblresults = {} \
+  local holidays = redis.call("smembers", "holidays:" .. KEYS[1]) \
+  for index = 1, #holidays do \
+    table.insert(tblresults, {holidays[index]}) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
 };

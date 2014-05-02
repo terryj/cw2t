@@ -55,7 +55,7 @@ var scriptquote;
 var scriptquoteack;
 var scriptrejectorder;
 var scriptgetinst;
-var scriptgetholidays;
+//var scriptgetholidays;
 var scriptorderfillrequest;
 
 // set-up a redis client
@@ -415,8 +415,7 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
   // the order has been credit checked
   // now, either forward to Proquote or attempt to match the order, depending on the type of instrument & whether the market is open
   //
-  console.log("processOrder");
-  console.log(order);
+  console.log(order.markettype);
   if (order.markettype == 1) {
     matchOrder(order);
   } else {
@@ -476,7 +475,8 @@ function initDb() {
 }
 
 function loadHolidays() {
-  db.eval(scriptgetholidays, 0, function(err, ret) {
+  // we are assuming "L"=London
+  db.eval(common.scriptgetholidays, 1, "L", function(err, ret) {
     if (err) throw err;
 
     for (var i = 0; i < ret.length; ++i) {
@@ -917,22 +917,27 @@ function registerScripts() {
   ';
 
   //
-  // positions are keyed on clientid + symbol + currency + settlement date
+  // positions are keyed on clientid + symbol + currency
+  // they are linked to a list of trade ids to provide further information, such as stellement date, if required
+  // a position id is allocated against a position and stored against the trade
   //
   updateposition = getrealisedpandl + '\
-  local updateposition = function(clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, settldate, trademargin) \
-    local poskey = symbol .. ":" .. currency .. ":" .. settldate \
+  local updateposition = function(clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, trademargin, tradeid) \
+    local poskey = symbol .. ":" .. currency \
     local positionkey = clientid .. ":position:" .. poskey \
     local positionskey = clientid .. ":positions" \
+    local postrades = clientid .. ":" .. poskey \
     local posqty = 0 \
     local poscost = 0 \
     local realisedpandl = 0 \
     local posmargin = 0 \
     local avgcostpershare = 0 \
-    local fields = {"quantity", "cost", "margin", "side", "averagecostpershare", "realisedpandl"} \
+    local positionid = "" \
+    local fields = {"quantity", "cost", "margin", "side", "averagecostpershare", "realisedpandl", "positionid"} \
     local vals = redis.call("hmget", positionkey, unpack(fields)) \
     --[[ do we already have a position? ]] \
     if vals[1] then \
+      positionid = vals[7] \
       if tonumber(side) == tonumber(vals[4]) then \
         --[[ we are adding to the existing quantity ]] \
         posqty = tonumber(vals[1]) + tonumber(tradequantity) \
@@ -974,14 +979,17 @@ function registerScripts() {
       --[[ todo: may need to update margin here ]] \
       redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare, "realisedpandl", realisedpandl) \
     else \
+      --[[ create a position ]] \
       posqty = tradequantity \
       poscost = tradecost \
       posmargin = trademargin \
       avgcostpershare = tradeprice \
-      local positionid = redis.call("incr", "positionid") \
-      redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "side", side, "quantity", posqty, "cost", poscost, "currency", currency, "settldate", settldate, "margin", posmargin, "positionid", positionid, "averagecostpershare", avgcostpershare, "realisedpandl", 0) \
+      positionid = redis.call("incr", "positionid") \
+      redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "side", side, "quantity", posqty, "cost", poscost, "currency", currency, "margin", posmargin, "positionid", positionid, "averagecostpershare", avgcostpershare, "realisedpandl", 0) \
       redis.call("sadd", positionskey, poskey) \
+      redis.call("sadd", postrades, tradeid) \
     end \
+    return positionid \
   end \
   ';
 
@@ -1019,9 +1027,9 @@ function registerScripts() {
   ';
 
   getposition = '\
-  local getposition = function(clientid, symbol, currency, settldate) \
+  local getposition = function(clientid, symbol, currency) \
     local fields = {"quantity", "cost", "side", "margin"} \
-    local position = redis.call("hmget", clientid .. ":position:" .. symbol .. ":" .. currency .. ":" .. settldate, unpack(fields)) \
+    local position = redis.call("hmget", clientid .. ":position:" .. symbol .. ":" .. currency, unpack(fields)) \
     return position \
   end \
   ';
@@ -1048,7 +1056,7 @@ function registerScripts() {
     local initialmargin = getinitialmargin(symbol, consid) \
     local totalcost = gettotalcost(clientid, symbol, instrumenttype, side, consid, currency) \
     local finance = calcfinance(instrumenttype, consid, currency, side, nosettdays) \
-    local position = getposition(clientid, symbol, currency, settldate) \
+    local position = getposition(clientid, symbol, currency) \
     --[[ always allow closing trades ]] \
     if position[1] then \
       if tonumber(side) ~= tonumber(position[3]) then \
@@ -1203,7 +1211,8 @@ function registerScripts() {
     if tonumber(finance) > 0 then \
       updatecash(clientid, settlcurrency, "FI", finance, 1, "finance", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
-    updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, futsettdate, initialmargin) \
+    local positionid = updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, initialmargin, tradeid) \
+    redis.call("hset", tradekey, "positionid", positionid) \
     return tradeid \
   end \
   ';
@@ -1708,10 +1717,5 @@ function registerScripts() {
     end \
   end \
   return cjson.encode(inst) \
-  ';
-
-  scriptgetholidays = '\
-  local holidays = redis.call("smembers", "holidays") \
-  return holidays \
   ';
 }
