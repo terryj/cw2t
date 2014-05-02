@@ -1,2 +1,1 @@
-SHELL=/bin/sh
-15 * * * * ../node_modules/forever/bin/forever list
+0 * * * * ../node_modules/forever/bin/forever list
