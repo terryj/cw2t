@@ -1455,13 +1455,13 @@
         // sign-in form
         //
         function displayFormSignin() {
-            var frm;
+            var frmsignin;
             var emaillabel;
             var passwordlabel;
             var dummylabel;
             var email;
             var password;
-            var btn;
+            var btnsignin;
             var cw2theading;
 
             clearMenu();
@@ -1470,8 +1470,8 @@
             cw2theading = document.getElementById('cw2t');
             cw2theading.innerHTML = coheading;
 
-            frm = document.createElement("form");
-            frm.id = "frmsignin";
+            frmsignin = document.createElement("form");
+            frmsignin.id = "frmsignin";
 
             emaillabel = document.createElement("label");
             emaillabel.innerHTML = "Email ";
@@ -1508,31 +1508,31 @@
                 }
             }
 
-            btn = document.createElement("input");
-            btn.type = "button";
-            btn.value = "Sign In";
-            btn.className = "formbutton";
+            btnsignin = document.createElement("input");
+            btnsignin.type = "button";
+            btnsignin.value = "Sign In";
+            btnsignin.className = "formbutton";
 
-            btn.onclick = function() {
+            btnsignin.onclick = function() {
                 disable();
                 signin();
             }
 
-            addNewLine(frm);
-            frm.appendChild(emaillabel);
-            frm.appendChild(email);
-            addNewLine(frm);
-            frm.appendChild(passwordlabel);
-            frm.appendChild(password);
-            addNewLine(frm);
-            addNewLine(frm);
-            frm.appendChild(dummylabel);
-            frm.appendChild(btn);
+            addNewLine(frmsignin, null);
+            frmsignin.appendChild(emaillabel);
+            frmsignin.appendChild(email);
+            addNewLine(frmsignin, null);
+            frmsignin.appendChild(passwordlabel);
+            frmsignin.appendChild(password);
+            addNewLine(frmsignin, null);
+            addNewLine(frmsignin, null);
+            frmsignin.appendChild(dummylabel);
+            frmsignin.appendChild(btnsignin);
 
-            main.appendChild(frm);
+            main.appendChild(frmsignin);
 
             function disable() {
-                btn.disable = true;
+                btnsignin.disable = true;
                 email.onkeypress = null;
                 password.onkeypress = null;
             }
@@ -1794,6 +1794,11 @@
             clearAllSymbolDivs();
             clearEmptyLines();
             clearTables();
+            clearLabels();
+        }
+
+        function clearLabels() {
+            clearElementById("lbltrades");
         }
 
         function clearLists() {
@@ -2088,8 +2093,7 @@
             clearHeadings();
             clearTables();
 
-            var emptyline = addNewLine(main);
-            emptyline.id = "emptyline:" + "1";
+            var emptyline = addNewLine(main, "emptyline:1");
 
             if (Object.keys(positions).length == 0) {
                 var list = getList("list1");
@@ -2212,16 +2216,7 @@
                         col.className = "colrightalign";
                         break;
                     case 10:
-                        var lnktrades = newlink(positions[x].symbol + ":" + positions[x].currency, "trades", "", col);
-                        lnktrades.onclick = function() {
-                            var tradehistoryrequest = {};
-                            var inpclientid = document.getElementById("inpclientid");
-                            if (inpclientid != null) {
-                                tradehistoryrequest.clientid = inpclientid.value;
-                                tradehistoryrequest.positionkey = this.id;
-                                sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(tradehistoryrequest) + "}");
-                            }
-                        }
+                        displayPostrades(col);
                         break;
                     default:
                     }
@@ -2230,6 +2225,33 @@
                 }
 
                 tblbody.appendChild(posrow);
+            }
+
+            function displayPostrades(col) {
+                var tradehistoryrequest = {};
+
+                var lnktrades = newlink(positions[x].symbol + ":" + positions[x].currency, "trades", "", col);
+
+                lnktrades.onclick = function() {
+                    var inpclientid = document.getElementById("inpclientid");
+                    if (inpclientid != null) {
+                        tradehistoryrequest.clientid = inpclientid.value;
+                        tradehistoryrequest.positionkey = this.id;
+                        sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(tradehistoryrequest) + "}");
+                        whichPos(tradehistoryrequest.positionkey);
+                    }
+                }
+            }
+
+            function whichPos(pos) {
+                var postrades = document.getElementById("postrades");
+                if (postrades == null) {
+                    postrades = document.createElement("input");
+                    postrades.type = "hidden";
+                    postrades.id = "postrades";
+                    main.appendChild(postrades);
+                }
+                postrades.value = pos;
             }
         }
 
@@ -2244,8 +2266,7 @@
             clearHeadings();
             clearTables();
 
-            var emptyline = addNewLine(main);
-            emptyline.id = "emptyline:" + "1";
+            var emptyline = addNewLine(main, "emptyline:1");
 
             if (Object.keys(account).length == 0) {
                 var list = getList("list1");
@@ -2382,20 +2403,15 @@
             clearTables();
 
             list1 = getList("list1");
-            var emptyline1 = addNewLine(main);
-            emptyline1.id = "emptyline:1";
+            var emptyline1 = addNewLine(main, "emptyline:1");
             list2 = getList("list2");
-            var emptyline2 = addNewLine(main);
-            emptyline2.id = "emptyline:2";
+            var emptyline2 = addNewLine(main, "emptyline:2");
             list3 = getList("list3");
-            var emptyline3 = addNewLine(main);
-            emptyline3.id = "emptyline:3";
+            var emptyline3 = addNewLine(main, "emptyline:3");
             list4 = getList("list4");
-            var emptyline4 = addNewLine(main);
-            emptyline4.id = "emptyline:4";
+            var emptyline4 = addNewLine(main, "emptyline:4");
             list5 = getList("list5");
-            var emptyline5 = addNewLine(main);
-            emptyline5.id = "emptyline:5";
+            var emptyline5 = addNewLine(main, "emptyline:5");
             list6 = getList("list6");
 
             displayOrderHeadings();
@@ -2545,12 +2561,19 @@
                 clearHeadings();
                 clearTables();
             } else {
-                clearElementById("emptyline:1");
+                clearElementById("emptyline:2");
+                clearElementById("lbltrades");
                 clearTable("tbltrades");
             }
 
-            var emptyline = addNewLine(main);
-            emptyline.id = "emptyline:1";
+            var emptyline2 = addNewLine(main, "emptyline:2");
+
+            if (selectedmenu == 8) {
+                var postrades = document.getElementById("postrades");
+                if (postrades != null) {
+                    var lbltrades = newlabel("lbltrades", "Trades for position " + postrades.value, "", main);
+                }
+            }
 
             if (Object.keys(trades).length == 0) {
                 var list = getList("list1");
@@ -2838,8 +2861,7 @@
             clearHeadings();
             clearTables();
 
-            var emptyline = addNewLine(main);
-            emptyline.id = "emptyline:" + "1";
+            var emptyline = addNewLine(main, "emptyline:1");
 
             if (Object.keys(cashhistory).length == 0) {
                 var list = getList("list1");
@@ -2995,8 +3017,7 @@
             clearHeadings();
             clearTables();
 
-            var emptyline = addNewLine(main);
-            emptyline.id = "emptyline:1";
+            var emptyline = addNewLine(main, "emptyline:1");
 
             var list = getList("list1");
 
@@ -3035,8 +3056,7 @@
             clearHeadings();
             clearTables();
 
-            var emptyline = addNewLine(main);
-            emptyline.id = "emptyline:1";
+            var emptyline = addNewLine("emptyline:1");
 
             var list = getList("list1");
 
@@ -3060,8 +3080,7 @@
             clearHeadings();
             clearTables();
 
-            var emptyline = addNewLine(main);
-            emptyline.id = "emptyline:1";
+            var emptyline = addNewLine(main, "emptyline:1");
 
             var list = getList("list1");
 
@@ -3412,7 +3431,7 @@
 
             chatdiv.appendChild(chattext);
 
-            addNewLine(chatdiv);
+            addNewLine(chatdiv, null);
 
             var chatbtn = newbutton("btnchat:" + elem.value, "Send", "chatbtn", chatdiv);
 
@@ -4209,17 +4228,17 @@
                 sendIt();
             }
 
-            addNewLine(orderdiv);
+            addNewLine(orderdiv, null);
             orderdiv.appendChild(lblquantity);
             orderdiv.appendChild(quantitycashsel);
             orderdiv.appendChild(quotereqqty);
-            addNewLine(orderdiv);
+            addNewLine(orderdiv, null);
             orderdiv.appendChild(lblcurrency);
             orderdiv.appendChild(currencysel);
-            addNewLine(orderdiv);
+            addNewLine(orderdiv, null);
             orderdiv.appendChild(lblsettle);
             orderdiv.appendChild(settlperiod);
-            addNewLine(orderdiv);
+            addNewLine(orderdiv, null);
             orderdiv.appendChild(quotereqbutton);
             orderdiv.appendChild(inpclientid);
 
@@ -4485,7 +4504,7 @@
             if (selectedmenu == 0) {
                 orderdiv = getDiv("orderdiv:" + quote.symbol + ":" + quote.orderdivnum, quote.symbol);
 
-                addNewLine(orderdiv);
+                addNewLine(orderdiv, null);
                 orderdiv.appendChild(sellbutton);
                 orderdiv.appendChild(timerlabel);
                 orderdiv.appendChild(buybutton);
@@ -4729,7 +4748,7 @@
 
             populateSettlPeriod(settlperiod, instruments[symbol].instrumenttype);
 
-            addNewLine(orderdiv);
+            addNewLine(orderdiv, null);
             orderdiv.appendChild(btn);
             orderdiv.appendChild(quantityinput);
             orderdiv.appendChild(stocklabel);
@@ -5256,19 +5275,19 @@
 
             var frmclient = getForm("frmclient");
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lblname = newlabel("lblname", "Name:", "formlabel", frmclient);
             var inpname = newinput("inpname", "forminput", frmclient);
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lblemail = newlabel("lblemail", "Email:", "formlabel", frmclient);
             var inpemail = newinput("inpemail", "forminput", frmclient);
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lblmobile = newlabel("lblmobile", "Mobile:", "formlabel", frmclient);
             var inpmobile = newinput("inpmobile", "forminput", frmclient);
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lbladdress = newlabel("lbladdress", "Address:", "formlabel", null);
             var inpaddress = document.createElement("textarea");
             inpaddress.id = "inpaddress";
@@ -5277,23 +5296,23 @@
             divaddress.appendChild(inpaddress);
             frmclient.appendChild(divaddress);
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lblbroker = newlabel("lblbroker", "Broker:", "formlabel", frmclient);
             var selbroker = newselect("selbroker", "formselect", frmclient);
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lblbrokerclientcode = newlabel("lblbrokerclientcode", "Broker Client Code:", "formlabel", frmclient);
             var inpbrokerclientcode = newinput("inpbrokerclientcode", "forminput", frmclient);
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lblifa = newlabel("lblifa", "IFA:", "formlabel", frmclient);
             var selifa = newselect("selifa", "formselect", frmclient);
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lbltype = newlabel("lbltype", "Client Type:", "formlabel", frmclient);
             var seltype = newselect("seltype", "formselect", frmclient);
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lblcantrade = newlabel("lblcantrade", "Can Trade:", "formlabel", frmclient);
 
             for (var i in instrumenttypes) {
@@ -5308,26 +5327,26 @@
                 frmclient.appendChild(textinsttype);
             }
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lblhedge = newlabel("lblhedge", "Hedge:", "formlabel", frmclient);
             var opthedgeyes = newoption("opthedgeyes", "opthedge", "formcheckbox", frmclient);
             var lblhedgeyes = newlabel("lblhedgeyes", "Yes", "", frmclient);
             var opthedgeno = newoption("opthedgeno", "opthedge", "formcheckbox", frmclient);
             var lblhedgeno = newlabel("lblhedgeno", "No", "", frmclient);
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lblcommpercent = newlabel("lblcommpercent", "Commission Override %:", "formlabel", frmclient);
             var inpcommpercent = newinput("inpcommpercent", "forminput", frmclient);
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lblclientid = newlabel("lblclientid", "Client Id:", "formlabel", frmclient);
             var inpclientid = newinput("inpclientid", "forminput", frmclient, true);
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var btnupdate = newbutton("btnupdate", "Add", "formbutton", frmclient);
             var btnnewclient = newbutton("btnnewclient", "New Client", "formbuttonwide", frmclient);
 
-            addNewLine(frmclient);
+            addNewLine(frmclient, null);
             var lblclientconf = newlabel("lblclientconf", "", "", frmclient);
 
             btnupdate.onclick = function() {
@@ -5662,39 +5681,39 @@
 
             inpclient.disabled = true;
 
-            addNewLine(frmcash);
+            addNewLine(frmcash, null);
             frmcash.appendChild(lblclient);
             frmcash.appendChild(inpclient);
-            addNewLine(frmcash);
+            addNewLine(frmcash, null);
             frmcash.appendChild(lblcurrency);
             frmcash.appendChild(selcurrency);
-            addNewLine(frmcash);
+            addNewLine(frmcash, null);
             frmcash.appendChild(lbltranstype);
             frmcash.appendChild(seltranstype);
-            addNewLine(frmcash);
+            addNewLine(frmcash, null);
             var lbldrcr = newlabel("lbldrcr", "In(+)/Out(-):", "formlabel", frmcash);
             var optdr = newoption("optdr", "optdrcr", "formcheckbox", frmcash);
             var lbldr = newlabel("lbldr", "In", "", frmcash);
             var optcr = newoption("optcr", "optdrcr", "formcheckbox", frmcash);
             var lblcr = newlabel("lblcr", "Out", "", frmcash);
             optdr.checked = true;
-            addNewLine(frmcash);
+            addNewLine(frmcash, null);
             frmcash.appendChild(lblamount);
             frmcash.appendChild(inpamount);
-            addNewLine(frmcash);
+            addNewLine(frmcash, null);
             frmcash.appendChild(lblsettldate);
             frmcash.appendChild(settlday);
             frmcash.appendChild(settlmonth);
             frmcash.appendChild(settlyear);
-            addNewLine(frmcash);
+            addNewLine(frmcash, null);
             frmcash.appendChild(lbldesc);
             frmcash.appendChild(inpdesc);
-            addNewLine(frmcash);
+            addNewLine(frmcash, null);
             frmcash.appendChild(lblref);
             frmcash.appendChild(inpref);
-            addNewLine(frmcash);
+            addNewLine(frmcash, null);
             frmcash.appendChild(btnupdate);
-            addNewLine(frmcash);
+            addNewLine(frmcash, null);
             frmcash.appendChild(lblcashconf);
             frmcash.appendChild(inpclientid);
 
@@ -5743,48 +5762,48 @@
                 frmproduct.id = "frmproduct";
             }
 
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             lblsymbol = newlabel("lblsymbol", "Symbol:", "formlabel", frmproduct);
             inpsymbol = newinput("inpsymbol", "forminput", frmproduct, true);
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             lbldesc = newlabel("lbldesc", "Description:", "formlabel", frmproduct);
             inpdesc = newinput("inpdesc", "forminput", frmproduct, true);
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             lblisin = newlabel("lblisin", "Isin:", "formlabel", frmproduct);
             inpisin = newinput("inpisin", "forminput", frmproduct, true);
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             lblsedol = newlabel("lblsedol", "Sedol:", "formlabel", frmproduct);
             inpsedol = newinput("inpsedol", "forminput", frmproduct, true);
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             lblinsttype = newlabel("lblinsttype", "Instrument Type:", "formlabel", frmproduct);
             inpinsttype = newinput("inpinsttype", "forminput", frmproduct, true);
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             lblcurrency = newlabel("lblcurrency", "Currency:", "formlabel", frmproduct);
             inpcurrency = newinput("inpcurrency", "forminput", frmproduct, true);
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             lblmarket = newlabel("lblmarket", "Market:", "formlabel", frmproduct);
             inpmarket = newinput("inpmarket", "forminput", frmproduct, true);
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             lblsector = newlabel("lblsector", "Sector:", "formlabel", frmproduct);
             inpsector = newinput("inpsector", "forminput", frmproduct, true);
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             lblmargin = newlabel("lblmargin", "Margin %:", "formlabel", frmproduct);
             inpmargin = newinput("inpmargin", "forminput", frmproduct);
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             lblhedge = newlabel("lblhedge", "Hedge:", "formlabel", frmproduct);
             opthedgeyes = newoption("opthedgeyes", "opthedge", "formcheckbox", frmproduct);
             lblhedgeyes = newlabel("lblhedgeyes", "Yes", "", frmproduct);
             opthedgeno = newoption("opthedgeno", "opthedge", "formcheckbox", frmproduct);
             lblhedgeno = newlabel("lblhedgeno", "No", "", frmproduct);
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             lblptmlevy = newlabel("lblptmlevy", "PTM Levy exempt", "formlabel", frmproduct);
             optptmexempt = newoption("optptmexempt", "optptm", "formcheckbox", frmproduct);
             lblptmexempt = newlabel("lblptmexempt", "Yes", "", frmproduct);
             optptmnotexempt = newoption("optptmnotexempt", "optptm", "formcheckbox", frmproduct);
             lblptmnotexempt = newlabel("lblhedgeno", "No", "", frmproduct);
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             btnupdate = newbutton("btnupdate", "Update", "formbutton", frmproduct);
-            addNewLine(frmproduct);
+            addNewLine(frmproduct, null);
             lblinstconf = newlabel("lblinstconf", "", "", frmproduct);
 
             btnupdate.onclick = function() {
@@ -5868,15 +5887,15 @@
 
             var lblinsttype = newlabel("lblinsttype", "Instrument Type:", "formlabel", frmhedge);
             var selinsttype = newselect("selinsttype", "formselect", frmhedge);
-            addNewLine(frmhedge);
+            addNewLine(frmhedge, null);
             var lblcurrency = newlabel("lblcurrency", "Currency:", "formlabel", frmhedge);
             var selcurrency = newselect("selcurrency", "formselect", frmhedge);
-            addNewLine(frmhedge);
+            addNewLine(frmhedge, null);
             var lblhedgebook = newlabel("lblhedgebook", "Hedge Book:", "formlabel", frmhedge);
             var selhedgebook = newselect("selhedgebook", "formselect", frmhedge);
-            addNewLine(frmhedge);
+            addNewLine(frmhedge, null);
             var btnupdate = newbutton("btnupdate", "Update", "formbutton", frmhedge);
-            addNewLine(frmhedge);
+            addNewLine(frmhedge, null);
             var lblhedgeconf = newlabel("lblhedgeconf", "", "", frmhedge);
 
             populateInstrumentTypes(selinsttype, insttype);
@@ -5926,42 +5945,42 @@
 
             var lblinsttype = newlabel("lblinsttype", "Instrument Type:", "formlabel", frmcosts);
             var selinsttype = newselect("selinsttype", "formselect", frmcosts);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var lblcurrency = newlabel("lblcurrency", "Currency:", "formlabel", frmcosts);
             var selcurrency = newselect("selcurrency", "formselect", frmcosts);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var lblside = newlabel("lblside", "Buy/Sell:", "formlabel", frmcosts);
             var selside = newselect("selside", "formselect", frmcosts);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var lblcommissionpercent = newlabel("lblcommissionpercent", "Commission %:", "formlabel", frmcosts);
             var inpcommissionpercent = newinput("inpcommissionpercent", "forminput", frmcosts, false);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var lblcommissionmin = newlabel("lblcommissionmin", "Commission Min:", "formlabel", frmcosts);
             var inpcommissionmin = newinput("inpcommissionmin", "forminput", frmcosts, false);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var lblptmlevylimit = newlabel("lblptmlevylimit", "PTM Levy Limit:", "formlabel", frmcosts);
             var inpptmlevylimit = newinput("inpptmlevylimit", "forminput", frmcosts, false);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var lblptmlevy = newlabel("lblptmlevy", "PTM Levy:", "formlabel", frmcosts);
             var inpptmlevy = newinput("inpptmlevy", "forminput", frmcosts, false);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var lblstampdutylimit = newlabel("lblstampdutylimit", "Stamp Duty Limit:", "formlabel", frmcosts);
             var inpstampdutylimit = newinput("inpstampdutylimit", "forminput", frmcosts, false);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var lblstampdutypercent = newlabel("lblstampdutypercent", "Stamp Duty %:", "formlabel", frmcosts);
             var inpstampdutypercent = newinput("inpstampdutypercent", "forminput", frmcosts, false);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var lblcontractcharge = newlabel("lblcontractcharge", "Contract Charge:", "formlabel", frmcosts);
             var inpcontractcharge = newinput("inpcontractcharge", "forminput", frmcosts, false);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var lblfinance = newlabel("lblfinance", "Finance %:", "formlabel", frmcosts);
             var inpfinance = newinput("inpfinance", "forminput", frmcosts, false);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var lbldefaultnosettdays = newlabel("lbldefaultnosettdays", "Default Settl. Days:", "formlabel", frmcosts);
             var inpdefaultnosettdays = newinput("inpdefaultnosettdays", "forminput", frmcosts, false);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var btnupdate = newbutton("btnupdate", "Update", "formbutton", frmcosts);
-            addNewLine(frmcosts);
+            addNewLine(frmcosts, null);
             var lblcostsconf = newlabel("lblcostsconf", "", "", frmcosts);
 
             selinsttype.onchange = function() {
@@ -6053,16 +6072,16 @@
             var frmifa = getForm("frmifa");
 
             var selifa = newselect("selinsttype", "formselect", frmifa);
-            addNewLine(frmifa);
+            addNewLine(frmifa, null);
             var lblname = newlabel("lblname", "Name:", "formlabel", frmifa);
             var inpname = newinput("inpname", "forminput", frmifa);
-            addNewLine(frmifa);
+            addNewLine(frmifa, null);
             var lblemail = newlabel("lblemail", "Email:", "formlabel", frmifa);
             var inpemail = newinput("inpemail", "forminput", frmifa);
-            addNewLine(frmifa);
+            addNewLine(frmifa, null);
             var lblmobile = newlabel("lblmobile", "Mobile:", "formlabel", frmifa);
             var inpmobile = newinput("inpmobile", "forminput", frmifa);
-            addNewLine(frmifa);
+            addNewLine(frmifa, null);
             var lbladdress = document.createElement("label");
             lbladdress.className = "formlabel";
             lbladdress.innerHTML = "Address:";
@@ -6072,12 +6091,12 @@
             divaddress.appendChild(lbladdress);
             divaddress.appendChild(inpaddress);
             frmifa.appendChild(divaddress);
-            addNewLine(frmifa);
+            addNewLine(frmifa, null);
             var lblifaid = newlabel("lblifaid", "Id:", "formlabel", frmifa);
             var inpifaid = newinput("inpifaid", "forminput", frmifa, true);
-            addNewLine(frmifa);
+            addNewLine(frmifa, null);
             var btnupdate = newbutton("btnupdate", "Update", "formbutton", frmifa);
-            addNewLine(frmifa);
+            addNewLine(frmifa, null);
             var lblifaconf = newlabel("lblifaconf", "", "", frmifa);
 
             selifa.onchange = function() {
@@ -6136,9 +6155,13 @@
         // various routines to create presentation elements
         //
 
-        function addNewLine(frm) {
+        function addNewLine(frm, id) {
+            console.log("addNewLine:"+id);
             var newline = document.createElement("label");
             newline.innerHTML = "<br>";
+            if (id != null) {
+                newline.id = id;
+            }
             frm.appendChild(newline);
             return newline;
         }
@@ -6415,8 +6438,8 @@
 
             frmhistory.appendChild(inpclientid);
 
-            addNewLine(frmhistory);
-            addNewLine(frmhistory);
+            addNewLine(frmhistory, null);
+            addNewLine(frmhistory, null);
             
             main.appendChild(frmhistory);
 
