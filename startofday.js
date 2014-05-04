@@ -24,5 +24,18 @@ function resetNos() {
   db.set("fixseqnumin", 0);
   db.set("fixseqnumout", 0);
 
-  console.log("fix sequence numbers reset ok");
+  db.get("fixseqnumin", function(err, fixseqnumin) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (fixseqnumin == "0") {
+      console.log("fix sequence numbers reset ok");
+    } else {
+      console.log("fix sequence numbers not reset");      
+    }
+    
+    process.exit(0);
+  });
 }

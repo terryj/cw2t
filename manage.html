@@ -1142,7 +1142,6 @@
 
         function updatePosition(position) {
             var msg;
-            //var poskey = position.symbol + ":" + position.currency;
             var poskey = position.positionid;
 
             if (position.quantity == 0) {
@@ -3706,7 +3705,7 @@
             } else {
                 msg = "Short ";
             }
-            msg += position.quantity + " " + position.symbol + ", cost " + parseFloat(position.cost).toFixed(2) + " " + position.currency + ", for settlement " + formatUTCDate(position.settldate);
+            msg += position.quantity + " " + position.symbol + ", cost " + parseFloat(position.cost).toFixed(2) + " " + position.currency;
 
             return msg;
         }
