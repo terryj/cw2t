@@ -1,1 +1,1 @@
-0,5 * * * * ../node_modules/forever/bin/forever list
+3,6,9 * * * * ../node_modules/forever/bin/forever list
