@@ -24,8 +24,8 @@ var datainbuf = ''; // data buffer
 var connectDelay = 5000; // re-try connection timer delay in milliseconds
 var pqconn;
 var encryptmethod = '0';
-var heartbeatintimer = null; // timer used to monitor incoming messages
-var heartbeatouttimer = null; // timer used to monitor outgoing messages
+var heartbeattimer = null; // timer used to monitor incoming messages
+//var heartbeatouttimer = null; // timer used to monitor outgoing messages
 var testrequesttimer = null;
 var heartbtint = 30; // heart beat interval in seconds
 var transmissiontime = 3; // transmission time in seconds
@@ -130,8 +130,8 @@ function tryToConnect(self) {
 }
 
 function stopHeartbeatTimers() {
-	stopHeartBeatIn();
-	stopHeartbeatOut();
+	stopHeartBeatTimer();
+	//stopHeartbeatOut();
 	stopTestRequestTimer();
 }
 
@@ -429,7 +429,7 @@ function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, m
 	}
 }
 
-function startHeartbeatOut() {
+/*function startHeartbeatOut() {
 	heartbeatouttimer = setTimeout(function() {
 		sendHeartbeat();
 	}, heartbtint * 1000);
@@ -440,7 +440,7 @@ function stopHeartbeatOut() {
 		clearTimeout(heartbeatouttimer);
 		heartbeatouttimer = null;
 	}
-}
+}*/
 
 function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, timestamp, origtimestamp) {
 	var msg;
@@ -534,20 +534,23 @@ function parseData(self) {
 	}
 }
 
-function startHeartBeatIn() {
-	if (heartbeatintimer == null) {
+function startHeartBeatTimer() {
+	console.log("startHeartBeatTimer");
+	if (heartbeattimer == null) {
 		// send a test request after agreed quiet time period
-		heartbeatintimer = setTimeout(function() {
+		//heartbeattimer = setTimeout(function() {
+		heartbeattimer = setTimeout(function() {
 			sendTestRequest();
 		}, (heartbtint * 1000) + (transmissiontime * 1000));
 	}
 }
 
-function stopHeartBeatIn() {
-	if (heartbeatintimer != null) {
+function stopHeartBeatTimer() {
+	console.log("stopHeartBeatTimer");
+	if (heartbeattimer != null) {
 		// clear the timer
-		clearTimeout(heartbeatintimer);
-		heartbeatintimer = null;
+		clearTimeout(heartbeattimer);
+		heartbeattimer = null;
 	}
 }
 
@@ -1253,15 +1256,18 @@ function orderCancelReject(ordercancelreject, self) {
 }
 
 function heartbeatReceived(heartbeat, self) {
+	stopHeartBeatTimer();
+
 	// if we have a test request running, check the value of the string returned
 	if (testrequesttimer != null) {
-		if ('testreqid' in heartbeat) {
-			if (heartbeat.testreqid == matchtestreqid) {
+		//if ('testreqid' in heartbeat) {
+			//if (heartbeat.testreqid == matchtestreqid) {
 				stopTestRequestTimer();
-			}
-		}
+			//}
+		//}
 	} else {
 		sendHeartbeat();
+		startHeartBeatTimer();
 	}
 }
 
