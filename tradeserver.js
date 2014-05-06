@@ -917,11 +917,11 @@ function registerScripts() {
   ';
 
   createposition = '\
-  local createposition = function(poskey, positionkey, positionskey, postrades, clientid, symbol, side, quantity, avgcostpershare, cost, currency, margin, tradeid) \
+  local createposition = function(poskey, positionkey, positionskey, postradeskey, clientid, symbol, side, quantity, avgcostpershare, cost, currency, margin, tradeid) \
     local positionid = redis.call("incr", "positionid") \
     redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "side", side, "quantity", quantity, "cost", cost, "currency", currency, "margin", margin, "positionid", positionid, "averagecostpershare", avgcostpershare, "realisedpandl", 0) \
     redis.call("sadd", positionskey, poskey) \
-    redis.call("sadd", postrades, tradeid) \
+    redis.call("sadd", postradeskey, tradeid) \
     return positionid \
   end \
   ';
@@ -930,10 +930,13 @@ function registerScripts() {
   // todo: do something with realisedpandl
   //
   closeposition = '\
-  local closeposition = function(poskey, positionkey, positionskey, postrades, tradeid, realisedpandl) \
+  local closeposition = function(poskey, positionkey, positionskey, postradeskey, tradeid, realisedpandl) \
     redis.call("hdel", positionkey, "clientid", "symbol", "side", "quantity", "cost", "currency", "margin", "positionid", "averagecostpershare", "realisedpandl") \
     redis.call("srem", positionskey, poskey) \
-    redis.call("srem", postrades, tradeid) \
+    local postrades = redis.call("smembers", postradeskey) \
+    for index = 1, #postrades do \
+      redis.call("srem", postradeskey, postrades[index]) \
+    end \
   end \
   ';
 
@@ -947,7 +950,7 @@ function registerScripts() {
     local poskey = symbol .. ":" .. currency \
     local positionkey = clientid .. ":position:" .. poskey \
     local positionskey = clientid .. ":positions" \
-    local postrades = clientid .. ":trades:" .. poskey \
+    local postradeskey = clientid .. ":trades:" .. poskey \
     local posqty = 0 \
     local poscost = 0 \
     local realisedpandl = 0 \
@@ -969,14 +972,14 @@ function registerScripts() {
         realisedpandl = vals[6] \
         --[[ update the position & add the trade to the set ]] \
         redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare, "realisedpandl", realisedpandl) \
-        redis.call("sadd", postrades, tradeid) \
+        redis.call("sadd", postradeskey, tradeid) \
       elseif tonumber(tradequantity) == tonumber(vals[1]) then \
         --[[ just close position ]] \
         realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
-        closeposition(poskey, positionkey, positionskey, postrades, tradeid, realisedpandl) \
+        closeposition(poskey, positionkey, positionskey, postradeskey, tradeid, realisedpandl) \
       elseif tonumber(tradequantity) > tonumber(vals[1]) then \
         --[[ close position ]] \
-        closeposition(poskey, positionkey, positionskey, postrades, tradeid) \
+        closeposition(poskey, positionkey, positionskey, postradeskey, tradeid) \
         --[[ & open new ]] \
         posqty = tonumber(tradequantity) - tonumber(vals[1]) \
         poscost = posqty * tonumber(tradeprice) \
@@ -985,7 +988,7 @@ function registerScripts() {
         posmargin = round(posmargin, 5) \
         avgcostpershare = tradeprice \
         realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
-        createposition(poskey, positionkey, positionskey, postrades, clientid, symbol, side, posqty, avgcostpershare, poscost, currency, posmargin, tradeid) \
+        createposition(poskey, positionkey, positionskey, postradeskey, clientid, symbol, side, posqty, avgcostpershare, poscost, currency, posmargin, tradeid) \
       else \
         --[[ part-fill ]] \
         posqty = tonumber(vals[1]) - tonumber(tradequantity) \
@@ -996,11 +999,11 @@ function registerScripts() {
         avgcostpershare = vals[5] \
         realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
         redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare, "realisedpandl", realisedpandl) \
-        redis.call("sadd", postrades, tradeid) \
+        redis.call("sadd", postradeskey, tradeid) \
       end \
     else \
       --[[ new position ]] \
-      createposition(poskey, positionkey, positionskey, postrades, clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, trademargin, tradeid) \
+      createposition(poskey, positionkey, positionskey, postradeskey, clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, trademargin, tradeid) \
     end \
     return positionid \
   end \
