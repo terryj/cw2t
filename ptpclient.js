@@ -25,7 +25,6 @@ var connectDelay = 5000; // re-try connection timer delay in milliseconds
 var pqconn;
 var encryptmethod = '0';
 var heartbeattimer = null; // timer used to monitor incoming messages
-//var heartbeatouttimer = null; // timer used to monitor outgoing messages
 var testrequesttimer = null;
 var heartbtint = 30; // heart beat interval in seconds
 var transmissiontime = 3; // transmission time in seconds
@@ -89,15 +88,8 @@ function tryToConnect(self) {
 			// add new data to buffer
 			datainbuf += data;
 
-			/*if (first) {
-				start = new Date();
-				first = false;
-			}*/
-
 			// parse it
-			//stopHeartBeatIn();
 			parseData(self);
-			//startHeartBeatIn();
 
     		/*if (count == 20000) {
     			console.log("nummsg="+count);
@@ -111,6 +103,7 @@ function tryToConnect(self) {
 			console.log('Disconnected from ' + pqhost);
 
 			stopHeartbeatTimers();
+			restartTimer(self);
 		});
 
 		logon(false);
@@ -121,17 +114,18 @@ function tryToConnect(self) {
 		console.log(err);
 
 		stopHeartbeatTimers();
-
-		// set a timer to re-try - todo: do we need to base this on error?
-		setTimeout(function() {
-			tryToConnect(self);
-    	}, connectDelay);
 	});
+}
+
+function restartTimer(self) {
+	// set a timer to re-try
+	setTimeout(function() {
+		tryToConnect(self);
+   	}, connectDelay);
 }
 
 function stopHeartbeatTimers() {
 	stopHeartBeatTimer();
-	//stopHeartbeatOut();
 	stopTestRequestTimer();
 }
 
@@ -255,7 +249,7 @@ function sendHeartbeat() {
 	sendMessage('0', "", "", "", false, null, null);
 }
 
-function sendTestRequest() {
+function sendTestRequest(self) {
 	var msg;
 
 	console.log('sending test request');
@@ -274,23 +268,25 @@ function sendTestRequest() {
 	sendMessage('1', "", "", msg, false, null, null);
 
 	// need to receive a signed heartbeat within agreed time period, otherwise we are history
-	startTestRequestTimer();
+	startTestRequestTimer(self);
 }
 
-function TestRequestTimeout() {
+function TestRequestTimeout(self) {
 	console.log("test request timeout, quitting...");
 
 	sendLogout("Test Request Timeout");
 
 	// we haven't heard for a while, so quit
-	disconnect();
+	disconnect(self);
 }
 
-function disconnect() {
+function disconnect(self) {
 	console.log("disconnecting");
 
 	// todo: clear timers etc.
 	pqconn.destroy();
+
+	restartTimer(self);
 }
 
 Ptp.prototype.quoteRequest = function(quoterequest) {
@@ -429,19 +425,6 @@ function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, m
 	}
 }
 
-/*function startHeartbeatOut() {
-	heartbeatouttimer = setTimeout(function() {
-		sendHeartbeat();
-	}, heartbtint * 1000);
-}
-
-function stopHeartbeatOut() {
-	if (heartbeatouttimer != null) {
-		clearTimeout(heartbeatouttimer);
-		heartbeatouttimer = null;
-	}
-}*/
-
 function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, timestamp, origtimestamp) {
 	var msg;
 	var checksumstr;
@@ -534,13 +517,13 @@ function parseData(self) {
 	}
 }
 
-function startHeartBeatTimer() {
+function startHeartBeatTimer(self) {
 	console.log("startHeartBeatTimer");
 	if (heartbeattimer == null) {
 		// send a test request after agreed quiet time period
 		//heartbeattimer = setTimeout(function() {
 		heartbeattimer = setTimeout(function() {
-			sendTestRequest();
+			sendTestRequest(self);
 		}, (heartbtint * 1000) + (transmissiontime * 1000));
 	}
 }
@@ -604,7 +587,7 @@ function completeMessage(tagvalarr, self) {
 			// check for sequence reset as this overrides any sequence number processing
 			if (header.msgtype == '4') {
 				if (!('gapfillflag' in body) || body.gapfillflag == 'N') {
-					sequenceReset(body, msgseqnumin);
+					sequenceReset(body, msgseqnumin, self);
 					return;
 				}
 			}
@@ -623,7 +606,7 @@ function completeMessage(tagvalarr, self) {
 				} else {
 					// serious error, abort & call
 					console.log("Error: message number received=" + header.msgseqnum + ", number expected=" + msgseqnumin + ", aborting...");
-					disconnect();
+					disconnect(self);
 					return;
 				}
 			}
@@ -641,7 +624,7 @@ function completeMessage(tagvalarr, self) {
 			if (messagerecoveryinstarted) {
 				// we are in the middle of a resend & it has gone wrong, so abort & call
 				console.log("Error: message number received=" + header.msgseqnum + ", number expected=" + msgseqnumin + ", aborting...");
-				disconnect();
+				disconnect(self);
 				return;
 			}
 
@@ -695,7 +678,7 @@ function completeMessage(tagvalarr, self) {
 				testRequestReceived(body, self);
 				break;
 			case '2':
-				resendRequestReceived(body);
+				resendRequestReceived(body, self);
 				break;
 			case '4':
 				sequenceGapReceived(body);
@@ -1181,7 +1164,7 @@ function logoutReceived(logout, self) {
 		//sendLogout('');
 	} else {
 		// we are done
-		disconnect();
+		disconnect(self);
 	}
 }
 
@@ -1193,10 +1176,10 @@ function resetSequenceNumbers() {
 	db.set("fixseqnumout", 0);
 }
 
-function sequenceReset(body, nextnumin) {
+function sequenceReset(body, nextnumin, self) {
 	if (body.newseqno < nextnumin) {
 		console.log("Sequence reset number less than expected sequence number, aborting...");
-		disconnect();
+		disconnect(self);
 	}
 
 	// reset the incoming sequence number
@@ -1267,13 +1250,13 @@ function heartbeatReceived(heartbeat, self) {
 		//}
 	} else {
 		sendHeartbeat();
-		startHeartBeatTimer();
+		startHeartBeatTimer(self);
 	}
 }
 
-function startTestRequestTimer() {
+function startTestRequestTimer(self) {
 	testrequesttimer = setTimeout(function() {
-		TestRequestTimeout();
+		TestRequestTimeout(self);
 	}, (heartbtint * 1000) + (transmissiontime * 1000));
 }
 
@@ -1294,12 +1277,12 @@ function testRequestReply(reqid) {
 	sendMessage('0', "", "", msg, false, null, null);
 }
 
-function resendRequestReceived(resendrequest) {
+function resendRequestReceived(resendrequest, self) {
 	// check we have a valid begin & end sequence number
 	// end number may be '0' to indicate infinity
 	if (resendrequest.beginseqno < 1 || (resendrequest.endseqno < resendrequest.beginseqno && resendrequest.endseqno != 0)) {
 		console.log("Invalid Begin or End sequence number, unable to continue");
-		disconnect();
+		disconnect(self);
 		return;
 	}
 
@@ -1307,19 +1290,19 @@ function resendRequestReceived(resendrequest) {
 	messagerecoveryout = true;
 
 	// resend the required messages
-	resendMessage(resendrequest.beginseqno, resendrequest.endseqno);
+	resendMessage(resendrequest.beginseqno, resendrequest.endseqno, self);
 }
 
 function businessRejectReceived(businessreject, self) {
 	self.emit('businessReject', businessreject);
 }
 
-function resendMessage(msgno, endseqno) {
+function resendMessage(msgno, endseqno, self) {
 	// get requested message
 	db.hgetall("fixmessageout:" + msgno, function(err, msg) {
 		if (err) {
 			console.log(err);
-			disconnect();
+			disconnect(self);
 			return;
 		}
 
@@ -1349,8 +1332,8 @@ function resendMessage(msgno, endseqno) {
 			// get the last outgoing message sequence number
 			db.get("fixseqnumout", function(err, msgseqnumout) {
 				if (err) {
-					disconnect();
 					console.log(err);
+					disconnect(self);
 					return;
 				}
 
