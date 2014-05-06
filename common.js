@@ -163,13 +163,11 @@ function sendLevelOne(symbol, bestbid, bestoffer, connections) {
   msg += "{\"level\":1,\"bid\":" + bestbid + "}";
   msg += ",{\"level\":1,\"offer\":" + bestoffer + "}";
   msg += "]}}";
-  console.log(msg);
   publishMessage(msg, connections);
 }
 
 function publishMessage(message, connections) {
   // todo: alter to just cater for interested parties
-  console.log(message);
   for (var c in connections) {
     if (connections.hasOwnProperty(c)) {
       connections[c].write(message);
@@ -766,7 +764,7 @@ exports.registerCommonScripts = function () {
   // pass client id, positionkey
   //
   exports.scriptgetpostrades = gettrades + '\
-  local postrades = redis.call("smembers", KEYS[1] .. ":" .. KEYS[2]) \
+  local postrades = redis.call("smembers", KEYS[1] .. ":trades:" .. KEYS[2]) \
   local tblresults = gettrades(postrades) \
   return cjson.encode(tblresults) \
   ';
