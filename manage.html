@@ -758,6 +758,7 @@
         var orderdivnumarr = {};
         var loggedout = false;
         var markets = {};
+        var tsstatus = 0;
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -885,7 +886,7 @@
                     loadChatHistory(obj.chathistory);
                     displayChatHistory();
                 } else if ("status" in obj) {
-                    statusMsg(obj.status);
+                    tsstatus = obj.status;
                 //} else if ("pong" in obj) {
                     //console.log("received pong");
                     //inconnectiontest = false;
@@ -1403,10 +1404,6 @@
             displayOrderBooks();
         }
 
-        function statusMsg(status) {
-            console.log("status:"+status);
-        }
-
         function startHeartbeatTimer() {
             stopHeartbeatTimer();
             // todo: either need to remove or JSONify the ping message
@@ -1834,6 +1831,8 @@
         function clearDivs() {
             clearDiv("clientbox");
             clearDiv("stockbox");
+            clearDiv("divholidays");
+            clearDiv("divmonitor");
         }
 
         function clearEmptyLines() {
@@ -5044,7 +5043,7 @@
             menu.id = "menu";
 
             // build the main menu - reset chatmenuoption if changed
-            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Chat", "Holidays", "End Of Day", "Log Out"];
+            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Chat", "Holidays", "End Of Day", "Monitor", "Log Out"];
 
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
@@ -5115,6 +5114,9 @@
                     endOfDay();
                     break;
                 case 12:
+                    monitor();
+                    break;
+                case 13:
                     logout();
                     break;
                 }
@@ -6560,6 +6562,17 @@
             }
         }
 
+        function monitor() {
+            var msg;
+
+            var divmonitor = getDiv("divmonitor");
+            var list1 = getList("list1");
+            divmonitor.appendChild(list1);
+
+            msg = "Trade Server:" + getTSStatus(tsstatus);
+            addElement(msg, list1, 0);
+        }
+
         function endOfDay() {
             var eoddate = new Date();
 
@@ -6638,6 +6651,24 @@
             }
 
             return today;
+        }
+
+        function getTSStatus(status) {
+            var desc;
+
+            switch (status) {
+            case 0:
+                desc = "started";
+                break;    
+            case 1:
+                desc = "connected";
+                break;    
+            case 2:
+                desc = "disconnected";
+                break;    
+            }
+
+            return desc;
         }
 
         function getOrderStatusDesc(status) {

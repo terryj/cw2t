@@ -1060,7 +1060,7 @@ function sendTrade(trade, conn) {
     conn.write("{\"trade\":" + JSON.stringify(trade) + "}");
   }
 }
-st
+
 function tradeHistory(req, conn) {
   if ("positionkey" in req) {
     db.eval(common.scriptgetpostrades, 2, req.clientid, req.positionkey, function(err, ret) {
