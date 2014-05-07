@@ -43,6 +43,9 @@ var norelatedsym = '1'; // number of related symbols in a request, always 1
 var idsource = '4'; // indicates ISIN is to be used to identify a security
 var securitytype = 'CS'; // common stock
 var handinst = '1'; // i.e. no intervention
+var connectstatus = 0;
+var connectstatusint = 30;
+var connectstatusinterval = 30;
 
 /// performance test ///
 //var count = 0;
@@ -81,9 +84,9 @@ function tryToConnect(self) {
 
 		// any received data
 		pqconn.on('data', function(data) {
-			console.log("--- received ---");
-			console.log(data);
-			console.log("----------------");
+			//console.log("--- received ---");
+			//console.log(data);
+			//console.log("----------------");
 
 			// add new data to buffer
 			datainbuf += data;
@@ -104,6 +107,8 @@ function tryToConnect(self) {
 
 			stopHeartbeatTimers();
 			restartTimer(self);
+			connectstatus = 2;
+			publishStatus();
 		});
 
 		logon(false);
@@ -129,6 +134,11 @@ function stopHeartbeatTimers() {
 	stopTestRequestTimer();
 }
 
+function publishStatus() {
+	// publish to user channel
+	db.publish(2, connectstatus);
+}
+
 function init(self) {
 	messagerecoveryinrequested = false;
 	messagerecoveryinstarted = false;
@@ -136,6 +146,9 @@ function init(self) {
 	logoutinitiated = false;
 	logoutrequired = false;
 	resendrequestrequired = false;
+
+	// publish status every time period
+	connectstatusinterval = setInterval(publishStatus, connectstatusint * 1000);
 
   	db.get("trading:ipaddress", function(err, ipaddr) {
     	if (err) {
@@ -287,6 +300,9 @@ function disconnect(self) {
 	pqconn.destroy();
 
 	restartTimer(self);
+
+	connectstatus = 2;
+	publishStatus();
 }
 
 Ptp.prototype.quoteRequest = function(quoterequest) {
@@ -463,9 +479,9 @@ function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgs
 	msg += checksumstr;
 
 	// send the message
-	console.log("--- sending ---");
-	console.log(msg);
-	console.log("---------------");
+	//console.log("--- sending ---");
+	//console.log(msg);
+	//console.log("---------------");
 	pqconn.write(msg, 'ascii'); // todo: need ascii option?
 }
 
@@ -518,10 +534,8 @@ function parseData(self) {
 }
 
 function startHeartBeatTimer(self) {
-	console.log("startHeartBeatTimer");
 	if (heartbeattimer == null) {
 		// send a test request after agreed quiet time period
-		//heartbeattimer = setTimeout(function() {
 		heartbeattimer = setTimeout(function() {
 			sendTestRequest(self);
 		}, (heartbtint * 1000) + (transmissiontime * 1000));
@@ -529,7 +543,6 @@ function startHeartBeatTimer(self) {
 }
 
 function stopHeartBeatTimer() {
-	console.log("stopHeartBeatTimer");
 	if (heartbeattimer != null) {
 		// clear the timer
 		clearTimeout(heartbeattimer);
@@ -1251,6 +1264,7 @@ function heartbeatReceived(heartbeat, self) {
 	} else {
 		sendHeartbeat();
 		startHeartBeatTimer(self);
+		connectstatus = 1;
 	}
 }
 

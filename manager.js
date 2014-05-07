@@ -134,7 +134,7 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    //console.log("channel:" + channel + ", " + message);
+    console.log("channel:" + channel + ", " + message);
 
     if (message.substr(0, 8) == "quoteack") {
       sendQuoteack(message.substr(9));
