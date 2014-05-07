@@ -1404,6 +1404,7 @@
         }
 
         function statusMsg(status) {
+            console.log("status:"+status);
         }
 
         function startHeartbeatTimer() {
@@ -6159,7 +6160,6 @@
         //
 
         function addNewLine(frm, id) {
-            console.log("addNewLine:"+id);
             var newline = document.createElement("label");
             newline.innerHTML = "<br>";
             if (id != null) {

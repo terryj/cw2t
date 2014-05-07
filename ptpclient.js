@@ -136,7 +136,7 @@ function stopHeartbeatTimers() {
 
 function publishStatus() {
 	// publish to user channel
-	db.publish(2, connectstatus);
+	db.publish(2, "status:" + connectstatus);
 }
 
 function init(self) {

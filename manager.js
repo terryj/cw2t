@@ -148,6 +148,8 @@ function pubsub() {
       getSendOrder(message.substr(6));
     } else if (message.substr(0, 5) == "trade") {
       getSendTrade(message.substr(6));
+    } else if (message.substr(0, 6) == "status") {
+      sendStatus(message.substr(7));
     } else if (message.substr(2, 4) == "chat") {
       newChatClient(message);
     } else {
@@ -1047,12 +1049,18 @@ function orderHistory(req, conn) {
   });
 }*/
 
+function sendStatus(status) {
+  for (var i in connections) {
+    connections[i].write("{\"status\":" + JSON.stringify(status) + "}");
+  }
+}
+
 function sendTrade(trade, conn) {
   if (conn != null) {
     conn.write("{\"trade\":" + JSON.stringify(trade) + "}");
   }
 }
-
+st
 function tradeHistory(req, conn) {
   if ("positionkey" in req) {
     db.eval(common.scriptgetpostrades, 2, req.clientid, req.positionkey, function(err, ret) {
