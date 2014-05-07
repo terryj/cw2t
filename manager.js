@@ -134,7 +134,7 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    console.log("channel:" + channel + ", " + message);
+    //console.log("channel:" + channel + ", " + message);
 
     if (message.substr(0, 8) == "quoteack") {
       sendQuoteack(message.substr(9));
@@ -1050,8 +1050,10 @@ function orderHistory(req, conn) {
 }*/
 
 function sendStatus(status) {
+  var msg = "{\"status\":" + JSON.stringify(status) + "}";
+
   for (var i in connections) {
-    connections[i].write("{\"status\":" + JSON.stringify(status) + "}");
+    connections[i].write(msg);
   }
 }
 
@@ -1414,6 +1416,7 @@ function start(userid, brokerid, conn) {
   sendHedgebooks(conn);
   sendCosts(conn);
   sendMarkets(conn);
+  sendStatus(0);
 
   // make this the last one, as sends ready status to f/e
   sendClients(userid, brokerid, conn);

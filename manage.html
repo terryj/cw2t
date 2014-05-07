@@ -886,15 +886,13 @@
                     loadChatHistory(obj.chathistory);
                     displayChatHistory();
                 } else if ("status" in obj) {
-                    tsstatus = obj.status;
-                //} else if ("pong" in obj) {
-                    //console.log("received pong");
-                    //inconnectiontest = false;
+                    updateStatus(obj.status);
                 } else {
                     console.log("Unknown message:" + msg);
                 }
             } catch(e) {
                 console.log(e);
+                console.log(msg);
                 return;
             }
         };
@@ -1130,6 +1128,14 @@
         // various update routines
         // these take a single data item & update the item based on its index
         //
+
+        function updateStatus(status) {
+            tsstatus = parseInt(status);
+
+            if (selectedmenu == 12) {
+                displayStatus();
+            }
+        }
 
         function updateTrade(trade) {
             var msg;
@@ -6562,15 +6568,19 @@
             }
         }
 
-        function monitor() {
-            var msg;
+        function displayStatus() {
+            var msg = "Trade Server:" + getTSStatus(tsstatus);
 
-            var divmonitor = getDiv("divmonitor");
+            clearList("list1", false);
             var list1 = getList("list1");
-            divmonitor.appendChild(list1);
 
-            msg = "Trade Server:" + getTSStatus(tsstatus);
             addElement(msg, list1, 0);
+        }
+
+        function monitor() {
+            var list1 = getList("list1");
+            main.appendChild(list1);
+            displayStatus();
         }
 
         function endOfDay() {
