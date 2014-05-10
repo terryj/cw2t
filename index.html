@@ -4127,22 +4127,27 @@
             }
         }
 
+        //
+        // sign-in form
+        //
         function displayFormSignin() {
-            var frm;
+            var frmsignin;
             var emaillabel;
             var passwordlabel;
             var dummylabel;
             var email;
             var password;
-            var btn;
-            var newline1;
-            var newline2;
+            var btnsignin;
+            var cw2theading;
 
             clearMenu();
             clearScreen();
 
-            frm = document.createElement("form");
-            frm.id = "frmsignin";
+            cw2theading = document.getElementById('cw2t');
+            cw2theading.innerHTML = coheading;
+
+            frmsignin = document.createElement("form");
+            frmsignin.id = "frmsignin";
 
             emaillabel = document.createElement("label");
             emaillabel.innerHTML = "Email ";
@@ -4179,33 +4184,31 @@
                 }
             }
 
-            btn = document.createElement("input");
-            btn.type = "button";
-            btn.value = "Sign In";
-            btn.className = "formsigninbutton";
-            btn.onclick = function() {
+            btnsignin = document.createElement("input");
+            btnsignin.type = "button";
+            btnsignin.value = "Sign In";
+            btnsignin.className = "formbutton";
+
+            btnsignin.onclick = function() {
                 disable();
                 signin();
             }
 
-            newline1 = document.createElement("label");
-            newline1.innerHTML = "<br>";
-            newline2 = document.createElement("label");
-            newline2.innerHTML = "<br><br>";
+            addNewLine(frmsignin, null);
+            frmsignin.appendChild(emaillabel);
+            frmsignin.appendChild(email);
+            addNewLine(frmsignin, null);
+            frmsignin.appendChild(passwordlabel);
+            frmsignin.appendChild(password);
+            addNewLine(frmsignin, null);
+            addNewLine(frmsignin, null);
+            frmsignin.appendChild(dummylabel);
+            frmsignin.appendChild(btnsignin);
 
-            frm.appendChild(emaillabel);
-            frm.appendChild(email);
-            frm.appendChild(newline1);
-            frm.appendChild(passwordlabel);
-            frm.appendChild(password);
-            frm.appendChild(newline2);
-            frm.appendChild(dummylabel);
-            frm.appendChild(btn);
-
-            main.appendChild(frm);
+            main.appendChild(frmsignin);
 
             function disable() {
-                btn.disable = true;
+                btnsignin.disable = true;
                 email.onkeypress = null;
                 password.onkeypress = null;
             }

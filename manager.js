@@ -30,6 +30,7 @@ var tradeserverchannel = 3;
 var userserverchannel = 2;
 var clientserverchannel = 1;
 var servertype = "user";
+var serverstatus = {};
 
 // redis
 var redishost;
@@ -148,8 +149,10 @@ function pubsub() {
       getSendOrder(message.substr(6));
     } else if (message.substr(0, 5) == "trade") {
       getSendTrade(message.substr(6));
-    } else if (message.substr(0, 6) == "status") {
-      sendStatus(message.substr(7));
+    } else if (message.substr(0, 8) == "tsstatus") {
+      sendStatus("TS", message.substr(9));
+    } else if (message.substr(0, 8) == "psstatus") {
+      sendStatus("PS", message.substr(9));
     } else if (message.substr(2, 4) == "chat") {
       newChatClient(message);
     } else {
@@ -1049,8 +1052,14 @@ function orderHistory(req, conn) {
   });
 }*/
 
-function sendStatus(status) {
-  var msg = "{\"status\":" + JSON.stringify(status) + "}";
+function sendStatus(server, status) {
+  if (server == "TS") {
+    serverstatus.tsstatus = status;
+  } else if (server == "PS") {
+    serverstatus.psstatus = status;    
+  }
+
+  var msg = "{\"status\":" + JSON.stringify(serverstatus) + "}";
 
   for (var i in connections) {
     connections[i].write(msg);
@@ -1416,7 +1425,7 @@ function start(userid, brokerid, conn) {
   sendHedgebooks(conn);
   sendCosts(conn);
   sendMarkets(conn);
-  sendStatus(0);
+  sendStatus();
 
   // make this the last one, as sends ready status to f/e
   sendClients(userid, brokerid, conn);

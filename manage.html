@@ -758,7 +758,7 @@
         var orderdivnumarr = {};
         var loggedout = false;
         var markets = {};
-        var tsstatus = 0;
+        var serverstatus = {};
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -1130,7 +1130,11 @@
         //
 
         function updateStatus(status) {
-            tsstatus = parseInt(status);
+            if ("tsstatus" in status) {
+                serverstatus.tsstatus = parseInt(status.tsstatus);
+            } else if ("psstatus" in status) {
+                serverstatus.psstatus = parseInt(status.psstatus);                
+            }
 
             if (selectedmenu == 12) {
                 displayStatus();
@@ -6569,12 +6573,15 @@
         }
 
         function displayStatus() {
-            var msg = "Trade Server:" + getTSStatus(tsstatus);
+            var msg;
 
             clearList("list1", false);
             var list1 = getList("list1");
 
+            msg = "Trade Server:" + getServerStatus(serverstatus.tsstatus);
             addElement(msg, list1, 0);
+            msg = "Price Server:" + getServerStatus(serverstatus.psstatus);
+            addElement(msg, list1, 1);
         }
 
         function monitor() {
@@ -6663,7 +6670,7 @@
             return today;
         }
 
-        function getTSStatus(status) {
+        function getServerStatus(status) {
             var desc;
 
             switch (status) {
