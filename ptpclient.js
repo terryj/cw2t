@@ -26,6 +26,7 @@ var pqconn;
 var encryptmethod = '0';
 var heartbeattimer = null; // timer used to monitor incoming messages
 var testrequesttimer = null;
+var restarttimer = null;
 var heartbtint = 30; // heart beat interval in seconds
 var transmissiontime = 3; // transmission time in seconds
 var matchtestreqid;
@@ -75,6 +76,8 @@ exports.Ptp = Ptp;
 function tryToConnect(self) {
 	console.log("trying to connect to " + pqhost + ":" + pqport);
 
+	restarttimer = null;
+
 	pqconn = net.connect({port: pqport, host: pqhost}, function() {
 		// connected
 		self.emit("connected");
@@ -103,12 +106,9 @@ function tryToConnect(self) {
 
 		// connection termination
 		pqconn.on('end', function() {
-			console.log('Disconnected from ' + pqhost);
+			console.log('Disconnected by ' + pqhost);
+			disconnect(self);
 
-			stopHeartbeatTimers();
-			restartTimer(self);
-			connectstatus = 2;
-			publishStatus();
 		});
 
 		logon(false);
@@ -117,14 +117,18 @@ function tryToConnect(self) {
 	// need to handle error event
 	pqconn.on('error', function(err) {
 		console.log(err);
-
-		stopHeartbeatTimers();
+		disconnect(self);
 	});
 }
 
 function restartTimer(self) {
+	if (restarttimer != null) {
+		// already set
+		return;
+	}
+
 	// set a timer to re-try
-	setTimeout(function() {
+	restarttimer = setTimeout(function() {
 		tryToConnect(self);
    	}, connectDelay);
 }
@@ -136,7 +140,7 @@ function stopHeartbeatTimers() {
 
 function publishStatus() {
 	// publish to user channel
-	db.publish(2, "status:" + connectstatus);
+	db.publish(2, "tsstatus:" + connectstatus);
 }
 
 function init(self) {
@@ -294,13 +298,16 @@ function TestRequestTimeout(self) {
 }
 
 function disconnect(self) {
-	console.log("disconnecting");
-
-	// todo: clear timers etc.
+	// tidy
 	pqconn.destroy();
 
+	// stop timers
+	stopHeartbeatTimers();
+
+	// prepare to restart
 	restartTimer(self);
 
+	// tell everyone we are disconnected
 	connectstatus = 2;
 	publishStatus();
 }
