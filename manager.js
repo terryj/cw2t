@@ -149,10 +149,9 @@ function pubsub() {
       getSendOrder(message.substr(6));
     } else if (message.substr(0, 5) == "trade") {
       getSendTrade(message.substr(6));
-    } else if (message.substr(0, 8) == "tsstatus") {
-      sendStatus("TS", message.substr(9));
-    } else if (message.substr(0, 8) == "psstatus") {
-      sendStatus("PS", message.substr(9));
+    } else if (message.substr(2, 6) == "status") {
+      updateStatus(message.substr(0, 2), message.substr(9));
+      sendStatus();
     } else if (message.substr(2, 4) == "chat") {
       newChatClient(message);
     } else {
@@ -1052,13 +1051,15 @@ function orderHistory(req, conn) {
   });
 }*/
 
-function sendStatus(server, status) {
-  if (server == "TS") {
+function updateStatus(server, status) {
+  if (server == "ts") {
     serverstatus.tsstatus = status;
-  } else if (server == "PS") {
+  } else if (server == "ps") {
     serverstatus.psstatus = status;    
   }
+}
 
+function sendStatus() {
   var msg = "{\"status\":" + JSON.stringify(serverstatus) + "}";
 
   for (var i in connections) {
