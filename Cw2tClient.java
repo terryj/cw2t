@@ -235,9 +235,11 @@ public class Cw2tClient implements ISessionObserver {
     }
 	
 	public void onAck(Peer peer, String tid, boolean bSuccess, String sReason) {
-		// TODO Auto-generated method stub
+        Jedis jedispublisher = jedispool.getResource();
+        jedispublisher.publish("2", "psstatus:1");
+        jedispool.returnResource(jedispublisher);
 	}
-
+    
 	public String onCloseRequest(Peer peer, String RID) {
 		// TODO Auto-generated method stub
 		return null;
@@ -248,7 +250,12 @@ public class Cw2tClient implements ISessionObserver {
 	}
 
 	public void onHeartbeatTimeout(Peer peer) {
-		System.out.println("Remote connection heart beat timeout. Reconnecting...");
+		System.out.println("Remote connection heartbeat timeout. Reconnecting...");
+        
+        Jedis jedispublisher = jedispool.getResource();
+        jedispublisher.publish("2", "psstatus:2");
+        jedispool.returnResource(jedispublisher);
+        
 		startSession();
 	}
 
@@ -1060,6 +1067,12 @@ public class Cw2tClient implements ISessionObserver {
 				System.exit(1);
 			}
 		}
+        
+        /*
+         File file = new File("test.txt");  
+         FileOutputStream fis = new FileOutputStream(file);  
+         PrintStream out = new PrintStream(fis);  
+         System.setOut(out);  */
 		
 		// session layer initialization
 		Cw2tClient ts = new Cw2tClient(args);
