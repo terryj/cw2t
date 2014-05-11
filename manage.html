@@ -2400,12 +2400,6 @@
             var firstorderexpired = true;
             var msg;
             var listelement;
-            var list1;
-            var list2;
-            var list3;
-            var list4;
-            var list5;
-            var list6;
             var lblnopartfilled;
 
             clearLists();
@@ -2413,17 +2407,17 @@
             clearEmptyLines();
             clearTables();
 
-            list1 = getList("list1");
+            var list1 = getList("list1");
             var emptyline1 = addNewLine(main, "emptyline:1");
-            list2 = getList("list2");
+            var list2 = getList("list2");
             var emptyline2 = addNewLine(main, "emptyline:2");
-            list3 = getList("list3");
+            var list3 = getList("list3");
             var emptyline3 = addNewLine(main, "emptyline:3");
-            list4 = getList("list4");
+            var list4 = getList("list4");
             var emptyline4 = addNewLine(main, "emptyline:4");
-            list5 = getList("list5");
+            var list5 = getList("list5");
             var emptyline5 = addNewLine(main, "emptyline:5");
-            list6 = getList("list6");
+            var list6 = getList("list6");
 
             displayOrderHeadings();
 
@@ -2575,6 +2569,7 @@
                 clearElementById("emptyline:2");
                 clearElementById("lbltrades");
                 clearTable("tbltrades");
+                clearList("list1", true);
             }
 
             var emptyline2 = addNewLine(main, "emptyline:2");

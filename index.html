@@ -1264,32 +1264,27 @@
             var firstorderfilled = true;
             var firstorderrejected = true;
             var firstordercancelled = true;
+            var firstorderexpired = true;
             var msg;
             var listelement;
-            var list1;
-            var list2;
-            var list3;
-            var list4;
-            var list5;
+            var lblnopartfilled;
 
             clearLists();
             clearHeadings();
             clearEmptyLines();
             clearTables();
 
-            list1 = getList("list1");
-            var emptyline1 = addNewLine(main);
-            emptyline1.id = "emptyline:1";
-            list2 = getList("list2");
-            var emptyline2 = addNewLine(main);
-            emptyline2.id = "emptyline:2";
-            list3 = getList("list3");
-            var emptyline3 = addNewLine(main);
-            emptyline3.id = "emptyline:3";
-            list4 = getList("list4");
-            var emptyline4 = addNewLine(main);
-            emptyline4.id = "emptyline:4";
-            list5 = getList("list5");
+            var list1 = getList("list1");
+            var emptyline1 = addNewLine(main, "emptyline:1");
+            var list2 = getList("list2");
+            var emptyline2 = addNewLine(main, "emptyline:2");
+            var list3 = getList("list3");
+            var emptyline3 = addNewLine(main, "emptyline:3");
+            var list4 = getList("list4");
+            var emptyline4 = addNewLine(main, "emptyline:4");
+            var list5 = getList("list5");
+            var emptyline5 = addNewLine(main, "emptyline:5");
+            var list6 = getList("list6");
 
             displayOrderHeadings();
 
@@ -1301,7 +1296,7 @@
 
                     msg = orderNewMsg(orders[x]);
                     listelement = addElement(msg, list1, orders[x].orderid);
-                    optionToViewCancel(listelement, true);
+                    optionToViewCancel(listelement, true, true);
                 } else if (orders[x].status == "1") { // part-filled
                     if (firstorderpartfilled) {
                         firstorderpartfilled = false;
@@ -1330,6 +1325,13 @@
 
                     msg = orderCancelMsg(orders[x]);
                     listelement = addElement(msg, list5, orders[x].orderid);
+                } else if (orders[x].status == "C") { // expired
+                    if (firstorderexpired) {
+                        firstorderexpired = false;
+                    }
+
+                    msg = orderExpireMsg(orders[x]);
+                    listelement = addElement(msg, list6, orders[x].orderid);
                 }
             }
 
@@ -1380,6 +1382,19 @@
                 addElement("No cancelled orders", list5, 0)
             } else {
                 list5.onclick = function(e) {
+                    var element;
+                    
+                    if (!e) e = window.event;
+                    element = e.target || e.srcElement;
+
+                    viewOrder(element.value);
+                }                                
+            }
+
+            if (firstorderexpired) {
+                addElement("No expired orders", list6, 0)
+            } else {
+                list6.onclick = function(e) {
                     var element;
                     
                     if (!e) e = window.event;
@@ -1579,9 +1594,9 @@
             clearEmptyLines();
             clearHeadings();
             clearTables();
+            clearElementById("lbltrades");
 
-            var emptyline = addNewLine(main);
-            emptyline.id = "emptyline:" + "1";
+           var emptyline = addNewLine(main, "emptyline:1");
 
             if (Object.keys(account).length == 0) {
                 var list = getList("list1");
@@ -1791,8 +1806,11 @@
             var traderow;
             var headingrow;
             var numcols = 19;
+            var lbltrades;
 
-            if (selectedmenu == 7) {
+            console.log(selectedmenu);
+
+            if (selectedmenu == 1) {
                 clearLists();
                 clearEmptyLines();
                 clearHeadings();
@@ -1801,14 +1819,15 @@
                 clearElementById("emptyline:2");
                 clearElementById("lbltrades");
                 clearTable("tbltrades");
+                clearList("list1", true);
             }
 
             var emptyline2 = addNewLine(main, "emptyline:2");
 
-            if (selectedmenu == 8) {
+            if (selectedmenu == 2) {
                 var postrades = document.getElementById("postrades");
                 if (postrades != null) {
-                    var lbltrades = newlabel("lbltrades", "Trades for position " + postrades.value, "", main);
+                    lbltrades = newlabel("lbltrades", "Trades for position " + postrades.value, "", main);
                 }
             }
 
@@ -2212,9 +2231,9 @@
             clearEmptyLines();
             clearHeadings();
             clearTables();
+            clearElementById("lbltrades");
 
-            var emptyline = addNewLine(main);
-            emptyline.id = "emptyline:" + "1";
+            var emptyline = addNewLine(main, "emptyline:1");
 
             var list = getList("list1");
 
@@ -2990,9 +3009,12 @@
             return button;
         }
 
-        function addNewLine(frm) {
+        function addNewLine(frm, id) {
             var newline = document.createElement("label");
             newline.innerHTML = "<br>";
+            if (id != null) {
+                newline.id = id;
+            }
             frm.appendChild(newline);
             return newline;
         }
@@ -4440,7 +4462,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Watch List", "Portfolio", "History", "Settings", "Chat", "Logout"];
+            menuarr = ["Watch List", "History", "Portfolio", "Settings", "Chat", "Logout"];
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
@@ -4476,7 +4498,7 @@
                     displayOrderBooks();
                     break;
                 case 1:
-                    requestPortfolio();
+                    requestHistory();
                     break;
                 /*case 1:
                     displayQuotes();
@@ -4496,7 +4518,7 @@
                     displayReserves();
                     break;*/
                 case 2:
-                    requestHistory();
+                    requestPortfolio();
                     break;
                 case 3:
                     settings();
