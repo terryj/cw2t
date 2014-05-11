@@ -636,6 +636,7 @@
         var showvolume = false;
         var quotetimer;
         var loggedout;
+        var coheading = "Thomas Grant & Company";
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -1189,6 +1190,7 @@
             clearTable("tblpositions");
             clearTable("tblaccount");
             clearTable("tblcashhistory");
+            clearTable("tbltrades");
         }
 
         function clearEmptyLines() {
@@ -1396,28 +1398,6 @@
             addHeading("Cancelled", list5);
         }
 
-        /*function displayPositions() {
-            var firstposition = true;
-            var msg;
-            var poskey;
-
-            for (var x in positions) {
-                if (firstposition) {
-                    list1.onclick = requestPositionHistory;
-                    firstposition = false;
-                }
-
-                msg = positionMsg(positions[x]);
-                //poskey = positions[x].symbol + ":" + positions[x].currency;
-                poskey = positions[x].positionid;
-                addElement(msg, list1, poskey);
-            }
-
-            if (firstposition) {
-                addElement("No positions", list1, "");
-            }
-        }*/
-
         function displayPositions() {
             var tblpositions;
             var tblbody;
@@ -1429,9 +1409,9 @@
             clearEmptyLines();
             clearHeadings();
             clearTables();
+            clearElementById("lbltrades");
 
-            var emptyline = addNewLine(main);
-            emptyline.id = "emptyline:" + "1";
+            var emptyline = addNewLine(main, "emptyline:1");
 
             if (Object.keys(positions).length == 0) {
                 var list = getList("list1");
@@ -1462,38 +1442,38 @@
                     col.innerHTML = "Currency";
                     break;
                 case 2:
-                    col.innerHTML = "Settl. Date";
-                    break;
-                case 3:
                     col.innerHTML = "Long/Short";
                     break;
-                case 4:
+                case 3:
                     col.innerHTML = "Quantity";
                     col.className = "colrightalign";
                     break;
-                case 5:
+                case 4:
                     col.innerHTML = "Cost";
                     col.className = "colrightalign";
                     break;
-                case 6:
+                case 5:
                     col.innerHTML = "Avg. Cost";
                     col.className = "colrightalign";
                     break;
-                case 7:
+                case 6:
                     col.innerHTML = "Margin";
                     col.className = "colrightalign";
                     break;
-                case 8:
+                case 7:
                     col.innerHTML = "Realised P&L";
                     col.className = "colrightalign";
                     break;
-                case 9:
+                case 8:
                     col.innerHTML = "Market Price";
                     col.className = "colrightalign";
                     break;
-                case 10:
+                case 9:
                     col.innerHTML = "Unrealised P&L";
                     col.className = "colrightalign";
+                    break;
+                case 10:
+                    col.innerHTML = "View Trades";
                     break;
                 default:
                 }
@@ -1517,9 +1497,6 @@
                         col.innerHTML = positions[x].currency;
                         break;
                     case 2:
-                        col.innerHTML = formatUTCDate(positions[x].settldate);
-                        break;
-                    case 3:
                         if (positions[x].side == 1) {
                             col.innerHTML = "Long";
                             posrow.className = "rowlong";
@@ -1528,33 +1505,36 @@
                             posrow.className = "rowshort";
                         }
                         break;
-                    case 4:
+                    case 3:
                         col.innerHTML = positions[x].quantity;
                         col.className = "colrightalign";
                         break;
-                    case 5:
+                    case 4:
                         col.innerHTML = positions[x].cost;
                         col.className = "colrightalign";
                         break;
-                    case 6:
+                    case 5:
                         col.innerHTML = positions[x].averagecostpershare;
                         col.className = "colrightalign";
                         break;
-                    case 7:
+                    case 6:
                         col.innerHTML = positions[x].margin;
                         col.className = "colrightalign";
                         break;
-                    case 8:
+                    case 7:
                         col.innerHTML = positions[x].realisedpandl;
                         col.className = "colrightalign";
                         break;
-                    case 9:
+                    case 8:
                         col.innerHTML = positions[x].mktprice;
                         col.className = "colrightalign";
                         break;
-                    case 10:
+                    case 9:
                         col.innerHTML = positions[x].unrealisedpandl;
                         col.className = "colrightalign";
+                        break;
+                    case 10:
+                        displayPostrades(col);
                         break;
                     default:
                     }
@@ -1563,6 +1543,29 @@
                 }
 
                 tblbody.appendChild(posrow);
+            }
+
+            function displayPostrades(col) {
+                var tradehistoryrequest = {};
+
+                var lnktrades = newlink(positions[x].symbol + ":" + positions[x].currency, "trades", "", col);
+
+                lnktrades.onclick = function() {
+                    tradehistoryrequest.positionkey = this.id;
+                    sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(tradehistoryrequest) + "}");
+                    whichPos(tradehistoryrequest.positionkey);
+                }
+            }
+
+            function whichPos(pos) {
+                var postrades = document.getElementById("postrades");
+                if (postrades == null) {
+                    postrades = document.createElement("input");
+                    postrades.type = "hidden";
+                    postrades.id = "postrades";
+                    main.appendChild(postrades);
+                }
+                postrades.value = pos;
             }
         }
 
@@ -1783,34 +1786,206 @@
         }
 
         function displayTrades() {
-            var firsttrade = true;
-            var msg;
-            var list;
+            var tbltrades;
+            var tblbody;
+            var traderow;
+            var headingrow;
+            var numcols = 19;
 
-            clearLists();
-            clearHeadings();
-            clearEmptyLines();
-            clearTables();
-
-            list = getList("list1");
-
-            for (var x in trades) {
-                msg = tradeMsg(trades[x]);
-                addElement(msg, list1, trades[x].tradeid);
-                firsttrade = false;
+            if (selectedmenu == 7) {
+                clearLists();
+                clearEmptyLines();
+                clearHeadings();
+                clearTables();
+            } else {
+                clearElementById("emptyline:2");
+                clearElementById("lbltrades");
+                clearTable("tbltrades");
             }
 
-            if (firsttrade) {
-                addElement("No fills this session", list1, 0);                
-            } else {
-                list1.onclick = function(e) {
-                    var element;
-                    
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
+            var emptyline2 = addNewLine(main, "emptyline:2");
 
-                    viewTrade(element.value);
+            if (selectedmenu == 8) {
+                var postrades = document.getElementById("postrades");
+                if (postrades != null) {
+                    var lbltrades = newlabel("lbltrades", "Trades for position " + postrades.value, "", main);
                 }
+            }
+
+            if (Object.keys(trades).length == 0) {
+                var list = getList("list1");
+                addElement("No trades", list, 0);
+                return;
+            }
+
+            tbltrades = document.createElement("table");
+            tbltrades.id = "tbltrades";
+            tbltrades.setAttribute("border", "1");
+
+            tblbody = document.createElement("tbody");
+            tblbody.id = "tblbody";
+
+            tbltrades.appendChild(tblbody);
+            main.appendChild(tbltrades);
+
+            headingrow = document.createElement("tr");
+
+            for (var i = 0; i < numcols; ++i) {
+                var col = document.createElement("td");
+
+                switch (i) {
+                case 0:
+                    col.innerHTML = "Client";
+                    break;
+                case 1:
+                    col.innerHTML = "Symbol";
+                    break;
+                case 2:
+                    col.innerHTML = "Side";
+                    break;
+                case 3:
+                    col.innerHTML = "Quantity";
+                    col.className = "colrightalign";
+                    break;
+                case 4:
+                    col.innerHTML = "Price";
+                    col.className = "colrightalign";
+                    break;
+                case 5:
+                    col.innerHTML = "Settlcurramt";
+                    col.className = "colrightalign";
+                    break;
+                case 6:
+                    col.innerHTML = "Nosettdays";
+                    break;                
+                case 7:
+                    col.innerHTML = "Settl.Date";
+                    break;
+                case 8:
+                    col.innerHTML = "Currency";
+                    break;
+                case 9:
+                    col.innerHTML = "Commission";
+                    col.className = "colrightalign";
+                    break;
+                case 10:
+                    col.innerHTML = "Ptm Levy";
+                    col.className = "colrightalign";
+                    break;
+                case 11:
+                    col.innerHTML = "Stamp Duty";
+                    col.className = "colrightalign";
+                    break;
+                case 12:
+                    col.innerHTML = "Contract Charge";
+                    col.className = "colrightalign";
+                    break;
+                case 13:
+                    col.innerHTML = "Counterparty";
+                    break;
+                case 14:
+                    col.innerHTML = "External Trade Id";
+                    break;
+                case 15:
+                    col.innerHTML = "Timestamp";
+                    break;
+                case 16:
+                    col.innerHTML = "Trade Id";
+                    break;
+                case 17:
+                    col.innerHTML = "Finance";
+                    col.className = "colrightalign";
+                    break;
+                case 18:
+                    col.innerHTML = "Margin";
+                    col.className = "colrightalign";
+                    break;
+                default:
+                }
+
+                headingrow.appendChild(col);
+            }
+
+            tblbody.appendChild(headingrow);
+
+            for (var x in trades) {
+                var traderow = document.createElement("tr");
+
+                for (var i = 0; i < numcols; ++i) {
+                    var col = document.createElement("td");
+
+                    switch (i) {
+                    case 0:
+                        col.innerHTML = trades[x].clientid;
+                        break;
+                    case 1:
+                        col.innerHTML = trades[x].symbol;
+                        break;
+                    case 2:
+                        col.innerHTML = getSideDesc(trades[x].side);
+                        break;
+                    case 3:
+                        col.innerHTML = trades[x].quantity;
+                        col.className = "colrightalign";
+                        break;
+                    case 4:
+                        col.innerHTML = trades[x].price;
+                        col.className = "colrightalign";
+                        break;
+                    case 5:
+                        col.innerHTML = trades[x].settlcurramt;
+                        col.className = "colrightalign";
+                        break;
+                    case 6:
+                        col.innerHTML = "T+" + trades[x].nosettdays;
+                        break;
+                    case 7:
+                        col.innerHTML = formatUTCDate(trades[x].futsettdate);
+                        break;
+                    case 8:
+                        col.innerHTML = trades[x].settlcurrency;
+                        break;
+                    case 9:
+                        col.innerHTML = trades[x].commission;
+                        col.className = "colrightalign";
+                        break;
+                    case 10:
+                        col.innerHTML = trades[x].ptmlevy;
+                        col.className = "colrightalign";
+                        break;
+                    case 11:
+                        col.innerHTML = trades[x].stampduty;
+                        col.className = "colrightalign";
+                        break;
+                    case 12:
+                        col.innerHTML = trades[x].contractcharge;
+                        col.className = "colrightalign";
+                        break;
+                    case 13:
+                        col.innerHTML = trades[x].counterpartyid;
+                        break;
+                    case 14:
+                        col.innerHTML = trades[x].externaltradeid;
+                        break;
+                    case 15:
+                        col.innerHTML = formatUTCDateTime(trades[x].timestamp);
+                        break;
+                    case 16:
+                        col.innerHTML = trades[x].tradeid;
+                        break;
+                    case 17:
+                        col.innerHTML = trades[x].finance;
+                        break;
+                    case 18:
+                        col.innerHTML = trades[x].margin;
+                        break;
+                    default:
+                    }
+
+                    traderow.appendChild(col);
+                }
+
+                tblbody.appendChild(traderow);
             }
         }
 
@@ -4246,7 +4421,7 @@
                     clearForm("frmsignin", true);
 
                     cw2theading = document.getElementById('cw2t');
-                    cw2theading.innerHTML = cw2theading.innerHTML + " - " + reply.email;
+                    cw2theading.innerHTML = coheading + " - " + reply.email;
 
                     clientid = reply.clientid;
 

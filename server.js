@@ -1274,10 +1274,17 @@ function orderHistory(req, clientid, conn) {
 }
 
 function tradeHistory(req, clientid, conn) {
-  db.eval(common.scriptgettrades, 1, clientid, function(err, ret) {
-    if (err) throw err;
-    conn.write("{\"trades\":" + ret + "}");
-  });
+  if ("positionkey" in req) {
+    db.eval(common.scriptgetpostrades, 2, clientid, req.positionkey, function(err, ret) {
+      if (err) throw err;
+      conn.write("{\"trades\":" + ret + "}");
+    });
+  } else {
+    db.eval(common.scriptgettrades, 1, clientid, function(err, ret) {
+      if (err) throw err;
+      conn.write("{\"trades\":" + ret + "}");
+    });
+  }
 }
 
 function cashHistory(req, clientid, conn) {
