@@ -71,6 +71,18 @@
             background-color: inherit;
             color: yellow;
         }
+        .submenu{
+            background-color: white;
+            color: black;
+            display: block;
+            border: 2px;
+        }
+        .submenu li{
+            color: white;
+        }
+        .submenu li:hover{
+            background-color:blue;
+        }
         .cw2t {
             /*width: 620px;*/
             width: 460px;
@@ -5066,11 +5078,42 @@
                     lastElement = menuitem;
                 } else if (i == chatmenuoption) { // change if menu changed
                     menuitem.id = "menuitemchat";
+                }else if (i > 13){ // when the amount of items in the menu exceed 13 then..//
+                    var nwmnu = new menuitem(); //... this will create a new list..//
+                    nwmnu.value = j; // ..add the items onto the list..//
+                    nwmnu.innerHTML = menuarr[j]//.. and display them !!//
                 }
                 menu.appendChild(menuitem);
             }
 
             heading.appendChild(menu);
+
+             menu.onclick = function(dS){
+            //Creating the submenu
+                var index = ["item1", "item2", "item3", "item4", "item5"]
+
+                var submenu = getDiv("div");
+                submenu.id = "submenu";
+                submenu.className = "submenu";
+                var smenulist = document.createElement("ul");
+                for (index = 0; index < 5; ++index) {
+                    li = document.createElement('li');
+                    li.innerHTML = "SubMenu" + index;
+                    /*if (index === 2) {
+                      thirdLI = li;
+                    }*/ //this creates a list within a list
+                    outerUL.appendChild(li);
+                }
+
+            submenu.appendChild(smenulist);
+            };
+
+            //end
+
+            submenu.onclick = function(){
+                // the items on the submenu
+                
+            }
 
             menu.onclick = function(e) {
                 var element;
