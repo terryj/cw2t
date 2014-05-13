@@ -13,6 +13,8 @@
 var util = require('util');
 var net = require('net');
 var events = require('events');
+var common = require('./common.js');
+
 var fixver = 'FIX.4.2';
 var pqhost; // ip address
 var pqport; // port
@@ -143,13 +145,17 @@ function publishStatus() {
 	db.publish(2, "tsstatus:" + connectstatus);
 }
 
-function init(self) {
+function initFlags() {
 	messagerecoveryinrequested = false;
 	messagerecoveryinstarted = false;
 	messagerecoveryout = false;
 	logoutinitiated = false;
 	logoutrequired = false;
 	resendrequestrequired = false;
+}
+
+function init(self) {
+	initFlags();
 
 	// publish status every time period
 	connectstatusinterval = setInterval(publishStatus, connectstatusint * 1000);
@@ -298,18 +304,29 @@ function TestRequestTimeout(self) {
 }
 
 function disconnect(self) {
+	// tell everyone we are disconnected
+	setStatus(2);
+
 	// tidy
 	pqconn.destroy();
 
 	// stop timers
 	stopHeartbeatTimers();
 
+	// re-set flags
+	initFlags();
+
 	// prepare to restart
 	restartTimer(self);
 
-	// tell everyone we are disconnected
-	connectstatus = 2;
-	publishStatus();
+	var timestamp = common.getUTCTimeStamp(new Date());
+  	console.log(timestamp + " - disconnected from ptp");
+}
+
+function setStatus(status) {
+	// tell everyone our status has changed
+	connectstatus = status;
+	publishStatus();	
 }
 
 Ptp.prototype.quoteRequest = function(quoterequest) {
@@ -1271,7 +1288,14 @@ function heartbeatReceived(heartbeat, self) {
 	} else {
 		sendHeartbeat();
 		startHeartBeatTimer(self);
-		connectstatus = 1;
+
+		if (connectstatus != 1) {
+			// re-set status & tell everyone
+			setStatus(1);
+
+			var timestamp = common.getUTCTimeStamp(new Date());
+  			console.log(timestamp + " - connected to ptp");
+		}
 	}
 }
 
