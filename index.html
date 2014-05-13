@@ -730,6 +730,7 @@
                 }
             } catch (e) {
                 console.log(e);
+                console.log(msg);
                 return;
             }
         };
@@ -932,8 +933,6 @@
                 return;
             }
 
-            console.log("sending ping");
-            sockjs.send("ping");
             inconnectiontest = true;
         }
 
@@ -1153,6 +1152,11 @@
             clearDivs();
             clearEmptyLines();
             clearTables();
+            clearLabels();
+        }
+
+        function clearLabels() {
+            clearElementById("lbltrades");
         }
 
         function clearLists() {
@@ -1807,8 +1811,6 @@
             var headingrow;
             var numcols = 19;
             var lbltrades;
-
-            console.log(selectedmenu);
 
             if (selectedmenu == 1) {
                 clearLists();
@@ -3711,8 +3713,6 @@
             var msg;
             var sellmsg;
             var buymsg;
-            var positionopenclose = 1;
-            var positioncloseid = "";
             var refreshbutton;
             var clearbutton;
 
@@ -3755,7 +3755,7 @@
             sellbutton.value = sellmsg;
 
             sellbutton.onclick = function() {
-                sendOrder(quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', positionopenclose, quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", positioncloseid);
+                sendOrder(quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
                 disable();
             }
 
@@ -3765,7 +3765,7 @@
             buybutton.value = buymsg;
 
             buybutton.onclick = function() {
-                sendOrder(quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', positionopenclose, quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", positioncloseid);
+                sendOrder(quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
                 disable();
             }
 
@@ -4143,7 +4143,7 @@
             }
         }
 
-        function sendOrder(symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime, positioncloseid) {
+        function sendOrder(symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
             var neworder = {};
             var msg;
 
@@ -4161,7 +4161,6 @@
             neworder.timeinforce = timeinforce;
             neworder.expiredate = expiredate;
             neworder.expiretime = expiretime;
-            neworder.positioncloseid = positioncloseid;
             neworder.operatortype = operatortype;
             neworder.operatorid = clientid;
 

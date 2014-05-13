@@ -311,12 +311,8 @@ function newOrder(order) {
 }
 
 function matchOrder(order) {
-  console.log("matchOrder");
   db.eval(scriptmatchorder, 1, order.orderid, function(err, ret) {
     if (err) throw err;
-
-    // todo: check ret value
-    console.log(ret);
 
     // return the active order to the sending operator type
     db.publish(order.operatortype, "order:" + order.orderid);
@@ -413,7 +409,6 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
   // the order has been credit checked
   // now, either forward to Proquote or attempt to match the order, depending on the type of instrument & whether the market is open
   //
-  console.log(order.markettype);
   if (order.markettype == 1) {
     matchOrder(order);
   } else {

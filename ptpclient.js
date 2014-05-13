@@ -883,6 +883,12 @@ function getBody(msgtype, tagvalarr) {
 			case 5819:
 				// list of individual quotes, ignore, at least for time being
 				break;
+			case 645:
+				body.mktbidx = tagvalarr[i].value;
+				break;
+			case 646:
+				body.mktofferpx = tagvalarr[i].value;
+				break;
 			default:
 				unknownTag(tagvalarr[i].tag);
 			}

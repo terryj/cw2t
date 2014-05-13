@@ -78,7 +78,7 @@
             border: 2px;
         }
         .submenu li{
-            color: white;
+            color: red;
         }
         .submenu li:hover{
             background-color:blue;
@@ -1469,9 +1469,6 @@
                 return;
             }
 
-            //console.log("sending ping");
-            //sockjs.send("ping");
-            //startHeartbeatTimer();
             inconnectiontest = true;
         }
 
@@ -3062,8 +3059,6 @@
 
                     if (!e) e = window.event;
                     element = e.target || e.srcElement;
-
-                    console.log(inpclientid.value);
 
                     historyrequest.clientid = inpclientid.value;
                     historyrequest.currency = tmpcasharr[element.value];
@@ -5077,7 +5072,7 @@
                     lastElement = menuitem;
                 } else if (i == chatmenuoption) { // change if menu changed
                     menuitem.id = "menuitemchat";
-                }else if (i > 13){ // when the amount of items in the menu exceed 13 then..//
+                } else if (i > 13){ // when the amount of items in the menu exceed 13 then..//
                     var nwmnu = new menuitem(); //... this will create a new list..//
                     nwmnu.value = j; // ..add the items onto the list..//
                     nwmnu.innerHTML = menuarr[j]//.. and display them !!//
@@ -5087,32 +5082,41 @@
 
             heading.appendChild(menu);
 
-             menu.onclick = function(dS){
+            /*
+            //
+            // Alex, this needs work...
+            //
+            menu.onclick = function(dS){
             //Creating the submenu
                 var index = ["item1", "item2", "item3", "item4", "item5"]
 
-                var submenu = getDiv("div");
+                var submenu = getDiv("divsubmenu");
                 submenu.id = "submenu";
                 submenu.className = "submenu";
+
                 var smenulist = document.createElement("ul");
                 for (index = 0; index < 5; ++index) {
                     li = document.createElement('li');
                     li.innerHTML = "SubMenu" + index;
-                    /*if (index === 2) {
-                      thirdLI = li;
-                    }*/ //this creates a list within a list
-                    outerUL.appendChild(li);
+
+                    smenulist.appendChild(li);
                 }
 
-            submenu.appendChild(smenulist);
-            };
+                submenu.appendChild(smenulist);
+
+                menu.appendChild(submenu);
+
+                submenu.onclick = function(){
+                // the items on the submenu
+                }
+            }*/
 
             //end
 
-            submenu.onclick = function(){
+            //submenu.onclick = function(){
                 // the items on the submenu
                 
-            }
+            //}
 
             menu.onclick = function(e) {
                 var element;
@@ -6535,7 +6539,7 @@
         function holidays() {
             var listholidays;
 
-            var divholidays = getDiv("div");
+            var divholidays = getDiv("divholidays");
 
             var lblmarket = newlabel("lblmarket", "Market:", "formlabel", divholidays);
 
@@ -6547,9 +6551,6 @@
                 var holidayreq = {};
 
                 holidayreq.market = selmarket[selmarket.selectedIndex].value;
-                console.log(selmarket.selectedIndex);
-                console.log(selmarket[selmarket.selectedIndex].value);
-                console.log(JSON.stringify(holidayreq));
                 sockjs.send("{\"holidayrequest\":" + JSON.stringify(holidayreq) + "}");
             }
 
@@ -6564,14 +6565,15 @@
                 var del = confirm("Are you sure you want to delete this date ?");
                 // alert confirming delete list element //done
                 // if delete confirmed, send a message to server //done
-                if(del === true){
-                    var rmv = remove.selectedIndex
+                if (del === true) {
+                    var rmv = remove.selectedIndex;
                     sockjs.send("{\"listHolidays\":" + JSON.stringify(rmv) + "}");
+                }
             }
 
              // add a button to add a holiday //done
             var addhol = document.createElement("button");
-            addhol.innerHTML = "Add"
+            addhol.innerHTML = "Add";
             // if cliecked, send a message to server //
 
             divholidays.appendChild(listholidays);
@@ -6610,9 +6612,9 @@
         //
         function removeHoliday(holiday) {
             //get list //done
-            var gtlstrh = getElementById(listholidays)
+            var gtlstrh = getElementById(listholidays);
             //remove element from list //done
-            var rmvitm = remove(holidays.selectedIndex)
+            var rmvitm = remove(holidays.selectedIndex);
         }
 
         function populateMarkets(mktselect, defaultid) {
