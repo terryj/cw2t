@@ -71,6 +71,18 @@
             background-color: inherit;
             color: yellow;
         }
+        .submenu{
+            background-color: white;
+            color: black;
+            display: block;
+            border: 2px;
+        }
+        .submenu li{
+            color: white;
+        }
+        .submenu li:hover{
+            background-color:blue;
+        }
         .cw2t {
             /*width: 620px;*/
             width: 460px;
@@ -695,6 +707,11 @@
         .rowshort {
             background-color: inherit;
             color: red;
+        }
+        .lsthol{
+            display:inline-block;
+            background-color:inherit;
+
         }
     </style>
 </head>
@@ -5060,11 +5077,42 @@
                     lastElement = menuitem;
                 } else if (i == chatmenuoption) { // change if menu changed
                     menuitem.id = "menuitemchat";
+                }else if (i > 13){ // when the amount of items in the menu exceed 13 then..//
+                    var nwmnu = new menuitem(); //... this will create a new list..//
+                    nwmnu.value = j; // ..add the items onto the list..//
+                    nwmnu.innerHTML = menuarr[j]//.. and display them !!//
                 }
                 menu.appendChild(menuitem);
             }
 
             heading.appendChild(menu);
+
+             menu.onclick = function(dS){
+            //Creating the submenu
+                var index = ["item1", "item2", "item3", "item4", "item5"]
+
+                var submenu = getDiv("div");
+                submenu.id = "submenu";
+                submenu.className = "submenu";
+                var smenulist = document.createElement("ul");
+                for (index = 0; index < 5; ++index) {
+                    li = document.createElement('li');
+                    li.innerHTML = "SubMenu" + index;
+                    /*if (index === 2) {
+                      thirdLI = li;
+                    }*/ //this creates a list within a list
+                    outerUL.appendChild(li);
+                }
+
+            submenu.appendChild(smenulist);
+            };
+
+            //end
+
+            submenu.onclick = function(){
+                // the items on the submenu
+                
+            }
 
             menu.onclick = function(e) {
                 var element;
@@ -6507,15 +6555,24 @@
 
             listholidays = document.createElement('ul');
             listholidays.id = "listholidays";
-            //listholidays.className = "***";
+            listholidays.id = "listholidays";
+            //listholidays.className = "***"; // done
+            listholidays.className = "lsthol"; // add .lsthol to css
+
 
             listholidays.onclick = function() {
-                // alert confirming delete list element
-                // if delete confirmed, send a message to server
+                var del = confirm("Are you sure you want to delete this date ?");
+                // alert confirming delete list element //done
+                // if delete confirmed, send a message to server //done
+                if(del === true){
+                    var rmv = remove.selectedIndex
+                    sockjs.send("{\"listHolidays\":" + JSON.stringify(rmv) + "}");
             }
 
-            // add a button to add a holiday
-            // if cliecked, send a message to server
+             // add a button to add a holiday //done
+            var addhol = document.createElement("button");
+            addhol.innerHTML = "Add"
+            // if cliecked, send a message to server //
 
             divholidays.appendChild(listholidays);
         }
@@ -6542,16 +6599,20 @@
         // receive an addholiday message
         //
         function addHoliday(holiday) {
-            //get list
-            // add item to list
+            //get list //done
+            var gtlstah = getElementById(listholidays);
+            // add item to list //done
+            var additm = add(holidays[j].date);
         }
 
         //
         // receive an removeholiday message
         //
         function removeHoliday(holiday) {
-            //get list
-            //remove element from list
+            //get list //done
+            var gtlstrh = getElementById(listholidays)
+            //remove element from list //done
+            var rmvitm = remove(holidays.selectedIndex)
         }
 
         function populateMarkets(mktselect, defaultid) {
