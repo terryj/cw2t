@@ -89,9 +89,11 @@ function tryToConnect(self) {
 
 		// any received data
 		pqconn.on('data', function(data) {
-			//console.log("--- received ---");
-			//console.log(data);
-			//console.log("----------------");
+			if (connectstatus != 1) {
+				console.log("--- received ---");
+				console.log(data);
+				console.log("----------------");
+			}
 
 			// add new data to buffer
 			datainbuf += data;
@@ -502,10 +504,14 @@ function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgs
 	checksumstr = '10=' + checksum(msg) + SOH;
 	msg += checksumstr;
 
+	// log the message if not connected
+	if (connectstatus != 1) {
+		console.log("--- sending ---");
+		console.log(msg);
+		console.log("---------------");
+	}
+
 	// send the message
-	//console.log("--- sending ---");
-	//console.log(msg);
-	//console.log("---------------");
 	pqconn.write(msg, 'ascii'); // todo: need ascii option?
 }
 
@@ -1300,7 +1306,7 @@ function heartbeatReceived(heartbeat, self) {
 			setStatus(1);
 
 			var timestamp = common.getUTCTimeStamp(new Date());
-  			console.log(timestamp + " - connected to ptp");
+  			console.log(timestamp + " - heartbeat received from ptp");
 		}
 	}
 }
