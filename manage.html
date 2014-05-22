@@ -3,7 +3,7 @@
     <meta http-equiv="content-type" content="text/html;charset=utf-8" />
     <title>TG-Online Manager v0.9</title>
     <script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
-    <style>
+    <style type="text/css">
         table {
             font-size: 21px;
         }
@@ -3846,6 +3846,7 @@
                         level2 = document.createElement('span');
                         level2.className = "level2";
                     }
+                    
                     stock = document.createElement('span');
                     stock.className = "stock";
                     bidprice = document.createElement('span');
@@ -3888,7 +3889,7 @@
                         var reqquotelnk = newlink("reqquotelnk", "Request Quote", "", links);
                         var buyorderlnk = newlink("buyorderlnk", "Limit Buy", "", links);
                         var sellorderlnk = newlink("sellorderlnk", "Limit Sell", "", links);
-                        var clearquotelnk = newlink("clearquotelnk", "Clear", "", links);
+                        var clearquotelnk = newlink("clearquotelnk", "Clear Ticket", "", links);
 
                         reqquotelnk.onclick = function() {requestQuote(symbol);}
                         buyorderlnk.onclick = function() {placeOrder(symbol, '1', 0, 0);}

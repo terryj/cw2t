@@ -3,7 +3,7 @@
     <meta http-equiv="content-type" content="text/html;charset=utf-8" />
     <title>TG-Online v0.9</title>
     <script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
-    <style>
+    <style type="text/css">
         table {
             font-size: 21px;
         }
@@ -435,7 +435,7 @@
         .orderstock {
             color: gray;
             display: inline-block;
-            width: 120px;
+            width: 160px;
             font-size: 21px;
             margin-left: 3px;
             text-align: center;
@@ -580,7 +580,7 @@
             border: solid 1px #aacfe4;
             width: 450px;
             margin: 2px 0 15px 10px;
-        }​
+        }
         .formbutton {
             border-style: none;
             background-color: #C0C0C0;
@@ -3204,7 +3204,7 @@
                         var reqquotelnk = newlink("reqquotelnk", "Request Quote", "", links);
                         var buyorderlnk = newlink("buyorderlnk", "Limit Buy", "", links);
                         var sellorderlnk = newlink("sellorderlnk", "Limit Sell", "", links);
-                        var clearquotelnk = newlink("clearquotelnk", "Clear", "", links);
+                        var clearquotelnk = newlink("clearquotelnk", "Clear Ticket", "", links);
 
                         reqquotelnk.onclick = function() {requestQuote(symbol);}
                         buyorderlnk.onclick = function() {placeOrder(symbol, '1', 0, 0);}
@@ -3904,7 +3904,7 @@
 
             stocklabel = document.createElement("label");
             stocklabel.className = "orderstock";
-            stocklabel.innerHTML = symbol + " @ ";
+            stocklabel.innerHTML = symbol + " @";
 
             /*ordertypesel = document.createElement("select");
             ordertypesel.id = "ordertype" + symbol;
