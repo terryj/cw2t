@@ -38,17 +38,16 @@ var nextseqnumin; // store the next sequence number in when resetting stored val
 var messagerecoveryout = false; // flag to indicate we are in a resend process for outgoing messages
 var sequencegapnum = 0; // sequence gap starting message number
 var sequencegaptimestamp; // timestamp of first message in a sequence gap
-var logoutinitiated = false; // indicates whether we have initiated a logout
-var logoutrequired = false; // indicates a logout should be performed once a resend process has completed
 var resendrequestrequired = false; // indicates we need to do our own resend once we have serviced a resend request
 var settlmnttyp = '6'; // indicates a settlement date is being used, rather than a number of days
 var norelatedsym = '1'; // number of related symbols in a request, always 1
 var idsource = '4'; // indicates ISIN is to be used to identify a security
 var securitytype = 'CS'; // common stock
 var handinst = '1'; // i.e. no intervention
-var connectstatus = 0;
+var connectstatus = 0; // status of connection, 0=started, 1=connected, 2=disconnected
 var connectstatusint = 30;
 var connectstatusinterval = 30;
+var datareceivedsinceheartbeat = false; // indicates whether data has been received since the last heartbeat
 
 /// performance test ///
 //var count = 0;
@@ -89,6 +88,7 @@ function tryToConnect(self) {
 
 		// any received data
 		pqconn.on('data', function(data) {
+			// only log if not connected
 			if (connectstatus != 1) {
 				console.log("--- received ---");
 				console.log(data);
@@ -106,11 +106,13 @@ function tryToConnect(self) {
     			var end = new Date();
     			console.log(end-start);
     		}*/
+
+    		datareceivedsinceheartbeat = true;
 		});
 
 		// connection termination
 		pqconn.on('end', function() {
-			console.log('Disconnected by ' + pqhost);
+			console.log('disconnected by ' + pqhost);
 			disconnect(self);
 
 		});
@@ -151,8 +153,6 @@ function initFlags() {
 	messagerecoveryinrequested = false;
 	messagerecoveryinstarted = false;
 	messagerecoveryout = false;
-	logoutinitiated = false;
-	logoutrequired = false;
 	resendrequestrequired = false;
 }
 
@@ -259,15 +259,11 @@ function logon(reset) {
 function sendLogout(text) {
 	var msg = '';
 
-	console.log("sending logout msg");
-
 	if (text != '') {
 		msg = '58=' + text + SOH;
 	}
 
 	sendMessage('5', "", "", msg, false, null, null);
-
-	logoutinitiated = true;
 }
 
 function sendHeartbeat() {
@@ -277,12 +273,17 @@ function sendHeartbeat() {
 function sendTestRequest(self) {
 	var msg;
 
-	console.log('sending test request');
-
 	// just in case we already have a test request running
 	if (testrequesttimer != null) {
 		return;
 	}
+
+	// if we have received data since the last heartbeat, no need to do test
+	if (datareceivedsinceheartbeat) {
+		return;
+	}
+
+	console.log('sending test request');
 
 	// string we expect to receive back
 	matchtestreqid = getUTCTimeStamp();
@@ -504,7 +505,7 @@ function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgs
 	checksumstr = '10=' + checksum(msg) + SOH;
 	msg += checksumstr;
 
-	// log the message if not connected
+	// only log the message if not connected
 	if (connectstatus != 1) {
 		console.log("--- sending ---");
 		console.log(msg);
@@ -569,6 +570,8 @@ function startHeartBeatTimer(self) {
 		heartbeattimer = setTimeout(function() {
 			sendTestRequest(self);
 		}, (heartbtint * 1000) + (transmissiontime * 1000));
+
+		datareceivedsinceheartbeat = false;
 	}
 }
 
@@ -625,7 +628,7 @@ function completeMessage(tagvalarr, self) {
 
 		// check fix sequence number matches what we expect
 		if (parseInt(header.msgseqnum) < parseInt(msgseqnumin)) {
-			console.log("message sequence number received=" + header.msgseqnum + ", number expected=" + msgseqnumin);
+			console.log("incoming sequence number=" + header.msgseqnum + ", expected=" + msgseqnumin);
 
 			// check for sequence reset as this overrides any sequence number processing
 			if (header.msgtype == '4') {
@@ -646,15 +649,21 @@ function completeMessage(tagvalarr, self) {
 						// normal logon reply & we haven't missed anything, so just set the stored sequence number to that received
 						db.set("fixseqnumin", header.msgseqnum);
 					}
+				} else if (header.msgtype == '5') {
+					if ('text' in body) {
+						console.log("logout received, text=" + body.text);
+					}
+
+					// we have been logged out & will be disconnected by the other side, just exit & try again
+					return;
 				} else {
-					// serious error, abort & call
-					console.log("Error: message number received=" + header.msgseqnum + ", number expected=" + msgseqnumin + ", aborting...");
+					// serious error, abort
 					disconnect(self);
 					return;
 				}
 			}
 		} else if (parseInt(header.msgseqnum) > parseInt(msgseqnumin)) {
-			console.log("message sequence number received=" + header.msgseqnum + ", number expected=" + msgseqnumin);
+			console.log("incoming sequence number=" + header.msgseqnum + ", expected=" + msgseqnumin);
 
 			// check for sequence reset as this overrides any sequence number processing
 			if (header.msgtype == '4') {
@@ -664,9 +673,17 @@ function completeMessage(tagvalarr, self) {
 				}
 			}
 
+			if (header.msgtype == '5') {
+				// we have been logged out & will be disconnected by the other side, just exit & try again
+				if ('text' in body) {
+					console.log("logout received, text=" + body.text);
+				}
+				return;
+			}
+
 			if (messagerecoveryinstarted) {
 				// we are in the middle of a resend & it has gone wrong, so abort & call
-				console.log("Error: message number received=" + header.msgseqnum + ", number expected=" + msgseqnumin + ", aborting...");
+				console.log("message recovery failed, aborting...");
 				disconnect(self);
 				return;
 			}
@@ -684,11 +701,6 @@ function completeMessage(tagvalarr, self) {
 					// record that we need to do our own resend request after servicing the requested resend
 					resendrequestrequired = true;
 				} else {
-					if (header.msgtype == '5') {
-						// record the fact we need to logout, once we have completed a resend request
-						logoutrequired = true; // todo - how do we react to this? - maybe after a time period, check heartbeat?
-					}
-
 					// request resend of messages from this point, but wait to adjust the stored value
 					// until we know the recovery process has started, as in the first possible duplicate received
 					resendRequest(msgseqnumin);
@@ -1188,7 +1200,11 @@ function rejectReceived(reject, self) {
 }
 
 function logonReplyReceived(logon, self) {
-	console.log('logon reply received');
+	// we are connected
+	setStatus(1);
+
+	var timestamp = common.getUTCTimeStamp(new Date());
+	console.log(timestamp + ' - logon reply received');
 
 	if (logon.resetseqnumflag) {
 		// reset both sequence numbers
@@ -1202,19 +1218,12 @@ function logonReplyReceived(logon, self) {
 function logoutReceived(logout, self) {
 	console.log('logout received');
 
-	if (!logoutinitiated) {
-		if ('text' in logout) {
-			console.log('logout text=' + logout.text);
-		}
-
-		// return a logout
-		// commented out as socket is closed by server immediately after it sends a logout message
-		// so nothing further to do
-		//sendLogout('');
-	} else {
-		// we are done
-		disconnect(self);
+	if ('text' in logout) {
+		console.log('logout text=' + logout.text);
 	}
+
+	// we are done
+	disconnect(self);
 }
 
 function resetSequenceNumbers() {
@@ -1227,7 +1236,7 @@ function resetSequenceNumbers() {
 
 function sequenceReset(body, nextnumin, self) {
 	if (body.newseqno < nextnumin) {
-		console.log("Sequence reset number less than expected sequence number, aborting...");
+		console.log("sequence reset number less than expected sequence number, aborting...");
 		disconnect(self);
 	}
 
@@ -1301,6 +1310,7 @@ function heartbeatReceived(heartbeat, self) {
 		sendHeartbeat();
 		startHeartBeatTimer(self);
 
+		// no need to log if connected
 		if (connectstatus != 1) {
 			// re-set status & tell everyone
 			setStatus(1);
@@ -1338,7 +1348,7 @@ function resendRequestReceived(resendrequest, self) {
 	// check we have a valid begin & end sequence number
 	// end number may be '0' to indicate infinity
 	if (resendrequest.beginseqno < 1 || (resendrequest.endseqno < resendrequest.beginseqno && resendrequest.endseqno != 0)) {
-		console.log("Invalid Begin or End sequence number, unable to continue");
+		console.log("invalid begin or end sequence number, unable to continue");
 		disconnect(self);
 		return;
 	}
@@ -1451,9 +1461,7 @@ function oldMessage(msg) {
 function sequenceGap(beginnum, endnum, timestamp) {
 	var msg;
 
-	console.log('seq gap');
-	console.log('beginnum='+beginnum);
-	console.log('endnum='+endnum);
+	console.log('sequence gap, beginnum=' + beginnum + ', endnum=' + endnum);
 
 	msg = '123=' + 'Y' + SOH
 		+ '36=' + endnum + SOH;
