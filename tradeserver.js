@@ -139,7 +139,7 @@ winner.on('finished', function(message) {
 // connection to Proquote
 var ptp = new ptpclient.Ptp();
 ptp.on("connected", function() {
-  console.log("Connected to Proquote");
+  console.log("connected to Proquote");
 });
 ptp.on('finished', function(message) {
     console.log(message);
@@ -272,6 +272,8 @@ function newOrder(order) {
   // store the order, get an id & credit check it
   db.eval(scriptneworder, 24, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, order.orderdivnum, function(err, ret) {
     if (err) throw err;
+
+    console.log(ret);
 
     // credit check failed
     if (ret[0] == 0) {
@@ -410,6 +412,7 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
   // now, either forward to Proquote or attempt to match the order, depending on the type of instrument & whether the market is open
   //
   if (order.markettype == 1) {
+    console.log("matching");
     matchOrder(order);
   } else {
     // equity orders

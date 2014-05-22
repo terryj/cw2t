@@ -584,6 +584,7 @@
         .formbutton {
             border-style: none;
             background-color: #C0C0C0;
+            color: inherit;
             font-size: 15px;
             cursor: pointer;
             height: 24px;
@@ -1165,6 +1166,7 @@
             clearList("list3");
             clearList("list4");
             clearList("list5");
+            clearList("list6");
         }
 
         function clearForms() {
@@ -1415,6 +1417,7 @@
             addHeading("Filled", list3);
             addHeading("Rejected", list4);
             addHeading("Cancelled", list5);
+            addHeading("Expired", list6);
         }
 
         function displayPositions() {
@@ -2735,6 +2738,18 @@
             }
 
             msg += " " + getOrdertypeDesc(order.ordertype) + ", cancelled, order id " + order.orderid + ", at " + formatUTCDateTime(order.timestamp);
+
+            return msg;
+        }
+
+        function orderExpireMsg(order) {
+            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbol + ", " + order.remquantity + " remaining";
+
+            if ('price' in order) {
+                msg += " @ " + order.price;
+            }
+
+            msg += " " + getOrdertypeDesc(order.ordertype) + ", expired, order id " + order.orderid + ", at " + formatUTCDateTime(order.timestamp);
 
             return msg;
         }
