@@ -2936,30 +2936,30 @@
             }
 
             // update the prices
-            for (var i = 0; i < orderbook.pricelevels.length; ++i) {
-                level = orderbook.pricelevels[i].level - 1;
+            for (var i = 0; i < orderbook.prices.length; ++i) {
+                level = orderbook.prices[i].level - 1;
 
-                if ("bid" in orderbook.pricelevels[i]) {
-                    if (orderbook.pricelevels[i].bid > orderbooks[orderbook.symbol][level].bid) {
+                if ("bid" in orderbook.prices[i]) {
+                    if (orderbook.prices[i].bid > orderbooks[orderbook.symbol][level].bid) {
                         orderbooks[orderbook.symbol][level].lastbidchange = 1;
-                    } else if (orderbook.pricelevels[i].bid < orderbooks[orderbook.symbol][level].bid) {
+                    } else if (orderbook.prices[i].bid < orderbooks[orderbook.symbol][level].bid) {
                         orderbooks[orderbook.symbol][level].lastbidchange = 2;
                     } else {
                         orderbooks[orderbook.symbol][level].lastbidchange = 0;                        
                     }
-                    orderbooks[orderbook.symbol][level].bid = orderbook.pricelevels[i].bid;
+                    orderbooks[orderbook.symbol][level].bid = orderbook.prices[i].bid;
                     orderbooks[orderbook.symbol][level].bidflashcount = 3;
                     priceflash[orderbook.symbol] = true;
                 }
-                if ("offer" in orderbook.pricelevels[i]) {
-                    if (orderbook.pricelevels[i].offer > orderbooks[orderbook.symbol][level].offer) {
+                if ("offer" in orderbook.prices[i]) {
+                    if (orderbook.prices[i].offer > orderbooks[orderbook.symbol][level].offer) {
                         orderbooks[orderbook.symbol][level].lastofferchange = 1;
-                    } else if (orderbook.pricelevels[i].offer < orderbooks[orderbook.symbol][level].offer) {
+                    } else if (orderbook.prices[i].offer < orderbooks[orderbook.symbol][level].offer) {
                         orderbooks[orderbook.symbol][level].lastofferchange = 2;
                     } else {
                         orderbooks[orderbook.symbol][level].lastofferchange = 0;                        
                     }
-                    orderbooks[orderbook.symbol][level].offer = orderbook.pricelevels[i].offer;
+                    orderbooks[orderbook.symbol][level].offer = orderbook.prices[i].offer;
                     orderbooks[orderbook.symbol][level].offerflashcount = 3;
                     priceflash[orderbook.symbol] = true;
                 }
