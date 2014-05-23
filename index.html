@@ -2927,6 +2927,8 @@
         function updateOrderBook(orderbook) {
             var level;
 
+            console.log(orderbook);
+
             // create an entry in the orderbooks array for this symbol
             if (!(orderbook.symbol in orderbooks)) {
                 // 6 levels
