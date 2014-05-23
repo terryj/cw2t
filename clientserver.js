@@ -138,7 +138,6 @@ var options = {
 
 // https server
 function listen() {
-  console.log("listen");
   var server = https.createServer(options);
 
   server.addListener('request', function(req, res) {
