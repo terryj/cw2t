@@ -104,9 +104,11 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    console.log("channel " + channel + ": " + message);
+    //console.log("channel " + channel + ": " + message);
 
-    if (message.substr(0, 8) == "quoteack") {
+    if (message.substr(1, 6) == "prices") {
+      common.newPrice(channel, servertype, message, connections);
+    } else if (message.substr(0, 8) == "quoteack") {
       sendQuoteack(message.substr(9));
     } else if (message.substr(0, 5) == "quote") {
       sendQuote(message.substr(6));
@@ -119,7 +121,7 @@ function pubsub() {
     } else if (message.substr(2, 4) == "chat") {
       newChat(message);
     } else {
-      newPrice(channel, message);
+      console.log("unknown message, channel=" + channel + ", message=" + message);
     }
   });
 
@@ -161,7 +163,7 @@ function listen() {
 
     // data callback
     conn.on('data', function(msg) {
-      console.log('recd:' + msg);
+      //console.log('recd:' + msg);
 
       if (msg.substr(2, 18) == "ordercancelrequest") {
         db.publish(tradeserverchannel, msg);
@@ -319,7 +321,7 @@ function unsubscribeConnection(id) {
   });
 }
 
-function newPrice(topic, msg) {
+/*function newPrice(topic, msg) {
   var jsonmsg;
 
   db.smembers("topic:" + topic + ":symbols", function(err, symbols) {
@@ -348,7 +350,7 @@ function newPrice(topic, msg) {
       });
     });
   });
-}
+}*/
 
 /*
 // Convert dd-mmm-yyyy to FIX date format 'yyyymmdd'
@@ -1172,63 +1174,7 @@ function orderBookRequest(clientid, symbol, conn) {
     }
 
     // send the orderbook, with the current stored prices
-    sendCurrentOrderBook(symbol, ret[1], conn);
-  });
-}
-
-function sendCurrentOrderBook(symbol, topic, conn) {
-  var orderbook = {pricelevels : []};
-  var pricelevel1 = {};
-  var pricelevel2 = {};
-  var pricelevel3 = {};
-  var pricelevel4 = {};
-  var pricelevel5 = {};
-  var pricelevel6 = {};
-
-  db.hgetall("topic:" + topic, function(err, topicrec) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (!topicrec) {
-      console.log("topic:" + topic + " not found");
-
-      // send zeros
-      topicrec = {};
-      topicrec.bid1 = 0;
-      topicrec.offer1 = 0;
-      topicrec.bid2 = 0;
-      topicrec.offer2 = 0;
-      topicrec.bid3 = 0;
-      topicrec.offer3 = 0;
-    }
-
-    // 3 levels
-    pricelevel1.bid = topicrec.bid1;
-    pricelevel1.level = 1;
-    orderbook.pricelevels.push(pricelevel1);
-    pricelevel2.offer = topicrec.offer1;
-    pricelevel2.level = 1;
-    orderbook.pricelevels.push(pricelevel2);
-    pricelevel3.bid = topicrec.bid2;
-    pricelevel3.level = 2;
-    orderbook.pricelevels.push(pricelevel3);
-    pricelevel4.offer = topicrec.offer2;
-    pricelevel4.level = 2;
-    orderbook.pricelevels.push(pricelevel4);
-    pricelevel5.bid = topicrec.bid3;
-    pricelevel5.level = 3;
-    orderbook.pricelevels.push(pricelevel5);
-    pricelevel6.offer = topicrec.offer3;
-    pricelevel6.level = 3;
-    orderbook.pricelevels.push(pricelevel6);
-
-    orderbook.symbol = symbol;
-
-    if (conn != null) {
-      conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-    }
+    common.sendCurrentOrderBook(symbol, ret[1], conn);
   });
 }
 

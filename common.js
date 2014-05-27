@@ -155,6 +155,90 @@ exports.broadcastLevelOne = broadcastLevelOne;
 
 exports.broadcastLevelTwo = broadcastLevelTwo;*/
 
+function sendCurrentOrderBook(symbol, topic, conn) {
+  var orderbook = {prices : []};
+  var level1 = {};
+  var level2 = {};
+  var level3 = {};
+  var level4 = {};
+  var level5 = {};
+  var level6 = {};
+
+  db.hgetall("topic:" + topic, function(err, topicrec) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (!topicrec) {
+      console.log("topic:" + topic + " not found");
+
+      // send zeros
+      topicrec = {};
+      topicrec.bid1 = 0;
+      topicrec.offer1 = 0;
+      topicrec.bid2 = 0;
+      topicrec.offer2 = 0;
+      topicrec.bid3 = 0;
+      topicrec.offer3 = 0;
+    }
+
+    // 3 levels
+    level1.bid = topicrec.bid1;
+    level1.level = 1;
+    orderbook.prices.push(level1);
+    level2.offer = topicrec.offer1;
+    level2.level = 1;
+    orderbook.prices.push(level2);
+    level3.bid = topicrec.bid2;
+    level3.level = 2;
+    orderbook.prices.push(level3);
+    level4.offer = topicrec.offer2;
+    level4.level = 2;
+    orderbook.prices.push(level4);
+    level5.bid = topicrec.bid3;
+    level5.level = 3;
+    orderbook.prices.push(level5);
+    level6.offer = topicrec.offer3;
+    level6.level = 3;
+    orderbook.prices.push(level6);
+
+    orderbook.symbol = symbol;
+
+    if (conn != null) {
+      conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
+    }
+  });
+}
+
+exports.sendCurrentOrderBook = sendCurrentOrderBook;
+
+function newPrice(topic, servertype, msg, connections) {
+  // which symbols are subscribed to for this topic (may be more than 1 as covers derivatives)
+  db.smembers("topic:" + topic + ":" + servertype + ":symbols", function(err, symbols) {
+    if (err) throw err;
+
+    symbols.forEach(function(symbol, i) {
+      // build the message according to the symbol
+      var jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
+
+      // get the users watching this symbol
+      db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + servertype, function(err, users) {
+        if (err) throw err;
+
+        // send the message to each user
+        users.forEach(function(user, j) {
+          if (user in connections) {
+            connections[user].write(jsonmsg);
+          }
+        });
+      });
+    });
+  });
+}
+
+exports.newPrice = newPrice;
+
 //
 // send level one to everyone
 //
@@ -657,15 +741,15 @@ exports.registerCommonScripts = function () {
     redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":symbols", symbol) \
     local needtosubscribe = 0 \
     if redis.call("scard", "topic:" .. topic .. ":" .. servertype) == 0 then \
-      redis.call("publish", "proquote", "subscribe:" .. topic) \
+      redis.call("sadd", "topic:" .. topic .. ":" .. servertype, id) \
+      needtosubscribe = 1 \
       if redis.call("scard", "topic:" .. topic .. ":servers") == 0 then \
-    		redis.call("sadd", "topics", topic) \
-      	needtosubscribe = 1 \
+        redis.call("publish", "proquote", "subscribe:" .. topic) \
       end \
+      redis.call("sadd", "topic:" .. topic .. ":servers", servertype) \
     end \
-    redis.call("sadd", "topic:" .. topic .. ":servers", servertype) \
+    redis.call("sadd", "topics", topic) \
     redis.call("sadd", "server:" .. servertype .. ":topics", topic) \
-    redis.call("sadd", "topic:" .. topic .. ":" .. servertype, id) \
     redis.call("sadd", servertype .. ":" .. id .. ":topics", topic) \
     return {needtosubscribe, topic} \
   end \
@@ -691,12 +775,12 @@ exports.registerCommonScripts = function () {
       redis.call("srem", servertype .. ":" .. id .. ":topics", topic) \
       redis.call("srem", "topic:" .. topic .. ":" .. servertype, id) \
       if redis.call("scard", "topic:" .. topic .. ":" .. servertype) == 0 then \
-        redis.call("publish", "proquote", "unsubscribe:" .. topic) \
+        needtounsubscribe = 1 \
         redis.call("srem", "topic:" .. topic .. ":servers", servertype) \
       	redis.call("srem", "server:" .. servertype .. ":topics", topic) \
       	if redis.call("scard", "topic:" .. topic .. ":servers") == 0 then \
+          redis.call("publish", "proquote", "unsubscribe:" .. topic) \
       		redis.call("srem", "topics", topic) \
-        	needtounsubscribe = 1 \
         end \
       end \
     end \
