@@ -71,18 +71,6 @@
             background-color: inherit;
             color: yellow;
         }
-        .submenu{
-            background-color: white;
-            color: black;
-            display: block;
-            border: 2px;
-        }
-        .submenu li{
-            color: red;
-        }
-        .submenu li:hover{
-            background-color:blue;
-        }
         .cw2t {
             /*width: 620px;*/
             width: 460px;
@@ -713,6 +701,50 @@
             background-color:inherit;
 
         }
+        /*submenu css*/
+        .creatlbl {
+            background-color: red;
+            padding:5px;
+        }
+        .creatul {
+            margin:0;
+            padding:5px;
+            background-color:#A1CF9F;
+            display: inline-block;
+            list-style-type: none;
+            color:#C0C0C0;
+            font-size:19px;
+            border-radius:5px;
+            /*visibility: hidden;
+            /*border: 2px dashed green; This lets me know where the div is*/
+        }
+        /*label:hover + .submenudiv, .submenudiv:hover{
+            visibility: visible;    
+        }*/
+        .divContainer {
+            text-align:center;
+        }
+        .sbmnulist {
+            border: 2px solid#A1CF9F;
+            background-color:#F0F5F0;
+            padding: 5px;
+        }
+        .sbmnulist:hover {
+            background-color: blue;
+            color:white;
+        }
+        .submenudiv{
+            display: block;
+        }
+
+        /*.visible {
+            visibility: visible;
+        }
+        .hidden {
+            visibility: hidden;
+        }*/
+
+        /*end of submenu css*/
     </style>
 </head>
 <body lang="en">
@@ -2550,17 +2582,17 @@
             var headingrow;
             var numcols = 19;
             var keys = [];
-            var numtrades;
+            var len;
+            //var x;
 
-            // are there any trades?
+            console.log("displayTrades");
+
             if (Object.keys(trades).length == 0) {
                 var list = getList("list1");
                 addElement("No trades", list, 0);
                 return;
             }
 
-            // we need to sort the trades so as to be able to list most recent first
-            // to do this, we need to put the keys in an array & sort it
             for (var y in trades) {
                 if (trades.hasOwnProperty(y)) {
                     keys.push(y);
@@ -2568,7 +2600,12 @@
             }
 
             keys.sort();
-            numtrades = keys.length;
+            len = keys.length;
+
+            /*for (i = len - 1; i >= 0; i--) {
+                k = keys[i];
+                console.log(k);
+            }*/
 
             tbltrades = document.createElement("table");
             tbltrades.id = "tbltrades";
@@ -2660,11 +2697,17 @@
 
             tblbody.appendChild(headingrow);
 
-            for (var j = numtrades - 1; j >= 0; j--) {
+            //for (var x in trades) {
+            for (var j = len - 1; j = 0; j--) {
                 var x = keys[j];
+                console.log(x);
+                console.log(trades[x]);
                 var traderow = document.createElement("tr");
 
+                console.log(numcols);
+
                 for (var k = 0; k < numcols; ++k) {
+                    console.log("hello"+k);
                     var col = document.createElement("td");
 
                     switch (k) {
@@ -2741,6 +2784,8 @@
                 tblbody.appendChild(traderow);
             }
         }
+
+
 
         function displayTrade() {
             console.log("displayTrade");
@@ -5048,42 +5093,6 @@
 
             heading.appendChild(menu);
 
-            /*
-            //
-            // Alex, this needs work...
-            //
-            menu.onclick = function(dS){
-            //Creating the submenu
-                var index = ["item1", "item2", "item3", "item4", "item5"]
-
-                var submenu = getDiv("divsubmenu");
-                submenu.id = "submenu";
-                submenu.className = "submenu";
-
-                var smenulist = document.createElement("ul");
-                for (index = 0; index < 5; ++index) {
-                    li = document.createElement('li');
-                    li.innerHTML = "SubMenu" + index;
-
-                    smenulist.appendChild(li);
-                }
-
-                submenu.appendChild(smenulist);
-
-                menu.appendChild(submenu);
-
-                submenu.onclick = function(){
-                // the items on the submenu
-                }
-            }*/
-
-            //end
-
-            //submenu.onclick = function(){
-                // the items on the submenu
-                
-            //}
-
             menu.onclick = function(e) {
                 var element;
 
@@ -5131,7 +5140,8 @@
                     requestConnections();
                     break;
                 case 10:
-                    holidays();
+                    //holidays();
+                    subMenu();
                     break;
                 case 11:
                     endOfDay();
@@ -5144,6 +5154,75 @@
                     break;
                 }
             }
+        }
+
+        //
+        // AlexC new submenu draft
+        //
+        function subMenu() {
+            /*var creatbtndiv = document.createElement("div");
+            var creatbtn = document.createElement("button");
+            creatbtn.innerHTML = "Click Me";
+            var creatlbl = document.createElement("label");
+            creatlbl.className = "creatlbl";
+            creatlbl.innerHTML = "Hover Over Me ";
+
+            creatbtndiv.appendChild(creatlbl);
+            creatbtndiv.appendChild(creatbtn);
+
+            document.body.appendChild(creatbtndiv);*/
+
+            var list = function () {
+                var creatDiv = document.createElement("div");
+                creatDiv.id = "submenudiv";
+                creatDiv.className = "submenudiv";
+
+                var creatul = document.createElement("ul");
+                creatul.className = "creatul";
+                for (index = 0; index < 5; ++index) {
+                    li = document.createElement("li");
+                    li.className = "sbmnulist";
+                    li.innerHTML = "Submenu" + index;
+                    creatul.appendChild(li);
+                }
+
+                creatDiv.appendChild(creatul);
+                document.body.appendChild(creatDiv);
+
+                /*creatDiv.onmouseout = function(){
+                //var confirm = confirm("the mouse is out");
+                this.parentNode.removeChild(this);
+                };*/
+                
+                
+            };
+
+            list();
+
+            //If the cursor hovers over the label, activate this function//
+            /*creatbtn.onclick = function () {
+                var alert = confirm("yes master");
+                if (alert === true) {
+                    list();     
+                }
+
+                if (creatlbl.onmouseover === true) {
+                    var confirm = ("aye aye captain");
+                    creatDiv.className = "visible";
+                } else {
+                    creatDiv.className = "hidden";
+                }
+            };*/
+
+            /*creatlbl.onmouseover = function(){
+                //figure it out !!//
+            };*/
+
+        //AFTER THE CLICK ME BUTTON IS CLICKED THEN THE SUBEMNU ITEMS NEED TO HAVE AN ONCLICK EVENT //
+
+            /*creatbtndiv.onmouseout = function() {
+                var alert = confirm("this works");
+            }*/
         }
 
         function logout() {
@@ -6668,8 +6747,11 @@
 
         function endOfDay() {
             var eoddate = new Date();
+
             var frmeod = getForm("frmeod");
-            var lbleoddate = newlabel("lbleoddate", "Run End Of Day for " + eoddate, "", frmeod);display
+
+            var lbleoddate = newlabel("lbleoddate", "Run End Of Day for " + eoddate, "", frmeod);
+
             var btneod = newbutton("btneod", "Confirm", "formbutton", frmeod);
         }
 
