@@ -1042,6 +1042,7 @@ function tradeHistory(req, conn) {
   } else if (req.clientid == "0") {
     db.eval(scriptgetalltrades, 2, fromdate.getTime(), todate.getTime(), function(err, ret) {
       if (err) throw err;
+      console.log(ret);
       conn.write("{\"trades\":" + ret + "}");
     });
   } else {

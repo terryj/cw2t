@@ -2549,12 +2549,31 @@
             var traderow;
             var headingrow;
             var numcols = 19;
+            var keys = [];
+            var len;
+            //var x;
+
+            console.log("displayTrades");
 
             if (Object.keys(trades).length == 0) {
                 var list = getList("list1");
                 addElement("No trades", list, 0);
                 return;
             }
+
+            for (var y in trades) {
+                if (trades.hasOwnProperty(y)) {
+                    keys.push(y);
+                }
+            }
+
+            keys.sort();
+            len = keys.length;
+
+            /*for (i = len - 1; i >= 0; i--) {
+                k = keys[i];
+                console.log(k);
+            }*/
 
             tbltrades = document.createElement("table");
             tbltrades.id = "tbltrades";
@@ -2646,13 +2665,20 @@
 
             tblbody.appendChild(headingrow);
 
-            for (var x in trades) {
+            //for (var x in trades) {
+            for (var j = len - 1; j = 0; j--) {
+                var x = keys[j];
+                console.log(x);
+                console.log(trades[x]);
                 var traderow = document.createElement("tr");
 
-                for (var i = 0; i < numcols; ++i) {
+                console.log(numcols);
+
+                for (var k = 0; k < numcols; ++k) {
+                    console.log("hello"+k);
                     var col = document.createElement("td");
 
-                    switch (i) {
+                    switch (k) {
                     case 0:
                         col.innerHTML = trades[x].clientid;
                         break;
@@ -6428,9 +6454,7 @@
                 tidy();
                 setSelected(lnktrades);
 
-                console.log(inpclientid.value);
-
-                if (inpclientid.value == 0) { 
+                if (inpclientid.value == 0) { // all clients
                     selectDate();
                 } else {
                     historyrequest.clientid = inpclientid.value;
