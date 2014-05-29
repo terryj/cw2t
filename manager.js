@@ -1020,13 +1020,27 @@ function sendTrade(trade, conn) {
 }
 
 function tradeHistory(req, conn) {
+  var fromdate;
+  var todate;
+
+  if ('fromdate' in req) {
+    // create date objects from from/to date strings
+    fromdate = common.dateFromUTCString(req.fromdate);
+    todate = common.dateFromUTCString(req.todate);
+
+    // set todate to end of day
+    todate.setHours(23);
+    todate.setMinutes(59);
+    todate.setSeconds(59);
+  }
+
   if ("positionkey" in req) {
     db.eval(common.scriptgetpostrades, 2, req.clientid, req.positionkey, function(err, ret) {
       if (err) throw err;
       conn.write("{\"trades\":" + ret + "}");
     });
   } else if (req.clientid == "0") {
-    db.eval(scriptgetalltrades, 0, function(err, ret) {
+    db.eval(scriptgetalltrades, 2, fromdate.getTime(), todate.getTime(), function(err, ret) {
       if (err) throw err;
       conn.write("{\"trades\":" + ret + "}");
     });
@@ -1961,10 +1975,10 @@ function registerScripts() {
   ';
 
   //
-  // all trades - todo: limit by date...add date index?
+  // get trades between a start & end date
   //
   scriptgetalltrades = gettrades + '\
-  local trades = redis.call("smembers", "trades") \
+  local trades = redis.call("zrangebyscore", "tradesbydate", KEYS[1], KEYS[2]) \
   local tblresults = gettrades(trades) \
   return cjson.encode(tblresults) \
   ';

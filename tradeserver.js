@@ -593,9 +593,12 @@ ptp.on("orderFill", function(exereport) {
   }
 
   // we don't get this from proquote - todo: set based on currency pair
-  exereport.settlcurrfxratecalc = 1;    
+  exereport.settlcurrfxratecalc = 1;
 
-  db.eval(scriptnewtrade, 20, exereport.clordid, exereport.symbol, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currency, currencyratetoorg, currencyindtoorg, exereport.execbroker, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.ordstatus, exereport.lastmkt, exereport.leavesqty, exereport.orderid, exereport.settlcurrency, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, function(err, ret) {
+  // milliseconds since epoch, used for scoring trades so they can be retrieved in a range
+  var milliseconds = new Date().getTime();
+
+  db.eval(scriptnewtrade, 21, exereport.clordid, exereport.symbol, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currency, currencyratetoorg, currencyindtoorg, exereport.execbroker, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.ordstatus, exereport.lastmkt, exereport.leavesqty, exereport.orderid, exereport.settlcurrency, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, function(err, ret) {
     if (err) {
       console.log(err);
       return
@@ -605,11 +608,12 @@ ptp.on("orderFill", function(exereport) {
     db.publish(ret[1], "order:" + exereport.clordid);
     db.publish(ret[1], "trade:" + ret[0]);
 
-    // if we have not sent to the client channel & this fill is for a hedge order, forward to client channel for hedge book monitoring
-    if (ret[1] != clientserverchannel) {
-      if (ret[2] != "") {
-        db.publish(clientserverchannel, "trade:" + ret[0]);        
-      }
+    if (ret[1] == clientserverchannel) {
+      // forward to user channel to enable keeping track of all trades
+      db.publish(userserverchannel, "trade:" + ret[0]);
+    } else if (ret[2] != "") {
+      // if we have not sent to the client channel & this fill is for a hedge order, forward to client channel for hedge book monitoring
+      db.publish(clientserverchannel, "trade:" + ret[0]);        
     }
   });
 });
@@ -1203,7 +1207,7 @@ function registerScripts() {
   ';
 
   newtrade = updateposition + updatecash + '\
-  local newtrade = function(clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, operatortype, operatorid, finance) \
+  local newtrade = function(clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, operatortype, operatorid, finance, milliseconds) \
     local tradeid = redis.call("incr", "tradeid") \
     if not tradeid then return 0 end \
     local tradekey = "trade:" .. tradeid \
@@ -1211,6 +1215,7 @@ function registerScripts() {
     redis.call("sadd", "trades", tradeid) \
     redis.call("sadd", clientid .. ":trades", tradeid) \
     redis.call("sadd", "order:" .. orderid .. ":trades", tradeid) \
+    redis.call("zadd", "tradesbydate", milliseconds, tradeid) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
     if totalcost > 0 then \
       updatecash(clientid, settlcurrency, "TC", totalcost, 1, "trade costs", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
@@ -1442,7 +1447,7 @@ function registerScripts() {
   local initialmargin = getinitialmargin(vals[2], consid) \
   local costs = getcosts(vals[1], vals[2], instrumenttype, vals[3], consid, KEYS[17]) \
   local finance = calcfinance(instrumenttype, consid, KEYS[17], vals[3], vals[8]) \
-  local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance) \
+  local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
   --[[ adjust order related margin/reserve ]] \
   adjustmarginreserve(KEYS[1], vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[17], vals[7], KEYS[15], KEYS[11], vals[8]) \
   --[[ adjust order ]] \

@@ -438,9 +438,9 @@ function getReasonDesc(reason) {
 
 exports.getReasonDesc = getReasonDesc;
 
-/*
-* Get the nuber of seconds between two UTC datetimes
-*/
+//
+// Get the nuber of seconds between two UTC datetimes
+//
 function getSeconds(startutctime, finishutctime) {
   var startdt = new Date(getDateString(startutctime));
   var finishdt = new Date(getDateString(finishutctime));
@@ -449,17 +449,20 @@ function getSeconds(startutctime, finishutctime) {
 
 exports.getSeconds = getSeconds;
 
-/*
-* Convert a UTC datetime to a valid string for creating a date object
-*/
+//
+// Convert a UTC datetime to a valid string for creating a date object
+//
 function getDateString(utcdatetime) {
     return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
 }
 
 exports.getDateString = getDateString;
 
+//
+// Convert a "yyyymmdd" date string to a date object
+//
 function dateFromUTCString(utcdatestring) {
-  var dt = new Date(utcdatestring.substr(0,4), utcdatestring.substr(4,2), utcdatestring.substr(6,2));
+  var dt = new Date(utcdatestring.substr(0,4), utcdatestring.substr(4,2) - 1, utcdatestring.substr(6,2));
   return dt;
 }
 
@@ -696,6 +699,9 @@ exports.registerCommonScripts = function () {
 
   exports.getfreemargin = getfreemargin;
 
+  //
+  // get a range of trades from passed ids
+  //
   gettrades = '\
   local gettrades = function(trades) \
     local tblresults = {} \

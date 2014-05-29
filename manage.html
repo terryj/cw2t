@@ -535,7 +535,7 @@
             font-size: 15px;
             cursor: pointer;
             height: 24px;
-            width: 80px;
+            width: 90px;
         }
         .formbuttonwide {
             border-style: none;
@@ -776,6 +776,7 @@
         var loggedout = false;
         var markets = {};
         var serverstatus = {};
+        var allclients = "All clients";
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -809,6 +810,7 @@
                     displayTrades();
                 } else if ("trade" in obj) {
                     updateTrade(obj.trade);
+                    displayTrade();
                 } else if ("quoterequests" in obj) {
                     clearQuoteRequests();
                     loadQuoteRequests(obj.quoterequests);
@@ -1159,13 +1161,7 @@
         }
 
         function updateTrade(trade) {
-            var msg;
-
-            msg = tradeMsg(trade);
-
-            if (selectedmenu == 0) {
-                addMessageToDiv(msg, "orderdiv:" + trade.symbol + ":" + trade.orderdivnum);
-            }
+            trades[trade.tradeid] = trade;
         }
 
         function updatePosition(position) {
@@ -1843,6 +1839,7 @@
             clearForm("frmifa", true);
             clearForm("frmhistory", true);
             clearForm("frmpositions", true);
+            clearForm("frmdates", true);
         }
 
         function clearTables() {
@@ -2111,12 +2108,6 @@
             var headingrow;
             var numcols = 11;
 
-            clearLists();
-            clearEmptyLines();
-            clearHeadings();
-            clearTables();
-            clearElementById("lbltrades");
-
             var emptyline = addNewLine(main, "emptyline:1");
 
             if (Object.keys(positions).length == 0) {
@@ -2257,25 +2248,21 @@
                 var lnktrades = newlink(positions[x].symbol + ":" + positions[x].currency, "trades", "", col);
 
                 lnktrades.onclick = function() {
+                    clearElementById("emptyline:2");
+                    clearElementById("lbltrades");
+                    clearTable("tbltrades");
+                    clearList("list1", true);
+
                     var inpclientid = document.getElementById("inpclientid");
                     if (inpclientid != null) {
                         tradehistoryrequest.clientid = inpclientid.value;
                         tradehistoryrequest.positionkey = this.id;
                         sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(tradehistoryrequest) + "}");
-                        whichPos(tradehistoryrequest.positionkey);
+
+                        var emptyline2 = addNewLine(main, "emptyline:2");
+                        var lbltrades = newlabel("lbltrades", "Trades for position: " + this.id, "", main);
                     }
                 }
-            }
-
-            function whichPos(pos) {
-                var postrades = document.getElementById("postrades");
-                if (postrades == null) {
-                    postrades = document.createElement("input");
-                    postrades.type = "hidden";
-                    postrades.id = "postrades";
-                    main.appendChild(postrades);
-                }
-                postrades.value = pos;
             }
         }
 
@@ -2284,12 +2271,6 @@
             var tblbody;
             var numrows = 7;
             var firstcurr = true;
-
-            clearLists();
-            clearEmptyLines();
-            clearHeadings();
-            clearTables();
-            clearElementById("lbltrades");
 
             var emptyline = addNewLine(main, "emptyline:1");
 
@@ -2415,11 +2396,6 @@
             var msg;
             var listelement;
             var lblnopartfilled;
-
-            clearLists();
-            clearHeadings();
-            clearEmptyLines();
-            clearTables();
 
             var list1 = getList("list1");
             var emptyline1 = addNewLine(main, "emptyline:1");
@@ -2573,27 +2549,6 @@
             var traderow;
             var headingrow;
             var numcols = 19;
-
-            if (selectedmenu == 7) {
-                clearLists();
-                clearEmptyLines();
-                clearHeadings();
-                clearTables();
-            } else {
-                clearElementById("emptyline:2");
-                clearElementById("lbltrades");
-                clearTable("tbltrades");
-                clearList("list1", true);
-            }
-
-            var emptyline2 = addNewLine(main, "emptyline:2");
-
-            if (selectedmenu == 8) {
-                var postrades = document.getElementById("postrades");
-                if (postrades != null) {
-                    var lbltrades = newlabel("lbltrades", "Trades for position " + postrades.value, "", main);
-                }
-            }
 
             if (Object.keys(trades).length == 0) {
                 var list = getList("list1");
@@ -2772,15 +2727,20 @@
             }
         }
 
+        function displayTrade() {
+            console.log("displayTrade");
+            console.log(selectedmenu);
+            if (selectedmenu == 0) {
+                addMessageToDiv(msg, "orderdiv:" + trade.symbol + ":" + trade.orderdivnum);
+            } else if (selectedmenu == 7) {
+                displayTrades();
+            }
+        }
+
         function displayChatHistory() {
             var firstchat = true;
             var msg;
             var list;
-
-            clearLists();
-            clearHeadings();
-            clearEmptyLines();
-            clearTables();
 
             list = getList("list1");
 
@@ -2809,11 +2769,6 @@
             var msg;
             var list;
 
-            clearLists();
-            clearHeadings();
-            clearEmptyLines();
-            clearTables();
-
             list = getList("list1");
 
             for (var x in quoterequests) {
@@ -2840,11 +2795,6 @@
             var firstquote = true;
             var msg;
             var list;
-
-            clearLists();
-            clearHeadings();
-            clearEmptyLines();
-            clearTables();
 
             list = getList("list1");
 
@@ -2875,11 +2825,6 @@
             var headingrow;
             var numcols = 8;
             var firstrow;
-
-            clearLists();
-            clearEmptyLines();
-            clearHeadings();
-            clearTables();
 
             var emptyline = addNewLine(main, "emptyline:1");
 
@@ -3031,12 +2976,6 @@
         function displayCash() {
             var firstCash = true;
             var tmpcasharr = [];
-
-            clearLists();
-            clearEmptyLines();
-            clearHeadings();
-            clearTables();
-            clearElementById("lbltrades");
 
             var emptyline = addNewLine(main, "emptyline:1");
 
@@ -3308,6 +3247,7 @@
 
                 if (!validateClientid()) {return;}
 
+                tidy();
                 setSelected(lnkpositions);
                 positionrequest.clientid = inpclientid.value;
                 sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
@@ -3318,6 +3258,7 @@
 
                 if (!validateClientid()) {return;}
 
+                tidy();
                 setSelected(lnkcash);
                 cashrequest.clientid = inpclientid.value;
                 sockjs.send("{\"cashrequest\":" + JSON.stringify(cashrequest) + "}");
@@ -3348,6 +3289,7 @@
 
                 if (!validateClientid()) {return;}
 
+                tidy();
                 setSelected(lnkaccount);
                 accountrequest.clientid = inpclientid.value;
                 sockjs.send("{\"accountrequest\":" + JSON.stringify(accountrequest) + "}");
@@ -3380,6 +3322,14 @@
                 lnkaccount.className = "";
 
                 link.className = "linkselected";
+            }
+
+            function tidy() {
+                clearLists();
+                clearEmptyLines();
+                clearHeadings();
+                clearTables();
+                clearElementById("lbltrades");
             }
         }
 
@@ -3846,7 +3796,7 @@
                         level2 = document.createElement('span');
                         level2.className = "level2";
                     }
-                    
+
                     stock = document.createElement('span');
                     stock.className = "stock";
                     bidprice = document.createElement('span');
@@ -5226,7 +5176,7 @@
                         }
 
                         if (allclientopt) {
-                            addElement("All clients", clientlist, 0);                            
+                            addElement(allclients, clientlist, 0);                            
                         }
                     }
                 } else {
@@ -5243,7 +5193,7 @@
                     }
 
                     if (allclientopt) {
-                        addElement("All clients", clientlist, 0);                            
+                        addElement(allclients, clientlist, 0);                            
                     }
                 }
 
@@ -5277,7 +5227,7 @@
                 clientboxinput.value = "";
 
                 if (element.value == 0) {
-                    client.name = "All clients";
+                    client.name = allclients;
                     client.clientid = 0;
                 } else {
                     client = clients[element.value];
@@ -6448,6 +6398,7 @@
             lnkquoterequests.onclick = function() {
                 if (!validateClientid(false)) {return;}
 
+                tidy();
                 setSelected(lnkquoterequests);
                 historyrequest.clientid = inpclientid.value;
                 sockjs.send("{\"quoterequesthistoryrequest\":" + JSON.stringify(historyrequest) + "}");
@@ -6456,6 +6407,7 @@
             lnkquotes.onclick = function() {
                 if (!validateClientid(false)) {return;}
 
+                tidy();
                 setSelected(lnkquotes);
                 historyrequest.clientid = inpclientid.value;
                 sockjs.send("{\"quotehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
@@ -6464,6 +6416,7 @@
             lnkorders.onclick = function() {
                 if (!validateClientid(false)) {return;}
 
+                tidy();
                 setSelected(lnkorders);
                 historyrequest.clientid = inpclientid.value;
                 sockjs.send("{\"orderhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
@@ -6472,14 +6425,23 @@
             lnktrades.onclick = function() {
                 if (!validateClientid(true)) {return;}
 
+                tidy();
                 setSelected(lnktrades);
-                historyrequest.clientid = inpclientid.value;
-                sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+
+                console.log(inpclientid.value);
+
+                if (inpclientid.value == 0) { 
+                    selectDate();
+                } else {
+                    historyrequest.clientid = inpclientid.value;
+                    sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");                    
+                }
             }
 
             lnkcash.onclick = function() {
                 if (!validateClientid(false)) {return;}
 
+                tidy();
                 setSelected(lnkcash);
                 historyrequest.clientid = inpclientid.value;
                 historyrequest.currency = "GBP";
@@ -6489,6 +6451,7 @@
             lnkchat.onclick = function() {
                 if (!validateClientid(false)) {return;}
 
+                tidy();
                 setSelected(lnkchat);
                 historyrequest.clientid = inpclientid.value;
                 sockjs.send("{\"chathistoryrequest\":" + JSON.stringify(historyrequest) + "}");
@@ -6515,7 +6478,7 @@
                     selectClientFocus("clientboxinput");
                 }
 
-                // only allow "All clients" for trades
+                // only allow all clients for trades
                 if (inpclientid.value == "0" && zeroclientidok == false) {
                     alert("Please select an individual client");
                     validclient = false;
@@ -6534,6 +6497,47 @@
                 lnkcash.className = "";
 
                 link.className = "linkselected";
+            }
+
+            function selectDate() {
+                var frmdates = getForm("frmdates");
+
+                var lblfromdate = newlabel("lblfromdate", "From:", "", frmdates);
+                var selfromday = newselect("selfromday", "formselect", frmdates);
+                var selfrommonth = newselect("selfrommonth", "formselect", frmdates);
+                var selfromyear = newselect("selfromyear", "formselect", frmdates);
+                var lbltodate = newlabel("lbltodate", " To:", "", frmdates);
+                var seltoday = newselect("seltoday", "formselect", frmdates);
+                var seltomonth = newselect("seltomonth", "formselect", frmdates);
+                var seltoyear = newselect("seltoyear", "formselect", frmdates);
+
+                populateDate(selfromday, selfrommonth, selfromyear, new Date());
+                populateDate(seltoday, seltomonth, seltoyear, new Date());
+
+                var dummylabel = newlabel("dummylabel", " ", "", frmdates);
+                var btntrades = newbutton("btntrades", "Get trades", "formbutton", frmdates);
+
+                btntrades.onclick = function() {
+                    clearEmptyLines();
+                    clearLists();
+                    clearTables();
+
+                    historyrequest.clientid = inpclientid.value;
+                    historyrequest.fromdate = formatToUTCDate(selfromday[selfromday.selectedIndex].value, selfrommonth[selfrommonth.selectedIndex].value, selfromyear[selfromyear.selectedIndex].value);
+                    historyrequest.todate = formatToUTCDate(seltoday[seltoday.selectedIndex].value, seltomonth[seltomonth.selectedIndex].value, seltoyear[seltoyear.selectedIndex].value);
+
+                    sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+                }
+
+                main.appendChild(frmdates);
+            }
+
+            function tidy() {
+                clearLists();
+                clearHeadings();
+                clearEmptyLines();
+                clearTables();
+                clearForm("frmdates", true);
             }
         }
 

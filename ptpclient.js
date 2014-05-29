@@ -1461,7 +1461,7 @@ function oldMessage(msg) {
 function sequenceGap(beginnum, endnum, timestamp) {
 	var msg;
 
-	console.log('sequence gap, beginnum=' + beginnum + ', endnum=' + endnum);
+	console.log('sending sequence gap, beginnum=' + beginnum + ', endnum=' + endnum);
 
 	msg = '123=' + 'Y' + SOH
 		+ '36=' + endnum + SOH;
