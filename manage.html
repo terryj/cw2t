@@ -1857,6 +1857,7 @@
             clearList("list4", true);
             clearList("list5", true);
             clearList("list6", true);
+            //clearList("creatul", true);
         }
 
         function clearForms() {
@@ -1886,6 +1887,7 @@
             clearDiv("stockbox");
             clearDiv("divholidays");
             clearDiv("divmonitor");
+            clearDiv("submenudiv");
         }
 
         function clearEmptyLines() {
@@ -5172,7 +5174,7 @@
 
             document.body.appendChild(creatbtndiv);*/
 
-            var list = function () {
+            var listsubmenu = function () {
                 var creatDiv = document.createElement("div");
                 creatDiv.id = "submenudiv";
                 creatDiv.className = "submenudiv";
@@ -5187,17 +5189,19 @@
                 }
 
                 creatDiv.appendChild(creatul);
-                document.body.appendChild(creatDiv);
+
+                // changed 'document.body' to 'main' for consistency
+                //document.body.appendChild(creatDiv);
+                main.appendChild(creatDiv);
 
                 /*creatDiv.onmouseout = function(){
                 //var confirm = confirm("the mouse is out");
                 this.parentNode.removeChild(this);
                 };*/
-                
-                
             };
 
-            list();
+            // changed name to...
+            listsubmenu();
 
             //If the cursor hovers over the label, activate this function//
             /*creatbtn.onclick = function () {
