@@ -2584,10 +2584,7 @@
             var headingrow;
             var numcols = 19;
             var keys = [];
-            var len;
-            //var x;
-
-            console.log("displayTrades");
+            var numtrades;
 
             if (Object.keys(trades).length == 0) {
                 var list = getList("list1");
@@ -2602,12 +2599,7 @@
             }
 
             keys.sort();
-            len = keys.length;
-
-            /*for (i = len - 1; i >= 0; i--) {
-                k = keys[i];
-                console.log(k);
-            }*/
+            numtrades = keys.length;
 
             tbltrades = document.createElement("table");
             tbltrades.id = "tbltrades";
@@ -2699,17 +2691,11 @@
 
             tblbody.appendChild(headingrow);
 
-            //for (var x in trades) {
-            for (var j = len - 1; j = 0; j--) {
+            for (var j = numtrades - 1; j >= 0; j--) {
                 var x = keys[j];
-                console.log(x);
-                console.log(trades[x]);
                 var traderow = document.createElement("tr");
 
-                console.log(numcols);
-
                 for (var k = 0; k < numcols; ++k) {
-                    console.log("hello"+k);
                     var col = document.createElement("td");
 
                     switch (k) {
