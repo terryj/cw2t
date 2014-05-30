@@ -809,6 +809,7 @@
         var markets = {};
         var serverstatus = {};
         var allclients = "All clients";
+        var numtradecols = 19;
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -842,7 +843,7 @@
                     displayTrades();
                 } else if ("trade" in obj) {
                     updateTrade(obj.trade);
-                    displayTrade();
+                    displayTrade(obj.trade);
                 } else if ("quoterequests" in obj) {
                     clearQuoteRequests();
                     loadQuoteRequests(obj.quoterequests);
@@ -2579,41 +2580,34 @@
 
         function displayTrades() {
             var tbltrades;
-            var tblbody;
-            var traderow;
-            var headingrow;
-            var numcols = 19;
-            var keys = [];
-            var numtrades;
 
+            // see if there any trades to display
             if (Object.keys(trades).length == 0) {
                 var list = getList("list1");
                 addElement("No trades", list, 0);
                 return;
             }
 
-            for (var y in trades) {
-                if (trades.hasOwnProperty(y)) {
-                    keys.push(y);
-                }
-            }
+            tbltrades = createTradeTable();
 
-            keys.sort();
-            numtrades = keys.length;
+            displayTradeHeadings(tbltrades);
+            displayTradeDetail(tbltrades);
+        }
 
+        function createTradeTable() {
             tbltrades = document.createElement("table");
             tbltrades.id = "tbltrades";
             tbltrades.setAttribute("border", "1");
 
-            tblbody = document.createElement("tbody");
-            tblbody.id = "tblbody";
-
-            tbltrades.appendChild(tblbody);
             main.appendChild(tbltrades);
 
-            headingrow = document.createElement("tr");
+            return tbltrades;
+        }
 
-            for (var i = 0; i < numcols; ++i) {
+        function displayTradeHeadings(tbltrades) {
+            var headingrow = tbltrades.insertRow();
+
+            for (var i = 0; i < numtradecols; ++i) {
                 var col = document.createElement("td");
 
                 switch (i) {
@@ -2688,101 +2682,134 @@
 
                 headingrow.appendChild(col);
             }
+        }
 
-            tblbody.appendChild(headingrow);
+        function displayTradeDetail(tbltrades) {
+            // just display as they come, can sort separately
+            for (var x in trades) {
+                // append a row to bottom of table
+                var traderow = tbltrades.insertRow(-1);
+                addTradeRow(trades[x], traderow);
+            }            
+        }
 
-            for (var j = numtrades - 1; j >= 0; j--) {
-                var x = keys[j];
-                var traderow = document.createElement("tr");
+        function addTradeRow(trade, traderow) {
+            for (var k = 0; k < numtradecols; ++k) {
+                var col = document.createElement("td");
 
-                for (var k = 0; k < numcols; ++k) {
-                    var col = document.createElement("td");
-
-                    switch (k) {
-                    case 0:
-                        col.innerHTML = trades[x].clientid;
-                        break;
-                    case 1:
-                        col.innerHTML = trades[x].symbol;
-                        break;
-                    case 2:
-                        col.innerHTML = getSideDesc(trades[x].side);
-                        break;
-                    case 3:
-                        col.innerHTML = trades[x].quantity;
-                        col.className = "colrightalign";
-                        break;
-                    case 4:
-                        col.innerHTML = trades[x].price;
-                        col.className = "colrightalign";
-                        break;
-                    case 5:
-                        col.innerHTML = trades[x].settlcurramt;
-                        col.className = "colrightalign";
-                        break;
-                    case 6:
-                        col.innerHTML = "T+" + trades[x].nosettdays;
-                        break;
-                    case 7:
-                        col.innerHTML = formatUTCDate(trades[x].futsettdate);
-                        break;
-                    case 8:
-                        col.innerHTML = trades[x].settlcurrency;
-                        break;
-                    case 9:
-                        col.innerHTML = trades[x].commission;
-                        col.className = "colrightalign";
-                        break;
-                    case 10:
-                        col.innerHTML = trades[x].ptmlevy;
-                        col.className = "colrightalign";
-                        break;
-                    case 11:
-                        col.innerHTML = trades[x].stampduty;
-                        col.className = "colrightalign";
-                        break;
-                    case 12:
-                        col.innerHTML = trades[x].contractcharge;
-                        col.className = "colrightalign";
-                        break;
-                    case 13:
-                        col.innerHTML = trades[x].counterpartyid;
-                        break;
-                    case 14:
-                        col.innerHTML = trades[x].externaltradeid;
-                        break;
-                    case 15:
-                        col.innerHTML = formatUTCDateTime(trades[x].timestamp);
-                        break;
-                    case 16:
-                        col.innerHTML = trades[x].tradeid;
-                        break;
-                    case 17:
-                        col.innerHTML = trades[x].finance;
-                        break;
-                    case 18:
-                        col.innerHTML = trades[x].margin;
-                        break;
-                    default:
-                    }
-
-                    traderow.appendChild(col);
+                switch (k) {
+                case 0:
+                    col.innerHTML = trade.clientid;
+                    break;
+                case 1:
+                    col.innerHTML = trade.symbol;
+                    break;
+                case 2:
+                    col.innerHTML = getSideDesc(trade.side);
+                    break;
+                case 3:
+                    col.innerHTML = trade.quantity;
+                    col.className = "colrightalign";
+                    break;
+                case 4:
+                    col.innerHTML = trade.price;
+                    col.className = "colrightalign";
+                    break;
+                case 5:
+                    col.innerHTML = trade.settlcurramt;
+                    col.className = "colrightalign";
+                    break;
+                case 6:
+                    col.innerHTML = "T+" + trade.nosettdays;
+                    break;
+                case 7:
+                    col.innerHTML = formatUTCDate(trade.futsettdate);
+                    break;
+                case 8:
+                    col.innerHTML = trade.settlcurrency;
+                    break;
+                case 9:
+                    col.innerHTML = trade.commission;
+                    col.className = "colrightalign";
+                    break;
+                case 10:
+                    col.innerHTML = trade.ptmlevy;
+                    col.className = "colrightalign";
+                    break;
+                case 11:
+                    col.innerHTML = trade.stampduty;
+                    col.className = "colrightalign";
+                    break;
+                case 12:
+                    col.innerHTML = trade.contractcharge;
+                    col.className = "colrightalign";
+                    break;
+                case 13:
+                    col.innerHTML = trade.counterpartyid;
+                    break;
+                case 14:
+                    col.innerHTML = trade.externaltradeid;
+                    break;
+                case 15:
+                    col.innerHTML = formatUTCDateTime(trade.timestamp);
+                    break;
+                case 16:
+                    col.innerHTML = trade.tradeid;
+                    break;
+                case 17:
+                    col.innerHTML = trade.finance;
+                    break;
+                case 18:
+                    col.innerHTML = trade.margin;
+                    break;
+                default:
                 }
 
-                tblbody.appendChild(traderow);
+                traderow.appendChild(col);
             }
         }
 
-
-
-        function displayTrade() {
-            console.log("displayTrade");
-            console.log(selectedmenu);
+        function displayTrade(trade) {
             if (selectedmenu == 0) {
                 addMessageToDiv(msg, "orderdiv:" + trade.symbol + ":" + trade.orderdivnum);
             } else if (selectedmenu == 7) {
-                displayTrades();
+                displayATrade(trade);
             }
+        }
+
+        function displayATrade(trade) {
+            var tbltrades = document.getElementById("tbltrades");
+            if (tbltrades == null) {
+                tbltrades = createTradeTable();
+                displayTradeHeadings(tbltrades);
+            }
+
+            // insert trade at first row below heading
+            var row = tbltrades.insertRow(1);
+            addTradeRow(trade, row);
+        }
+
+        function sortTradeTable() {
+            /*var keys = [];
+            var numtrades;
+
+            // use an array to store the trade id keys in trades
+            for (var y in trades) {
+                console.log("y="+y);
+                if (trades.hasOwnProperty(y)) {
+                    keys.push(parseInt(y));
+                }
+            }
+
+            // sort them, so we can then display them ordered how we want
+            keys.sort();
+            numtrades = keys.length;
+
+            // most recent first
+            for (var j = numtrades - 1; j >= 0; j--) {
+                console.log(keys[j]);
+                var x = keys[j];
+            }*/
         }
 
         function displayChatHistory() {
