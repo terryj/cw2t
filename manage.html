@@ -2685,12 +2685,16 @@
         }
 
         function displayTradeDetail(tbltrades) {
-            // just display as they come, can sort separately
-            for (var x in trades) {
-                // append a row to bottom of table
+            var numtrades;
+
+            var keys = sortTrades();
+            numtrades = keys.length;
+
+            for (var i = 0; i < numtrades; i++) {
+                var x = keys[i];
                 var traderow = tbltrades.insertRow(-1);
                 addTradeRow(trades[x], traderow);
-            }            
+             }
         }
 
         function addTradeRow(trade, traderow) {
@@ -2789,27 +2793,24 @@
             addTradeRow(trade, row);
         }
 
-        function sortTradeTable() {
-            /*var keys = [];
-            var numtrades;
+        function sortTrades() {
+            var keys = [];
 
-            // use an array to store the trade id keys in trades
-            for (var y in trades) {
-                console.log("y="+y);
-                if (trades.hasOwnProperty(y)) {
-                    keys.push(parseInt(y));
+            // use an array to store the trade id's
+            for (var x in trades) {
+                if (trades.hasOwnProperty(x)) {
+                    keys.push(parseInt(trades[x].tradeid));
                 }
             }
 
-            // sort them, so we can then display them ordered how we want
-            keys.sort();
-            numtrades = keys.length;
+            // sort them, so we can then display them most recent first
+            keys.sort(sortNumbersDesc);
 
-            // most recent first
-            for (var j = numtrades - 1; j >= 0; j--) {
-                console.log(keys[j]);
-                var x = keys[j];
-            }*/
+            return keys;
+        }
+
+        function sortNumbersDesc(a, b) {
+            return b - a;
         }
 
         function displayChatHistory() {
