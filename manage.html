@@ -1185,7 +1185,8 @@
             console.log(status);
             if ("tsstatus" in status) {
                 serverstatus.tsstatus = parseInt(status.tsstatus);
-            } else if ("psstatus" in status) {
+            }
+            if ("psstatus" in status) {
                 serverstatus.psstatus = parseInt(status.psstatus);                
             }
 
