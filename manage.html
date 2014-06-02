@@ -5103,6 +5103,7 @@
                     var nwmnu = new menuitem(); //... this will create a new list..//
                     nwmnu.value = j; // ..add the items onto the list..//
                     nwmnu.innerHTML = menuarr[j]//.. and display them !!//
+                    menuitem.appendChild(nwmnu);
                 }*/
                 menu.appendChild(menuitem);
             }
@@ -5158,7 +5159,7 @@
                 case 10:
                     holidays();
                     subMenu();
-                    random();
+                    randomCode();
                     break;
                 case 11:
                     endOfDay();
@@ -5177,7 +5178,7 @@
         // AlexC new submenu draft
         //
 
-        function random(){
+        function randomCode(){
             var crtdiv = document.createElement("div");
             var crtbtn = document.createElement("button");
             crtbtn.innerHTML = "This code works";
@@ -5186,7 +5187,7 @@
             main.appendchild(crtdiv);
         }
         
-        random();
+        randomCode();
 
         function subMenu() {
             var creatbtndiv = document.createElement("div");
