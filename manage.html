@@ -1181,7 +1181,8 @@
         //
 
         function updateStatus(status) {
-            console.log("updateStatus");
+            console.log("updateStatus:");
+            console.log(status);
             if ("tsstatus" in status) {
                 serverstatus.tsstatus = parseInt(status.tsstatus);
             } else if ("psstatus" in status) {
