@@ -281,7 +281,8 @@ function listen() {
             reply.clientid = clientid;
             replySignIn(reply, conn);
 
-            console.log("client:" + clientid + " logged on");
+            var timestamp = common.getUTCTimeStamp(new Date());
+            console.log(timestamp + " - client:" + clientid + " logged on");
 
             // send the data
             start(clientid, conn);
