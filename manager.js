@@ -135,7 +135,7 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    //console.log("channel:" + channel + ", " + message);
+    console.log("channel:" + channel + ", " + message);
 
     if (message.substr(1, 6) == "prices") {
       common.newPrice(channel, servertype, message, connections);
@@ -998,6 +998,7 @@ function orderHistory(req, conn) {
 }*/
 
 function updateStatus(server, status) {
+  console.log("updateStatus");
   if (server == "ts") {
     serverstatus.tsstatus = status;
   } else if (server == "ps") {
@@ -1006,6 +1007,7 @@ function updateStatus(server, status) {
 }
 
 function sendStatus() {
+  console.log("sendStatus");
   var msg = "{\"status\":" + JSON.stringify(serverstatus) + "}";
 
   for (var i in connections) {
