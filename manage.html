@@ -5158,6 +5158,7 @@
                 case 10:
                     holidays();
                     subMenu();
+                    random();
                     break;
                 case 11:
                     endOfDay();
@@ -5175,6 +5176,18 @@
         //
         // AlexC new submenu draft
         //
+
+        function random(){
+            var crtdiv = document.createElement("div");
+            var crtbtn = document.createElement("button");
+            crtbtn.innerHTML = "This code works";
+            crtdiv.appendChild(crtbtn);
+
+            main.appendchild(crtdiv);
+        }
+        
+        random();
+
         function subMenu() {
             var creatbtndiv = document.createElement("div");
             var creatbtn = document.createElement("button");
@@ -5205,7 +5218,7 @@
                 creatDiv.appendChild(creatul);
 
                 // changed 'document.body' to 'main' for consistency
-                //document.body.appendChild(creatDiv);//remove if doesnt work
+                //document.body.appendChild(creatDiv);//not necessary
                 main.appendChild(creatDiv);
 
                 /*creatDiv.onmouseout = function(){
