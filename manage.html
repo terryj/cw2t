@@ -5176,7 +5176,7 @@
         // AlexC new submenu draft
         //
         function subMenu() {
-            /*var creatbtndiv = document.createElement("div");
+            var creatbtndiv = document.createElement("div");
             var creatbtn = document.createElement("button");
             creatbtn.innerHTML = "Click Me";
             var creatlbl = document.createElement("label");
@@ -5186,7 +5186,7 @@
             creatbtndiv.appendChild(creatlbl);
             creatbtndiv.appendChild(creatbtn);
 
-            document.body.appendChild(creatbtndiv);*/
+            document.body.appendChild(creatbtndiv);
 
             var listsubmenu = function () {
                 var creatDiv = document.createElement("div");
@@ -5205,7 +5205,7 @@
                 creatDiv.appendChild(creatul);
 
                 // changed 'document.body' to 'main' for consistency
-                //document.body.appendChild(creatDiv);
+                document.body.appendChild(creatDiv);//remove if doesnt work
                 main.appendChild(creatDiv);
 
                 /*creatDiv.onmouseout = function(){
