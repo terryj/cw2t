@@ -296,7 +296,8 @@ function listen() {
 function tidy(clientid, conn) {
   if (clientid != "0") {
     if (clientid in connections) {
-      console.log("client:" + clientid + " logged off");
+      var timestamp = common.getUTCTimeStamp(new Date());
+      console.log(timestamp + " - client:" + clientid + " logged off");
 
       if (connections[clientid] == conn) {
         // remove from list
