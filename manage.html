@@ -1181,6 +1181,7 @@
         //
 
         function updateStatus(status) {
+            console.log("updateStatus");
             if ("tsstatus" in status) {
                 serverstatus.tsstatus = parseInt(status.tsstatus);
             } else if ("psstatus" in status) {
@@ -6746,6 +6747,9 @@
 
         function displayStatus() {
             var msg;
+
+            console.log("displayStatus");
+            console.log(serverstatus);
 
             clearList("list1", false);
             var list1 = getList("list1");
