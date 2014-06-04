@@ -600,8 +600,8 @@
     </div>
 
     <script>
-        var sockjs_url = 'https://54.229.76.60/echo';
-        //var sockjs_url = 'https://localhost/echo';
+        //var sockjs_url = 'https://54.229.76.60/echo';
+        var sockjs_url = 'https://localhost/echo';
         //var sockjs_url = '/echo';
         var sockjs;
         var selectedmenu = -1;
@@ -647,6 +647,7 @@
             var console = { log: function() {} };
 
         var datain = function(msg) {
+            //console.log(msg);
             try {
                 var obj = JSON.parse(msg);
 
@@ -890,12 +891,12 @@
         }
 
         function start() {
+            touchdevice = isTouchDevice();
             init();
             clearScreen();
             displayMenu();
             selectedmenu = 0;
             displayOrderBooks();
-            touchdevice = isTouchDevice();
         }
 
         function statusMsg(status) {
@@ -2415,7 +2416,7 @@
         function optionToViewCancel(listelement, cancelorder) {
             var addfuncdiv;
 
-            if (touchdevice) {
+            if (!touchdevice) {
                 listelement.onmouseover = function() {
                     addfuncdiv.style.visibility = "visible";
                 }
@@ -3170,7 +3171,7 @@
                     strip = document.createElement('div');
                     strip.id = "strip:" + symbol + ":" + y;
 
-                    if (touchdevice) {
+                    if (!touchdevice) {
                         strip.onmouseover = function() {
                             links.style.visibility = "visible";
                         }
@@ -3219,7 +3220,7 @@
 
                         links = document.createElement('div');
 
-                        if (touchdevice) {
+                        if (!touchdevice) {
                             links.style.visibility = "hidden";
                         }
 
