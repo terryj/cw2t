@@ -640,6 +640,7 @@
         var quotetimer;
         var loggedout;
         var coheading = "Thomas Grant & Company";
+        var touchdevice = false;
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -894,11 +895,22 @@
             displayMenu();
             selectedmenu = 0;
             displayOrderBooks();
+            touchdevice = isTouchDevice();
         }
 
         function statusMsg(status) {
             if (status == "readytotrade") {
                 start();
+            }
+        }
+
+        function isTouchDevice() {
+            try {
+                document.createEvent("TouchEvent");
+                return true;
+            }
+            catch (e) {
+                return false;
             }
         }
 
@@ -2403,11 +2415,13 @@
         function optionToViewCancel(listelement, cancelorder) {
             var addfuncdiv;
 
-            listelement.onmouseover = function() {
-                addfuncdiv.style.visibility = "visible";
-            }
-            listelement.onmouseout = function() {
-                addfuncdiv.style.visibility = "hidden";
+            if (touchdevice) {
+                listelement.onmouseover = function() {
+                    addfuncdiv.style.visibility = "visible";
+                }
+                listelement.onmouseout = function() {
+                    addfuncdiv.style.visibility = "hidden";
+                }
             }
 
             addfuncdiv = document.createElement('div');
@@ -3155,11 +3169,14 @@
                     // first time through, so create elements
                     strip = document.createElement('div');
                     strip.id = "strip:" + symbol + ":" + y;
-                    strip.onmouseover = function() {
-                        links.style.visibility = "visible";
-                     }
-                    strip.onmouseout = function() {
-                        links.style.visibility = "hidden";
+
+                    if (touchdevice) {
+                        strip.onmouseover = function() {
+                            links.style.visibility = "visible";
+                        }
+                        strip.onmouseout = function() {
+                            links.style.visibility = "hidden";
+                        }
                     }
 
                     if (showvolume) {
@@ -3201,7 +3218,10 @@
                         strip.className = "yellowstrip";
 
                         links = document.createElement('div');
-                        links.style.visibility = "hidden";
+
+                        if (touchdevice) {
+                            links.style.visibility = "hidden";
+                        }
 
                         var reqquotelnk = newlink("reqquotelnk", "Request Quote", "", links);
                         var buyorderlnk = newlink("buyorderlnk", "Limit Buy", "", links);
