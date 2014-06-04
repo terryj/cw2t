@@ -1085,7 +1085,6 @@ function sendOrderBooksClient(clientid, conn) {
   db.eval(scriptgetorderbooks, 1, clientid, function(err, ret) {
     if (err) throw err;
 
-    //console.log(ret);
     conn.write("{\"orderbooks\":" + ret[1] + "}");
 
     // subscribe to any associated topics that are not already subscribed to
@@ -1421,6 +1420,8 @@ function registerScripts() {
       vals = redis.call("hmget", "topic:" .. ret[2], unpack(fields)) \
       if vals[1] then \
         table.insert(tblresults, {symbol=orderbooks[index], prices={{bid=vals[1],offer=vals[2],level=1},{bid=vals[3],offer=vals[4],level=2},{bid=vals[5],offer=vals[6],level=3},{bid=vals[7],offer=vals[8],level=4},{bid=vals[9],offer=vals[10],level=5},{bid=vals[11],offer=vals[12],level=6}}}) \
+      else \
+        table.insert(tblresults, {symbol=orderbooks[index], prices={{bid=0,offer=0,level=1},{bid=0,offer=0,level=2},{bid=0,offer=0,level=3},{bid=0,offer=0,level=4},{bid=0,offer=0,level=5},{bid=0,offer=0,level=6}}}) \
       end \
     end \
     return {needtosubscribe, cjson.encode(tblresults)} \
