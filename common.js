@@ -761,6 +761,8 @@ exports.registerCommonScripts = function () {
   end \
   ';
 
+  exports.subscribeinstrument = subscribeinstrument;
+
   unsubscribeinstrument = '\
   local unsubscribeinstrument = function(symbol, id, servertype) \
     local topic = redis.call("hget", "symbol:" .. symbol, "topic") \

@@ -647,7 +647,6 @@
             var console = { log: function() {} };
 
         var datain = function(msg) {
-            //console.log(msg);
             try {
                 var obj = JSON.parse(msg);
 
@@ -747,11 +746,7 @@
 
         function loadOrderBooks(orderbookarr) {
             for (var i = 0; i < orderbookarr.length; ++i) {
-                orderbooks[orderbookarr[i].symbol] = orderbookarr[i];
-            }
-
-            if (selectedmenu == 0) {
-                displayOrderBooks();
+                updateOrderBook(orderbookarr[i]);
             }
         }
 

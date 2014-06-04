@@ -56,6 +56,7 @@ if (redislocal) {
 // redis scripts
 var scriptgetinst;
 var scriptupdatepassword;
+var scriptgetorderbooks;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -647,6 +648,7 @@ function sendInstruments(clientid, conn) {
       console.log(err);
       return;
     }
+    console.log("sending instruments");
     conn.write("{\"instruments\":" + ret + "}");
   });
 }
@@ -1061,9 +1063,8 @@ function sendOrderBook(symbol, level1arr, send, conn) {
 //
 // send all the orderbooks for a single client
 //
-function sendOrderBooksClient(clientid, conn) {
   // get all the instruments in the order book for this client
-  // todo: script?
+/*function sendOrderBooksClient(clientid, conn) {
   db.smembers("client:" + clientid + ":orderbooks", function(err, instruments) {
     if (err) {
       console.log("Error in sendOrderBooksClient:" + err);
@@ -1074,6 +1075,23 @@ function sendOrderBooksClient(clientid, conn) {
     instruments.forEach(function (symbol, i) {
       orderBookRequest(clientid, symbol, conn);
     });
+  });
+}*/
+
+//
+// send all the orderbooks for a single client
+//
+function sendOrderBooksClient(clientid, conn) {
+  db.eval(scriptgetorderbooks, 1, clientid, function(err, ret) {
+    if (err) throw err;
+
+    //console.log(ret);
+    conn.write("{\"orderbooks\":" + ret[1] + "}");
+
+    // subscribe to any associated topics that are not already subscribed to
+    for (var i = 0; i < ret[0].length; i++) {
+      dbsub.subscribe(ret[0][i]);
+    }
   });
 }
 
@@ -1095,8 +1113,12 @@ function getTimeInForceDesc(timeinforce) {
 
 function start(clientid, conn) {
   sendOrderBooksClient(clientid, conn);
-  sendInstruments(clientid, conn);
   sendOrderTypes(conn);
+
+    // may not be last, but...
+  sendReadyToTrade(conn);
+
+  sendInstruments(clientid, conn);
   //sendPositions(clientid, conn);
   //sendOrders(clientid, conn);
   //sendCash(clientid, conn);
@@ -1104,7 +1126,7 @@ function start(clientid, conn) {
   //sendReserves(clientid, conn);
 
   // may not be last, but...
-  sendReadyToTrade(conn);
+  //sendReadyToTrade(conn);
 }
 
 function sendReadyToTrade(conn) {
@@ -1347,6 +1369,8 @@ function newChat(chat) {
 }
 
 function registerScripts() {
+    //var subscribeinstrument = common.subscribeinstrument;
+
   //
   // get alpha sorted list of instruments for a specified client
   // uses set of valid instrument types per client i.e. 1:instrumenttypes CFD
@@ -1379,5 +1403,26 @@ function registerScripts() {
       retval = 1 \
     end \
     return retval \
+  ';
+
+  scriptgetorderbooks = common.subscribeinstrument + '\
+    local needtosubscribe = {} \
+    local tblresults = {} \
+    local vals \
+    local fields = {"bid1", "offer1", "bid2", "offer2", "bid3", "offer3", "bid4", "offer4", "bid5", "offer5", "bid6", "offer6"} \
+    local ret \
+    local orderbooks = redis.call("smembers", "client:" .. KEYS[1] .. ":orderbooks") \
+    for index = 1, #orderbooks do \
+      ret = subscribeinstrument(orderbooks[index], KEYS[1], "client") \
+      if ret[1] == 1 then \
+        --[[ keep a list of topics we need to subscribe to as has to be done separately as on separate connection ]] \
+        table.insert(needtosubscribe, ret[2]) \
+      end \
+      vals = redis.call("hmget", "topic:" .. ret[2], unpack(fields)) \
+      if vals[1] then \
+        table.insert(tblresults, {symbol=orderbooks[index], prices={{bid=vals[1],offer=vals[2],level=1},{bid=vals[3],offer=vals[4],level=2},{bid=vals[5],offer=vals[6],level=3},{bid=vals[7],offer=vals[8],level=4},{bid=vals[9],offer=vals[10],level=5},{bid=vals[11],offer=vals[12],level=6}}}) \
+      end \
+    end \
+    return {needtosubscribe, cjson.encode(tblresults)} \
   ';
 }
