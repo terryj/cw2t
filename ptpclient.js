@@ -1438,6 +1438,7 @@ function resendMessage(msgno, endseqno, self) {
 	});
 
 	function doneResending() {
+		console.log("doneResending");
 		messagerecoveryout = false;
 
 		// we may need to do our own resend request
