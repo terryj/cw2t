@@ -468,39 +468,28 @@
             background-color: #ddd;
             cursor: pointer;
         }
-        .formsigninlabel {
-            display: inline-block;
-            width: 95px;
-            font-size: 21px;
-            color: #C0C0C0;
-        }
-        .formsigninlabelm {
-            display: inline-block;
-            width: 160px;
-            font-size: 36px;
-            color: #C0C0C0;
-        }
         .formsignininput {
-            display: inline-block;
-            width: 270px;
-            line-height: 21px;
+            width: 330px;
+            line-height: 24px;
             font-size: 15px;
             color: gray;
+            margin-top: 6px;
         }
         .formsignininputm {
-            display: inline-block;
-            width: 360px;
-            line-height: 30px;
-            font-size: 24px;
+            width: 450px;
+            line-height: 40px;
+            font-size: 30px;
             color: gray;
+            margin-top: 10px;
         }
         .formsigninbutton {
             border-style: none;
             background-color: #C0C0C0;
             font-size: 15px;
             cursor: pointer;
-            height: 24px;
-            width: 80px;
+            height: 30px;
+            width: 330px;
+            margin-top: 6px;
         }
         .formsigninbuttonm {
             border-style: none;
@@ -508,7 +497,8 @@
             font-size: 24px;
             cursor: pointer;
             height: 40px;
-            width: 120px;
+            width: 450px;
+            margin-top: 10px;
         }
         .quotebuybutton {
             font-size: 21px;
@@ -4382,9 +4372,6 @@
         //
         function displayFormSignin() {
             var frmsignin;
-            var emaillabel;
-            var passwordlabel;
-            var dummylabel;
             var email;
             var password;
             var btnsignin;
@@ -4399,18 +4386,8 @@
             frmsignin = document.createElement("form");
             frmsignin.id = "frmsignin";
 
-            emaillabel = document.createElement("label");
-            emaillabel.innerHTML = "Email ";
-            emaillabel.className = "formsigninlabel";
-
-            passwordlabel = document.createElement("label");
-            passwordlabel.innerHTML = "Password ";
-            passwordlabel.className = "formsigninlabel";
-
-            dummylabel = document.createElement("label");
-            dummylabel.className = "formsigninlabel";
-
             email = document.createElement("input");
+            email.placeholder = "Email";
             email.className = "formsignininput";
 
             email.onkeypress = function(event) {
@@ -4423,6 +4400,7 @@
             }
 
             password = document.createElement("input");
+            password.placeholder = "Password";
             password.className = "formsignininput";
 
             password.onkeypress = function(event) {
@@ -4445,23 +4423,15 @@
             }
 
             if (touchdevice) {
-                emaillabel.className = "formsigninlabelm";
-                passwordlabel.className = "formsigninlabelm";
-                dummylabel.className = "formsigninlabelm";
                 email.className = "formsignininputm";
                 password.className = "formsignininputm";
                 btnsignin.className = "formsigninbuttonm";
             }
 
-            addNewLine(frmsignin, null);
-            frmsignin.appendChild(emaillabel);
             frmsignin.appendChild(email);
             addNewLine(frmsignin, null);
-            frmsignin.appendChild(passwordlabel);
             frmsignin.appendChild(password);
             addNewLine(frmsignin, null);
-            addNewLine(frmsignin, null);
-            frmsignin.appendChild(dummylabel);
             frmsignin.appendChild(btnsignin);
 
             main.appendChild(frmsignin);
