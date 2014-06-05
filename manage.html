@@ -702,29 +702,73 @@
 
         }
         /*submenu css*/
-        .creatlbl {
-            background-color: red;
+        .contdiv{
+            position: relative;
+            display:block;
+            float:left;
+            height: 200px;
+            width: 120px;
+            background-color: red;  
+            text-align: center;
+            padding: 10px;
+            margin:0;
+            align-self: center;
+        }
+        .clickable{
+            display:inline-block;
+            position:relative;
+            /*height:70px;*/
+            width: 100px;
+            background-color:yellow;
+            text-align:center;
+            padding: 5px;
+            margin: 5px;
+        }
+        /*.scndcontainerdiv{
+            display:block;
+            position: absolute;
+            height:120px;
+            width:110px;
+            background-color:purple; 
+            padding-top:50px;
+            /*margin-top:50px;
+        }*/
+        /*.appeardiv{
+            display:table;
+            display: none;
+            position: relative;
+            height: 100px;
+            width: 100px;
+            background-color:blue;
+            text-align: center;
             padding:5px;
+            margin: 10px;
+        }*/
+        ///////////////////////*the submenu css*/
+        .creatlbl {
+             background-color:;
+             padding:5px;
         }
         .creatul {
-            margin:0;
-            padding:5px;
-            background-color:#A1CF9F;
-            display: inline-block;
-            list-style-type: none;
-            color:#C0C0C0;
-            font-size:19px;
-            border-radius:5px;
-            /*visibility: hidden;
-            /*border: 2px dashed green; This lets me know where the div is*/
+             margin:0;
+             padding:5px;
+             background-color:#A1CF9F;
+             display: inline-block;
+             list-style-type: none;
+             color:#C0C0C0;
+             font-size:19px;
+             border-radius:5px;
+             /*visibility: hidden;
+             /*border: 2px dashed green; This lets me know where the div is*/
         }
-        /*label:hover + .submenudiv, .submenudiv:hover{
-            visibility: visible;    
+        /*label:hover + .submenudiv, .submenudiv:hover:
+             visibility: visible;    
         }*/
         .divContainer {
             text-align:center;
         }
         .sbmnulist {
+            display:block;
             border: 2px solid#A1CF9F;
             background-color:#F0F5F0;
             padding: 5px;
@@ -734,17 +778,12 @@
             color:white;
         }
         .submenudiv{
-            display: block;
+            display: table;
+            position:absolute;
+            margin: 15px 20px;   
         }
+        /*end of submenu*/
 
-        /*.visible {
-            visibility: visible;
-        }
-        .hidden {
-            visibility: hidden;
-        }*/
-
-        /*end of submenu css*/
     </style>
 </head>
 <body lang="en">
@@ -5189,19 +5228,49 @@
         
         randomCode();
 
+        for( var i = 0; i < 3; ++i){
+
+        var contdiv = document.createElement("div");
+        contdiv.className = "contdiv";
+        contdiv.innerHTML = "Container Div";
+
+
+        var creatclickablediv = document.createElement("div");
+        creatclickablediv.className = "clickable";
+        creatclickablediv.innerHTML = "onscreen tab";
+
+        contdiv.appendChild(creatclickablediv);
+        //document.body.appendChild(creatclickablediv);
+
+            
+        var appeardiv = document.createElement("div");
+        appeardiv.className = "appeardiv";
+        appeardiv.innerHTML = "Tada!!";
+        //contdiv.appendChild(appeardiv);
+        document.body.appendChild(contdiv);
+        }
+            
+        creatclickablediv.onclick = function(){
+            var alert = confirm("well done for clicking me");
+            var sbmnudiv = document.createElement("div");
+            sbmnudiv.className = "scndcontainerdiv";
+            //appeardiv.appendChild(sbmnudiv);
+            document.body.appendChild(sbmnudiv);
+            subMenu();
+            
+        };
+            
+
+        appeardiv.onclick = function(){
+            var alert = confirm("submenu !!");
+        };
+
+
+
+        /////////////////the submenu function
         function subMenu() {
-            /*var creatbtndiv = document.createElement("div");
-            var creatbtn = document.createElement("button");
-            creatbtn.innerHTML = "Click Me";
-            var creatlbl = document.createElement("label");
-            creatlbl.className = "creatlbl";
-            creatlbl.innerHTML = "Hover Over Me ";
 
-            creatbtndiv.appendChild(creatlbl);
-            creatbtndiv.appendChild(creatbtn);
-
-            document.body.appendChild(creatbtndiv);*/
-
+                  
             var listsubmenu = function () {
                 var creatDiv = document.createElement("div");
                 creatDiv.id = "submenudiv";
@@ -5219,45 +5288,21 @@
                 creatDiv.appendChild(creatul);
 
                 // changed 'document.body' to 'main' for consistency
-                //document.body.appendChild(creatDiv);//not necessary
-                main.appendChild(creatDiv);
+                //document.body.appendChild(creatDiv);//remove if doesnt work
+                main.appendChild(creatDiv);//just for the site only
 
-                /*creatDiv.onmouseout = function(){
-                //var confirm = confirm("the mouse is out");
-                this.parentNode.removeChild(this);
-                };*/
+                
             };
 
             // changed name to...
             listsubmenu();
 
-            //If the cursor hovers over the label, activate this function//
-            /*creatbtn.onclick = function () {
-                var alert = confirm("yes master");
-                if (alert === true) {
-                    list();     
-                }
-
-                if (creatlbl.onmouseover === true) {
-                    var confirm = ("aye aye captain");
-                    creatDiv.className = "visible";
-                } else {
-                    creatDiv.className = "hidden";
-                }
-            };*/
-
-            /*creatlbl.onmouseover = function(){
-                //figure it out !!//
-            };*/
-
-        //AFTER THE CLICK ME BUTTON IS CLICKED THEN THE SUBEMNU ITEMS NEED TO HAVE AN ONCLICK EVENT //
-
-            /*creatbtndiv.onmouseout = function() {
-                var alert = confirm("this works");
-            }*/
+            
         }//testing//
 
-        subMenu();
+        //subMenu();
+    
+
 
         function logout() {
             sockjs.close();
