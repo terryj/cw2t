@@ -5222,10 +5222,9 @@
             var crtbtn = document.createElement("button");
             crtbtn.innerHTML = "This code works";
             crtdiv.appendChild(crtbtn);
-
-            main.appendchild(crtdiv);
+            
         };
-        
+        main.appendchild(crtdiv);
         randomCode();
 
         /////////the container divs and tabs
@@ -5250,8 +5249,9 @@
         appeardiv.innerHTML = "Tada!!";
         //contdiv.appendChild(appeardiv);
         //document.body.appendChild(contdiv);
-        main.appendChild(contdiv); //for the site only
+        
         }
+        main.appendChild(contdiv); //for the site only
             
         creatclickablediv.onclick = function(){
             var alert = confirm("well done for clicking me");
