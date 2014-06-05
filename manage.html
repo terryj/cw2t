@@ -779,8 +779,10 @@
         }
         .submenudiv{
             display: table;
-            position:absolute;
-            margin: 15px 20px;   
+            position:relative;
+            margin: 15px 20px; 
+            float:right;
+
         }
         /*end of submenu*/
 
@@ -5221,7 +5223,7 @@
             var crtdiv = document.createElement("div");
             var crtbtn = document.createElement("button");
             crtbtn.innerHTML = "This code works";
-            crtbtn.appendChild(crtdiv);
+            crtdiv.appendChild(crtbtn);
             
         };
         main.appendChild(crtdiv);
