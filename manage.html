@@ -5228,6 +5228,8 @@
         
         randomCode();
 
+        /////////the container divs and tabs
+
         for( var i = 0; i < 3; ++i){
 
         var contdiv = document.createElement("div");
@@ -5261,9 +5263,7 @@
         };
             
 
-        appeardiv.onclick = function(){
-            var alert = confirm("submenu !!");
-        };
+        
 
 
 
@@ -5291,7 +5291,9 @@
                 //document.body.appendChild(creatDiv);//remove if doesnt work
                 main.appendChild(creatDiv);//just for the site only
 
-                
+                creatul.onclick = function(){
+                    var alert = confirm("submenu !!");
+                };
             };
 
             // changed name to...
@@ -5300,7 +5302,7 @@
             
         }//testing//
 
-        //subMenu();
+        subMenu();
     
 
 
