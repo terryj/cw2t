@@ -474,11 +474,24 @@
             font-size: 21px;
             color: #C0C0C0;
         }
+        .formsigninlabelm {
+            display: inline-block;
+            width: 160px;
+            font-size: 36px;
+            color: #C0C0C0;
+        }
         .formsignininput {
             display: inline-block;
             width: 270px;
             line-height: 21px;
             font-size: 15px;
+            color: gray;
+        }
+        .formsignininputm {
+            display: inline-block;
+            width: 360px;
+            line-height: 30px;
+            font-size: 24px;
             color: gray;
         }
         .formsigninbutton {
@@ -488,6 +501,14 @@
             cursor: pointer;
             height: 24px;
             width: 80px;
+        }
+        .formsigninbuttonm {
+            border-style: none;
+            background-color: #C0C0C0;
+            font-size: 24px;
+            cursor: pointer;
+            height: 40px;
+            width: 120px;
         }
         .quotebuybutton {
             font-size: 21px;
@@ -886,7 +907,6 @@
         }
 
         function start() {
-            touchdevice = isTouchDevice();
             init();
             clearScreen();
             displayMenu();
@@ -954,6 +974,7 @@
                 console.log("connection open");
                 stopRestartTimer();
                 startPriceTimer();
+                touchdevice = isTouchDevice();
                 displayFormSignin();
                 loggedout = false;
             };
@@ -4416,11 +4437,20 @@
             btnsignin = document.createElement("input");
             btnsignin.type = "button";
             btnsignin.value = "Sign In";
-            btnsignin.className = "formbutton";
+            btnsignin.className = "formsigninbutton";
 
             btnsignin.onclick = function() {
                 disable();
                 signin();
+            }
+
+            if (touchdevice) {
+                emaillabel.className = "formsigninlabelm";
+                passwordlabel.className = "formsigninlabelm";
+                dummylabel.className = "formsigninlabelm";
+                email.className = "formsignininputm";
+                password.className = "formsignininputm";
+                btnsignin.className = "formsigninbuttonm";
             }
 
             addNewLine(frmsignin, null);
