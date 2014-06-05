@@ -662,6 +662,7 @@
                 var obj = JSON.parse(msg);
 
                 if ("orderbooks" in obj) {
+                    clearOrderBooks();
                     loadOrderBooks(obj.orderbooks);
                 } else if ("orderbook" in obj) {
                     updateOrderBook(obj.orderbook);
@@ -871,6 +872,10 @@
 
         function clearOrders() {
             orders = [];
+        }
+
+        function clearOrderBooks() {
+            orderbooks = [];
         }
 
         function clearTrades() {

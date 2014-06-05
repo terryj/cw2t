@@ -648,7 +648,7 @@ function sendInstruments(clientid, conn) {
       console.log(err);
       return;
     }
-    console.log("sending instruments");
+
     conn.write("{\"instruments\":" + ret + "}");
   });
 }
@@ -1082,6 +1082,7 @@ function sendOrderBook(symbol, level1arr, send, conn) {
 // send all the orderbooks for a single client
 //
 function sendOrderBooksClient(clientid, conn) {
+  console.log(clientid);
   db.eval(scriptgetorderbooks, 1, clientid, function(err, ret) {
     if (err) throw err;
 
@@ -1368,8 +1369,6 @@ function newChat(chat) {
 }
 
 function registerScripts() {
-    //var subscribeinstrument = common.subscribeinstrument;
-
   //
   // get alpha sorted list of instruments for a specified client
   // uses set of valid instrument types per client i.e. 1:instrumenttypes CFD
