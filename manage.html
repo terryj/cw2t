@@ -5224,13 +5224,13 @@
             crtdiv.appendChild(crtbtn);
             
         };
-        main.appendchild(crtdiv);
+        main.appendChild(crtdiv);
 
         randomCode();
 
         /////////the container divs and tabs
 
-        for( var i = 0; i < 3; ++i){
+        //for( var i = 0; i < 3; ++i){
 
         var contdiv = document.createElement("div");
         contdiv.className = "contdiv";
@@ -5248,11 +5248,11 @@
         var appeardiv = document.createElement("div");
         appeardiv.className = "appeardiv";
         appeardiv.innerHTML = "Tada!!";
-        //contdiv.appendChild(appeardiv);
+        contdiv.appendChild(appeardiv);
         //document.body.appendChild(contdiv);
-        
-        }
-        main.appendChild(contdiv); //for the site only
+
+        main.appendChild(contdiv);//for the site only
+        //} 
             
         creatclickablediv.onclick = function(){
             var alert = confirm("well done for clicking me");
@@ -5286,7 +5286,7 @@
 
                 // changed 'document.body' to 'main' for consistency
                 //document.body.appendChild(creatDiv);//remove if doesnt work
-                //main.appendChild(creatDiv);//just for the site only
+                main.appendChild(creatDiv);//just for the site only
 
                 creatul.onclick = function(){
                     var alert = confirm("submenu !!");
