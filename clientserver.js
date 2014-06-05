@@ -1082,7 +1082,6 @@ function sendOrderBook(symbol, level1arr, send, conn) {
 // send all the orderbooks for a single client
 //
 function sendOrderBooksClient(clientid, conn) {
-  console.log(clientid);
   db.eval(scriptgetorderbooks, 1, clientid, function(err, ret) {
     if (err) throw err;
 
