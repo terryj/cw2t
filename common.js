@@ -429,6 +429,9 @@ function getReasonDesc(reason) {
   case 1022:
     desc = "Order already expired";
     break;
+  case 1023:
+    desc = "Email already exists";
+    break;
   default:
     desc = "Unknown reason";
   }

@@ -938,6 +938,8 @@
                     displayChatHistory();
                 } else if ("status" in obj) {
                     updateStatus(obj.status);
+                } else if ("errormsg" in obj) {
+                    alert(obj.errormsg);
                 } else {
                     console.log("Unknown message:" + msg);
                 }
@@ -1351,6 +1353,8 @@
                     } else {
                         msg = client.name + " updated ok";
                     }
+
+                    alert(msg);
 
                     displayClient(null, "frmclient", msg, "", "", "clientboxinput");
                 }
@@ -5477,9 +5481,6 @@
             var btnupdate = newbutton("btnupdate", "Add", "formbutton", frmclient);
             var btnnewclient = newbutton("btnnewclient", "New Client", "formbuttonwide", frmclient);
 
-            addNewLine(frmclient, null);
-            var lblclientconf = newlabel("lblclientconf", "", "", frmclient);
-
             btnupdate.onclick = function() {
                 var client = {};
                 var insttypes = [];
@@ -5557,7 +5558,6 @@
             var selifa;
             var chkinsttype;
             var found;
-            var lblclientconf;
             var seltype;
             var opthedgeyes;
             var opthedgeno;
@@ -5634,11 +5634,6 @@
                                 chkinsttype.checked = false;
                             }
                         }
-                    }
-
-                    lblclientconf = document.getElementById("lblclientconf");
-                    if (lblclientconf != null) {
-                        lblclientconf.innerHTML = msg;
                     }
 
                     if (client.name == "") {
@@ -6997,6 +6992,9 @@
                 break;
             case 1022:
                 desc = "Order already expired";
+                break;
+            case 1023:
+                desc = "Email already exists";
                 break;
             default:
                 desc = "Unknown reason";

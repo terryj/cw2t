@@ -443,6 +443,7 @@ function newClient(client, conn) {
 
       if (ret[0] != 0) {
         console.log("Error in scriptnewclient:" + common.getReasonDesc(ret[0]));
+        sendErrorMsg(ret[0], conn);
         return;
       }
 
@@ -460,6 +461,10 @@ function newClient(client, conn) {
       getSendClient(client.clientid, conn);
     });
   }
+}
+
+function sendErrorMsg(error, conn) {
+  conn.write("{\"errormsg\":" + JSON.stringify(common.getReasonDesc(error)) + "}");
 }
 
 function newIfa(ifa, conn) {
@@ -1781,6 +1786,9 @@ function registerScripts() {
   ';
 
   scriptnewclient = stringsplit + '\
+  --[[ check email is unique ]] \
+  local emailexists = redis.call("get", "client:" .. KEYS[3]) \
+  if emailexists then return {1023} end \
   local clientid = redis.call("incr", "clientid") \
   if not clientid then return {1005} end \
   --[[ store the client ]] \
