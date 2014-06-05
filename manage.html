@@ -1457,6 +1457,7 @@
 
             selectedmenu = 0;
 
+            clearOrderBooks();
             displayOrderBooks();
         }
 
@@ -1743,6 +1744,10 @@
                 }
                 main.removeChild(headingstrip);
             }
+        }
+
+        function clearOrderBooks() {
+            orderbooks = [];
         }
 
         function clearList(liststr, remove) {

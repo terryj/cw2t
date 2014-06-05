@@ -44,7 +44,7 @@ var norelatedsym = '1'; // number of related symbols in a request, always 1
 var idsource = '4'; // indicates ISIN is to be used to identify a security
 var securitytype = 'CS'; // common stock
 var handinst = '1'; // i.e. no intervention
-var connectstatus = 0; // status of connection, 0=started, 1=connected, 2=disconnected
+var connectstatus = 2; // status of connection, 1=connected, 2=disconnected
 var connectstatusint = 30;
 var connectstatusinterval = 30;
 var datareceivedsinceheartbeat = false; // indicates whether data has been received since the last heartbeat
