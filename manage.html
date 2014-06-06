@@ -5222,13 +5222,18 @@
         //
 
         function randomCode(){
+            var btnbtn = function(){
+
             var crtdiv = document.createElement("div");
             var crtbtn = document.createElement("button");
             crtbtn.innerHTML = "This code works";
             crtdiv.appendChild(crtbtn);
+            main.appendChild(crtdiv);
+            }
             
+            btnbtn();
         };
-        main.appendChild(crtdiv);
+        
 
         randomCode();
 
