@@ -348,7 +348,7 @@ function listen() {
             console.log("user:" + userid + " logged on");
 
             // send the data
-            start(userid, user.brokerid, conn);
+            start(user, conn);
           });
         });
       });
@@ -1378,8 +1378,8 @@ function getTimeInForceDesc(timeinforce) {
 6 = Good Till Date*/
 }
 
-function start(userid, brokerid, conn) {
-  sendOrderBooks(userid, conn);
+function start(user, conn) {
+  sendOrderBooks(user.userid, conn);
   sendInstruments(conn);
   sendBrokers(conn);
   sendIfas(conn);
@@ -1392,9 +1392,10 @@ function start(userid, brokerid, conn) {
   sendCosts(conn);
   sendMarkets(conn);
   sendStatus();
+  sendUserid(user.userid, conn);
 
   // make this the last one, as sends ready status to f/e
-  sendClients(userid, brokerid, conn);
+  sendClients(user.brokerid, conn);
 }
 
 function sendUserid(userid, conn) {
@@ -1474,13 +1475,11 @@ function registerClient(reg, conn) {
   });
 }
 
-function sendClients(userid, brokerid, conn) {
+function sendClients(brokerid, conn) {
   // get sorted set of clients for specified broker
   db.eval(scriptgetclients, 1, brokerid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"clients\":" + ret + "}");
-
-    sendUserid(userid, conn);
   });
 }
 
@@ -1777,7 +1776,8 @@ function registerScripts() {
   local tblinsttype = {} \
   for index = 1, #clients do \
     vals = redis.call("hmget", "client:" .. clients[index], unpack(fields)) \
-    if KEYS[1] == vals[1] then \
+    --[[ only interested in clients for the specified broker ]] \
+    if vals[1] == KEYS[1] then \
       tblinsttype = redis.call("smembers", vals[2] .. ":instrumenttypes") \
       table.insert(tblclient, {brokerid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype, type = vals[8], hedge = vals[9], brokerclientcode = vals[10], commissionpercent = vals[11]}) \
     end \

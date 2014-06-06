@@ -1087,6 +1087,9 @@ function sendOrderBooksClient(clientid, conn) {
 
     conn.write("{\"orderbooks\":" + ret[1] + "}");
 
+    // todo: is this needed or the right place?
+    sendReadyToTrade(conn);
+
     // subscribe to any associated topics that are not already subscribed to
     for (var i = 0; i < ret[0].length; i++) {
       dbsub.subscribe(ret[0][i]);
@@ -1113,10 +1116,6 @@ function getTimeInForceDesc(timeinforce) {
 function start(clientid, conn) {
   sendOrderBooksClient(clientid, conn);
   sendOrderTypes(conn);
-
-    // may not be last, but...
-  sendReadyToTrade(conn);
-
   sendInstruments(clientid, conn);
   //sendPositions(clientid, conn);
   //sendOrders(clientid, conn);

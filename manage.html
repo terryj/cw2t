@@ -808,7 +808,7 @@
         var markets = {};
         var serverstatus = {};
         var allclients = "All clients";
-        var numtradecols = 19;
+        var numtradecols = 20;
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -2624,65 +2624,68 @@
                     col.innerHTML = "Client";
                     break;
                 case 1:
-                    col.innerHTML = "Symbol";
+                    col.innerHTML = "Broker Client Code";
                     break;
                 case 2:
-                    col.innerHTML = "Side";
+                    col.innerHTML = "Symbol";
                     break;
                 case 3:
+                    col.innerHTML = "Side";
+                    break;
+                case 4:
                     col.innerHTML = "Quantity";
                     col.className = "colrightalign";
                     break;
-                case 4:
+                case 5:
                     col.innerHTML = "Price";
                     col.className = "colrightalign";
                     break;
-                case 5:
+                case 6:
                     col.innerHTML = "Settlcurramt";
                     col.className = "colrightalign";
                     break;
-                case 6:
+                case 7:
                     col.innerHTML = "Nosettdays";
                     break;                
-                case 7:
+                case 8:
                     col.innerHTML = "Settl.Date";
                     break;
-                case 8:
+                case 9:
                     col.innerHTML = "Currency";
                     break;
-                case 9:
+                case 10:
                     col.innerHTML = "Commission";
                     col.className = "colrightalign";
                     break;
-                case 10:
+                case 11:
                     col.innerHTML = "Ptm Levy";
                     col.className = "colrightalign";
                     break;
-                case 11:
+                case 12:
                     col.innerHTML = "Stamp Duty";
                     col.className = "colrightalign";
                     break;
-                case 12:
+                case 13:
                     col.innerHTML = "Contract Charge";
                     col.className = "colrightalign";
                     break;
-                case 13:
+                case 14:
                     col.innerHTML = "Counterparty";
                     break;
-                case 14:
+                case 15:
                     col.innerHTML = "External Trade Id";
                     break;
-                case 15:
+                case 16:
                     col.innerHTML = "Timestamp";
                     break;
-                case 16:
+                case 17:
                     col.innerHTML = "Trade Id";
                     break;
-                case 17:
+                case 18:
                     col.innerHTML = "Finance";
                     col.className = "colrightalign";
                     break;
-                case 18:
+                case 19:
                     col.innerHTML = "Margin";
                     col.className = "colrightalign";
                     break;
@@ -2715,64 +2718,67 @@
                     col.innerHTML = trade.clientid;
                     break;
                 case 1:
-                    col.innerHTML = trade.symbol;
+                    col.innerHTML = trade.brokerclientcode;
                     break;
                 case 2:
-                    col.innerHTML = getSideDesc(trade.side);
+                    col.innerHTML = trade.symbol;
                     break;
                 case 3:
+                    col.innerHTML = getSideDesc(trade.side);
+                    break;
+                case 4:
                     col.innerHTML = trade.quantity;
                     col.className = "colrightalign";
                     break;
-                case 4:
+                case 5:
                     col.innerHTML = trade.price;
                     col.className = "colrightalign";
                     break;
-                case 5:
+                case 6:
                     col.innerHTML = trade.settlcurramt;
                     col.className = "colrightalign";
                     break;
-                case 6:
+                case 7:
                     col.innerHTML = "T+" + trade.nosettdays;
                     break;
-                case 7:
+                case 8:
                     col.innerHTML = formatUTCDate(trade.futsettdate);
                     break;
-                case 8:
+                case 9:
                     col.innerHTML = trade.settlcurrency;
                     break;
-                case 9:
+                case 10:
                     col.innerHTML = trade.commission;
                     col.className = "colrightalign";
                     break;
-                case 10:
+                case 11:
                     col.innerHTML = trade.ptmlevy;
                     col.className = "colrightalign";
                     break;
-                case 11:
+                case 12:
                     col.innerHTML = trade.stampduty;
                     col.className = "colrightalign";
                     break;
-                case 12:
+                case 13:
                     col.innerHTML = trade.contractcharge;
                     col.className = "colrightalign";
                     break;
-                case 13:
+                case 14:
                     col.innerHTML = trade.counterpartyid;
                     break;
-                case 14:
+                case 15:
                     col.innerHTML = trade.externaltradeid;
                     break;
-                case 15:
+                case 16:
                     col.innerHTML = formatUTCDateTime(trade.timestamp);
                     break;
-                case 16:
+                case 17:
                     col.innerHTML = trade.tradeid;
                     break;
-                case 17:
+                case 18:
                     col.innerHTML = trade.finance;
                     break;
-                case 18:
+                case 19:
                     col.innerHTML = trade.margin;
                     break;
                 default:
