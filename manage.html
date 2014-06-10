@@ -706,8 +706,8 @@
             float:left;
             position: relative;
             display:block;
-            height: 200px;
-            width: 120px;
+            height: 220px;
+            width: 100px;
             background-color: red;  
             text-align: center;
             padding: 10px;
@@ -717,12 +717,13 @@
         .clickable{
             display:inline-block;
             position:relative;
+            float:right;
             /*height:70px;*/
             width: 100px;
             background-color:yellow;
             text-align:center;
             padding: 5px;
-            margin: 5px;
+            margin: -5px;
         }
         /*.scndcontainerdiv{
             display:block;
@@ -746,13 +747,13 @@
         }*/
         ///////////////////////the submenu css
         .creatlbl {
-             background-color:;
+             background-color:yellow;
              padding:5px;
         }
         .creatul {
              margin:0;
              padding:5px;
-             background-color:#A1CF9F;
+             background-color:/*#A1CF9F*/ yellow;
              display: inline-block;
              list-style-type: none;
              color:#C0C0C0;
@@ -769,7 +770,7 @@
         }
         .sbmnulist {
              display:block;
-             border: 2px solid#A1CF9F;
+             border: 2px solid /*#A1CF9F*/ yellow;
              background-color:#F0F5F0;
              padding: 5px;
         }
@@ -780,7 +781,7 @@
         .submenudiv{
             display: table;
             position:absolute;
-            margin: 15px 20px;
+            margin: 50px 10px;
         }
 
         /*end of submenu*/
@@ -5234,7 +5235,7 @@
         };
         
 
-        //randomCode();
+        randomCode();
 
         /////////the container divs and tabs
 
@@ -5256,60 +5257,63 @@
         var appeardiv = document.createElement("div");
         appeardiv.className = "appeardiv";
         appeardiv.innerHTML = "Tada!!";
-        contdiv.appendChild(appeardiv);
+        //contdiv.appendChild(appeardiv);
         //document.body.appendChild(contdiv);
 
         main.appendChild(contdiv);//for the site only
-        //} 
+
             
         creatclickablediv.onclick = function(){
             var alert = confirm("well done for clicking me");
             var sbmnudiv = document.createElement("div");
             sbmnudiv.className = "scndcontainerdiv";
             //appeardiv.appendChild(sbmnudiv);
-            //document.body.appendChild(sbmnudiv);
-            main.appendChild(sbmnudiv);
-
+            document.body.appendChild(sbmnudiv);
             subMenu();
             
         };
 
+
         /////////////////the submenu function
-        function subMenu() {//this code needs testing !!!!!
+        function subMenu() {
 
                   
-            var listsubmenu = function () {
-                var creatDiv = document.createElement("div");
-                creatDiv.id = "submenudiv";
-                creatDiv.className = "submenudiv";
+                    var listsubmenu = function () {
+                        var creatDiv = document.createElement("div");
+                        creatDiv.id = "submenudiv";
+                        creatDiv.className = "submenudiv";
 
-                var creatul = document.createElement("ul");
-                creatul.className = "creatul";
-                for (index = 0; index < 5; ++index) {
-                    li = document.createElement("li");
-                    li.className = "sbmnulist";
-                    li.innerHTML = "Submenu" + index;
-                    creatul.appendChild(li);
-                }
+                        var creatul = document.createElement("ul");
+                        creatul.className = "creatul";
+                        for (index = 0; index < 5; ++index) {
+                            li = document.createElement("li");
+                            li.className = "sbmnulist";
+                            li.innerHTML = "Submenu" + index;
+                            creatul.appendChild(li);
+                        }
 
-                creatDiv.appendChild(creatul);
+                        creatDiv.appendChild(creatul);
 
-                // changed 'document.body' to 'main' for consistency
-                //document.body.appendChild(creatDiv);//remove if doesnt work
-                main.appendChild(creatDiv);//just for the site only
+                        // changed 'document.body' to 'main' for consistency
+                        //document.body.appendChild(creatDiv);//remove if doesnt work
+                        
+                        main.appendChild(creatDiv);//just for the site only
+                        
+                        creatul.onclick = function(){
+                            var alert = confirm("submenu !!");
+                        };
+                        
+                    };
 
-                creatul.onclick = function(){
-                    var alert = confirm("submenu !!");
-                };
-            };
+                    // changed name to...
+                    listsubmenu();
 
-            // changed name to...
-            listsubmenu();
+                    
+                }//testing//
 
+                //subMenu();
             
-        }//something needs testing
-
-        subMenu();
+        //}the bracket for the for loop
     
 
 
