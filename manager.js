@@ -1,6 +1,6 @@
 /****************
 * manager.js
-* Front-office management server
+* Front-office server for users
 * Cantwaittotrade Limited
 * Terry Johnston
 * November 2013
@@ -21,14 +21,16 @@ var common = require('./common.js');
 // globals
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
-var cw2tport = 8080; // user listen port
+var cw2tport = 8081; // user listen port
 var ordertypes = {};
 var brokerid = "1"; // todo: via logon
 var defaultnosettdays = 3;
 var operatortype = 2;
-var tradeserverchannel = 3;
-var userserverchannel = 2;
 var clientserverchannel = 1;
+var userserverchannel = 2;
+var tradeserverchannel = 3;
+var ifaserverchannel = 4;
+var webserverchannel = 5;
 var servertype = "user";
 var serverstatus = {};
 
@@ -54,15 +56,15 @@ if (redislocal) {
 
 // redis scripts
 var scriptgetclients;
-var scriptnewclient;
+//var scriptnewclient;
 var scriptgetbrokers;
 var scriptgetifas;
 var scriptgetinstrumenttypes;
 var scriptgetcashtranstypes;
 var scriptgetcurrencies;
-var scriptupdateclient;
+//var scriptupdateclient;
 var scriptgetinst;
-var scriptgetclienttypes;
+//var scriptgetclienttypes;
 var scriptinstupdate;
 var scripthedgeupdate;
 var scriptgethedgebooks;
@@ -186,7 +188,7 @@ function listen() {
   console.log('Listening on port ' + cw2tport);
 
   sockjs_svr.on('connection', function(conn) {
-    // this will be overwritten if & when a client logs on
+    // this will be overwritten if & when a user logs on
     var userid = "0";
 
     console.log('new connection');
@@ -233,7 +235,7 @@ function listen() {
           } else if ("index" in obj) {
             sendIndex(obj.index, conn);        
           } else if ("newclient" in obj) {
-            newClient(obj.newclient, conn);
+            newClient(obj.newclient, userid, conn);
           } else if ("cashtrans" in obj) {
             cashTrans(obj.cashtrans, userid, conn);
           } else if ("instupdate" in obj) {
@@ -243,7 +245,7 @@ function listen() {
           } else if ("cost" in obj) {
             costUpdate(obj.cost, conn);
           } else if ("ifa" in obj) {
-            newIfa(obj.ifa, conn);
+            newIfa(obj.ifa, userid, conn);
           } else if ("tradehistoryrequest" in obj) {
             tradeHistory(obj.tradehistoryrequest, conn);
           } else if ("quotehistoryrequest" in obj) {
@@ -343,12 +345,22 @@ function listen() {
             // send a successful logon reply
             reply.success = true;
             reply.email = signin.email;
-            replySignIn(reply, conn);
 
-            console.log("user:" + userid + " logged on");
+            db.hget("broker:" + user.brokerid, "name", function(err, name) {
+              if (err) {
+                console.log(err);
+                return;
+              }
 
-            // send the data
-            start(user, conn);
+              reply.broker = name;
+
+              replySignIn(reply, conn);
+
+              console.log("user:" + userid + " logged on");
+
+              // send the data
+              start(user, conn);
+            });
           });
         });
       });
@@ -410,6 +422,25 @@ function unsubscribeConnection(id) {
   });
 }*/
 
+//
+// send all the orderbooks for a single user
+//
+function sendOrderBooks(userid, conn) {
+  // get all the instruments in the order book for this user
+  // todo: script?
+  db.smembers(servertype + ":" + userid + ":orderbooks", function(err, instruments) {
+    if (err) {
+      console.log("Error in sendOrderBooks:" + err);
+      return;
+    }
+
+    // send the order book for each instrument
+    instruments.forEach(function (symbol, i) {
+      orderBookRequest(userid, symbol, conn);
+    });
+  });
+}
+
 function orderBookRequest(userid, symbol, conn) {
   db.eval(common.scriptsubscribeinstrument, 3, symbol, userid, servertype, function(err, ret) {
     if (err) throw err;
@@ -435,44 +466,48 @@ function orderBookRemoveRequest(userid, symbol, conn) {
   });
 }
 
-function newClient(client, conn) {
-  // maybe a new client or an updated client
-  if (client.clientid == "") {
-    db.eval(scriptnewclient, 11, client.brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, client.commissionpercent, function(err, ret) {
-      if (err) throw err;
+function newClient(client, userid, conn) {
+  db.hget(servertype + ":" + userid, "brokerid", function(err, brokerid) {
+    if (err) {
+      console.log(err);
+      return;
+    }
 
-      if (ret[0] != 0) {
-        console.log("Error in scriptnewclient:" + common.getReasonDesc(ret[0]));
-        sendErrorMsg(ret[0], conn);
-        return;
-      }
+    // maybe a new client or an updated client
+    if (client.clientid == "") {
+      db.eval(common.scriptnewclient, 11, brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, client.commissionpercent, function(err, ret) {
+        if (err) throw err;
 
-      getSendClient(ret[1], conn);
-    });
-  } else {
-    db.eval(scriptupdateclient, 12, client.clientid, client.brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, client.commissionpercent, function(err, ret) {
-      if (err) throw err;
+        if (ret[0] != 0) {
+          console.log("Error in scriptnewclient:" + common.getReasonDesc(ret[0]));
+          common.sendErrorMsg(ret[0], conn);
+          return;
+        }
 
-      if (ret != 0) {
-        console.log("Error in scriptupdateclient:" + common.getReasonDesc(ret));
-        return;
-      }
+        getSendClient(ret[1], conn);
+      });
+    } else {
+      db.eval(common.scriptupdateclient, 12, client.clientid, brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, client.commissionpercent, function(err, ret) {
+        if (err) throw err;
 
-      getSendClient(client.clientid, conn);
-    });
-  }
+        if (ret != 0) {
+          console.log("Error in scriptupdateclient:" + common.getReasonDesc(ret));
+          return;
+        }
+
+        getSendClient(client.clientid, conn);
+      });
+    }
+  });
 }
 
-function sendErrorMsg(error, conn) {
-  conn.write("{\"errormsg\":" + JSON.stringify(common.getReasonDesc(error)) + "}");
-}
-
-function newIfa(ifa, conn) {
-  db.eval(scriptifa, 5, ifa.ifaid, ifa.name, ifa.email, ifa.address, ifa.mobile, function(err, ret) {
+function newIfa(ifa, userid, conn) {
+  db.eval(scriptifa, 6, ifa.ifaid, ifa.name, ifa.email, ifa.address, ifa.mobile, userid, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
       console.log("Error in scriptifa:" + common.getReasonDesc(ret[0]));
+      common.sendErrorMsg(ret[0], conn);
       return;
     }
 
@@ -1343,25 +1378,6 @@ function sendOrderBook(symbol, level1arr, send, conn) {
   });
 }
 
-//
-// send all the orderbooks for a single user
-//
-function sendOrderBooks(userid, conn) {
-  // get all the instruments in the order book for this user
-  // todo: script?
-  db.smembers("user:" + userid + ":orderbooks", function(err, instruments) {
-    if (err) {
-      console.log("Error in sendOrderBooks:" + err);
-      return;
-    }
-
-    // send the order book for each instrument
-    instruments.forEach(function (symbol, i) {
-      orderBookRequest(userid, symbol, conn);
-    });
-  });
-}
-
 function getTimeInForceDesc(timeinforce) {
 /*0 = Day
 
@@ -1381,7 +1397,7 @@ function getTimeInForceDesc(timeinforce) {
 function start(user, conn) {
   sendOrderBooks(user.userid, conn);
   sendInstruments(conn);
-  sendBrokers(conn);
+  //sendBrokers(conn);
   sendIfas(conn);
   sendInstrumentTypes(conn);
   sendOrderTypes(conn);
@@ -1398,12 +1414,23 @@ function start(user, conn) {
   sendClients(user.brokerid, conn);
 }
 
+function sendBroker(brokerid, conn) {
+  db.hget("broker:" + brokerid, "name", function(err, name) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    conn.write("{\"broker\":\"" + name + "\"}");
+  });
+}
+
 function sendUserid(userid, conn) {
   conn.write("{\"userid\":" + userid + "}");
 }
 
 function replySignIn(reply, conn) {
-    conn.write("{\"signinreply\":" + JSON.stringify(reply) + "}");
+  conn.write("{\"signinreply\":" + JSON.stringify(reply) + "}");
 }
 
 function initDb() {
@@ -1521,7 +1548,7 @@ function sendCurrencies(conn) {
 }
 
 function sendClientTypes(conn) {
-  db.eval(scriptgetclienttypes, 0, function(err, ret) {
+  db.eval(common.scriptgetclienttypes, 1, servertype, function(err, ret) {
     if (err) throw err;
     conn.write("{\"clienttypes\":" + ret + "}");
   });    
@@ -1785,59 +1812,6 @@ function registerScripts() {
   return cjson.encode(tblclient) \
   ';
 
-  scriptnewclient = stringsplit + '\
-  --[[ check email is unique ]] \
-  local emailexists = redis.call("get", "client:" .. KEYS[3]) \
-  if emailexists then return {1023} end \
-  local clientid = redis.call("incr", "clientid") \
-  if not clientid then return {1005} end \
-  --[[ store the client ]] \
-  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "brokerid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7], "hedge", KEYS[9], "brokerclientcode", KEYS[10], "marketext", "D", "commissionpercent", KEYS[11]) \
-  --[[ add to set of clients ]] \
-  redis.call("sadd", "clients", clientid) \
-  --[[ add route to find client from email ]] \
-  redis.call("set", "client:" .. KEYS[3], clientid) \
-  --[[ add tradeable instrument types ]] \
-  if KEYS[8] ~= "" then \
-    local insttypes = stringsplit(KEYS[8], ",") \
-    for i = 1, #insttypes do \
-      redis.call("sadd", clientid .. ":instrumenttypes", insttypes[i]) \
-    end \
-  end \
-  return {0, clientid} \
-  ';
-
-  scriptupdateclient = stringsplit + '\
-  local clientkey = "client:" .. KEYS[1] \
-  --[[ get existing email, in case we need to change email->client link ]] \
-  local email = redis.call("hget", clientkey, "email") \
-  if not email then return 1017 end \
-  --[[ update client ]] \
-  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "brokerid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifaid", KEYS[7], "type", KEYS[8], "hedge", KEYS[10], "brokerclientcode", KEYS[11], "commissionpercent", KEYS[12]) \
-  --[[ remove old email link and add new one ]] \
-  if KEYS[4] ~= email then \
-    redis.call("del", "client:" .. email) \
-    redis.call("set", "client:" .. KEYS[4], KEYS[1]) \
-  end \
-  --[[ add/remove tradeable instrument types ]] \
-  local insttypes = redis.call("smembers", "instrumenttypes") \
-  local clientinsttypes = stringsplit(KEYS[9], ",") \
-  for i = 1, #insttypes do \
-    local found = false \
-    for j = 1, #clientinsttypes do \
-      if clientinsttypes[j] == insttypes[i] then \
-        redis.call("sadd", KEYS[1] .. ":instrumenttypes", insttypes[i]) \
-        found = true \
-        break \
-      end \
-    end \
-    if not found then \
-      redis.call("srem", KEYS[1] .. ":instrumenttypes", insttypes[i]) \
-    end \
-  end \
-  return 0 \
-  ';
-
   scriptgetbrokers = '\
   local brokers = redis.call("sort", "brokers", "ALPHA") \
   local fields = {"brokerid", "name"} \
@@ -1848,17 +1822,6 @@ function registerScripts() {
     table.insert(broker, {brokerid = vals[1], name = vals[2]}) \
   end \
   return cjson.encode(broker) \
-  ';
-
-  scriptgetclienttypes = '\
-  local clienttypes = redis.call("sort", "clienttypes", "ALPHA") \
-  local clienttype = {} \
-  local val \
-  for index = 1, #clienttypes do \
-    val = redis.call("get", "clienttype:" .. clienttypes[index]) \
-    table.insert(clienttype, {clienttypeid = clienttypes[index], description = val}) \
-  end \
-  return cjson.encode(clienttype) \
   ';
 
   scriptgetinstrumenttypes = '\
@@ -1967,15 +1930,21 @@ function registerScripts() {
   return cjson.encode(ifa) \
   ';
 
+  //
+  // set-up/maintain an ifa
+  //
   scriptifa = '\
   local ifaid \
   if KEYS[1] == "" then \
     ifaid = redis.call("incr", "ifaid") \
+    local brokerid = redis.call("hget", "user:" .. KEYS[6], "brokerid") \
     --[[ set the default password to email ]] \
-    redis.call("hmset", "ifa:" .. ifaid, "ifaid", ifaid, "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "address", KEYS[4], "mobile", KEYS[5]) \
+    redis.call("hmset", "ifa:" .. ifaid, "ifaid", ifaid, "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "address", KEYS[4], "mobile", KEYS[5], "brokerid", brokerid, "marketext", "D") \
+    --[[ add route to find ifa from email ]] \
+    redis.call("set", "ifa:" .. KEYS[3], ifaid) \
   else \
     ifaid = KEYS[1] \
-    --[[ do not update id/password ]] \
+    --[[ do not update id/password/brokerid ]] \
     redis.call("hmset", "ifa:" .. ifaid, "name", KEYS[2], "email", KEYS[3], "address", KEYS[4], "mobile", KEYS[5]) \
   end \
   redis.call("sadd", "ifas", ifaid) \

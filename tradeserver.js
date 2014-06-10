@@ -21,6 +21,7 @@ var markettype; // comes from database, 0=normal market, 1=out of hours
 var tradeserverchannel = 3;
 var userserverchannel = 2;
 var clientserverchannel = 1;
+var ifaserverchannel = 4;
 
 // redis
 var redishost;

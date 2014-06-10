@@ -1,7 +1,7 @@
 <!doctype html>
 <html><head>
     <meta http-equiv="content-type" content="text/html;charset=utf-8" />
-    <title>TG-Online Manager v0.9</title>
+    <title>TG-Online User v0.9</title>
     <script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
     <style type="text/css">
         table {
@@ -661,7 +661,7 @@
             display: inline-block;
             border: 1px solid #aacfe4;
             font-size: 15px;
-            width: 600px;
+            width: 450px;
             height: 120px;
             margin: 2px 2px 10px 10px;
             vertical-align: top;
@@ -695,55 +695,10 @@
             background-color: inherit;
             color: red;
         }
-        .lsthol{
+        .lsthol {
             display:inline-block;
             background-color:inherit;
-
         }
-        /*submenu css*/
-        .creatlbl {
-            background-color: red;
-            padding:5px;
-        }
-        .creatul {
-            margin:0;
-            padding:5px;
-            background-color:#A1CF9F;
-            display: inline-block;
-            list-style-type: none;
-            color:#C0C0C0;
-            font-size:19px;
-            border-radius:5px;
-            /*visibility: hidden;
-            /*border: 2px dashed green; This lets me know where the div is*/
-        }
-        /*label:hover + .submenudiv, .submenudiv:hover{
-            visibility: visible;    
-        }*/
-        .divContainer {
-            text-align:center;
-        }
-        .sbmnulist {
-            border: 2px solid#A1CF9F;
-            background-color:#F0F5F0;
-            padding: 5px;
-        }
-        .sbmnulist:hover {
-            background-color: blue;
-            color:white;
-        }
-        .submenudiv{
-            display: block;
-        }
-
-        /*.visible {
-            visibility: visible;
-        }
-        .hidden {
-            visibility: hidden;
-        }*/
-
-        /*end of submenu css*/
     </style>
 </head>
 <body lang="en">
@@ -774,7 +729,7 @@
         var indices = {};
         var timeinforces = {};
         var clients = {};
-        var brokers = {};
+        //var brokers = {};
         var ifas = {};
         var instrumenttypes = {};
         var cashtranstypes = {};
@@ -799,7 +754,6 @@
         var connections = {};
         var chathistory = {};
         var cashhistory = {};
-        var chatmenuoption = 9;
         var showvolume = false;
         var account = {};
         var coheading = "Thomas Grant & Company";
@@ -809,6 +763,24 @@
         var serverstatus = {};
         var allclients = "All clients";
         var numtradecols = 20;
+        var MENUORDERBOOKS = 0;
+        var MENUMAINTAIN = 1;
+        var MENUHISTORY = 2;
+        var MENUPORTFOLIO = 3;
+        var MENUCHAT = 4;
+        var MENUEOD = 5;
+        var MENUMONITOR = 6;
+        var MENULOGOUT = 7;
+        var MENUCLIENTS = 8;
+        var MENUCASH = 9;
+        var MENUPRODUCTS = 10;
+        var MENUHEDGEBOOKS = 11;
+        var MENUCOSTS = 12;
+        var MENUIFAS = 13;
+        var MENUHOLIDAYS = 14;
+        var MENUORDERS = 15;
+        var MENUTRADES = 16;
+        var MENUPOSITIONS = 17;
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -899,8 +871,8 @@
                     loadClienttypes(obj.clienttypes);
                 } else if ("client" in obj) {
                     updateClient(obj.client);
-                } else if ("brokers" in obj) {
-                    loadBrokers(obj.brokers);
+                //} else if ("brokers" in obj) {
+                    //loadBrokers(obj.brokers);
                 } else if ("ifas" in obj) {
                     loadIfas(obj.ifas);
                 } else if ("ifa" in obj) {
@@ -966,7 +938,7 @@
                 orderbooks[orderbookarr[i].symbol] = orderbookarr[i];
             }
 
-            if (selectedmenu == 0) {
+            if (selectedmenu == MENUORDERBOOKS) {
                 displayOrderBooks();
             }
         }
@@ -1022,7 +994,7 @@
                 chathistory[chathistarr[i].chatid] = chathistarr[i];
             }                                                
         }
-        //test
+        
         function loadInstruments(instrumentarr) {
             for (var i = 0; i < instrumentarr.length; ++i) {
                 instruments[instrumentarr[i].symbol] = instrumentarr[i];
@@ -1061,11 +1033,11 @@
             }                                    
         }
 
-        function loadBrokers(brokerarr) {
+        /*function loadBrokers(brokerarr) {
             for (var i = 0; i < brokerarr.length; ++i) {
                 brokers[brokerarr[i].brokerid] = brokerarr[i];
             }                                                
-        }
+        }*/
 
         function loadIfas(ifaarr) {
             for (var i = 0; i < ifaarr.length; ++i) {
@@ -1190,7 +1162,7 @@
                 serverstatus.psstatus = parseInt(status.psstatus);                
             }
 
-            if (selectedmenu == 12) {
+            if (selectedmenu == MENUMONITOR) {
                 displayStatus();
             }
         }
@@ -1206,13 +1178,13 @@
             if (position.quantity == 0) {
                 delete positions[poskey];
 
-                if (selectedmenu == 4) {
+                if (selectedmenu == MENUPOSITIONS) {
                     removeElementFromList(poskey, list1);
                 }
             } else {
                 positions[poskey] = position;
 
-                if (selectedmenu == 4) {
+                if (selectedmenu == MENUPOSITIONS) {
                     msg = positionMsg(position);
                     if (updateElement(msg, list1, poskey) == null) {
                         addElement(msg, list1, poskey);
@@ -1227,14 +1199,14 @@
             if (cashitem.amount == 0) {
                 delete cash[cashitem.currency];
 
-                if (selectedmenu == 5) {
+                if (selectedmenu == MENUCASH) {
                     removeElementFromList(cashitem.currency, list1);
                 }
             } else {
                 cash[cashitem.currency] = cashitem;
 
                 // display if we are looking at cash
-                if (selectedmenu == 5) {
+                if (selectedmenu == MENUCASH) {
                     msg = JSON.stringify(cashitem);
                     if (updateElement(msg, list1, cashitem.currency) == null) {
                         addElement(msg, list1, cashitem.currency);
@@ -1288,7 +1260,8 @@
                 }
             }
 
-            if (selectedmenu == 0) {
+            if (selectedmenu == MENUORDERBOOKS) {
+                displayOrderBookHeadings();
                 displayOrderBook(orderbook.symbol);
             }
         }
@@ -1325,14 +1298,9 @@
         }
 
         function updateIfa(ifa) {
-            var lblifaconf;
-
             ifas[ifa.ifaid] = ifa;
 
-            lblifaconf = document.getElementById("lblifaconf");
-            if (lblifaconf != null) {
-                lblifaconf.innerHTML = ifa.name + " updated ok";
-            }
+            alert(ifa.name + " updated ok");
         }
 
         function updateClient(client) {
@@ -1342,7 +1310,7 @@
 
             clients[client.clientid] = client;
 
-            if (selectedmenu != 1) {return};
+            if (selectedmenu != MENUCLIENTS) {return};
 
             frmclient = document.getElementById("frmclient");
             if (frmclient != null) {
@@ -1408,9 +1376,9 @@
                 msg = "Order cancelled";
             }
 
-            if (selectedmenu == 0) {
+            if (selectedmenu == MENUORDERBOOKS) {
                 addMessageToDiv(msg, "orderdiv:" + order.symbol + ":" + order.orderdivnum);
-            } else if (selectedmenu == 7) {
+            } else if (selectedmenu == MENUORDERS) {
                 removeElementFromList(order.orderid, list1);
                 if (list1.childNodes.length == 0) {
                     addElement("No new orders", list1, 0)
@@ -1459,9 +1427,8 @@
             clearScreen();
             displayMenu();
 
-            selectedmenu = 0;
+            selectedmenu = MENUORDERBOOKS;
 
-            clearOrderBooks();
             displayOrderBooks();
         }
 
@@ -1521,6 +1488,7 @@
 
             clearMenu();
             clearScreen();
+            clearOrderBooks();
 
             cw2theading = document.getElementById('cw2t');
             cw2theading.innerHTML = coheading;
@@ -1867,22 +1835,25 @@
             clearList("list4", true);
             clearList("list5", true);
             clearList("list6", true);
-            //clearList("creatul", true);
         }
 
         function clearForms() {
             clearForm("frmsignin", true);
             clearForm("frminstrument", true);
+            clearForm("frmhistory", true);
+            clearForm("frmpositions", true);
+            clearForm("frmdates", true);
+            clearForm("frmmaintain", true);
+            clearMaintainForms();
+        }
+
+        function clearMaintainForms() {
             clearForm("frmclient", true);
             clearForm("frmcash", true);
             clearForm("frmhedge", true);
             clearForm("frmproduct", true);
-            clearForm("frmhedge", true);
             clearForm("frmcosts", true);
-            clearForm("frmifa", true);
-            clearForm("frmhistory", true);
-            clearForm("frmpositions", true);
-            clearForm("frmdates", true);
+            clearForm("frmifa", true);            
         }
 
         function clearTables() {
@@ -1897,7 +1868,6 @@
             clearDiv("stockbox");
             clearDiv("divholidays");
             clearDiv("divmonitor");
-            clearDiv("submenudiv");
         }
 
         function clearEmptyLines() {
@@ -2013,7 +1983,7 @@
             stockboxinput = document.createElement("input");
             stockboxinput.className = "stockboxinput";
             stockboxinput.id = "stockboxinput";
-            stockboxinput.placeholder = "Symbol";
+            stockboxinput.placeholder = "Enter Symbol";
 
             stockboxinput.onkeyup = function() {
                 clearList(stocklist.id, false);
@@ -2789,9 +2759,9 @@
         }
 
         function displayTrade(trade) {
-            if (selectedmenu == 0) {
+            if (selectedmenu == MENUORDERBOOKS) {
                 addMessageToDiv(msg, "orderdiv:" + trade.symbol + ":" + trade.orderdivnum);
-            } else if (selectedmenu == 7) {
+            } else if (selectedmenu == MENUTRADES) {
                 displayATrade(trade);
             }
         }
@@ -3320,7 +3290,7 @@
             alert(msg);            
         }
 
-        function requestPortfolio() {
+        function portfolio() {
             var inpclientid;
 
             var frmpositions = getForm("frmpositions");
@@ -3543,7 +3513,7 @@
             var items;
 
             // if chat not selected, just highlight the menu option
-            if (selectedmenu != chatmenuoption) {
+            if (selectedmenu != MENUCHAT) {
                 menuitemchat = document.getElementById("menuitemchat");
                 if (menuitemchat != null) {
                     menuitemchat.className = "menuitemchat";
@@ -4137,7 +4107,7 @@
                 headinglevel2.className = "level2heading";
             }
             headingstock = document.createElement('span');
-            headingstock.innerHTML = "Stock";
+            headingstock.innerHTML = "Symbol";
             headingstock.className = "stockheading";
             if (showvolume) {
                 headingbidquantity = document.createElement('span');
@@ -4476,7 +4446,7 @@
                 msg += ", " + quoteack.text;
             }
 
-            if (selectedmenu == 0) {
+            if (selectedmenu == MENUORDERBOOKS) {
                 addMessageToDiv(msg, "orderdiv:" + quoteack.symbol + ":" + quoteack.orderdivnum);
             }
         }
@@ -4562,7 +4532,7 @@
             }, 1000);
             // todo: clear if form is closed
 
-            if (selectedmenu == 0) {
+            if (selectedmenu == MENUORDERBOOKS) {
                 orderdiv = getDiv("orderdiv:" + quote.symbol + ":" + quote.orderdivnum, quote.symbol);
 
                 addNewLine(orderdiv, null);
@@ -5083,6 +5053,8 @@
                     // clear the screen
                     clearForm("frmsignin", true);
 
+                    coheading = reply.broker;
+
                     cw2theading = document.getElementById('cw2t');
                     cw2theading.innerHTML = coheading + " - " + reply.email;
                 }
@@ -5101,8 +5073,8 @@
             menu.className = "menu";
             menu.id = "menu";
 
-            // build the main menu - reset chatmenuoption if changed
-            menuarr = ["Watch List", "Clients", "Cash", "Products", "Hedge Books", "Costs", "IFA's", "History", "Portfolio", "Chat", "Holidays", "End Of Day", "Monitor", "Log Out"];
+            // build the main menu
+            menuarr = ["Watch List", "Maintain", "History", "Portfolio", "Chat", "End Of Day", "Monitor", "Log Out"];
 
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
@@ -5112,7 +5084,7 @@
                 if (i == 0) {
                     menuitem.className = "menuitemselected";
                     lastElement = menuitem;
-                } else if (i == chatmenuoption) { // change if menu changed
+                } else if (i == MENUCHAT) { // change if menu changed
                     menuitem.id = "menuitemchat";
                 } else if (i > 13){ // when the amount of items in the menu exceed 13 then..//
                     var nwmnu = new menuitem(); //... this will create a new list..//
@@ -5140,122 +5112,32 @@
                 selectedmenu = element.value;
 
                 switch (selectedmenu) {
-                case 0:
+                case MENUORDERBOOKS:
                     displayOrderBooks();
                     break;
-                case 1:
-                    maintainClients();
+                case MENUMAINTAIN:
+                    maintain();
                     break;
-                case 2:
-                    maintainCash();
+                case MENUHISTORY:
+                    history();
                     break;
-                case 3:
-                    maintainProducts();
+                case MENUPORTFOLIO:
+                    portfolio();
                     break;
-                case 4:
-                    maintainHedgebooks();
-                    break;
-                case 5:
-                    maintainCosts();
-                    break;
-                case 6:
-                    maintainIfas();
-                    break;
-                case 7:
-                    requestHistory();
-                    break;
-                case 8:
-                    requestPortfolio();
-                    break;
-                case 9:
+                case MENUCHAT:
                     requestConnections();
                     break;
-                case 10:
-                    //holidays();
-                    subMenu();
-                    break;
-                case 11:
+                case MENUEOD:
                     endOfDay();
                     break;
-                case 12:
+                case MENUMONITOR:
                     monitor();
                     break;
-                case 13:
+                case MENULOGOUT:
                     logout();
                     break;
                 }
             }
-        }
-
-        //
-        // AlexC new submenu draft
-        //
-        function subMenu() {
-            /*var creatbtndiv = document.createElement("div");
-            var creatbtn = document.createElement("button");
-            creatbtn.innerHTML = "Click Me";
-            var creatlbl = document.createElement("label");
-            creatlbl.className = "creatlbl";
-            creatlbl.innerHTML = "Hover Over Me ";
-
-            creatbtndiv.appendChild(creatlbl);
-            creatbtndiv.appendChild(creatbtn);
-
-            document.body.appendChild(creatbtndiv);*/
-
-            var listsubmenu = function () {
-                var creatDiv = document.createElement("div");
-                creatDiv.id = "submenudiv";
-                creatDiv.className = "submenudiv";
-
-                var creatul = document.createElement("ul");
-                creatul.className = "creatul";
-                for (index = 0; index < 5; ++index) {
-                    li = document.createElement("li");
-                    li.className = "sbmnulist";
-                    li.innerHTML = "Submenu" + index;
-                    creatul.appendChild(li);
-                }
-
-                creatDiv.appendChild(creatul);
-
-                // changed 'document.body' to 'main' for consistency
-                //document.body.appendChild(creatDiv);
-                main.appendChild(creatDiv);
-
-                /*creatDiv.onmouseout = function(){
-                //var confirm = confirm("the mouse is out");
-                this.parentNode.removeChild(this);
-                };*/
-            };
-
-            // changed name to...
-            listsubmenu();
-
-            //If the cursor hovers over the label, activate this function//
-            /*creatbtn.onclick = function () {
-                var alert = confirm("yes master");
-                if (alert === true) {
-                    list();     
-                }
-
-                if (creatlbl.onmouseover === true) {
-                    var confirm = ("aye aye captain");
-                    creatDiv.className = "visible";
-                } else {
-                    creatDiv.className = "hidden";
-                }
-            };*/
-
-            /*creatlbl.onmouseover = function(){
-                //figure it out !!//
-            };*/
-
-        //AFTER THE CLICK ME BUTTON IS CLICKED THEN THE SUBEMNU ITEMS NEED TO HAVE AN ONCLICK EVENT //
-
-            /*creatbtndiv.onmouseout = function() {
-                var alert = confirm("this works");
-            }*/
         }
 
         function logout() {
@@ -5411,6 +5293,91 @@
             }
         }
 
+        function maintain() {
+            var frmmaintain = getForm("frmmaintain");
+
+            var lnkclients = newlink("lnkclients", "Clients", "", frmmaintain);
+            var lnkcash = newlink("lnkcash", "Cash", "", frmmaintain);
+            var lnkproducts = newlink("lnkproducts", "Products", "", frmmaintain);
+            var lnkhedgebooks = newlink("lnkhedgebooks", "Hedgebooks", "", frmmaintain);
+            var lnkcosts = newlink("lnkcosts", "Costs", "", frmmaintain);
+            var lnkifas = newlink("lnkifas", "IFAs", "", frmmaintain);
+            var lnkholidays = newlink("lnkholidays", "Holidays", "", frmmaintain);
+
+            lnkclients.onclick = function() {
+                clearMaintainForms();
+                clearDivs();
+                maintainClients();
+                selectedmenu = MENUCLIENTS;
+                setSelected(lnkclients);
+            }
+
+            lnkcash.onclick = function() {
+                clearMaintainForms();
+                clearDivs();
+                maintainCash();
+                selectedmenu = MENUCASH;
+                setSelected(lnkcash);
+            }
+
+            lnkproducts.onclick = function() {
+                clearMaintainForms();
+                clearDivs();
+                maintainProducts();
+                selectedmenu = MENUPRODUCTS;
+                setSelected(lnkproducts);
+            }
+
+            lnkhedgebooks.onclick = function() {
+                clearMaintainForms();
+                clearDivs();
+                maintainHedgebooks();
+                selectedmenu = MENUHEDGEBOOKS;
+                setSelected(lnkhedgebooks);
+            }
+
+            lnkcosts.onclick = function() {
+                clearMaintainForms();
+                clearDivs();
+                maintainCosts();
+                selectedmenu = MENUCOSTS;
+                setSelected(lnkcosts);
+            }
+
+            lnkifas.onclick = function() {
+                clearMaintainForms();
+                clearDivs();
+                maintainIfas();
+                selectedmenu = MENUIFAS;
+                setSelected(lnkifas);
+            }
+
+            lnkholidays.onclick = function() {
+                clearMaintainForms();
+                clearDivs();
+                holidays();
+                selectedmenu = MENUHOLIDAYS;
+                setSelected(lnkholidays);
+            }
+
+            addNewLine(frmmaintain, null);
+            addNewLine(frmmaintain, null);
+            
+            main.appendChild(frmmaintain);
+
+            function setSelected(link) {
+                lnkclients.className = "";
+                lnkcash.className = "";
+                lnkproducts.className = "";
+                lnkhedgebooks.className = "";
+                lnkcosts.className = "";
+                lnkifas.className = "";
+                lnkholidays.className = "";
+
+                link.className = "linkselected";
+            }
+        }
+
         function maintainClients() {
             selectClient("frmclient", null, null, false, "inpname", "inpclientid", "", false);
 
@@ -5437,11 +5404,11 @@
             divaddress.appendChild(inpaddress);
             frmclient.appendChild(divaddress);
 
-            addNewLine(frmclient, null);
-            var lblbroker = newlabel("lblbroker", "Broker:", "formlabel", frmclient);
-            var selbroker = newselect("selbroker", "formselect", frmclient);
+            //addNewLine(frmclient, null);
+            //var lblbroker = newlabel("lblbroker", "Broker:", "formlabel", frmclient);
+            //var selbroker = newselect("selbroker", "formselect", frmclient);
 
-            addNewLine(frmclient, null);
+            //addNewLine(frmclient, null);
             var lblbrokerclientcode = newlabel("lblbrokerclientcode", "Broker Client Code:", "formlabel", frmclient);
             var inpbrokerclientcode = newinput("inpbrokerclientcode", "forminput", frmclient);
 
@@ -5485,7 +5452,7 @@
 
             addNewLine(frmclient, null);
             var btnupdate = newbutton("btnupdate", "Add", "formbutton", frmclient);
-            var btnnewclient = newbutton("btnnewclient", "New Client", "formbuttonwide", frmclient);
+            var lnknewclient = newlink("lnknewclient", "New Client", "", frmclient);
 
             btnupdate.onclick = function() {
                 var client = {};
@@ -5506,7 +5473,7 @@
 
                 client.name = inpname.value;
                 client.mobile = inpmobile.value;
-                client.brokerid = selbroker[selbroker.selectedIndex].value;
+                //client.brokerid = selbroker[selbroker.selectedIndex].value;
                 client.brokerclientcode = inpbrokerclientcode.value;
                 client.clientid = inpclientid.value;
                 client.address = inpaddress.value;
@@ -5540,7 +5507,7 @@
                 sockjs.send("{\"newclient\":" + JSON.stringify(client) + "}");
             }
 
-            btnnewclient.onclick = function() {
+            lnknewclient.onclick = function() {
                 displayClient(null, "frmclient", "", "inpname", "inpclientid", "");
                 inpname.focus();
             }
@@ -5556,7 +5523,7 @@
             var inpclient;
             var inpname;
             var inpmobile;
-            var selbroker;
+            //var selbroker;
             var inpbrokerclientcode;
             var inpclientid;
             var inpaddress;
@@ -5568,7 +5535,7 @@
             var opthedgeyes;
             var opthedgeno;
             var btnupdate;
-            var btnnewclient;
+            var lnknewclient;
             var inpclientid;
             var focusfld;
             var inpcommpercent;
@@ -5576,7 +5543,7 @@
             if (frm == "frmclient") {
                 inpname = document.getElementById("inpname");
                 inpmobile = document.getElementById("inpmobile");
-                selbroker = document.getElementById("selbroker");
+                //selbroker = document.getElementById("selbroker");
                 inpbrokerclientcode = document.getElementById("inpbrokerclientcode");
                 inpclientid = document.getElementById("inpclientid");
                 inpaddress = document.getElementById("inpaddress");
@@ -5586,7 +5553,7 @@
                 opthedgeyes = document.getElementById("opthedgeyes");
                 opthedgeno = document.getElementById("opthedgeno");
                 btnupdate = document.getElementById("btnupdate");
-                btnnewclient = document.getElementById("btnnewclient");
+                lnknewclient = document.getElementById("lnknewclient");
                 inpcommpercent = document.getElementById("inpcommpercent");
 
                 // create an empty client
@@ -5594,7 +5561,7 @@
                     client = {
                         name:  '',
                         mobile:    '',
-                        brokerid:  1,
+                        //brokerid:  1,
                         brokerclientcode: '',
                         clientid: '',
                         address: '',
@@ -5610,7 +5577,7 @@
                 if (inpname != null) {
                     inpname.value = client.name;
                     inpmobile.value = client.mobile;
-                    populateBrokers(selbroker, client.brokerid);
+                    //populateBrokers(selbroker, client.brokerid);
                     inpbrokerclientcode.value = client.brokerclientcode;
                     inpclientid.value = client.clientid;
                     inpaddress.value = client.address;
@@ -5644,10 +5611,10 @@
 
                     if (client.name == "") {
                         btnupdate.value = "Add";
-                        btnnewclient.style.visibility = "hidden";
+                        lnknewclient.style.visibility = "hidden";
                     } else {
                         btnupdate.value = "Update";
-                        btnnewclient.style.visibility = "visible";
+                        lnknewclient.style.visibility = "visible";
                     }
                 }
             } else {
@@ -6228,8 +6195,6 @@
             var inpifaid = newinput("inpifaid", "forminput", frmifa, true);
             addNewLine(frmifa, null);
             var btnupdate = newbutton("btnupdate", "Update", "formbutton", frmifa);
-            addNewLine(frmifa, null);
-            var lblifaconf = newlabel("lblifaconf", "", "", frmifa);
 
             selifa.onchange = function() {
                 repopulateIfa();
@@ -6249,7 +6214,6 @@
 
             function repopulateIfa() {
                 displayIfa(selifa[selifa.selectedIndex].value);                    
-                lblifaconf.innerHTML = "";                
             }
 
             populateIfas(selifa, 0, 1);
@@ -6381,7 +6345,7 @@
         // various populate routines to populate selection boxes
         //
 
-        function populateBrokers(brokerselect, defaultid) {
+        /*function populateBrokers(brokerselect, defaultid) {
             var i = 0;
 
             for (var j in brokers) {
@@ -6392,7 +6356,7 @@
                 }
                 i++;
             }
-        }
+        }*/
 
         function populateIfas(ifaselect, defaultid, option) {
             var i = 0;
@@ -6498,7 +6462,7 @@
             }
         }
 
-        function requestHistory() {
+        function history() {
             var inpclientid;
             var historyrequest = {};
 

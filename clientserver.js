@@ -1,12 +1,9 @@
 /****************
-* server.js
-* Front-office client server
+* clientserver.js
+* Front-office server for clients
 * Cantwaittotrade Limited
 * Terry Johnston
 * September 2012
-* 
-* Server to direct trading clients
-*
 ****************/
 
 // node libraries
@@ -31,6 +28,8 @@ var defaultnosettdays = 3;
 var clientserverchannel = 1;
 var userserverchannel = 2;
 var tradeserverchannel = 3;
+var ifaserverchannel = 4;
+var webserverchannel = 5;
 var servertype = "client";
 
 // redis
