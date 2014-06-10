@@ -1300,6 +1300,11 @@
         function updateIfa(ifa) {
             ifas[ifa.ifaid] = ifa;
 
+            var selifa = document.getElementById("selifa");
+            if (selifa != null) {
+                populateIfas(selifa, ifa.ifaid, 1);
+            }
+
             alert(ifa.name + " updated ok");
         }
 
@@ -1491,7 +1496,7 @@
             clearOrderBooks();
 
             cw2theading = document.getElementById('cw2t');
-            cw2theading.innerHTML = coheading;
+            cw2theading.innerHTML = coheading + " - User Signin";
 
             frmsignin = document.createElement("form");
             frmsignin.id = "frmsignin";
@@ -5053,8 +5058,6 @@
                     // clear the screen
                     clearForm("frmsignin", true);
 
-                    coheading = reply.broker;
-
                     cw2theading = document.getElementById('cw2t');
                     cw2theading.innerHTML = coheading + " - " + reply.email;
                 }
@@ -6170,7 +6173,7 @@
         function maintainIfas() {
             var frmifa = getForm("frmifa");
 
-            var selifa = newselect("selinsttype", "formselect", frmifa);
+            var selifa = newselect("selifa", "formselect", frmifa);
             addNewLine(frmifa, null);
             var lblname = newlabel("lblname", "Name:", "formlabel", frmifa);
             var inpname = newinput("inpname", "forminput", frmifa);
