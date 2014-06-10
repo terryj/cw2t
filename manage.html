@@ -874,6 +874,7 @@
                 //} else if ("brokers" in obj) {
                     //loadBrokers(obj.brokers);
                 } else if ("ifas" in obj) {
+                    clearIfas();
                     loadIfas(obj.ifas);
                 } else if ("ifa" in obj) {
                     updateIfa(obj.ifa);
@@ -1147,6 +1148,10 @@
 
         function clearAccount() {
             account = [];
+        }
+
+        function clearIfas() {
+            ifas = [];
         }
 
         //
@@ -6205,6 +6210,18 @@
 
             btnupdate.onclick = function() {
                 var ifa = {};
+
+                if (inpname.value == "") {
+                    alert("Please enter a name");
+                    inpname.focus();
+                    return;
+                }
+
+                if (inpemail.value == "") {
+                    alert("Please enter an email");
+                    inpemail.focus();
+                    return;
+                }
 
                 ifa.ifaid = inpifaid.value;
                 ifa.name = inpname.value;

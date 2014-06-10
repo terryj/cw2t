@@ -1936,14 +1936,24 @@ function registerScripts() {
   scriptifa = '\
   local ifaid \
   if KEYS[1] == "" then \
-    ifaid = redis.call("incr", "ifaid") \
+    --[[ get the broker ]] \
     local brokerid = redis.call("hget", "user:" .. KEYS[6], "brokerid") \
+    --[[ check email is unique ]] \
+    local emailexists = redis.call("get", "ifa:" .. KEYS[3]) \
+    if emailexists then return {1023} end \
+    ifaid = redis.call("incr", "ifaid") \
     --[[ set the default password to email ]] \
     redis.call("hmset", "ifa:" .. ifaid, "ifaid", ifaid, "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "address", KEYS[4], "mobile", KEYS[5], "brokerid", brokerid, "marketext", "D") \
     --[[ add route to find ifa from email ]] \
     redis.call("set", "ifa:" .. KEYS[3], ifaid) \
   else \
     ifaid = KEYS[1] \
+    --[[ update the email->id link if email has changed ]] \
+    local email = redis.call("hget", "ifa:" .. ifaid, "email") \
+    if KEYS[3] ~= email then \
+      redis.call("del", "ifa:" .. email) \
+      redis.call("set", "ifa:" .. KEYS[3], ifaid) \
+    end \
     --[[ do not update id/password/brokerid ]] \
     redis.call("hmset", "ifa:" .. ifaid, "name", KEYS[2], "email", KEYS[3], "address", KEYS[4], "mobile", KEYS[5]) \
   end \
