@@ -701,13 +701,13 @@
             background-color:inherit;
 
         }
-        /*submenu div css*/
+        /*container div & clickable div & submenu div css*/
         .contdiv{ 
             float:right;
             position: relative;
             display:block;
             height: 220px;
-            width: 100px;
+            width: 110px;
             background-color: red;  
             text-align: center;
             padding: 10px;
@@ -723,36 +723,25 @@
             background-color:yellow;
             text-align:center;
             padding: 5px;
-            margin: -5px;
+            margin: 0px;
         }
-        /*.scndcontainerdiv{
-            display:block;
-            position: absolute;
-            height:120px;
-            width:110px;
-            background-color:purple; 
-            padding-top:50px;
-            /*margin-top:50px;
-        }*/
-        /*.appeardiv{
+        .appeardiv{
             display:table;
-            display: none;
             position: relative;
-            height: 100px;
-            width: 100px;
-            background-color:blue;
+            /*height: 100px;
+            width: 100px;*/
+            background-color:yellow;
             text-align: center;
             padding:5px;
-            margin: 10px;
-        }*/
-        ///////////////////////the submenu css
-        .creatlbl {
-             background-color:yellow;
-             padding:5px;
+            margin: 0px 0px 0px -2.5px;
+            margin-top: 5px;
+            border-radius: 5px;
+            
         }
+        /* creatul under here*/
         .creatul {
              margin:0;
-             padding:5px;
+             padding:7px;
              background-color:/*#A1CF9F*/ yellow;
              display: inline-block;
              list-style-type: none;
@@ -762,12 +751,7 @@
              /*visibility: hidden;
              /*border: 2px dashed green; This lets me know where the div is*/
         }
-        /*label:hover + .submenudiv, .submenudiv:hover:
-             visibility: visible;    
-        }*/
-        .divContainer {
-             text-align:center;
-        }
+        /*have the sbmnulist here*/
         .sbmnulist {
              display:block;
              border: 2px solid /*#A1CF9F*/ yellow;
@@ -777,12 +761,6 @@
         .sbmnulist:hover {
              background-color: blue;
              color:white;
-        }
-        .submenudiv{
-            float: right;
-            display: table;
-            position:relative;
-            margin: 50px 10px;
         }
 
         /*end of submenu*/
@@ -5238,83 +5216,62 @@
 
         //randomCode();
 
-        /////////the container divs and tabs
+        /////////the container divs and tabs & submenu
 
-        //for( var i = 0; i < 3; ++i){
+        for( var i = 0; i < 3; ++i){
 
-        var contdiv = document.createElement("div");
-        contdiv.className = "contdiv";
-        contdiv.innerHTML = "Container Div";
-
-
-        var creatclickablediv = document.createElement("div");
-        creatclickablediv.className = "clickable";
-        creatclickablediv.innerHTML = "onscreen tab";
-
-        contdiv.appendChild(creatclickablediv);
-        //document.body.appendChild(creatclickablediv);
-
-            
-        var appeardiv = document.createElement("div");
-        appeardiv.className = "appeardiv";
-        appeardiv.innerHTML = "Tada!!";
-        //contdiv.appendChild(appeardiv);
-        //document.body.appendChild(contdiv);
-
-        main.appendChild(contdiv);//for the site only
-
-            
-        creatclickablediv.onclick = function(){
-            var alert = confirm("well done for clicking me");
-            /*var sbmnudiv = document.createElement("div");
-            sbmnudiv.className = "scndcontainerdiv";
-            //appeardiv.appendChild(sbmnudiv);
-            document.body.appendChild(sbmnudiv);*/
-            subMenu();
-            
-        };
+            var contdiv = document.createElement("div");
+            contdiv.id = "contdiv";
+            contdiv.className = "contdiv";
+            contdiv.innerHTML = "Container Div";
 
 
-        /////////////////the submenu function
-        function subMenu() {
+            var creatclickablediv = document.createElement("div");
+            creatclickablediv.className = "clickable";
+            creatclickablediv.innerHTML = "onscreen tab";
 
-                  
-                    var listsubmenu = function () {
-                        var creatDiv = document.createElement("div");
-                        creatDiv.id = "submenudiv";
-                        creatDiv.className = "submenudiv";
+            contdiv.appendChild(creatclickablediv);
+            //document.body.appendChild(creatclickablediv);
 
-                        var creatul = document.createElement("ul");
-                        creatul.className = "creatul";
-                        for (index = 0; index < 5; ++index) {
-                            li = document.createElement("li");
-                            li.className = "sbmnulist";
-                            li.innerHTML = "Submenu" + index;
-                            creatul.appendChild(li);
-                        }
+                
+            var appeardiv = document.createElement("div");
+            appeardiv.className = "appeardiv";
+            //appeardiv.innerHTML = "Tada!!";
+            //create the list under here
+            var creatul = document.createElement("ul");
+            creatul.className = "creatul";
+            for (index = 0; index < 5; ++index) {
+                li = document.createElement("li");
+                li.className = "sbmnulist";
+                li.innerHTML = "Submenu" + index;
+                creatul.appendChild(li);
+            }//for loop^^
 
-                        creatDiv.appendChild(creatul);
+            appeardiv.appendChild(creatul);
+            //contdiv.appendChild(appeardiv);//check to see if the appeadiv lines up straight
 
-                        // changed 'document.body' to 'main' for consistency
-                        //document.body.appendChild(creatDiv);//remove if doesnt work
+            //document.body.appendChild(contdiv);//for jsfiddle only
 
-                        main.appendChild(creatDiv);//just for the site only
-                        
-                        creatul.onclick = function(){
-                            var alert = confirm("submenu !!");
-                        };
-                        
-                    };
+            main.appendChild(contdiv);//for the site only
 
-                    // changed name to...
-                    listsubmenu();
+            // need to be able to attach the submenu onto the container div !!//done
 
-                    
-                }//testing//
 
-                //subMenu();
-            
-        //}the bracket for the for loop
+
+
+            creatclickablediv.onclick = function(){
+                var alert = confirm("this has been clicked");
+                contdiv.appendChild(appeardiv);
+                
+                //add submenu stuff here//no need
+            };
+
+            creatul.onclick = function(){
+                 var alert = confirm("submenu !!");
+            };//function^^
+
+        }
+
     
 
 
