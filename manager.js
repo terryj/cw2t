@@ -467,6 +467,7 @@ function orderBookRemoveRequest(userid, symbol, conn) {
 }
 
 function newClient(client, userid, conn) {
+  // get the broker for this client
   db.hget(servertype + ":" + userid, "brokerid", function(err, brokerid) {
     if (err) {
       console.log(err);

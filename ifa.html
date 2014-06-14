@@ -759,7 +759,7 @@
         var serverstatus = {};
         var allclients = "All clients";
         var numtradecols = 20;
-        var MENUORDERBOOKS = 0;
+        var MENUWATCHLIST = 0;
         var MENUMAINTAIN = 1;
         var MENUHISTORY = 2;
         var MENUPORTFOLIO = 3;
@@ -910,7 +910,7 @@
                 orderbooks[orderbookarr[i].symbol] = orderbookarr[i];
             }
 
-            if (selectedmenu == MENUORDERBOOKS) {
+            if (selectedmenu == MENUWATCHLIST) {
                 displayOrderBooks();
             }
         }
@@ -1199,7 +1199,7 @@
                 }
             }
 
-            if (selectedmenu == MENUORDERBOOKS) {
+            if (selectedmenu == MENUWATCHLIST) {
                 displayOrderBookHeadings();
                 displayOrderBook(orderbook.symbol);
             }
@@ -1289,7 +1289,7 @@
                 msg = "Order cancelled";
             }
 
-            if (selectedmenu == MENUORDERBOOKS) {
+            if (selectedmenu == MENUWATCHLIST) {
                 addMessageToDiv(msg, "orderdiv:" + order.symbol + ":" + order.orderdivnum);
             } else if (selectedmenu == MENUORDERS) {
                 removeElementFromList(order.orderid, list1);
@@ -1340,7 +1340,7 @@
             clearScreen();
             displayMenu();
 
-            selectedmenu = MENUORDERBOOKS;
+            selectedmenu = MENUWATCHLIST;
 
             displayOrderBooks();
         }
@@ -2666,7 +2666,7 @@
         }
 
         function displayTrade(trade) {
-            if (selectedmenu == MENUORDERBOOKS) {
+            if (selectedmenu == MENUWATCHLIST) {
                 addMessageToDiv(msg, "orderdiv:" + trade.symbol + ":" + trade.orderdivnum);
             } else if (selectedmenu == MENUTRADES) {
                 displayATrade(trade);
@@ -4353,7 +4353,7 @@
                 msg += ", " + quoteack.text;
             }
 
-            if (selectedmenu == MENUORDERBOOKS) {
+            if (selectedmenu == MENUWATCHLIST) {
                 addMessageToDiv(msg, "orderdiv:" + quoteack.symbol + ":" + quoteack.orderdivnum);
             }
         }
@@ -4439,7 +4439,7 @@
             }, 1000);
             // todo: clear if form is closed
 
-            if (selectedmenu == MENUORDERBOOKS) {
+            if (selectedmenu == MENUWATCHLIST) {
                 orderdiv = getDiv("orderdiv:" + quote.symbol + ":" + quote.orderdivnum, quote.symbol);
 
                 addNewLine(orderdiv, null);
@@ -4986,15 +4986,11 @@
                 menuitem.value = i;
                 menuitem.innerHTML = menuarr[i];
 
-                if (i == 0) {
+                if (i == MENUWATCHLIST) {
                     menuitem.className = "menuitemselected";
                     lastElement = menuitem;
                 } else if (i == MENUCHAT) { // change if menu changed
                     menuitem.id = "menuitemchat";
-                } else if (i > 13){ // when the amount of items in the menu exceed 13 then..//
-                    var nwmnu = new menuitem(); //... this will create a new list..//
-                    nwmnu.value = j; // ..add the items onto the list..//
-                    nwmnu.innerHTML = menuarr[j]//.. and display them !!//
                 }
                 menu.appendChild(menuitem);
             }
@@ -5007,6 +5003,10 @@
                 if (!e) e = window.event;
                 element = e.target || e.srcElement;
 
+                if (element.id == "menu") {
+                    return;
+                }
+
                 clearScreen();
 
                 element.className = "menuitemselected";
@@ -5017,7 +5017,7 @@
                 selectedmenu = element.value;
 
                 switch (selectedmenu) {
-                case MENUORDERBOOKS:
+                case MENUWATCHLIST:
                     displayOrderBooks();
                     break;
                 case MENUMAINTAIN:

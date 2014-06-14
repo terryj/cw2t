@@ -4520,6 +4520,10 @@
                 if (!e) e = window.event;
                 element = e.target || e.srcElement;
 
+                if (element.id == "menu") {
+                    return;
+                }
+
                 clearScreen();
                 clearQuoteTimer();
 
@@ -4537,23 +4541,6 @@
                 case 1:
                     requestHistory();
                     break;
-                /*case 1:
-                    displayQuotes();
-                    break;
-                case 2:
-                    displayOrders();
-                    break;
-                case 3:
-                    displayTrades();
-                    break;
-                case 4:
-                    displayPositions();
-                    break;
-                case 5:
-                    displayCash();
-                    displayMargins();
-                    displayReserves();
-                    break;*/
                 case 2:
                     requestPortfolio();
                     break;
@@ -4727,8 +4714,6 @@
             var inpnewpwd = newinput("inpnewpwd", "forminput", frmpassword, false, false);
             addNewLine(frmpassword);
             var btnpwd = newbutton("btnpwd", "Update", "formbutton", frmpassword);
-            addNewLine(frmpassword);
-            var lblpwdconf = newlabel("lblpwdconf", "", "", frmpassword);
 
             btnpwd.onclick = function() {
                 var pwdrequest = {};
@@ -4743,14 +4728,10 @@
         }
 
         function passwordUpdate(pwdupdate) {
-            var lblpwdconf = document.getElementById("lblpwdconf");
-
-            if (lblpwdconf != null) {
-                if (pwdupdate == "1") {
-                    lblpwdconf.innerHTML = "Password updated";
-                } else {
-                    lblpwdconf.innerHTML = "Password not updated";
-                }
+            if (pwdupdate == "1") {
+                alert("Password updated");
+            } else {
+                alert("Password not updated");
             }
         }
 

@@ -729,7 +729,6 @@
         var indices = {};
         var timeinforces = {};
         var clients = {};
-        //var brokers = {};
         var ifas = {};
         var instrumenttypes = {};
         var cashtranstypes = {};
@@ -763,7 +762,7 @@
         var serverstatus = {};
         var allclients = "All clients";
         var numtradecols = 20;
-        var MENUORDERBOOKS = 0;
+        var MENUWATCHLIST = 0;
         var MENUMAINTAIN = 1;
         var MENUHISTORY = 2;
         var MENUPORTFOLIO = 3;
@@ -866,13 +865,12 @@
                 } else if ("index" in obj) {
                     loadIndex(obj.index);
                 } else if ("clients" in obj) {
+                    clearClients();
                     loadClients(obj.clients);
                 } else if ("clienttypes" in obj) {
                     loadClienttypes(obj.clienttypes);
                 } else if ("client" in obj) {
                     updateClient(obj.client);
-                //} else if ("brokers" in obj) {
-                    //loadBrokers(obj.brokers);
                 } else if ("ifas" in obj) {
                     clearIfas();
                     loadIfas(obj.ifas);
@@ -939,7 +937,7 @@
                 orderbooks[orderbookarr[i].symbol] = orderbookarr[i];
             }
 
-            if (selectedmenu == MENUORDERBOOKS) {
+            if (selectedmenu == MENUWATCHLIST) {
                 displayOrderBooks();
             }
         }
@@ -1033,12 +1031,6 @@
                 clients[clientarr[i].clientid] = clientarr[i];
             }                                    
         }
-
-        /*function loadBrokers(brokerarr) {
-            for (var i = 0; i < brokerarr.length; ++i) {
-                brokers[brokerarr[i].brokerid] = brokerarr[i];
-            }                                                
-        }*/
 
         function loadIfas(ifaarr) {
             for (var i = 0; i < ifaarr.length; ++i) {
@@ -1148,6 +1140,10 @@
 
         function clearAccount() {
             account = [];
+        }
+
+        function clearClients() {
+            clients = [];
         }
 
         function clearIfas() {
@@ -1265,7 +1261,7 @@
                 }
             }
 
-            if (selectedmenu == MENUORDERBOOKS) {
+            if (selectedmenu == MENUWATCHLIST) {
                 displayOrderBookHeadings();
                 displayOrderBook(orderbook.symbol);
             }
@@ -1386,7 +1382,7 @@
                 msg = "Order cancelled";
             }
 
-            if (selectedmenu == MENUORDERBOOKS) {
+            if (selectedmenu == MENUWATCHLIST) {
                 addMessageToDiv(msg, "orderdiv:" + order.symbol + ":" + order.orderdivnum);
             } else if (selectedmenu == MENUORDERS) {
                 removeElementFromList(order.orderid, list1);
@@ -1437,7 +1433,7 @@
             clearScreen();
             displayMenu();
 
-            selectedmenu = MENUORDERBOOKS;
+            selectedmenu = MENUWATCHLIST;
 
             displayOrderBooks();
         }
@@ -2769,7 +2765,7 @@
         }
 
         function displayTrade(trade) {
-            if (selectedmenu == MENUORDERBOOKS) {
+            if (selectedmenu == MENUWATCHLIST) {
                 addMessageToDiv(msg, "orderdiv:" + trade.symbol + ":" + trade.orderdivnum);
             } else if (selectedmenu == MENUTRADES) {
                 displayATrade(trade);
@@ -4456,7 +4452,7 @@
                 msg += ", " + quoteack.text;
             }
 
-            if (selectedmenu == MENUORDERBOOKS) {
+            if (selectedmenu == MENUWATCHLIST) {
                 addMessageToDiv(msg, "orderdiv:" + quoteack.symbol + ":" + quoteack.orderdivnum);
             }
         }
@@ -4542,7 +4538,7 @@
             }, 1000);
             // todo: clear if form is closed
 
-            if (selectedmenu == MENUORDERBOOKS) {
+            if (selectedmenu == MENUWATCHLIST) {
                 orderdiv = getDiv("orderdiv:" + quote.symbol + ":" + quote.orderdivnum, quote.symbol);
 
                 addNewLine(orderdiv, null);
@@ -5089,15 +5085,11 @@
                 menuitem.value = i;
                 menuitem.innerHTML = menuarr[i];
 
-                if (i == 0) {
+                if (i == MENUWATCHLIST) {
                     menuitem.className = "menuitemselected";
                     lastElement = menuitem;
-                } else if (i == MENUCHAT) { // change if menu changed
+                } else if (i == MENUCHAT) {
                     menuitem.id = "menuitemchat";
-                } else if (i > 13){ // when the amount of items in the menu exceed 13 then..//
-                    var nwmnu = new menuitem(); //... this will create a new list..//
-                    nwmnu.value = j; // ..add the items onto the list..//
-                    nwmnu.innerHTML = menuarr[j]//.. and display them !!//
                 }
                 menu.appendChild(menuitem);
             }
@@ -5110,6 +5102,10 @@
                 if (!e) e = window.event;
                 element = e.target || e.srcElement;
 
+                if (element.id == "menu") {
+                    return;
+                }
+
                 clearScreen();
 
                 element.className = "menuitemselected";
@@ -5120,7 +5116,7 @@
                 selectedmenu = element.value;
 
                 switch (selectedmenu) {
-                case MENUORDERBOOKS:
+                case MENUWATCHLIST:
                     displayOrderBooks();
                     break;
                 case MENUMAINTAIN:
@@ -5412,11 +5408,6 @@
             divaddress.appendChild(inpaddress);
             frmclient.appendChild(divaddress);
 
-            //addNewLine(frmclient, null);
-            //var lblbroker = newlabel("lblbroker", "Broker:", "formlabel", frmclient);
-            //var selbroker = newselect("selbroker", "formselect", frmclient);
-
-            //addNewLine(frmclient, null);
             var lblbrokerclientcode = newlabel("lblbrokerclientcode", "Broker Client Code:", "formlabel", frmclient);
             var inpbrokerclientcode = newinput("inpbrokerclientcode", "forminput", frmclient);
 
@@ -5481,7 +5472,6 @@
 
                 client.name = inpname.value;
                 client.mobile = inpmobile.value;
-                //client.brokerid = selbroker[selbroker.selectedIndex].value;
                 client.brokerclientcode = inpbrokerclientcode.value;
                 client.clientid = inpclientid.value;
                 client.address = inpaddress.value;
@@ -5531,7 +5521,6 @@
             var inpclient;
             var inpname;
             var inpmobile;
-            //var selbroker;
             var inpbrokerclientcode;
             var inpclientid;
             var inpaddress;
@@ -5551,7 +5540,6 @@
             if (frm == "frmclient") {
                 inpname = document.getElementById("inpname");
                 inpmobile = document.getElementById("inpmobile");
-                //selbroker = document.getElementById("selbroker");
                 inpbrokerclientcode = document.getElementById("inpbrokerclientcode");
                 inpclientid = document.getElementById("inpclientid");
                 inpaddress = document.getElementById("inpaddress");
@@ -5569,7 +5557,6 @@
                     client = {
                         name:  '',
                         mobile:    '',
-                        //brokerid:  1,
                         brokerclientcode: '',
                         clientid: '',
                         address: '',
@@ -5585,7 +5572,6 @@
                 if (inpname != null) {
                     inpname.value = client.name;
                     inpmobile.value = client.mobile;
-                    //populateBrokers(selbroker, client.brokerid);
                     inpbrokerclientcode.value = client.brokerclientcode;
                     inpclientid.value = client.clientid;
                     inpaddress.value = client.address;
@@ -6364,19 +6350,6 @@
         //
         // various populate routines to populate selection boxes
         //
-
-        /*function populateBrokers(brokerselect, defaultid) {
-            var i = 0;
-
-            for (var j in brokers) {
-                if (brokers[j].brokerid == defaultid) {
-                    brokerselect[i] = new Option(brokers[j].name, brokers[j].brokerid, true, true);
-                } else {
-                    brokerselect[i] = new Option(brokers[j].name, brokers[j].brokerid, false, false);                    
-                }
-                i++;
-            }
-        }*/
 
         function populateIfas(ifaselect, defaultid, option) {
             var i = 0;
