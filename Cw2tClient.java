@@ -169,18 +169,25 @@ class Cw2tSubscriber extends JedisPubSub {
 
 // listening thread for jedis pubsub
 class Cw2tSubscriberThread extends Thread {
-    private Jedis jedissubscriber;
     private Cw2tSubscriber cw2tsubscriber;
-
-    public Cw2tSubscriberThread(Jedis jedissubscriber, Cw2tSubscriber cw2tsubscriber) {
-        this.jedissubscriber = jedissubscriber;
+    private JedisPool jedispool;
+    
+    public Cw2tSubscriberThread(Cw2tSubscriber cw2tsubscriber, JedisPool jedispool) {
         this.cw2tsubscriber = cw2tsubscriber;
+        this.jedispool = jedispool;
     }
     
     public void run() {
         System.out.println("Starting pubsub thread");
+        
+        // PB fix - start the subscribe connection from within this thread
+        Jedis jedissubscriber = jedispool.getResource();
         jedissubscriber.subscribe(cw2tsubscriber, "proquote");
-        System.out.println( "Exiting pubsub thread");
+        
+        System.out.println("Exiting pubsub thread");
+        
+        // PB fix
+        jedispool.returnResource(jedissubscriber);
     }
 }
 
@@ -188,7 +195,6 @@ public class Cw2tClient implements ISessionObserver {
 	ClientSessionLayer session;
 	int status;
     JedisPool jedispool;
-    Jedis jedissubscriber;
 	
 	public static final int st_start = 0;
 	public static final int st_connected = 1;
@@ -211,14 +217,11 @@ public class Cw2tClient implements ISessionObserver {
         // get a connection pool
         jedispool = new JedisPool(new JedisPoolConfig(), "localhost", 6379, 0);
         
-        // connection for subscribing
-        jedissubscriber = jedispool.getResource();
-        
         // instance of listening class
         Cw2tSubscriber cw2tsubscriber = new Cw2tSubscriber(session);
         
-        // create a separate thread as connection will be blocked
-        new Cw2tSubscriberThread(jedissubscriber, cw2tsubscriber).start();
+        // create a separate thread as connection will be blocked - PB fix
+        new Cw2tSubscriberThread(cw2tsubscriber, jedispool).start();
     }
     
     public void stopJedis() {
@@ -230,7 +233,6 @@ public class Cw2tClient implements ISessionObserver {
         jedispool.returnResource(jedispublisher);
         
         // tidy jedis
-        jedispool.returnResource(jedissubscriber);
         jedispool.destroy();
     }
 	
@@ -1100,7 +1102,7 @@ public class Cw2tClient implements ISessionObserver {
 					ts.wait(500);
 					status = ts.status;
 				}
-				
+                
 				// disconnected in the meanwhile?
 				switch(status) {
 				case Cw2tClient.st_start:
