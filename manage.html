@@ -1336,26 +1336,28 @@
         }
 
         function updateCashtrans(cashtrans) {
-            var lblcashconf;
             var msg = "";
 
-            lblcashconf = document.getElementById("lblcashconf");
-            if (lblcashconf != null) {
-                msg += cashtranstypes[cashtrans.transtype].description;
-                msg += " of " + cashtrans.amount + " " + cashtrans.currency;
-                if (cashtrans.drcr == "1") {
-                    msg += " added to ";
-                } else {
-                    msg += " taken from ";     
-                }
-                msg += clients[cashtrans.clientid].name;
-                lblcashconf.innerHTML = msg;
+            msg += cashtranstypes[cashtrans.transtype].description;
+            msg += " of " + cashtrans.amount + " " + cashtrans.currency;
+            if (cashtrans.drcr == "1") {
+                msg += " added to ";
+            } else {
+                msg += " taken from ";     
             }
+            msg += clients[cashtrans.clientid].name;
 
-            clearField(inpclient);
-            clearField(inpamount);
-            clearField(inpdesc);
-            clearField(inpref);
+            alert(msg);
+
+            clearField("inpclient");
+            clearField("inpamount");
+            clearField("inpdesc");
+            clearField("inpref");
+
+            var clientboxinput = document.getElementById("clientboxinput");
+            if (clientboxinput != null) {
+                clientboxinput.focus();
+            }
         }
 
         function updateOrder(order) {
@@ -5653,7 +5655,6 @@
             var inpamount;
             var inpdesc;
             var btnupdate;
-            var lblcashconf;
             var inpclientid;
             var clientboxinput;
             var lblref;
@@ -5764,9 +5765,6 @@
                 sockjs.send("{\"cashtrans\":" + JSON.stringify(cashtrans) + "}");
             }
 
-            lblcashconf = document.createElement("label");
-            lblcashconf.id = "lblcashconf";
-
             populateCurrencies(selcurrency, "GBP");
             populateCashtranstypes(seltranstype, "CA");
             populateDate(settlday, settlmonth, settlyear, new Date());
@@ -5806,7 +5804,6 @@
             addNewLine(frmcash, null);
             frmcash.appendChild(btnupdate);
             addNewLine(frmcash, null);
-            frmcash.appendChild(lblcashconf);
             frmcash.appendChild(inpclientid);
 
             main.appendChild(frmcash);
@@ -6363,13 +6360,13 @@
             }
 
             if (option == 1) {
-                if (i == 0) {
+                if (defaultid == 0) {
                     ifaselect[i] = new Option("New IFA", 0, true, true);
                 } else {
                     ifaselect[i] = new Option("New IFA", 0, false, false);
                 }
             } else if (option == 0) {
-                if (i == 0) {
+                if (defaultid == 0) {
                     ifaselect[i] = new Option("None", 0, true, true);
                 } else {
                     ifaselect[i] = new Option("None", 0, false, false);

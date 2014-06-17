@@ -156,7 +156,7 @@ function pubsub() {
   });
 
   // listen for trading messages
-  dbsub.subscribe(userserverchannel);
+  dbsub.subscribe(ifaserverchannel);
 }
 
 // sockjs server
