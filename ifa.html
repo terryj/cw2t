@@ -760,16 +760,13 @@
         var allclients = "All clients";
         var numtradecols = 20;
         var MENUWATCHLIST = 0;
-        var MENUMAINTAIN = 1;
-        var MENUHISTORY = 2;
-        var MENUPORTFOLIO = 3;
-        var MENUCHAT = 4;
-        var MENULOGOUT = 5;
-        var MENUCLIENTS = 6;
-        var MENUCASH = 7;
-        var MENUORDERS = 8;
-        var MENUTRADES = 9;
-        var MENUPOSITIONS = 10;
+        var MENUCLIENTS = 1;
+        var MENULOGOUT = 2;
+        var MENUCHAT = 3;
+        var MENUCASH = 4;
+        var MENUORDERS = 5;
+        var MENUTRADES = 6;
+        var MENUPOSITIONS = 7;
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -1243,26 +1240,22 @@
         }
 
         function updateCashtrans(cashtrans) {
-            var lblcashconf;
             var msg = "";
 
-            lblcashconf = document.getElementById("lblcashconf");
-            if (lblcashconf != null) {
-                msg += cashtranstypes[cashtrans.transtype].description;
-                msg += " of " + cashtrans.amount + " " + cashtrans.currency;
-                if (cashtrans.drcr == "1") {
-                    msg += " added to ";
-                } else {
-                    msg += " taken from ";     
-                }
-                msg += clients[cashtrans.clientid].name;
-                lblcashconf.innerHTML = msg;
+            msg += cashtranstypes[cashtrans.transtype].description;
+            msg += " of " + cashtrans.amount + " " + cashtrans.currency;
+            if (cashtrans.drcr == "1") {
+                msg += " added to ";
+            } else {
+                msg += " taken from ";     
             }
+            msg += clients[cashtrans.clientid].name;
 
-            clearField(inpclient);
-            clearField(inpamount);
-            clearField(inpdesc);
-            clearField(inpref);
+            alert(msg);
+
+            clearField("inpamount");
+            clearField("inpdesc");
+            clearField("inpref");
         }
 
         function updateOrder(order) {
@@ -1757,6 +1750,7 @@
             clearForm("frmpositions", true);
             clearForm("frmdates", true);
             clearForm("frmmaintain", true);
+            clearForm("frmclientmenu", true);
             clearMaintainForms();
         }
 
@@ -2029,8 +2023,6 @@
             var headingrow;
             var numcols = 11;
 
-            var emptyline = addNewLine(main, "emptyline:1");
-
             if (Object.keys(positions).length == 0) {
                 var list = getList("list1");
                 addElement("No positions", list, 0);
@@ -2192,8 +2184,6 @@
             var tblbody;
             var numrows = 7;
             var firstcurr = true;
-
-            var emptyline = addNewLine(main, "emptyline:1");
 
             if (Object.keys(account).length == 0) {
                 var list = getList("list1");
@@ -2794,13 +2784,13 @@
             var numcols = 8;
             var firstrow;
 
-            var emptyline = addNewLine(main, "emptyline:1");
-
             if (Object.keys(cashhistory).length == 0) {
                 var list = getList("list1");
                 addElement("No cash transactions", list, 0);
                 return;
             }
+
+            addNewLine(main, "emptyline:1");
 
             tblcashhistory = document.createElement("table");
             tblcashhistory.id = "tblcashhistory";
@@ -2945,8 +2935,6 @@
             var firstCash = true;
             var tmpcasharr = [];
 
-            var emptyline = addNewLine(main, "emptyline:1");
-
             var list = getList("list1");
 
             var i = 0;
@@ -2970,6 +2958,9 @@
                     historyrequest.clientid = inpclientid.value;
                     historyrequest.currency = tmpcasharr[element.value];
                     sockjs.send("{\"cashhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+
+                    clearTable("tblcashhistory");
+                    clearEmptyLines();
                 }
             }
         }
@@ -3195,110 +3186,6 @@
             }
 
             alert(msg);            
-        }
-
-        function portfolio() {
-            var inpclientid;
-
-            var frmpositions = getForm("frmpositions");
-
-            selectClient("frmpositions", null, null, true, "", "inpclientid", "", false);
-
-            var lnkpositions = newlink("lnkpositions", "Positions", "", frmpositions);
-            var lnkcash = newlink("lnkcash", "Cash", "", frmpositions);
-            //var lnkmargin = newlink("lnkmargin", "Margin", "", frmpositions);
-            //var lnkreserves = newlink("lnkreserves", "Reserves", "", frmpositions);
-            var lnkaccount = newlink("lnkaccount", "Account", "", frmpositions);
-
-            lnkpositions.onclick = function() {
-                var positionrequest = {};
-
-                if (!validateClientid()) {return;}
-
-                tidy();
-                setSelected(lnkpositions);
-                positionrequest.clientid = inpclientid.value;
-                sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
-            }
-
-            lnkcash.onclick = function() {
-                var cashrequest = {};
-
-                if (!validateClientid()) {return;}
-
-                tidy();
-                setSelected(lnkcash);
-                cashrequest.clientid = inpclientid.value;
-                sockjs.send("{\"cashrequest\":" + JSON.stringify(cashrequest) + "}");
-            }
-
-            /*lnkmargin.onclick = function() {
-                var marginrequest = {};
-
-                if (!validateClientid()) {return;}
-
-                setSelected(lnkmargin);
-                marginrequest.clientid = inpclientid.value;
-                sockjs.send("{\"marginrequest\":" + JSON.stringify(marginrequest) + "}");
-            }
-
-            lnkreserves.onclick = function() {
-                var reservesrequest = {};
-
-                if (!validateClientid()) {return;}
-
-                setSelected(lnkreserves);
-                reservesrequest.clientid = inpclientid.value;
-                sockjs.send("{\"reservesrequest\":" + JSON.stringify(reservesrequest) + "}");
-            }*/
-
-            lnkaccount.onclick = function() {
-                var accountrequest = {};
-
-                if (!validateClientid()) {return;}
-
-                tidy();
-                setSelected(lnkaccount);
-                accountrequest.clientid = inpclientid.value;
-                sockjs.send("{\"accountrequest\":" + JSON.stringify(accountrequest) + "}");
-            }
-
-            inpclientid = document.createElement("input");
-            inpclientid.type = "hidden";
-            inpclientid.id = "inpclientid";
-            inpclientid.value = "";
-
-            frmpositions.appendChild(inpclientid);
-
-            main.appendChild(frmpositions);
-
-            function validateClientid() {
-                if (inpclientid.value == "") {
-                    alert("Please select a client");
-                    selectClientFocus("clientboxinput");
-                    return false;
-                }
-
-                return true;
-            }
-
-            function setSelected(link) {
-                lnkpositions.className = "";
-                lnkcash.className = "";
-                //lnkmargin.className = "";
-                //lnkreserves.className = "";
-                lnkaccount.className = "";
-
-                link.className = "linkselected";
-            }
-
-            function tidy() {
-                clearLists();
-                clearEmptyLines();
-                clearHeadings();
-                clearTables();
-                clearElementById("lbltrades");
-            }
         }
 
         function requestConnections() {
@@ -4979,7 +4866,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Watch List", "Maintain", "History", "Portfolio", "Chat", "Log Out"];
+            menuarr = ["Watch List", "Clients", "Log Out"];
 
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
@@ -5020,22 +4907,247 @@
                 case MENUWATCHLIST:
                     displayOrderBooks();
                     break;
-                case MENUMAINTAIN:
-                    maintain();
+                case MENUCLIENTS:
+                    clientMenu();
                     break;
-                case MENUHISTORY:
-                    history();
-                    break;
-                case MENUPORTFOLIO:
-                    portfolio();
-                    break;
-                case MENUCHAT:
+                /*case MENUCHAT:
                     requestConnections();
-                    break;
+                    break;*/
                 case MENULOGOUT:
                     logout();
                     break;
                 }
+            }
+        }
+
+        function clientMenu() {
+            var inpclientid;
+            var historyrequest = {};
+
+            var frmclientmenu = getForm("frmclientmenu");
+
+            selectClient("frmclientmenu", null, null, true, "", "inpclientid", "", true);
+
+            var lnknewclient = newlink("lnknewclient", "Add Client", "", frmclientmenu);
+            var lnkeditclient = newlink("lnkeditclient", "Edit Client", "", frmclientmenu);
+            var lnknewcash = newlink("lnknewcash", "+/- Cash", "", frmclientmenu);
+            var lnkcash = newlink("lnkcash", "Current Cash", "", frmclientmenu);
+            var lnkpositions = newlink("lnkpositions", "Positions", "", frmclientmenu);
+            var lnkaccount = newlink("lnkaccount", "Account", "", frmclientmenu);
+            var lnkquoterequests = newlink("lnkquoterequests", "Quote Requests", "", frmclientmenu);
+            var lnkquotes = newlink("lnkquotes", "Quotes", "", frmclientmenu);
+            var lnkorders = newlink("lnkorders", "Orders", "", frmclientmenu);
+            var lnktrades = newlink("lnktrades", "Trades", "", frmclientmenu);
+            var lnkcashhistory = newlink("lnkcashhistory", "Cash History", "", frmclientmenu);
+            var lnkchat = newlink("lnkchat", "Chat History", "", frmclientmenu);
+
+            lnknewclient.onclick = function() {
+                tidy();
+                setSelected(lnknewclient);
+
+                maintainClients(null);
+            }
+
+            lnkeditclient.onclick = function() {
+                if (!validateClientid()) {return;}
+
+                tidy();
+                setSelected(lnkeditclient);
+
+                maintainClients(clients[inpclientid.value]);
+            }
+
+            lnknewcash.onclick = function() {
+                tidy();
+                setSelected(lnknewcash);
+
+                maintainCash();
+            }
+
+            lnkcash.onclick = function() {
+                var cashrequest = {};
+
+                if (!validateClientid()) {return;}
+
+                tidy();
+                setSelected(lnkcash);
+                cashrequest.clientid = inpclientid.value;
+                sockjs.send("{\"cashrequest\":" + JSON.stringify(cashrequest) + "}");
+            }
+
+            lnkpositions.onclick = function() {
+                var positionrequest = {};
+
+                if (!validateClientid()) {return;}
+
+                tidy();
+                setSelected(lnkpositions);
+                positionrequest.clientid = inpclientid.value;
+                sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
+            }
+
+            lnkaccount.onclick = function() {
+                var accountrequest = {};
+
+                if (!validateClientid()) {return;}
+
+                tidy();
+                setSelected(lnkaccount);
+                accountrequest.clientid = inpclientid.value;
+                sockjs.send("{\"accountrequest\":" + JSON.stringify(accountrequest) + "}");
+            }
+
+            lnkquoterequests.onclick = function() {
+                if (!validateClientid(false)) {return;}
+
+                tidy();
+                setSelected(lnkquoterequests);
+                historyrequest.clientid = inpclientid.value;
+                sockjs.send("{\"quoterequesthistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            lnkquotes.onclick = function() {
+                if (!validateClientid(false)) {return;}
+
+                tidy();
+                setSelected(lnkquotes);
+                historyrequest.clientid = inpclientid.value;
+                sockjs.send("{\"quotehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            lnkorders.onclick = function() {
+                if (!validateClientid(false)) {return;}
+
+                tidy();
+                setSelected(lnkorders);
+                historyrequest.clientid = inpclientid.value;
+                sockjs.send("{\"orderhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            lnktrades.onclick = function() {
+                if (!validateClientid(true)) {return;}
+
+                tidy();
+                setSelected(lnktrades);
+
+                if (inpclientid.value == 0) { // all clients
+                    selectDate();
+                } else {
+                    historyrequest.clientid = inpclientid.value;
+                    sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");                    
+                }
+            }
+
+            lnkcashhistory.onclick = function() {
+                if (!validateClientid(false)) {return;}
+
+                tidy();
+                setSelected(lnkcashhistory);
+                historyrequest.clientid = inpclientid.value;
+                // todo: make option
+                historyrequest.currency = "GBP";
+                sockjs.send("{\"cashhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            lnkchat.onclick = function() {
+                if (!validateClientid(false)) {return;}
+
+                tidy();
+                setSelected(lnkchat);
+                historyrequest.clientid = inpclientid.value;
+                sockjs.send("{\"chathistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+            }
+
+            inpclientid = document.createElement("input");
+            inpclientid.type = "hidden";
+            inpclientid.id = "inpclientid";
+            inpclientid.value = "";
+
+            frmclientmenu.appendChild(inpclientid);
+
+            addNewLine(frmclientmenu, null);
+            addNewLine(frmclientmenu, null);
+            
+            main.appendChild(frmclientmenu);
+
+            function validateClientid(zeroclientidok) {
+                var validclient = true;
+
+                if (inpclientid.value == "") {
+                    alert("Please select a client");
+                    validclient = false;
+                    selectClientFocus("clientboxinput");
+                }
+
+                // only allow all clients for trades
+                if (inpclientid.value == "0" && zeroclientidok == false) {
+                    alert("Please select an individual client");
+                    validclient = false;
+                    selectClientFocus("clientboxinput");
+                }
+
+                return validclient;
+            }
+
+            function setSelected(link) {
+                lnknewclient.className = "";
+                lnkeditclient.className = "";
+                lnknewcash.className = "";
+                lnkquoterequests.className = "";
+                lnkquotes.className = "";
+                lnkorders.className = "";
+                lnktrades.className = "";
+                lnkchat.className = "";
+                lnkcash.className = "";
+                lnkpositions.className = "";
+                lnkcashhistory.className = "";
+                lnkaccount.className = "";
+
+                link.className = "linkselected";
+            }
+
+            function selectDate() {
+                var frmdates = getForm("frmdates");
+
+                var lblfromdate = newlabel("lblfromdate", "From:", "", frmdates);
+                var selfromday = newselect("selfromday", "formselect", frmdates);
+                var selfrommonth = newselect("selfrommonth", "formselect", frmdates);
+                var selfromyear = newselect("selfromyear", "formselect", frmdates);
+                var lbltodate = newlabel("lbltodate", " To:", "", frmdates);
+                var seltoday = newselect("seltoday", "formselect", frmdates);
+                var seltomonth = newselect("seltomonth", "formselect", frmdates);
+                var seltoyear = newselect("seltoyear", "formselect", frmdates);
+
+                populateDate(selfromday, selfrommonth, selfromyear, new Date());
+                populateDate(seltoday, seltomonth, seltoyear, new Date());
+
+                var dummylabel = newlabel("dummylabel", " ", "", frmdates);
+                var btntrades = newbutton("btntrades", "Get trades", "formbutton", frmdates);
+
+                btntrades.onclick = function() {
+                    clearEmptyLines();
+                    clearLists();
+                    clearTables();
+
+                    historyrequest.clientid = inpclientid.value;
+                    historyrequest.fromdate = formatToUTCDate(selfromday[selfromday.selectedIndex].value, selfrommonth[selfrommonth.selectedIndex].value, selfromyear[selfromyear.selectedIndex].value);
+                    historyrequest.todate = formatToUTCDate(seltoday[seltoday.selectedIndex].value, seltomonth[seltomonth.selectedIndex].value, seltoyear[seltoyear.selectedIndex].value);
+
+                    sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+                }
+
+                main.appendChild(frmdates);
+            }
+
+            function tidy() {
+                clearLists();
+                clearHeadings();
+                clearEmptyLines();
+                clearTables();
+                clearForm("frmdates", true);
+                clearForm("frmclient", true);
+                clearForm("frmcash", true);
+                clearElementById("lbltrades");
             }
         }
 
@@ -5127,7 +5239,7 @@
             clientlist.onclick = function(e) {
                 var element;
                 var client = {};
-                
+
                 if (!e) e = window.event;
                 element = e.target || e.srcElement;
 
@@ -5192,47 +5304,11 @@
             }
         }
 
-        function maintain() {
-            var frmmaintain = getForm("frmmaintain");
-
-            var lnkclients = newlink("lnkclients", "Clients", "", frmmaintain);
-            var lnkcash = newlink("lnkcash", "Cash", "", frmmaintain);
-
-            lnkclients.onclick = function() {
-                clearMaintainForms();
-                clearDivs();
-                maintainClients();
-                selectedmenu = MENUCLIENTS;
-                setSelected(lnkclients);
-            }
-
-            lnkcash.onclick = function() {
-                clearMaintainForms();
-                clearDivs();
-                maintainCash();
-                selectedmenu = MENUCASH;
-                setSelected(lnkcash);
-            }
-
-            addNewLine(frmmaintain, null);
-            addNewLine(frmmaintain, null);
-            
-            main.appendChild(frmmaintain);
-
-            function setSelected(link) {
-                lnkclients.className = "";
-                lnkcash.className = "";
-
-                link.className = "linkselected";
-            }
-        }
-
-        function maintainClients() {
-            selectClient("frmclient", null, null, false, "inpname", "inpclientid", "", false);
+        function maintainClients(selclient) {
+            var btnupdate;
 
             var frmclient = getForm("frmclient");
 
-            addNewLine(frmclient, null);
             var lblname = newlabel("lblname", "Name:", "formlabel", frmclient);
             var inpname = newinput("inpname", "forminput", frmclient);
 
@@ -5281,11 +5357,14 @@
 
             addNewLine(frmclient, null);
             var lblclientid = newlabel("lblclientid", "Client Id:", "formlabel", frmclient);
-            var inpclientid = newinput("inpclientid", "forminput", frmclient, true);
+            var displclientid = newinput("displclientid", "forminput", frmclient, true);
 
             addNewLine(frmclient, null);
-            var btnupdate = newbutton("btnupdate", "Add", "formbutton", frmclient);
-            var lnknewclient = newlink("lnknewclient", "New Client", "", frmclient);
+            if (selclient == null) {
+                btnupdate = newbutton("btnupdate", "Add", "formbutton", frmclient);
+            } else {
+                btnupdate = newbutton("btnupdate", "Update", "formbutton", frmclient);                
+            }
 
             btnupdate.onclick = function() {
                 var client = {};
@@ -5304,10 +5383,15 @@
                     return;                        
                 }
 
+                if (selclient == null) {
+                    client.clientid = "";
+                } else {
+                    client.clientid = inpclientid.value;
+                }
+
                 client.name = inpname.value;
                 client.mobile = inpmobile.value;
                 client.brokerclientcode = inpbrokerclientcode.value;
-                client.clientid = inpclientid.value;
                 client.address = inpaddress.value;
                 client.email = inpemail.value;
                 client.commissionpercent = inpcommpercent.value;
@@ -5326,32 +5410,24 @@
                 sockjs.send("{\"newclient\":" + JSON.stringify(client) + "}");
             }
 
-            lnknewclient.onclick = function() {
-                displayClient(null, "frmclient", "", "inpname", "inpclientid", "");
-                inpname.focus();
-            }
-
             main.appendChild(frmclient);
 
-            inpclientid.disabled = true;
-
-            displayClient(null, "frmclient", "", "", "", "");
+            displayClient(selclient, "frmclient", "", "", "", "");
         }
 
         function displayClient(client, frm, msg, namefld, idfld, focusfldstr) {
-            var inpclient;
             var inpname;
+            var inpclient;
+            var inpclientid;
             var inpmobile;
             var inpbrokerclientcode;
-            var inpclientid;
+            var displclientid;
             var inpaddress;
             var inpemail;
             var chkinsttype;
             var found;
             var seltype;
             var btnupdate;
-            var lnknewclient;
-            var inpclientid;
             var focusfld;
             var inpcommpercent;
 
@@ -5359,12 +5435,11 @@
                 inpname = document.getElementById("inpname");
                 inpmobile = document.getElementById("inpmobile");
                 inpbrokerclientcode = document.getElementById("inpbrokerclientcode");
-                inpclientid = document.getElementById("inpclientid");
+                displclientid = document.getElementById("displclientid");
                 inpaddress = document.getElementById("inpaddress");
                 inpemail = document.getElementById("inpemail");
                 seltype = document.getElementById("seltype");
                 btnupdate = document.getElementById("btnupdate");
-                lnknewclient = document.getElementById("lnknewclient");
                 inpcommpercent = document.getElementById("inpcommpercent");
 
                 // create an empty client
@@ -5387,7 +5462,7 @@
                     inpname.value = client.name;
                     inpmobile.value = client.mobile;
                     inpbrokerclientcode.value = client.brokerclientcode;
-                    inpclientid.value = client.clientid;
+                    displclientid.value = client.clientid;
                     inpaddress.value = client.address;
                     inpemail.value = client.email;
                     populateClientTypes(seltype, client.type);
@@ -5412,10 +5487,8 @@
 
                     if (client.name == "") {
                         btnupdate.value = "Add";
-                        lnknewclient.style.visibility = "hidden";
                     } else {
                         btnupdate.value = "Update";
-                        lnknewclient.style.visibility = "visible";
                     }
                 }
             } else {
@@ -5450,19 +5523,15 @@
 
         function maintainCash() {
             var frmcash;
-            var lblclient;
             var lblcurrency;
             var lbltranstype;
             var lblamount;
             var lbldesc;
             var selcurrency;
             var seltranstype;
-            var inpclient;
             var inpamount;
             var inpdesc;
             var btnupdate;
-            var lblcashconf;
-            var inpclientid;
             var clientboxinput;
             var lblref;
             var inpref;
@@ -5470,16 +5539,15 @@
             var settlmonth;
             var settlyear;
 
-            selectClient("frmcash", null, null, false, "inpclient", "inpclientid", "", false);
-
             frmcash = getForm("frmcash");
 
-            lblclient = document.createElement("label");
-            lblclient.className = "formlabel";
-            lblclient.innerHTML = "Client:";
-            inpclient = document.createElement("input");
-            inpclient.className = "forminput";
-            inpclient.id = "inpclient";
+            var inpclientid = document.getElementById("inpclientid");
+            if (inpclientid == null) {
+                alert("Please select a client");
+                selectClientFocus("clientboxinput");
+                return;
+            }
+
             lblcurrency = document.createElement("label");
             lblcurrency.className = "formlabel";
             lblcurrency.innerHTML = "Currency:";
@@ -5510,9 +5578,6 @@
             inpref = document.createElement("input");
             inpref.id = "inpref";
             inpref.className = "forminput";
-            inpclientid = document.createElement("input");
-            inpclientid.type = "hidden";
-            inpclientid.id = "inpclientid";
             lblsettldate = document.createElement("label");
             lblsettldate.className = "formlabel";
             lblsettldate.innerHTML = "Settlement Date:";
@@ -5572,19 +5637,10 @@
                 sockjs.send("{\"cashtrans\":" + JSON.stringify(cashtrans) + "}");
             }
 
-            lblcashconf = document.createElement("label");
-            lblcashconf.id = "lblcashconf";
-
             populateCurrencies(selcurrency, "GBP");
             populateCashtranstypes(seltranstype, "CA");
             populateDate(settlday, settlmonth, settlyear, new Date());
 
-            inpclient.disabled = true;
-
-            addNewLine(frmcash, null);
-            frmcash.appendChild(lblclient);
-            frmcash.appendChild(inpclient);
-            addNewLine(frmcash, null);
             frmcash.appendChild(lblcurrency);
             frmcash.appendChild(selcurrency);
             addNewLine(frmcash, null);
@@ -5613,9 +5669,6 @@
             frmcash.appendChild(inpref);
             addNewLine(frmcash, null);
             frmcash.appendChild(btnupdate);
-            addNewLine(frmcash, null);
-            frmcash.appendChild(lblcashconf);
-            frmcash.appendChild(inpclientid);
 
             main.appendChild(frmcash);
         }
@@ -5656,7 +5709,7 @@
             return label;    
         }
 
-        function newinput(id, classname, form, disabled) {
+        function newinput(id, classname, form, disabled, hidden) {
             var input = document.createElement("input");
             input.id = id;
             if (classname != "") {
@@ -5664,6 +5717,9 @@
             }
             if (disabled) {
                 input.disabled = true;
+            }
+            if (hidden) {
+                input.type = "hidden";
             }
             form.appendChild(input);   
             return input;
@@ -5777,165 +5833,6 @@
             } else {
                 sideselect[0] = new Option("Buy", 2, false, false);
                 sideselect[1] = new Option("Sell", 1, true, true);                
-            }
-        }
-
-        function history() {
-            var inpclientid;
-            var historyrequest = {};
-
-            var frmhistory = getForm("frmhistory");
-
-            selectClient("frmhistory", null, null, true, "", "inpclientid", "", true);
-
-            var lnkquoterequests = newlink("lnkquoterequests", "Quote Requests", "", frmhistory);
-            var lnkquotes = newlink("lnkquotes", "Quotes", "", frmhistory);
-            var lnkorders = newlink("lnkorders", "Orders", "", frmhistory);
-            var lnktrades = newlink("lnktrades", "Trades", "", frmhistory);
-            var lnkcash = newlink("lnkcash", "Cash", "", frmhistory);
-            var lnkchat = newlink("lnkchat", "Chat", "", frmhistory);
-
-            lnkquoterequests.onclick = function() {
-                if (!validateClientid(false)) {return;}
-
-                tidy();
-                setSelected(lnkquoterequests);
-                historyrequest.clientid = inpclientid.value;
-                sockjs.send("{\"quoterequesthistoryrequest\":" + JSON.stringify(historyrequest) + "}");
-            }
-
-            lnkquotes.onclick = function() {
-                if (!validateClientid(false)) {return;}
-
-                tidy();
-                setSelected(lnkquotes);
-                historyrequest.clientid = inpclientid.value;
-                sockjs.send("{\"quotehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
-            }
-
-            lnkorders.onclick = function() {
-                if (!validateClientid(false)) {return;}
-
-                tidy();
-                setSelected(lnkorders);
-                historyrequest.clientid = inpclientid.value;
-                sockjs.send("{\"orderhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
-            }
-
-            lnktrades.onclick = function() {
-                if (!validateClientid(true)) {return;}
-
-                tidy();
-                setSelected(lnktrades);
-
-                if (inpclientid.value == 0) { // all clients
-                    selectDate();
-                } else {
-                    historyrequest.clientid = inpclientid.value;
-                    sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");                    
-                }
-            }
-
-            lnkcash.onclick = function() {
-                if (!validateClientid(false)) {return;}
-
-                tidy();
-                setSelected(lnkcash);
-                historyrequest.clientid = inpclientid.value;
-                historyrequest.currency = "GBP";
-                sockjs.send("{\"cashhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
-            }
-
-            lnkchat.onclick = function() {
-                if (!validateClientid(false)) {return;}
-
-                tidy();
-                setSelected(lnkchat);
-                historyrequest.clientid = inpclientid.value;
-                sockjs.send("{\"chathistoryrequest\":" + JSON.stringify(historyrequest) + "}");
-            }
-
-            inpclientid = document.createElement("input");
-            inpclientid.type = "hidden";
-            inpclientid.id = "inpclientid";
-            inpclientid.value = "";
-
-            frmhistory.appendChild(inpclientid);
-
-            addNewLine(frmhistory, null);
-            addNewLine(frmhistory, null);
-            
-            main.appendChild(frmhistory);
-
-            function validateClientid(zeroclientidok) {
-                var validclient = true;
-
-                if (inpclientid.value == "") {
-                    alert("Please select a client");
-                    validclient = false;
-                    selectClientFocus("clientboxinput");
-                }
-
-                // only allow all clients for trades
-                if (inpclientid.value == "0" && zeroclientidok == false) {
-                    alert("Please select an individual client");
-                    validclient = false;
-                    selectClientFocus("clientboxinput");
-                }
-
-                return validclient;
-            }
-
-            function setSelected(link) {
-                lnkquoterequests.className = "";
-                lnkquotes.className = "";
-                lnkorders.className = "";
-                lnktrades.className = "";
-                lnkchat.className = "";
-                lnkcash.className = "";
-
-                link.className = "linkselected";
-            }
-
-            function selectDate() {
-                var frmdates = getForm("frmdates");
-
-                var lblfromdate = newlabel("lblfromdate", "From:", "", frmdates);
-                var selfromday = newselect("selfromday", "formselect", frmdates);
-                var selfrommonth = newselect("selfrommonth", "formselect", frmdates);
-                var selfromyear = newselect("selfromyear", "formselect", frmdates);
-                var lbltodate = newlabel("lbltodate", " To:", "", frmdates);
-                var seltoday = newselect("seltoday", "formselect", frmdates);
-                var seltomonth = newselect("seltomonth", "formselect", frmdates);
-                var seltoyear = newselect("seltoyear", "formselect", frmdates);
-
-                populateDate(selfromday, selfrommonth, selfromyear, new Date());
-                populateDate(seltoday, seltomonth, seltoyear, new Date());
-
-                var dummylabel = newlabel("dummylabel", " ", "", frmdates);
-                var btntrades = newbutton("btntrades", "Get trades", "formbutton", frmdates);
-
-                btntrades.onclick = function() {
-                    clearEmptyLines();
-                    clearLists();
-                    clearTables();
-
-                    historyrequest.clientid = inpclientid.value;
-                    historyrequest.fromdate = formatToUTCDate(selfromday[selfromday.selectedIndex].value, selfrommonth[selfrommonth.selectedIndex].value, selfromyear[selfromyear.selectedIndex].value);
-                    historyrequest.todate = formatToUTCDate(seltoday[seltoday.selectedIndex].value, seltomonth[seltomonth.selectedIndex].value, seltoyear[seltoyear.selectedIndex].value);
-
-                    sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
-                }
-
-                main.appendChild(frmdates);
-            }
-
-            function tidy() {
-                clearLists();
-                clearHeadings();
-                clearEmptyLines();
-                clearTables();
-                clearForm("frmdates", true);
             }
         }
 

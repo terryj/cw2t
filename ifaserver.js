@@ -476,6 +476,7 @@ function newClient(client, ifaid, conn) {
         getSendClient(ret[1], conn);
       });
     } else {
+      console.log("updating");
       db.eval(common.scriptupdateclient, 12, client.clientid, brokerid, client.name, client.email, client.mobile, client.address, ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, client.commissionpercent, function(err, ret) {
         if (err) throw err;
 
