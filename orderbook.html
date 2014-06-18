@@ -1,0 +1,288 @@
+<!doctype html>
+<html>
+<head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <title>TG-Online v0.9</title>
+    <script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
+    <style type="text/css">
+        a {
+            font-size: 18px;
+            margin: 10px;
+            color: #C0C0C0;
+        }
+        a:link {
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+            color: #666666;
+            cursor: pointer;
+        }
+        .tblorderbook {
+            display: inline-block;
+            border: 1px solid black;
+        }
+        .bluetext {
+            color: blue;
+        }
+        .redtext {
+            color: red;
+        }
+        .greentext {
+            color: green;
+        }
+    </style>
+</head>
+<body lang="en">
+    <script>
+        var sockjs_url = '/echo';
+        var sockjs;
+        var orderbooks = {};
+        //var priceflash = {};
+
+        var datain = function(msg) {
+            try {
+                var obj = JSON.parse(msg);
+
+                if ("orderbooks" in obj) {
+                    loadOrderBooks(obj.orderbooks);
+                } else if ("orderbook" in obj) {
+                    updateOrderBook(obj.orderbook);
+                }
+            } catch(e) {
+                console.log(e);
+                console.log(msg);
+                return;
+            }
+        };
+
+        var newconn = function() {
+            sockjs = new SockJS(sockjs_url);
+
+            sockjs.onopen = function()  {
+                console.log("connection open");
+                ob();
+            };
+
+            sockjs.onmessage = function(e) {
+                datain(e.data);
+            };
+
+            sockjs.onclose = function()  {
+                console.log("connection closed");
+            };
+
+            sockjs.onheartbeat = function() {
+            };
+        };
+
+        newconn();
+
+        function loadOrderBooks(orderbookarr) {
+            console.log(orderbookarr);
+            for (var i = 0; i < orderbookarr.length; ++i) {
+                updateOrderBook(orderbookarr[i]);
+            }
+        }
+
+        function updateOrderBook(orderbook) {
+            var level;
+
+            console.log(orderbook);
+
+            // create an entry in the orderbooks array for this symbol
+            if (!(orderbook.symbol in orderbooks)) {
+                // 6 levels
+                orderbooks[orderbook.symbol] = [{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0}];
+            }
+
+            var tbl = document.getElementById("tblorderbook:" + orderbook.symbol);
+            if (tbl == null) {
+                tbl = createOBTable(orderbook.symbol);
+            }
+
+            // update the prices
+            for (var i = 0; i < orderbook.prices.length; ++i) {
+                level = orderbook.prices[i].level - 1;
+
+                if ("bid" in orderbook.prices[i]) {
+                    tbl.rows[orderbook.prices[i].level+3].cells[1].innerHTML = orderbook.prices[i].bid;
+
+                    if (orderbook.prices[i].bid > orderbooks[orderbook.symbol][level].bid) {
+                        tbl.rows[orderbook.prices[i].level+3].cells[1].className = "bluetext";
+                        //orderbooks[orderbook.symbol][level].lastbidchange = 1;
+                    } else if (orderbook.prices[i].bid < orderbooks[orderbook.symbol][level].bid) {
+                        //orderbooks[orderbook.symbol][level].lastbidchange = 2;
+                        tbl.rows[orderbook.prices[i].level+3].cells[1].className = "redtext";
+                    } else {
+                        //orderbooks[orderbook.symbol][level].lastbidchange = 0;                        
+                        tbl.rows[orderbook.prices[i].level+3].cells[1].className = "greentext";
+                    }
+                    orderbooks[orderbook.symbol][level].bid = orderbook.prices[i].bid;
+                    //orderbooks[orderbook.symbol][level].bidflashcount = 3;
+                    //priceflash[orderbook.symbol] = true;
+                }
+                if ("bidvol" in orderbook.prices[i]) {
+                    tbl.rows[orderbook.prices[i].level+3].cells[0].innerHTML = orderbook.prices[i].bidvol;
+
+                    if (orderbook.prices[i].bidvol > orderbooks[orderbook.symbol][level].bidvol) {
+                        tbl.rows[orderbook.prices[i].level+3].cells[0].className = "bluetext";
+                    } else if (orderbook.prices[i].bidvol < orderbooks[orderbook.symbol][level].bidvol) {
+                        tbl.rows[orderbook.prices[i].level+3].cells[0].className = "redtext";
+                    } else {
+                        tbl.rows[orderbook.prices[i].level+3].cells[0].className = "greentext";
+                    }
+                    orderbooks[orderbook.symbol][level].bidvol = orderbook.prices[i].bidvol;
+                }
+                if ("offer" in orderbook.prices[i]) {
+                    tbl.rows[4-orderbook.prices[i].level].cells[2].innerHTML = orderbook.prices[i].offer;
+
+                    if (orderbook.prices[i].offer > orderbooks[orderbook.symbol][level].offer) {
+                        //orderbooks[orderbook.symbol][level].lastofferchange = 1;
+                        tbl.rows[4-orderbook.prices[i].level].cells[2].className = "bluetext";
+                    } else if (orderbook.prices[i].offer < orderbooks[orderbook.symbol][level].offer) {
+                        //orderbooks[orderbook.symbol][level].lastofferchange = 2;
+                        tbl.rows[4-orderbook.prices[i].level].cells[2].className = "redtext";
+                    } else {
+                        //orderbooks[orderbook.symbol][level].lastofferchange = 0;                        
+                        tbl.rows[4-orderbook.prices[i].level].cells[2].className = "greentext";
+                    }
+                    orderbooks[orderbook.symbol][level].offer = orderbook.prices[i].offer;
+                    //orderbooks[orderbook.symbol][level].offerflashcount = 3;
+                    //priceflash[orderbook.symbol] = true;
+                }
+                if ("offervol" in orderbook.prices[i]) {
+                    tbl.rows[4-orderbook.prices[i].level].cells[3].innerHTML = orderbook.prices[i].offervol;
+
+                    if (orderbook.prices[i].offervol > orderbooks[orderbook.symbol][level].offervol) {
+                        tbl.rows[4-orderbook.prices[i].level].cells[3].className = "bluetext";
+                    } else if (orderbook.prices[i].offervol < orderbooks[orderbook.symbol][level].offervol) {
+                        tbl.rows[4-orderbook.prices[i].level].cells[3].className = "redtext";
+                    } else {
+                        tbl.rows[4-orderbook.prices[i].level+3].cells[3].className = "greentext";
+                    }
+                    orderbooks[orderbook.symbol][level].offervol = orderbook.prices[i].offervol;
+                }
+            }
+
+            //displayOrderBook(orderbook.symbol);
+        }
+
+        function displayOrderBook(symbol) {
+            console.log("displayOrderBook");
+            var tbl = document.getElementById("tblorderbook:" + symbol);
+            if (tbl == null) {
+                createOBTable(symbol);
+            }
+
+            for (y = 0; y < orderbooks[symbol].length; ++y) {
+            }
+        }
+
+        function ob() {
+            console.log("ob");
+            var divorderbooks = document.createElement("div");
+            divorderbooks.id = "divorderbooks";
+            document.body.appendChild(divorderbooks);
+
+            sockjs.send("{\"orderbookrequest\":" + JSON.stringify("BARC.L") + "}");
+            sockjs.send("{\"orderbookrequest\":" + JSON.stringify("LLOY.L") + "}");
+            sockjs.send("{\"orderbookrequest\":" + JSON.stringify("RBS.L") + "}");
+
+            /*createOBTable("test");
+            createOBTable("another test");
+            createOBTable("another test");
+            createOBTable("another test");
+            createOBTable("another test");
+            createOBTable("another test");
+            createOBTable("another test");
+            createOBTable("another test");
+            createOBTable("another test");*/
+        }
+
+        function createOBTable(symbol) {
+            var tblorderbook = document.createElement("table");
+            tblorderbook.createCaption();
+            tblorderbook.innerHTML = symbol;
+            tblorderbook.id = "tblorderbook:" + symbol;
+            tblorderbook.className = "tblorderbook";
+
+            createOBHeadings(tblorderbook);
+            createOBDetail(tblorderbook);
+
+            var divorderbooks = document.getElementById("divorderbooks");
+            divorderbooks.appendChild(tblorderbook);
+
+            return tblorderbook;
+        }
+
+        function createOBHeadings(tblorderbook) {
+            var headingrow = tblorderbook.insertRow();
+
+            /*var colbuy = document.createElement("th");
+            colbuy.colSpan = 2;
+            colbuy.innerHTML = "Buy Orders";
+            colbuy.className = "";
+
+            var colsell = document.createElement("th");
+            colsell.colSpan = 2;
+            colsell.innerHTML = "Sell Orders";
+            colsell.className = "";*/
+
+            var colbidvol = document.createElement("th");
+            colbidvol.innerHTML = "Volume";
+            colbidvol.className = "";
+
+            var colbidprice = document.createElement("th");
+            colbidprice.innerHTML = "Bid";
+            colbidprice.className = "";
+
+            var colofferprice = document.createElement("th");
+            colofferprice.innerHTML = "Offer";
+            colofferprice.className = "";
+
+            var coloffervol = document.createElement("th");
+            coloffervol.innerHTML = "Volume";
+            coloffervol.className = "";
+
+            //headingrow1.appendChild(colbuy);
+            //headingrow1.appendChild(colsell);
+            headingrow.appendChild(colbidvol);
+            headingrow.appendChild(colbidprice);
+            headingrow.appendChild(colofferprice);
+            headingrow.appendChild(coloffervol);
+        }
+
+        function createOBDetail(tblorderbook) {
+            for (var i = 0; i < 6; i++) {
+                var obrow = tblorderbook.insertRow(-1);
+                addOBRow(obrow);
+            }
+        }
+
+        function addOBRow(obrow) {
+            for (var k = 0; k < 4; ++k) {
+                var col = document.createElement("td");
+
+                /*switch (k) {
+                case 0:
+                    col.innerHTML = 0;
+                    break;
+                case 1:
+                    col.innerHTML = 0;
+                    break;
+                case 2:
+                    col.innerHTML = 0;
+                    break;
+                case 3:
+                    col.innerHTML = 0;
+                    break;
+                default:
+                }*/
+
+                obrow.appendChild(col);
+            }
+        }
+     </script>
+</body>
+</html>
