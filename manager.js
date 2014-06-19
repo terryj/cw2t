@@ -746,9 +746,18 @@ function getSendTrade(tradeid) {
 
       trade.orderdivnum = order.orderdivnum;
 
-      if (order.operatorid in connections) {
-        sendTrade(trade, connections[order.operatorid]);
-      }
+      db.hgetall("client:" + trade.clientid, function(err, client) {
+        if (err) {
+          console.log(err);
+          return;
+        }
+
+        trade.brokerclientcode = client.brokerclientcode;
+
+        if (order.operatorid in connections) {
+          sendTrade(trade, connections[order.operatorid]);
+        }
+      });
     });
   });
 }
