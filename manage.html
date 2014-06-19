@@ -1797,7 +1797,7 @@
                 for (var i = 0; i < orderbooks[symbol].length; ++i) {
                     clearStrip("strip:" + symbol + ":" + i);
                     if (symbol in obdisplay) {
-                        if (!(obdisplay[symbol].level2)) {
+                        if (!obdisplay[symbol].level2) {
                             break;
                         }
                     }
@@ -2767,6 +2767,8 @@
         }
 
         function displayTrade(trade) {
+            var msg;
+
             if (selectedmenu == MENUWATCHLIST) {
                 addMessageToDiv(msg, "orderdiv:" + trade.symbol + ":" + trade.orderdivnum);
             } else if (selectedmenu == MENUTRADES) {
@@ -6498,6 +6500,7 @@
 
                 tidy();
                 setSelected(lnktrades);
+                selectedmenu = MENUTRADES;
 
                 if (inpclientid.value == 0) { // all clients
                     selectDate();
