@@ -766,6 +766,8 @@ textarea {
 }
 
 .basebarleft {
+    margin: 5px;
+    padding: 0px;
     background-color: #666666;
     color: #FFF21B;
     font-size: x-small;
@@ -776,6 +778,8 @@ textarea {
 }
 
 .basebarright {
+    margin: 5px;
+    padding: 0px;
     background-color: #666666;
     color: #FFF21B;
     font-size: x-small;
