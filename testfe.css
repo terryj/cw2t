@@ -47,7 +47,7 @@ table .coldoubleunderline {
     display: inline;
     margin: 5px;
     font-size: medium;
-    color: #FFFF00;
+    color: #FFF21B;
     cursor: pointer;
     white-space: nowrap;
     font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
@@ -75,7 +75,7 @@ table .coldoubleunderline {
 }
 
 .yellowstrip {
-    background-color: #FFFF00;
+    background-color: #FFF21B;
     width: 460px;
     white-space: nowrap;
     margin: 2px;
@@ -767,7 +767,7 @@ textarea {
 
 .basebarleft {
     background-color: #666666;
-    color: #FFFF00;
+    color: #FFF21B;
     font-size: small;
     width: 100%;
     font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
@@ -777,7 +777,7 @@ textarea {
 
 .basebarright {
     background-color: #666666;
-    color: #FFFF00;
+    color: #FFF21B;
     font-size: small;
     width: 100%;
     font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
