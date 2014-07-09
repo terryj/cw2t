@@ -794,3 +794,16 @@ textarea {
     text-align: center;
 }
 
+.linkbutton {
+    border-style: none;
+    margin: 5px;
+    padding: 5px;
+    color: #808080;
+    font-size: medium;
+    height: auto;
+    width: auto;
+    font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
+    text-align: center;
+    background-color: #FFFF00;
+    cursor: pointer;
+}
