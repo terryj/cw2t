@@ -70,7 +70,7 @@ table .coldoubleunderline {
 }
 
 .cw2t {
-    height: 30px;
+    height: 100px;
     width: 100%;
 }
 
@@ -791,10 +791,6 @@ textarea {
     height: auto;
     width: 100%;
     font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
-    top: auto;
-    right: auto;
-    bottom: auto;
-    left: auto;
     text-align: center;
 }
 
