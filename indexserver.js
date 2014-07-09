@@ -29,7 +29,9 @@ var userserverchannel = 2;
 var tradeserverchannel = 3;
 var ifaserverchannel = 4;
 var webserverchannel = 5;
+var tradechannel = 6;
 var servertype = "web";
+var nextclientid = 1;
 
 // redis
 var redishost = "127.0.0.1";
@@ -97,7 +99,8 @@ function pubsub() {
     }
   });
 
-  dbsub.subscribe(clientserverchannel);
+  // listem for web server related messages
+  dbsub.subscribe(webserverchannel);
 }
 
 // sockjs server
@@ -129,9 +132,12 @@ function listen() {
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a client logs on
-    var clientid = "0";
+    var clientid = nextclientid;
+    nextclientid++;
 
-    console.log('new connection');
+    console.log('new connection, clientid:' + clientid);
+
+    connections[clientid] = conn;
 
     // data callback
     conn.on('data', function(msg) {
@@ -172,7 +178,7 @@ function listen() {
           } else if ("cashhistoryrequest" in obj) {
             cashHistory(obj.cashhistoryrequest, clientid, conn);
           } else if ("index" in obj) {
-            sendIndex(clientid, obj.index, conn);
+            common.sendIndex(obj.index, conn);
           } else if ("pwdrequest" in obj) {
             passwordRequest(clientid, obj.pwdrequest, conn);
           } else if ("register" in obj) {
@@ -287,6 +293,7 @@ function tidy(clientid, conn) {
 function unsubscribeConnection(id) {
   db.eval(common.scriptunsubscribeid, 2, id, servertype, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
 
     // unsubscribe returned topics
     for (var i = 0; i < ret.length; i++) {
@@ -658,56 +665,6 @@ function sendOrderTypes(conn) {
         if (count <= 0) {
           conn.write(JSON.stringify(o));
         }
-      });
-    });
-  });
-}
-
-function sendIndex(clientid, index, conn) {
-  var i = {symbols: []};
-  var count;
-
-  // todo: remove this stuff?
-  i.name = index;
-
-  db.smembers("index:" + index, function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = replies.length;
-    if (count == 0) {
-      console.log("Index:" + index + " not found");
-      return;
-    }
-
-    replies.forEach(function(symbol, j) {
-      db.hgetall("symbol:" + symbol, function(err, inst) {
-        var instrument = {};
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        if (inst == null) {
-          console.log("Symbol:" + symbol + " not found");
-          count--;
-          return;
-        }
-
-        instrument.symbol = symbol;
-
-        // add the order to the array
-        i.symbols.push(instrument);
-
-        // send array if we have added the last item
-        //count--;
-        //if (count <= 0) {
-          //conn.write("{\"index\":" + JSON.stringify(i) + "}");
-          //orderBookOut(clientid, symbol, conn);
-          //orderbookrequest...
-        //}
       });
     });
   });
@@ -1172,8 +1129,10 @@ function orderBookRequest(clientid, symbol, conn) {
 }
 
 function orderBookRemoveRequest(clientid, symbol, conn) {
+  console.log("orderBookRemoveRequest");
   db.eval(common.scriptunsubscribeinstrument, 3, symbol, clientid, servertype, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
 
     // the script will tell us if we need to unsubscribe from the topic
     if (ret[0]) {

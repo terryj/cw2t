@@ -1695,7 +1695,7 @@
                 for (var i = 0; i < orderbooks[symbol].length; ++i) {
                     clearStrip("strip:" + symbol + ":" + i);
                     if (symbol in obdisplay) {
-                        if (!(obdisplay[symbol].level2)) {
+                        if (!obdisplay[symbol].level2) {
                             break;
                         }
                     }
@@ -2471,7 +2471,7 @@
         }
 
         function createTradeTable() {
-            tbltrades = document.createElement("table");
+            var tbltrades = document.createElement("table");
             tbltrades.id = "tbltrades";
             tbltrades.setAttribute("border", "1");
 

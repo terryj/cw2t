@@ -18,10 +18,12 @@ var common = require('./common.js');
 
 // globals
 var markettype; // comes from database, 0=normal market, 1=out of hours
-var tradeserverchannel = 3;
-var userserverchannel = 2;
 var clientserverchannel = 1;
+var userserverchannel = 2;
+var tradeserverchannel = 3;
 var ifaserverchannel = 4;
+var webserverchannel = 5;
+var tradechannel = 6;
 
 // redis
 var redishost;
@@ -122,6 +124,7 @@ function pubsub() {
     }
   });
 
+  // listen for trade related messages
   dbsub.subscribe(tradeserverchannel);
 }
 
@@ -274,10 +277,9 @@ function newOrder(order) {
   db.eval(scriptneworder, 24, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, order.orderdivnum, function(err, ret) {
     if (err) throw err;
 
-    console.log(ret);
-
     // credit check failed
     if (ret[0] == 0) {
+      // only publish to sending operator type
       db.publish(order.operatortype, "order:" + ret[1]);
       return;
     }
@@ -317,25 +319,27 @@ function matchOrder(order) {
   db.eval(scriptmatchorder, 1, order.orderid, function(err, ret) {
     if (err) throw err;
 
+    // todo: sort out publishing
+
     // return the active order to the sending operator type
     db.publish(order.operatortype, "order:" + order.orderid);
 
     // send any trades for active order client
     for (var i = 0; i < ret[1].length; ++i) {
-      db.publish(order.operatortype, "trade:" + ret[1][i]);
+      db.publish(tradechannel, "trade:" + ret[1][i]);
     }
 
-    // send any matched orders
+    // send any matched orders - todo: review
     for (var i = 0; i < ret[0].length; ++i) {
       db.publish(order.operatortype, "order:" + ret[0][i]);
     }
 
     // send any matched trades
     for (var i = 0; i < ret[2].length; ++i) {
-      db.publish(order.operatortype, "trade:" + ret[2][i]);
+      db.publish(tradechannel, "trade:" + ret[2][i]);
     }
 
-    // indicate orderbook may have changed
+    // indicate orderbook may have changed - todo: review, maybe send updated orderbook?
     db.publish(order.operatortype, "orderbookupdate:" + order.symbol);
   });
 }
@@ -401,9 +405,11 @@ function orderFillRequest(ofr) {
       return;
     }
 
-    // publish the result
+    // publish the order to the sending server type
     db.publish(ofr.operatortype, "order:" + ofr.orderid);
-    db.publish(ofr.operatortype, "trade:" + ret[1]);
+
+    // publish the trade
+    db.publish(tradechannel, "trade:" + ret[1]);
   });
 }
 
@@ -419,12 +425,14 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
     // equity orders
     if (order.instrumenttype == "DE" || order.instrumenttype == "IE") {
       if (tradeid != "") {
-        // the order has been executed, so publish the order & trade
+        // the order has been executed, so publish the order to the sending server type
         db.publish(order.operatortype, "order:" + order.orderid);
-        db.publish(order.operatortype, "trade:" + tradeid);
 
-        // publish the hedge to the client server, so anyone viewing the hedgebook receives it
-        db.publish(clientserverchannel, "trade:" + hedgetradeid);
+        // publish the trade
+        db.publish(tradechannel, "trade:" + tradeid);
+
+        // publish the hedge
+        db.publish(tradechannel, "trade:" + hedgetradeid);
       } else {
         // forward order to the market
         ptp.newOrder(order);
@@ -435,12 +443,12 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
 
       // publish the trade if there is one
       if (tradeid != "") {
-        db.publish(order.operatortype, "trade:" + tradeid);
+        db.publish(tradechannel, "trade:" + tradeid);
       }
 
       // publish any hedge to the client server, so anyone viewing the hedgebook receives it
       if (hedgetradeid != "") {
-        db.publish(clientserverchannel, "trade:" + hedgetradeid);
+        db.publish(tradechannel, "trade:" + hedgetradeid);
       }
 
       // if we are hedging, change the order id to that of the hedge & forward to proquote
@@ -605,17 +613,11 @@ ptp.on("orderFill", function(exereport) {
       return
     }
 
-    // send the order & trade to the returned operator type
+    // send the order to the returned operator type
     db.publish(ret[1], "order:" + exereport.clordid);
-    db.publish(ret[1], "trade:" + ret[0]);
 
-    if (ret[1] == clientserverchannel) {
-      // forward to user channel to enable keeping track of all trades
-      db.publish(userserverchannel, "trade:" + ret[0]);
-    } else if (ret[2] != "") {
-      // if we have not sent to the client channel & this fill is for a hedge order, forward to client channel for hedge book monitoring
-      db.publish(clientserverchannel, "trade:" + ret[0]);        
-    }
+    // publish the trade
+    db.publish(tradechannel, "trade:" + ret[0]);
   });
 });
 

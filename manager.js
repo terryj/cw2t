@@ -25,12 +25,13 @@ var cw2tport = 8081; // user listen port
 var ordertypes = {};
 var brokerid = "1"; // todo: via logon
 var defaultnosettdays = 3;
-var operatortype = 2;
+var operatortype = 2; // user
 var clientserverchannel = 1;
 var userserverchannel = 2;
 var tradeserverchannel = 3;
 var ifaserverchannel = 4;
 var webserverchannel = 5;
+var tradechannel = 6;
 var servertype = "user";
 var serverstatus = {};
 
@@ -163,8 +164,11 @@ function pubsub() {
     }
   });
 
-  // listen for trading messages
+  // listen for user related messages
   dbsub.subscribe(userserverchannel);
+
+  // listen for trading messages
+  dbsub.subscribe(tradechannel);
 }
 
 // sockjs server

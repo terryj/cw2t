@@ -611,9 +611,9 @@
     </div>
 
     <script>
-        var sockjs_url = 'https://54.76.12.182/echo';
+        //var sockjs_url = 'https://54.76.12.182/echo';
         //var sockjs_url = 'https://54.229.76.60/echo';
-        //var sockjs_url = 'https://localhost/echo';
+        var sockjs_url = 'https://localhost/echo';
         //var sockjs_url = '/echo';
         var sockjs;
         var selectedmenu = -1;
@@ -1147,7 +1147,7 @@
                 for (var i = 0; i < orderbooks[symbol].length; ++i) {
                     clearStrip("strip:" + symbol + ":" + i);
                     if (symbol in obdisplay) {
-                        if (!(obdisplay[symbol].level2)) {
+                        if (!obdisplay[symbol].level2) {
                             break;
                         }
                     }
@@ -2955,6 +2955,7 @@
 
         function updateOrderBook(orderbook) {
             var level;
+            var updatedisplay = false;
 
             // create an entry in the orderbooks array for this symbol
             if (!(orderbook.symbol in orderbooks)) {
@@ -2964,6 +2965,7 @@
 
             // update the prices
             for (var i = 0; i < orderbook.prices.length; ++i) {
+                if (orderbook.prices[i].level != 1) continue;
                 level = orderbook.prices[i].level - 1;
 
                 if ("bid" in orderbook.prices[i]) {
@@ -2977,6 +2979,7 @@
                     orderbooks[orderbook.symbol][level].bid = orderbook.prices[i].bid;
                     orderbooks[orderbook.symbol][level].bidflashcount = 3;
                     priceflash[orderbook.symbol] = true;
+                    updatedisplay = true;
                 }
                 if ("offer" in orderbook.prices[i]) {
                     if (orderbook.prices[i].offer > orderbooks[orderbook.symbol][level].offer) {
@@ -2989,10 +2992,11 @@
                     orderbooks[orderbook.symbol][level].offer = orderbook.prices[i].offer;
                     orderbooks[orderbook.symbol][level].offerflashcount = 3;
                     priceflash[orderbook.symbol] = true;
+                    updatedisplay = true;
                 }
             }
 
-            if (selectedmenu == 0) {
+            if (selectedmenu == 0 && updatedisplay) {
                 displayOrderBook(orderbook.symbol);
             }
         }

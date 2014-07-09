@@ -245,6 +245,56 @@ function newPrice(topic, servertype, msg, connections) {
 
 exports.newPrice = newPrice;
 
+function sendIndex(index, conn) {
+  var i = {symbols: []};
+  var count;
+
+  // todo: remove this stuff?
+  i.name = index;
+
+  db.smembers("index:" + index, function(err, replies) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    count = replies.length;
+    if (count == 0) {
+      console.log("Index:" + index + " not found");
+      return;
+    }
+
+    replies.forEach(function(symbol, j) {
+      db.hgetall("symbol:" + symbol, function(err, inst) {
+        var instrument = {};
+        if (err) {
+          console.log(err);
+          return;
+        }
+
+        if (inst == null) {
+          console.log("Symbol:" + symbol + " not found");
+          count--;
+          return;
+        }
+
+        instrument.symbol = symbol;
+
+        // add the order to the array
+        i.symbols.push(instrument);
+
+        // send array if we have added the last item
+        count--;
+        if (count <= 0) {
+          conn.write("{\"index\":" + JSON.stringify(i) + "}");
+        }
+      });
+    });
+  });
+}
+
+exports.sendIndex = sendIndex;
+
 //
 // send level one to everyone
 //
@@ -770,8 +820,10 @@ exports.registerCommonScripts = function () {
       return {0, ""} \
     end \
     local marketext = redis.call("hget", servertype .. ":" .. id, "marketext") \
-    if marketext ~= nil then \
-      	topic = topic .. marketext \
+    if not marketext then \
+      topic = topic .. "D" \
+    elseif marketext ~= nil then \
+      topic = topic .. marketext \
     end \
     redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbol) \
     redis.call("sadd", "topic:" .. topic .. ":symbol:" .. symbol .. ":" .. servertype, id) \
@@ -801,7 +853,9 @@ exports.registerCommonScripts = function () {
       return {0, ""} \
     end \
     local marketext = redis.call("hget", servertype .. ":" .. id, "marketext") \
-    if marketext ~= nil then \
+    if not marketext then \
+      topic = topic .. "D" \
+    elseif marketext ~= nil then \
       topic = topic .. marketext \
     end \
     redis.call("srem", "topic:" .. topic .. ":symbol:" .. symbol .. ":" .. servertype, id) \

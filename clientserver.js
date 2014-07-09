@@ -30,6 +30,7 @@ var userserverchannel = 2;
 var tradeserverchannel = 3;
 var ifaserverchannel = 4;
 var webserverchannel = 5;
+var tradechannel = 6;
 var servertype = "client";
 
 // redis
@@ -125,7 +126,11 @@ function pubsub() {
     }
   });
 
+  // listen for client related messages
   dbsub.subscribe(clientserverchannel);
+
+  // listen for trading messages
+  dbsub.subscribe(tradechannel);
 }
 
 // sockjs server
@@ -200,7 +205,7 @@ function listen() {
           } else if ("cashhistoryrequest" in obj) {
             cashHistory(obj.cashhistoryrequest, clientid, conn);
           } else if ("index" in obj) {
-            sendIndex(clientid, obj.index, conn);
+            common.sendIndex(obj.index, conn);
           } else if ("pwdrequest" in obj) {
             passwordRequest(clientid, obj.pwdrequest, conn);
           } else if ("register" in obj) {
@@ -686,56 +691,6 @@ function sendOrderTypes(conn) {
         if (count <= 0) {
           conn.write(JSON.stringify(o));
         }
-      });
-    });
-  });
-}
-
-function sendIndex(clientid, index, conn) {
-  var i = {symbols: []};
-  var count;
-
-  // todo: remove this stuff?
-  i.name = index;
-
-  db.smembers("index:" + index, function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = replies.length;
-    if (count == 0) {
-      console.log("Index:" + index + " not found");
-      return;
-    }
-
-    replies.forEach(function(symbol, j) {
-      db.hgetall("symbol:" + symbol, function(err, inst) {
-        var instrument = {};
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        if (inst == null) {
-          console.log("Symbol:" + symbol + " not found");
-          count--;
-          return;
-        }
-
-        instrument.symbol = symbol;
-
-        // add the order to the array
-        i.symbols.push(instrument);
-
-        // send array if we have added the last item
-        //count--;
-        //if (count <= 0) {
-          //conn.write("{\"index\":" + JSON.stringify(i) + "}");
-          //orderBookOut(clientid, symbol, conn);
-          //orderbookrequest...
-        //}
       });
     });
   });
