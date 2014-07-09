@@ -768,7 +768,7 @@ textarea {
 .basebarleft {
     background-color: #666666;
     color: #FFF21B;
-    font-size: small;
+    font-size: x-small;
     width: 100%;
     font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
     text-align: left;
@@ -778,7 +778,7 @@ textarea {
 .basebarright {
     background-color: #666666;
     color: #FFF21B;
-    font-size: small;
+    font-size: x-small;
     width: 100%;
     font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
     text-align: right;
@@ -801,6 +801,6 @@ textarea {
     width: auto;
     font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
     text-align: center;
-    background-color: #FFFF00;
+    background-color: #FFF21B;
     cursor: pointer;
 }
