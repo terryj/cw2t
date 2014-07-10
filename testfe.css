@@ -822,12 +822,12 @@ textarea {
     border-style: none;
     margin: 5px;
     padding: 5px;
-    color: #000080;
+    color: #808080;
     font-size: medium;
     height: 30px;
-    width: 100px;
+    width: auto;
     font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
     text-align: center;
-    background-color: #999999;
+    background-color: #FFFF99;
     cursor: pointer;
 }
