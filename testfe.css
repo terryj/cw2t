@@ -47,11 +47,11 @@ table .coldoubleunderline {
     display: inline;
     margin: 5px;
     font-size: medium;
-    color: #FFF21B;
+    color: #000080;
     cursor: pointer;
     white-space: nowrap;
     font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
-    background-color: #999999;
+    background-color: #FFF21B;
     width: 80%;
     right: auto;
     left: auto;
@@ -60,13 +60,15 @@ table .coldoubleunderline {
 
     .menu li:hover {
     cursor: pointer;
-    background-color: #666666;
-    color: #FFFFFF;
+    background-color: #FFF21B;
+    color: #666666;
+    font-weight: bold;
+    text-decoration: underline;
 }
 
 .menu .menuitemselected {
     background-color: #666666;
-    color: #00FFFF;
+    color: #FFF21B;
 }
 
 .cw2t {
@@ -768,7 +770,7 @@ textarea {
 
 .basebarleft {
     margin: 0px;
-    padding: 5px;
+    padding: 0px;
     background-color: #666666;
     color: #FFF21B;
     font-size: x-small;
@@ -780,7 +782,7 @@ textarea {
 
 .basebarright {
     margin: 0px;
-    padding: 5px;
+    padding: 0px;
     background-color: #666666;
     color: #FFF21B;
     font-size: x-small;
