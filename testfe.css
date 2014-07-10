@@ -599,20 +599,17 @@ textarea {
 }
 
 .formsigninbutton {
-    border-width: 0px;
-    margin: 5px;
-    padding: 0px;
     border-style: none;
-    background-color: #CCCCCC;
+    margin: 5px;
+    padding: 5px;
+    color: #808080;
     font-size: medium;
-    cursor: pointer;
-    height: 30px;
-    width: 100px;
+    height: auto;
+    width: auto;
     font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
     text-align: center;
-    color: #000080;
-    right: auto;
-    left: auto;
+    background-color: #FFF21B;
+    cursor: pointer;
 }
 
 .formsigninbuttonm {
