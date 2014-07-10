@@ -94,12 +94,10 @@ a {
 
     a:link {
         text-decoration: none;
-        font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
     }
 
     a:hover {
-        text-decoration: underline;
-        font-weight: bold;
+        background-color: #FFFF99;
     }
 
 textarea {
