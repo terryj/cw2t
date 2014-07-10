@@ -35,11 +35,9 @@ table .coldoubleunderline {
 }
 
     .list li:hover {
-        background-color: #DDDDDD;
-        color: #666666;
-        cursor: pointer;
-        font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
-        font-size: medium;
+    cursor: pointer;
+    background-color: #CCFF99;
+    color: #666666;
     }
 
 .menu li {
@@ -578,7 +576,7 @@ textarea {
 
 .formsignininput {
     padding: 5px;
-    border: 1px solid #FF0000;
+    border: 1px solid #00FFFF;
     margin: 5px;
     width: 400px;
     font-size: medium;
@@ -590,12 +588,12 @@ textarea {
 }
 
 .formsignininputm {
-    border: 1px solid #FF0000;
+    border: 1px solid #00FFFF;
     margin: 6px;
     width: 400px;
     font-size: medium;
     color: #000000;
-    font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+    font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
     text-align: left;
 }
 
@@ -770,7 +768,7 @@ textarea {
 .basebarleft {
     margin: 0px;
     padding: 0px;
-    background-color: #A4ADB2;
+    background-color: #C0C0C0;
     color: #FFFF99;
     font-size: small;
     width: 100%;
@@ -782,7 +780,7 @@ textarea {
 .basebarright {
     margin: 0px;
     padding: 0px;
-    background-color: #A4ADB2;
+    background-color: #C0C0C0;
     color: #66FFFF;
     font-size: small;
     width: 100%;
