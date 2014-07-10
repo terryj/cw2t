@@ -60,10 +60,8 @@ table .coldoubleunderline {
 
     .menu li:hover {
     cursor: pointer;
-    background-color: #FFFF99;
+    background-color: #CCFF99;
     color: #666666;
-    font-weight: bold;
-    text-decoration: underline;
 }
 
 .menu .menuitemselected {
@@ -97,7 +95,9 @@ a {
     }
 
     a:hover {
-        background-color: #FFFF99;
+    cursor: pointer;
+    background-color: #CCFF99;
+    color: #666666;
     }
 
 textarea {
