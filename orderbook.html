@@ -34,6 +34,14 @@
         .th {
             /*font-size: 12px;*/
         }
+        .leftside {
+            text-align: left;
+            color: orange;
+        }
+        .rightside {
+            text-align: right;
+            color: orange;
+        }
         .yellowstrippriceup {
             font-size: 36px;
             color: blue;
@@ -163,97 +171,97 @@
                 level = orderbook.prices[i].level - 1;
 
                 if ("bid" in orderbook.prices[i]) {
-                    tbl.rows[orderbook.prices[i].level+3].cells[1].innerHTML = orderbook.prices[i].bid;
+                    tbl.rows[orderbook.prices[i].level+4].cells[1].innerHTML = orderbook.prices[i].bid;
 
                     if (orderbook.prices[i].bid > orderbooks[orderbook.symbol][level].bid) {
                         if (orderbook.prices[i].level == 1) {
-                            tbl.rows[orderbook.prices[i].level+3].cells[1].className = "yellowstrippriceup";
+                            tbl.rows[orderbook.prices[i].level+4].cells[1].className = "yellowstrippriceup";
                         } else {
-                            tbl.rows[orderbook.prices[i].level+3].cells[1].className = "priceup";
+                            tbl.rows[orderbook.prices[i].level+4].cells[1].className = "priceup";
                         }
                     } else if (orderbook.prices[i].bid < orderbooks[orderbook.symbol][level].bid) {
                         if (orderbook.prices[i].level == 1) {
-                            tbl.rows[orderbook.prices[i].level+3].cells[1].className = "yellowstrippricedn";
+                            tbl.rows[orderbook.prices[i].level+4].cells[1].className = "yellowstrippricedn";
                         } else {
-                            tbl.rows[orderbook.prices[i].level+3].cells[1].className = "pricedn";
+                            tbl.rows[orderbook.prices[i].level+4].cells[1].className = "pricedn";
                         }
                     } else {
                         if (orderbook.prices[i].level == 1) {
-                            tbl.rows[orderbook.prices[i].level+3].cells[1].className = "yellowstrippricenc";
+                            tbl.rows[orderbook.prices[i].level+4].cells[1].className = "yellowstrippricenc";
                         } else {
-                            tbl.rows[orderbook.prices[i].level+3].cells[1].className = "pricenc";
+                            tbl.rows[orderbook.prices[i].level+4].cells[1].className = "pricenc";
                         }
                     }
                     orderbooks[orderbook.symbol][level].bid = orderbook.prices[i].bid;
                 }
                 if ("bidvol" in orderbook.prices[i]) {
-                    tbl.rows[orderbook.prices[i].level+3].cells[0].innerHTML = parseInt(orderbook.prices[i].bidvol);
+                    tbl.rows[orderbook.prices[i].level+4].cells[0].innerHTML = parseInt(orderbook.prices[i].bidvol);
 
                     if (orderbook.prices[i].bidvol > orderbooks[orderbook.symbol][level].bidvol) {
                         if (orderbook.prices[i].level == 1) {
-                            tbl.rows[orderbook.prices[i].level+3].cells[0].className = "yellowstripvolup";
+                            tbl.rows[orderbook.prices[i].level+4].cells[0].className = "yellowstripvolup";
                         } else {
-                            tbl.rows[orderbook.prices[i].level+3].cells[0].className = "volup";                            
+                            tbl.rows[orderbook.prices[i].level+4].cells[0].className = "volup";                            
                         }
                     } else if (orderbook.prices[i].bidvol < orderbooks[orderbook.symbol][level].bidvol) {
                         if (orderbook.prices[i].level == 1) {
-                            tbl.rows[orderbook.prices[i].level+3].cells[0].className = "yellowstripvoldn";
+                            tbl.rows[orderbook.prices[i].level+4].cells[0].className = "yellowstripvoldn";
                         } else {
-                            tbl.rows[orderbook.prices[i].level+3].cells[0].className = "voldn";
+                            tbl.rows[orderbook.prices[i].level+4].cells[0].className = "voldn";
                         }
                     } else {
                         if (orderbook.prices[i].level == 1) {
-                            tbl.rows[orderbook.prices[i].level+3].cells[0].className = "yellowstripvolnc";
+                            tbl.rows[orderbook.prices[i].level+4].cells[0].className = "yellowstripvolnc";
                         } else {
-                            tbl.rows[orderbook.prices[i].level+3].cells[0].className = "volnc";                            
+                            tbl.rows[orderbook.prices[i].level+4].cells[0].className = "volnc";                            
                         }
                     }
                     orderbooks[orderbook.symbol][level].bidvol = orderbook.prices[i].bidvol;
                 }
                 if ("offer" in orderbook.prices[i]) {
-                    tbl.rows[4-orderbook.prices[i].level].cells[2].innerHTML = orderbook.prices[i].offer;
+                    tbl.rows[5-orderbook.prices[i].level].cells[2].innerHTML = orderbook.prices[i].offer;
 
                     if (orderbook.prices[i].offer > orderbooks[orderbook.symbol][level].offer) {
                         if (orderbook.prices[i].level == 1) {
-                            tbl.rows[4-orderbook.prices[i].level].cells[2].className = "yellowstrippriceup";
+                            tbl.rows[5-orderbook.prices[i].level].cells[2].className = "yellowstrippriceup";
                         } else {
-                            tbl.rows[4-orderbook.prices[i].level].cells[2].className = "priceup";
+                            tbl.rows[5-orderbook.prices[i].level].cells[2].className = "priceup";
                         }
                     } else if (orderbook.prices[i].offer < orderbooks[orderbook.symbol][level].offer) {
                         if (orderbook.prices[i].level == 1) {
-                            tbl.rows[4-orderbook.prices[i].level].cells[2].className = "yellowstrippricedn";
+                            tbl.rows[5-orderbook.prices[i].level].cells[2].className = "yellowstrippricedn";
                         } else {
-                            tbl.rows[4-orderbook.prices[i].level].cells[2].className = "pricedn";
+                            tbl.rows[5-orderbook.prices[i].level].cells[2].className = "pricedn";
                         }
                     } else {
                         if (orderbook.prices[i].level == 1) {
-                            tbl.rows[4-orderbook.prices[i].level].cells[2].className = "yellowstrippricenc";
+                            tbl.rows[5-orderbook.prices[i].level].cells[2].className = "yellowstrippricenc";
                         } else {
-                            tbl.rows[4-orderbook.prices[i].level].cells[2].className = "pricenc";
+                            tbl.rows[5-orderbook.prices[i].level].cells[2].className = "pricenc";
                         }
                     }
                     orderbooks[orderbook.symbol][level].offer = orderbook.prices[i].offer;
                 }
                 if ("offervol" in orderbook.prices[i]) {
-                    tbl.rows[4-orderbook.prices[i].level].cells[3].innerHTML = parseInt(orderbook.prices[i].offervol);
+                    tbl.rows[5-orderbook.prices[i].level].cells[3].innerHTML = parseInt(orderbook.prices[i].offervol);
 
                     if (orderbook.prices[i].offervol > orderbooks[orderbook.symbol][level].offervol) {
                         if (orderbook.prices[i].level == 1) {
-                            tbl.rows[4-orderbook.prices[i].level].cells[3].className = "yellowstripvolup";
+                            tbl.rows[5-orderbook.prices[i].level].cells[3].className = "yellowstripvolup";
                         } else {
-                            tbl.rows[4-orderbook.prices[i].level].cells[3].className = "volup";                            
+                            tbl.rows[5-orderbook.prices[i].level].cells[3].className = "volup";                            
                         }
                     } else if (orderbook.prices[i].offervol < orderbooks[orderbook.symbol][level].offervol) {
                         if (orderbook.prices[i].level == 1) {
-                            tbl.rows[4-orderbook.prices[i].level].cells[3].className = "yellowstripvoldn";
+                            tbl.rows[5-orderbook.prices[i].level].cells[3].className = "yellowstripvoldn";
                         } else {
-                            tbl.rows[4-orderbook.prices[i].level].cells[3].className = "voldn";                            
+                            tbl.rows[5-orderbook.prices[i].level].cells[3].className = "voldn";                            
                         }
                     } else {
                         if (orderbook.prices[i].level == 1) {
-                            tbl.rows[4-orderbook.prices[i].level].cells[3].className = "yellowstripvolnc";
+                            tbl.rows[5-orderbook.prices[i].level].cells[3].className = "yellowstripvolnc";
                         } else {
-                            tbl.rows[4-orderbook.prices[i].level].cells[3].className = "volnc";                            
+                            tbl.rows[5-orderbook.prices[i].level].cells[3].className = "volnc";                            
                         }
                     }
                     orderbooks[orderbook.symbol][level].offervol = orderbook.prices[i].offervol;
@@ -271,6 +279,11 @@
 
             for (y = 0; y < orderbooks[symbol].length; ++y) {
             }
+        }
+
+        function removeOrderBook(symbol) {
+            delete orderbooks[symbol];
+            clearTable("tblorderbook:" + symbol);
         }
 
         function updateIndex(index) {
@@ -304,13 +317,11 @@
         }
 
         function createOBTable(symbol) {
-           var tblorderbook = document.createElement("table");
-            tblorderbook.createCaption();
-            tblorderbook.innerHTML = symbol;
+            var tblorderbook = document.createElement("table");
             tblorderbook.id = "tblorderbook:" + symbol;
             tblorderbook.className = "tblorderbook";
 
-            createOBHeadings(tblorderbook);
+            createOBHeadings(tblorderbook, symbol);
             createOBDetail(tblorderbook);
             createOBTicket(tblorderbook);
 
@@ -320,18 +331,47 @@
             return tblorderbook;
         }
 
-        function createOBHeadings(tblorderbook) {
-            var headingrow = tblorderbook.insertRow();
+        function clearTable(tablestr) {
+            var tbl = document.getElementById(tablestr);
+            if (tbl != null) {
+                while(tbl.hasChildNodes()){
+                    tbl.removeChild(tbl.childNodes[0])
+                }
 
-            /*var colbuy = document.createElement("th");
-            colbuy.colSpan = 2;
-            colbuy.innerHTML = "Buy Orders";
-            colbuy.className = "";
+                var divorderbooks = document.getElementById("divorderbooks");
+                if (divorderbooks != null) {
+                    divorderbooks.removeChild(tbl);
+                }
+            }
+        }
 
-            var colsell = document.createElement("th");
-            colsell.colSpan = 2;
-            colsell.innerHTML = "Sell Orders";
-            colsell.className = "";*/
+        function createOBHeadings(tblorderbook, symbol) {
+            var symbolrow = tblorderbook.insertRow();
+
+            var symbolcol = document.createElement("th");
+            symbolcol.innerHTML = symbol;
+            symbolcol.className = "leftside";
+
+            var dummycol1 = document.createElement("th");
+            var dummycol2 = document.createElement("th");
+
+            var closecol = document.createElement("th");
+            var lnkcloseob = newlink("lnkcloseob:" + symbol, "X", "rightside", closecol);
+
+            lnkcloseob.onclick = function(e) {
+                if (!e) e = window.event;
+                element = e.target || e.srcElement;
+
+                removeOrderBook(symbol);
+                sockjs.send("{\"orderbookremoverequest\":" + JSON.stringify(element.id.substr(11)) + "}");
+            }
+
+            symbolrow.appendChild(symbolcol);
+            symbolrow.appendChild(dummycol1);
+            symbolrow.appendChild(dummycol2);
+            symbolrow.appendChild(closecol);
+
+            var headingrow = tblorderbook.insertRow(-1);
 
             var colbidvol = document.createElement("th");
             colbidvol.innerHTML = "Vol";
@@ -349,8 +389,6 @@
             coloffervol.innerHTML = "Vol";
             coloffervol.className = "";
 
-            //headingrow1.appendChild(colbuy);
-            //headingrow1.appendChild(colsell);
             headingrow.appendChild(colbidvol);
             headingrow.appendChild(colbidprice);
             headingrow.appendChild(colofferprice);
@@ -433,7 +471,7 @@
             link.id = id;
             link.innerHTML = text;
             if (classname != "") {
-                newlink.className = classname;
+                link.className = classname;
             }
             form.appendChild(link);
             return link;

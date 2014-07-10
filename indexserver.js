@@ -161,8 +161,6 @@ function listen() {
             orderBookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
           } else if ("positionrequest" in obj) {
             positionRequest(obj.positionrequest, clientid, conn);
-          } else if ("signin" in obj) {
-            signIn(obj.signin);
           } else if ("cashrequest" in obj) {
             cashRequest(obj.cashrequest, clientid, conn);
           } else if ("accountrequest" in obj) {
@@ -199,75 +197,6 @@ function listen() {
       tidy(clientid, conn);
       clientid = "0";
     });
-
-    // client sign on
-    function signIn(signin) {
-      var reply = {};
-      reply.success = false;
-
-      db.get(servertype + ":" + signin.email, function(err, cid) {
-        if (err) {
-          console.log("Error in signIn:" + err);
-          return;
-        }
-
-        if (!cid) {
-          console.log("Email not found:" + signin.email);
-          reply.reason = "Email or password incorrect. Please try again.";
-          replySignIn(reply, conn);
-          return;
-        }
-
-        // validate email/password
-        db.hgetall(servertype + ":" + cid, function(err, client) {
-          if (err) {
-            console.log("Error in signIn:" + err);
-            return;
-          }
-
-          if (!client || signin.email != client.email || signin.password != client.password) {
-            reply.reason = "Email or password incorrect. Please try again.";
-            replySignIn(reply, conn);
-            return;
-          }
-
-          // check to see if this client is already logged on
-          db.sismember("connections:" + servertype, client.clientid, function(err, found) {
-            if (err) {
-              console.log(err);
-              return;
-            }
-
-            if (found) {
-              console.log("client " + client.clientid + " already logged on");
-
-              if (client.clientid in connections) {
-                connections[client.clientid].close();
-              }
-            }
-
-            // validated, so set client id & add client to list of connections
-            clientid = client.clientid;
-            connections[clientid] = conn;
-
-            // keep a record
-            db.sadd("connections:" + servertype, clientid);
-
-            // send a successful logon reply
-            reply.success = true;
-            reply.email = signin.email;
-            reply.clientid = clientid;
-            replySignIn(reply, conn);
-
-            var timestamp = common.getUTCTimeStamp(new Date());
-            console.log(timestamp + " - client:" + clientid + " logged on");
-
-            // send the data
-            start(clientid, conn);
-          });
-        });
-      });
-    }
   });
 }
 
@@ -293,7 +222,6 @@ function tidy(clientid, conn) {
 function unsubscribeConnection(id) {
   db.eval(common.scriptunsubscribeid, 2, id, servertype, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
 
     // unsubscribe returned topics
     for (var i = 0; i < ret.length; i++) {
@@ -988,43 +916,6 @@ function sendOrderBook(symbol, level1arr, send, conn) {
   });
 }
 
-//
-// send all the orderbooks for a single client
-//
-  // get all the instruments in the order book for this client
-/*function sendOrderBooksClient(clientid, conn) {
-  db.smembers("client:" + clientid + ":orderbooks", function(err, instruments) {
-    if (err) {
-      console.log("Error in sendOrderBooksClient:" + err);
-      return;
-    }
-
-    // send the order book for each instrument
-    instruments.forEach(function (symbol, i) {
-      orderBookRequest(clientid, symbol, conn);
-    });
-  });
-}*/
-
-//
-// send all the orderbooks for a single client
-//
-function sendOrderBooksClient(clientid, conn) {
-  db.eval(scriptgetorderbooks, 1, clientid, function(err, ret) {
-    if (err) throw err;
-
-    conn.write("{\"orderbooks\":" + ret[1] + "}");
-
-    // todo: is this needed or the right place?
-    sendReadyToTrade(conn);
-
-    // subscribe to any associated topics that are not already subscribed to
-    for (var i = 0; i < ret[0].length; i++) {
-      dbsub.subscribe(ret[0][i]);
-    }
-  });
-}
-
 function getTimeInForceDesc(timeinforce) {
 /*0 = Day
 
@@ -1042,7 +933,6 @@ function getTimeInForceDesc(timeinforce) {
 }
 
 function start(clientid, conn) {
-  sendOrderBooksClient(clientid, conn);
   sendOrderTypes(conn);
   sendInstruments(clientid, conn);
   //sendPositions(clientid, conn);
@@ -1129,10 +1019,8 @@ function orderBookRequest(clientid, symbol, conn) {
 }
 
 function orderBookRemoveRequest(clientid, symbol, conn) {
-  console.log("orderBookRemoveRequest");
   db.eval(common.scriptunsubscribeinstrument, 3, symbol, clientid, servertype, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
 
     // the script will tell us if we need to unsubscribe from the topic
     if (ret[0]) {
