@@ -99,6 +99,7 @@ a {
 
     a:hover {
         text-decoration: underline;
+        font-weight: bold;
     }
 
 textarea {
@@ -809,5 +810,32 @@ textarea {
     font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
     text-align: center;
     background-color: #FFFF99;
+    cursor: pointer;
+}
+
+.menutop {
+    border-style: none;
+    margin: 5px;
+    padding: 5px;
+    color: #000080;
+    font-size: medium;
+    height: 40px;
+    width: 100%;
+    font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
+    text-align: center;
+    background-color: #808080;
+}
+
+.menutopbutton {
+    border-style: none;
+    margin: 5px;
+    padding: 5px;
+    color: #000080;
+    font-size: medium;
+    height: 30px;
+    width: 100px;
+    font-family: 'Gill Sans' , 'Gill Sans MT' , Calibri, 'Trebuchet MS' , sans-serif;
+    text-align: center;
+    background-color: #C0C0C0;
     cursor: pointer;
 }
