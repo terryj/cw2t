@@ -4,6 +4,7 @@
     <meta http-equiv="content-type" content="text/html;charset=utf-8" />
     <title>TG-Online v0.9</title>
     <script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
+    <script src="Chart.js"></script>
     <style type="text/css">
         .list li {
             display: inline-block;
@@ -28,7 +29,7 @@
         }
         .tblorderbook {
             display: inline-block;
-            border: 1px solid black;
+            border: 1px solid grey;
             color: grey;
         }
         .th {
@@ -96,6 +97,15 @@
             font-size: 18px;
             color: green;
         }
+        h3 {
+            /*margin: -12px 0 12px -12px;
+            padding: 12px;*/
+            width: 100%;
+            text-align: center;
+            color: #627b86;
+            line-height: 2em;
+            background: #d0dde3;
+        }
     </style>
 </head>
 <body lang="en">
@@ -129,7 +139,7 @@
 
             sockjs.onopen = function()  {
                 console.log("connection open");
-                ob();
+                requestIndex("UKX");
             };
 
             sockjs.onmessage = function(e) {
@@ -268,10 +278,12 @@
                 }
             }
 
+            //tbl.rows[8].cells[0].innerHTML = "helllobabyareyouwatching";
+
             //displayOrderBook(orderbook.symbol);
         }
 
-        function displayOrderBook(symbol) {
+        /*function displayOrderBook(symbol) {
             var tbl = document.getElementById("tblorderbook:" + symbol);
             if (tbl == null) {
                 createOBTable(symbol);
@@ -279,7 +291,7 @@
 
             for (y = 0; y < orderbooks[symbol].length; ++y) {
             }
-        }
+        }*/
 
         function removeOrderBook(symbol) {
             delete orderbooks[symbol];
@@ -312,8 +324,8 @@
             document.body.appendChild(divorderbooks);
         }
 
-        function ob() {
-            sockjs.send("{\"index\":" + JSON.stringify("UKX") + "}");
+        function requestIndex(index) {
+            sockjs.send("{\"index\":" + JSON.stringify(index) + "}");
         }
 
         function createOBTable(symbol) {
@@ -322,7 +334,9 @@
             tblorderbook.className = "tblorderbook";
 
             createOBHeadings(tblorderbook, symbol);
-            createOBDetail(tblorderbook);
+            createOBPrices(tblorderbook);
+            createOBSummary(tblorderbook);
+            createOBChart(tblorderbook, symbol);
             createOBTicket(tblorderbook);
 
             var divorderbooks = document.getElementById("divorderbooks");
@@ -395,7 +409,7 @@
             headingrow.appendChild(coloffervol);
         }
 
-        function createOBDetail(tblorderbook) {
+        function createOBPrices(tblorderbook) {
             for (var i = 0; i < 6; i++) {
                 var obrow = tblorderbook.insertRow(-1);
                 addOBRow(obrow);
@@ -424,6 +438,62 @@
 
                 obrow.appendChild(col);
             }
+        }
+
+        function createOBSummary(tblorderbook) {
+            var summaryrow = tblorderbook.insertRow(-1);
+            var col = document.createElement("td");
+            col.colSpan = 4;
+            summaryrow.appendChild(col);
+        }
+
+
+        function createOBChart(tblorderbook, symbol) {
+var data = {
+    labels: ["January", "February", "March", "April", "May", "June", "July"],
+    datasets: [
+        /*{
+            label: "My First dataset",
+            fillColor: "rgba(220,220,220,0.2)",
+            strokeColor: "rgba(220,220,220,1)",
+            pointColor: "rgba(220,220,220,1)",
+            pointStrokeColor: "#fff",
+            pointHighlightFill: "#fff",
+            pointHighlightStroke: "rgba(220,220,220,1)",
+            data: [1.23, 1.32, 1.34, 1.31, 1.29, 1.27, 1.33]
+        },*/
+        {
+            label: "My Second dataset",
+            fillColor: "rgba(151,187,205,0.2)",
+            strokeColor: "rgba(151,187,205,1)",
+            pointColor: "rgba(151,187,205,1)",
+            pointStrokeColor: "#fff",
+            pointHighlightFill: "#fff",
+            pointHighlightStroke: "rgba(151,187,205,1)",
+            data: [28, 48, 40, 19, 86, 27, 90]
+        }
+    ]
+};
+var options = {};
+
+            var heading = document.createElement("h3");
+            heading.innerHTML = symbol;
+            document.body.appendChild(heading);
+
+            var canvas = document.createElement('canvas');
+            canvas.id = "chart:" + symbol;
+            canvas.className = "chart";
+
+            canvas.onclick = function(evt) {
+                var activePoints = chart.getPointsAtEvent(evt);
+                // => activePoints is an array of points on the canvas that are at the same position as the click event.
+                console.log(activePoints);
+            };
+
+            document.body.appendChild(canvas);
+
+            var ctx = canvas.getContext("2d");
+            var chart = new Chart(ctx).Line(data, options);
         }
 
         function createOBTicket(tblorderbook) {

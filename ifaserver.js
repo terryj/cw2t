@@ -33,6 +33,7 @@ var ifaserverchannel = 4;
 var webserverchannel = 5;
 var tradechannel = 6;
 var servertype = "ifa";
+var feedtype = "digitallook";
 
 // redis
 var redishost;
@@ -378,7 +379,7 @@ function tidy(ifaid, conn) {
 }
 
 function unsubscribeConnection(id) {
-  db.eval(common.scriptunsubscribeid, 2, id, servertype, function(err, ret) {
+  db.eval(common.scriptunsubscribeid, 3, id, servertype, feedtype, function(err, ret) {
     if (err) throw err;
 
     // unsubscribe returned topics
@@ -432,7 +433,7 @@ function sendOrderBooks(ifaid, conn) {
 }
 
 function orderBookRequest(ifaid, symbol, conn) {
-  db.eval(common.scriptsubscribeinstrument, 3, symbol, ifaid, servertype, function(err, ret) {
+  db.eval(common.scriptsubscribeinstrument, 4, symbol, ifaid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
 
     // the script tells us if we need to subscribe to a topic
@@ -446,7 +447,7 @@ function orderBookRequest(ifaid, symbol, conn) {
 }
 
 function orderBookRemoveRequest(ifaid, symbol, conn) {
-  db.eval(common.scriptunsubscribeinstrument, 3, symbol, ifaid, servertype, function(err, ret) {
+  db.eval(common.scriptunsubscribeinstrument, 4, symbol, ifaid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
 
     // the script will tell us if we need to unsubscribe from the topic

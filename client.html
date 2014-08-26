@@ -611,9 +611,9 @@
     </div>
 
     <script>
-        var sockjs_url = 'https://54.76.12.182/echo';
+        //var sockjs_url = 'https://54.76.12.182/echo';
         //var sockjs_url = 'https://54.229.76.60/echo';
-        //var sockjs_url = 'https://localhost/echo';
+        var sockjs_url = 'https://localhost/echo';
         //var sockjs_url = '/echo';
         var sockjs;
         var selectedmenu = -1;
@@ -2957,6 +2957,8 @@
             var level;
             var updatedisplay = false;
 
+            console.log(orderbook);
+
             // create an entry in the orderbooks array for this symbol
             if (!(orderbook.symbol in orderbooks)) {
                 // 6 levels
@@ -3155,6 +3157,7 @@
             var orderdiv;
             var nextsymbol;
             var links;
+            var otherinfo;
 
             if (!(symbol in orderbooks)) {
                 return;
@@ -3231,6 +3234,8 @@
                     removestock = document.createElement('span');
                     removestock.className = "removestock";
 
+                    otherinfo = document.createElement('span');
+
                     if (y == 0) {
                         strip.className = "yellowstrip";
 
@@ -3302,6 +3307,7 @@
                         strip.appendChild(offerquantity);
                     }
                     strip.appendChild(removestock);
+                    strip.appendChild(otherinfo);
 
                     if (y == 0) {
                         strip.appendChild(links);

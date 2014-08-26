@@ -1,6 +1,6 @@
 /****************
 * indexserver.js
-* web server
+* Web server
 * Cantwaittotrade Limited
 * Terry Johnston
 * September 2012
@@ -32,6 +32,7 @@ var webserverchannel = 5;
 var tradechannel = 6;
 var servertype = "web";
 var nextclientid = 1;
+var feedtype = "digitallook";
 
 // redis
 var redishost = "127.0.0.1";
@@ -40,7 +41,6 @@ var redisport = 6379;
 // redis scripts
 var scriptgetinst;
 var scriptupdatepassword;
-var scriptgetorderbooks;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -220,7 +220,7 @@ function tidy(clientid, conn) {
 }
 
 function unsubscribeConnection(id) {
-  db.eval(common.scriptunsubscribeid, 2, id, servertype, function(err, ret) {
+  db.eval(common.scriptunsubscribeid, 3, id, servertype, feedtype, function(err, ret) {
     if (err) throw err;
 
     // unsubscribe returned topics
@@ -1005,7 +1005,7 @@ function registerClient(reg, conn) {
 }
 
 function orderBookRequest(clientid, symbol, conn) {
-  db.eval(common.scriptsubscribeinstrument, 3, symbol, clientid, servertype, function(err, ret) {
+  db.eval(common.scriptsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
 
     // the script tells us if we need to subscribe to a topic
@@ -1014,12 +1014,12 @@ function orderBookRequest(clientid, symbol, conn) {
     }
 
     // send the orderbook, with the current stored prices
-    common.sendCurrentOrderBook(symbol, ret[1], conn);
+    common.sendCurrentOrderBook(symbol, ret[1], conn, feedtype);
   });
 }
 
 function orderBookRemoveRequest(clientid, symbol, conn) {
-  db.eval(common.scriptunsubscribeinstrument, 3, symbol, clientid, servertype, function(err, ret) {
+  db.eval(common.scriptunsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
 
     // the script will tell us if we need to unsubscribe from the topic
@@ -1217,28 +1217,5 @@ function registerScripts() {
       retval = 1 \
     end \
     return retval \
-  ';
-
-  scriptgetorderbooks = common.subscribeinstrument + '\
-    local needtosubscribe = {} \
-    local tblresults = {} \
-    local vals \
-    local fields = {"bid1", "offer1", "bid2", "offer2", "bid3", "offer3", "bid4", "offer4", "bid5", "offer5", "bid6", "offer6"} \
-    local ret \
-    local orderbooks = redis.call("smembers", "client:" .. KEYS[1] .. ":orderbooks") \
-    for index = 1, #orderbooks do \
-      ret = subscribeinstrument(orderbooks[index], KEYS[1], "client") \
-      if ret[1] == 1 then \
-        --[[ keep a list of topics we need to subscribe to as has to be done separately as on separate connection ]] \
-        table.insert(needtosubscribe, ret[2]) \
-      end \
-      vals = redis.call("hmget", "topic:" .. ret[2], unpack(fields)) \
-      if vals[1] then \
-        table.insert(tblresults, {symbol=orderbooks[index], prices={{bid=vals[1],offer=vals[2],level=1},{bid=vals[3],offer=vals[4],level=2},{bid=vals[5],offer=vals[6],level=3},{bid=vals[7],offer=vals[8],level=4},{bid=vals[9],offer=vals[10],level=5},{bid=vals[11],offer=vals[12],level=6}}}) \
-      else \
-        table.insert(tblresults, {symbol=orderbooks[index], prices={{bid=0,offer=0,level=1},{bid=0,offer=0,level=2},{bid=0,offer=0,level=3},{bid=0,offer=0,level=4},{bid=0,offer=0,level=5},{bid=0,offer=0,level=6}}}) \
-      end \
-    end \
-    return {needtosubscribe, cjson.encode(tblresults)} \
   ';
 }

@@ -32,6 +32,7 @@ var ifaserverchannel = 4;
 var webserverchannel = 5;
 var tradechannel = 6;
 var servertype = "client";
+var feedtype = "digitallook";
 
 // redis
 var redishost;
@@ -97,18 +98,18 @@ function pubsub() {
   dbsub = redis.createClient(redisport, redishost);
 
   dbsub.on("subscribe", function(channel, count) {
-    console.log("subscribed to:" + channel + ", num. channels:" + count);
+    console.log("subscribed to: " + channel + ", num. channels:" + count);
   });
 
   dbsub.on("unsubscribe", function(channel, count) {
-    console.log("unsubscribed from:" + channel + ", num. channels:" + count);
+    console.log("unsubscribed from: " + channel + ", num. channels:" + count);
   });
 
   dbsub.on("message", function(channel, message) {
-    //console.log("channel " + channel + ": " + message);
+    console.log("channel: " + channel + ", message: " + message);
 
     if (message.substr(1, 6) == "prices") {
-      common.newPrice(channel, servertype, message, connections);
+      common.newPrice(channel, servertype, message, connections, feedtype);
     } else if (message.substr(0, 8) == "quoteack") {
       sendQuoteack(message.substr(9));
     } else if (message.substr(0, 5) == "quote") {
@@ -318,46 +319,15 @@ function tidy(clientid, conn) {
 }
 
 function unsubscribeConnection(id) {
-  db.eval(common.scriptunsubscribeid, 2, id, servertype, function(err, ret) {
+  db.eval(common.scriptunsubscribeid, 3, id, servertype, feedtype, function(err, ret) {
     if (err) throw err;
 
     // unsubscribe returned topics
     for (var i = 0; i < ret.length; i++) {
-      dbsub.unsubscribe(ret[i]);
+      dbsub.unsubscribe("ticker:" + ret[i]);
     }
   });
 }
-
-/*function newPrice(topic, msg) {
-  var jsonmsg;
-
-  db.smembers("topic:" + topic + ":symbols", function(err, symbols) {
-    if (err) throw err;
-
-    // get the symbols covered by this topic - equity price covers cfd, spb...
-    symbols.forEach(function(symbol, i) {
-      console.log(symbol);
-
-      // build the message according to the symbol
-      jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
-      console.log(jsonmsg);
-
-      // get the clients watching this symbol
-      db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + servertype, function(err, clients) {
-        if (err) throw err;
-
-        // send the message to each user
-        clients.forEach(function(client, i) {
-          console.log(client);
-
-          if (client in connections) {
-            connections[client].write(jsonmsg);
-          }
-        });
-      });
-    });
-  });
-}*/
 
 /*
 // Convert dd-mmm-yyyy to FIX date format 'yyyymmdd'
@@ -1036,7 +1006,7 @@ function sendOrderBook(symbol, level1arr, send, conn) {
 // send all the orderbooks for a single client
 //
 function sendOrderBooksClient(clientid, conn) {
-  db.eval(scriptgetorderbooks, 1, clientid, function(err, ret) {
+  db.eval(scriptgetorderbooks, 2, clientid, feedtype, function(err, ret) {
     if (err) throw err;
 
     conn.write("{\"orderbooks\":" + ret[1] + "}");
@@ -1046,7 +1016,7 @@ function sendOrderBooksClient(clientid, conn) {
 
     // subscribe to any associated topics that are not already subscribed to
     for (var i = 0; i < ret[0].length; i++) {
-      dbsub.subscribe(ret[0][i]);
+      dbsub.subscribe("ticker:" + ret[0][i]);
     }
   });
 }
@@ -1141,26 +1111,38 @@ function registerClient(reg, conn) {
 }
 
 function orderBookRequest(clientid, symbol, conn) {
-  db.eval(common.scriptsubscribeinstrument, 3, symbol, clientid, servertype, function(err, ret) {
+  db.eval(common.scriptsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
+
+    console.log(ret);
 
     // the script tells us if we need to subscribe to a topic
     if (ret[0]) {
-      dbsub.subscribe(ret[1]);
+      dbsub.subscribe("ticker:" + ret[1]);
+    }
+
+    // publish the ticker list if it has changed
+    if (ret[2]) {
+      db.publish("digitallook", ret[3]);
     }
 
     // send the orderbook, with the current stored prices
-    common.sendCurrentOrderBook(symbol, ret[1], conn);
+    common.sendCurrentOrderBook(symbol, ret[1], conn, feedtype);
   });
 }
 
 function orderBookRemoveRequest(clientid, symbol, conn) {
-  db.eval(common.scriptunsubscribeinstrument, 3, symbol, clientid, servertype, function(err, ret) {
+  db.eval(common.scriptunsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
 
     // the script will tell us if we need to unsubscribe from the topic
     if (ret[0]) {
-      dbsub.unsubscribe(ret[1]);
+      dbsub.unsubscribe("ticker:" + ret[1]);
+    }
+
+    if (ret[2]) {
+      db.publish("digitallook", ret[3]);
     }
   });
 }
@@ -1355,20 +1337,28 @@ function registerScripts() {
     return retval \
   ';
 
-  scriptgetorderbooks = common.subscribeinstrument + '\
+  scriptgetorderbooks = common.subscribeinstrument + common.subscribeinstrumentdl + '\
     local needtosubscribe = {} \
     local tblresults = {} \
     local vals \
     local fields = {"bid1", "offer1", "bid2", "offer2", "bid3", "offer3", "bid4", "offer4", "bid5", "offer5", "bid6", "offer6"} \
-    local ret \
+    local ret = {0, ""} \
     local orderbooks = redis.call("smembers", "client:" .. KEYS[1] .. ":orderbooks") \
     for index = 1, #orderbooks do \
-      ret = subscribeinstrument(orderbooks[index], KEYS[1], "client") \
+      if KEYS[2] == "proquote" then \
+        ret = subscribeinstrument(orderbooks[index], KEYS[1], "client") \
+      elseif KEYS[2] == "digitallook" then \
+        ret = subscribeinstrumentdl(orderbooks[index], KEYS[1], "client") \
+      end \
       if ret[1] == 1 then \
-        --[[ keep a list of topics we need to subscribe to as has to be done separately as on separate connection ]] \
+        --[[ keep a list of topics/tickers we need to subscribe to as has to be done separately as on separate connection ]] \
         table.insert(needtosubscribe, ret[2]) \
       end \
-      vals = redis.call("hmget", "topic:" .. ret[2], unpack(fields)) \
+      if KEYS[2] == "proquote" then \
+        vals = redis.call("hmget", "topic:" .. ret[2], unpack(fields)) \
+      elseif KEYS[2] == "digitallook" then \
+        vals = redis.call("hmget", "ticker:" .. ret[2], unpack(fields)) \
+      end \
       if vals[1] then \
         table.insert(tblresults, {symbol=orderbooks[index], prices={{bid=vals[1],offer=vals[2],level=1},{bid=vals[3],offer=vals[4],level=2},{bid=vals[5],offer=vals[6],level=3},{bid=vals[7],offer=vals[8],level=4},{bid=vals[9],offer=vals[10],level=5},{bid=vals[11],offer=vals[12],level=6}}}) \
       else \

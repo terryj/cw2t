@@ -13,7 +13,8 @@ var redis = require('redis');
 
 // cw2t libraries
 //var winnclient = require('./winnclient.js'); // Winner API connection
-var ptpclient = require('./ptpclient.js'); // Proquote API connection
+//var ptpclient = require('./ptpclient.js'); // Proquote API connection
+var nbtrader = require('./nbtrader.js'); // NBTrader API connection 
 var common = require('./common.js');
 
 // globals
@@ -140,15 +141,15 @@ winner.on('finished', function(message) {
     console.log(message);
 });*/
 
-// connection to Proquote
-var ptp = new ptpclient.Ptp();
-ptp.on("connected", function() {
+// connection to NBTrader
+var nbt = new nbtrader.Nbt();
+nbt.on("connected", function() {
   console.log("connected to Proquote");
 });
-ptp.on('finished', function(message) {
+nbt.on('finished', function(message) {
     console.log(message);
 });
-ptp.on("initialised", function() {
+nbt.on("initialised", function() {
   connectToTrading();
 });
 
@@ -156,7 +157,7 @@ function connectToTrading() {
   // try to connect
   //winner.connect();
 
-  ptp.connect();
+  nbt.connect();
 }
 
 function quoteRequest(quoterequest) {
@@ -169,6 +170,8 @@ function quoteRequest(quoterequest) {
 
   // get settlement date from T+n no. of days
   quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, quoterequest.nosettdays, holidays));
+
+  // todo: get nbsymbol
 
   // store the quote request & get an id
   db.eval(scriptquoterequest, 12, quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, quoterequest.orderdivnum, function(err, ret) {
@@ -195,7 +198,7 @@ function quoteRequest(quoterequest) {
     }
 
     // forward the request to Proquote
-    ptp.quoteRequest(quoterequest);
+    nbt.quoteRequest(quoterequest);
   });
 }
 
@@ -297,7 +300,7 @@ function newOrder(order) {
 
     // use the returned quote values required by proquote
     if (order.ordertype == "D") {
-      order.proquotequoteid = ret[5];
+      order.externalquoteid = ret[5];
       order.qbroker = ret[6];
     }
 
@@ -368,7 +371,7 @@ function orderCancelRequest(ocr) {
       ocr.side = ret[7];
       ocr.quantity = ret[8];
 
-      ptp.orderCancelRequest(ocr);
+      nbt.orderCancelRequest(ocr);
       return;
     }
 
@@ -435,7 +438,7 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
         db.publish(tradechannel, "trade:" + hedgetradeid);
       } else {
         // forward order to the market
-        ptp.newOrder(order);
+        nbt.newOrder(order);
       }
     } else {
       // publish the order to whence it came
@@ -454,7 +457,7 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
       // if we are hedging, change the order id to that of the hedge & forward to proquote
       if (hedgeorderid != "") {
         order.orderid = hedgeorderid;
-        ptp.newOrder(order);
+        nbt.newOrder(order);
       }
     }
   }
@@ -501,7 +504,7 @@ function getMarkettype() {
   });
 }
 
-ptp.on("orderReject", function(exereport) {
+nbt.on("orderReject", function(exereport) {
   var text = "";
   var ordrejreason = "";
   console.log(exereport);
@@ -536,7 +539,7 @@ ptp.on("orderReject", function(exereport) {
 //
 // Limit order acknowledgement
 //
-ptp.on("orderAck", function(exereport) {
+nbt.on("orderAck", function(exereport) {
   var text = "";
   console.log("Order acknowledged, id:" + exereport.clordid);
   console.log(exereport);
@@ -553,7 +556,7 @@ ptp.on("orderAck", function(exereport) {
   });
 });
 
-ptp.on("orderCancel", function(exereport) {
+nbt.on("orderCancel", function(exereport) {
   console.log("Order cancelled by Proquote, ordercancelrequest id:" + exereport.clordid);
 
   db.eval(scriptordercancel, 1, exereport.clordid, function(err, ret) {
@@ -570,7 +573,7 @@ ptp.on("orderCancel", function(exereport) {
   });
 });
 
-ptp.on("orderExpired", function(exereport) {
+nbt.on("orderExpired", function(exereport) {
   console.log(exereport);
   console.log("order expired, id:" + exereport.clordid);
 
@@ -591,7 +594,7 @@ ptp.on("orderExpired", function(exereport) {
   });
 });
 
-ptp.on("orderFill", function(exereport) {
+nbt.on("orderFill", function(exereport) {
   var currencyratetoorg = 1; // product currency rate back to org 
   var currencyindtoorg = 1;
 
@@ -624,7 +627,7 @@ ptp.on("orderFill", function(exereport) {
 //
 // ordercancelrequest rejected by proquote
 //
-ptp.on("orderCancelReject", function(ordercancelreject) {
+nbt.on("orderCancelReject", function(ordercancelreject) {
   var text = "";
 
   console.log("Order cancel reject, order cancel request id:" + ordercancelreject.clordid);
@@ -645,7 +648,7 @@ ptp.on("orderCancelReject", function(ordercancelreject) {
   });
 });
 
-ptp.on("quote", function(quote, header) {
+nbt.on("quote", function(quote, header) {
   console.log("quote received");
   console.log(quote);
 
@@ -705,11 +708,11 @@ ptp.on("quote", function(quote, header) {
 //
 // quote rejection
 //
-ptp.on("quoteack", function(quoteack) {
+nbt.on("quoteack", function(quoteack) {
   console.log("quote ack, request id " + quoteack.quotereqid);
   console.log(quoteack);
 
-  db.eval(scriptquoteack, 4, quoteack.quotereqid, quoteack.quotestatus, quoteack.quoterejectreason, quoteack.text, function(err, ret) {
+  db.eval(scriptquoteack, 4, quoteack.quotereqid, quoteack.quoteackstatus, quoteack.quoterejectreason, quoteack.text, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -728,18 +731,18 @@ ptp.on("quoteack", function(quoteack) {
 //
 // message error
 //
-ptp.on("reject", function(reject) {
+nbt.on("reject", function(reject) {
   console.log("Error: reject received, fixseqnum:" + reject.refseqnum);
   console.log("Text:" + reject.text);
   console.log("Tag id:" + reject.reftagid);
   console.log("Msg type:" + reject.refmsgtype);
   if ('sessionrejectreason' in reject) {
-    var reasondesc = ptp.getSessionRejectReason(reject.sessionrejectreason);
+    var reasondesc = nbt.getSessionRejectReason(reject.sessionrejectreason);
     console.log("Reason:" + reasondesc);
   }
 });
 
-ptp.on("businessReject", function(businessreject) {
+nbt.on("businessReject", function(businessreject) {
   console.log(businessreject);
   // todo: lookup fix msg to get details of what it relates to
 });

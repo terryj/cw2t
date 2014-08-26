@@ -155,7 +155,17 @@ exports.broadcastLevelOne = broadcastLevelOne;
 
 exports.broadcastLevelTwo = broadcastLevelTwo;*/
 
-function sendCurrentOrderBook(symbol, topic, conn) {
+function sendCurrentOrderBook(symbol, topic, conn, feedtype) {
+  if (feedtype == "proquote") {
+    sendCurrentOrderBookPQ(symbol, topic, conn);
+  } else if (feedtype == "digitallook") {
+    sendCurrentOrderBookDL(symbol, topic, conn);
+  }
+}
+
+exports.sendCurrentOrderBook = sendCurrentOrderBook;
+
+function sendCurrentOrderBookPQ(symbol, topic, conn) {
   var orderbook = {prices : []};
   var level1 = {};
   var level2 = {};
@@ -211,7 +221,57 @@ function sendCurrentOrderBook(symbol, topic, conn) {
   });
 }
 
-exports.sendCurrentOrderBook = sendCurrentOrderBook;
+function sendCurrentOrderBookDL(symbol, topic, conn) {
+  var orderbook = {prices : []};
+  var level1 = {};
+  var level2 = {};
+  var level3 = {};
+  var level4 = {};
+  var level5 = {};
+  var level6 = {};
+
+  db.hgetall("ticker:" + topic, function(err, topicrec) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (!topicrec) {
+      console.log("ticker:" + topic + " not found");
+
+      // send zeros
+      topicrec = {};
+      topicrec.bid = 0;
+      topicrec.offer = 0;
+    }
+
+    // 3 levels
+    level1.bid = topicrec.bid;
+    level1.level = 1;
+    orderbook.prices.push(level1);
+    level2.offer = topicrec.offer;
+    level2.level = 1;
+    orderbook.prices.push(level2);
+    level3.bid = 0;
+    level3.level = 2;
+    orderbook.prices.push(level3);
+    level4.offer = 0;
+    level4.level = 2;
+    orderbook.prices.push(level4);
+    level5.bid = 0;
+    level5.level = 3;
+    orderbook.prices.push(level5);
+    level6.offer = 0;
+    level6.level = 3;
+    orderbook.prices.push(level6);
+
+    orderbook.symbol = symbol;
+
+    if (conn != null) {
+      conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
+    }
+  });
+}
 
 function sendErrorMsg(error, conn) {
   conn.write("{\"errormsg\":" + JSON.stringify(getReasonDesc(error)) + "}");
@@ -219,28 +279,52 @@ function sendErrorMsg(error, conn) {
 
 exports.sendErrorMsg = sendErrorMsg;
 
-function newPrice(topic, servertype, msg, connections) {
-  // which symbols are subscribed to for this topic (may be more than 1 as covers derivatives)
-  db.smembers("topic:" + topic + ":" + servertype + ":symbols", function(err, symbols) {
-    if (err) throw err;
+function newPrice(topic, servertype, msg, connections, feedtype) {
+  if (feedtype == "proquote") {
+    // which symbols are subscribed to for this topic (may be more than 1 as covers derivatives)
+    db.smembers("topic:" + topic + ":" + servertype + ":symbols", function(err, symbols) {
+      if (err) throw err;
 
-    symbols.forEach(function(symbol, i) {
-      // build the message according to the symbol
-      var jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
+      symbols.forEach(function(symbol, i) {
+        // build the message according to the symbol
+        var jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
 
-      // get the users watching this symbol
-      db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + servertype, function(err, users) {
-        if (err) throw err;
+        // get the users watching this symbol
+        db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + servertype, function(err, users) {
+          if (err) throw err;
 
-        // send the message to each user
-        users.forEach(function(user, j) {
-          if (user in connections) {
-            connections[user].write(jsonmsg);
-          }
+          // send the message to each user
+          users.forEach(function(user, j) {
+            if (user in connections) {
+              connections[user].write(jsonmsg);
+            }
+          });
         });
       });
     });
-  });
+  } else if (feedtype == "digitallook") {
+    // which symbols are subscribed to for this topic (may be more than 1 as covers derivatives)
+    db.smembers(topic + ":" + servertype + ":symbols", function(err, symbols) {
+      if (err) throw err;
+
+      symbols.forEach(function(symbol, i) {
+        // build the message according to the symbol
+        var jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
+
+        // get the users watching this symbol
+        db.smembers(topic + ":symbol:" + symbol + ":" + servertype, function(err, users) {
+          if (err) throw err;
+
+          // send the message to each user
+          users.forEach(function(user, j) {
+            if (user in connections) {
+              connections[user].write(jsonmsg);
+            }
+          });
+        });
+      });
+    });
+  }
 }
 
 exports.newPrice = newPrice;
@@ -604,6 +688,8 @@ exports.registerCommonScripts = function () {
   var gettrades;
   var getquoterequests;
   var stringsplit;
+  var subscribeinstrumentdl;
+  var unsubscribeinstrumentdl;
 
   round = '\
   local round = function(num, dp) \
@@ -846,6 +932,40 @@ exports.registerCommonScripts = function () {
 
   exports.subscribeinstrument = subscribeinstrument;
 
+  //
+  // subscribe an instrument with digitallook
+  // see scriptsubscribeinstrument
+  //
+  subscribeinstrumentdl = '\
+  local subscribeinstrumentdl = function(symbol, id, servertype) \
+    local ticker = redis.call("hget", "symbol:" .. symbol, "ticker") \
+    if not ticker then \
+      return {0, "", 0, ""} \
+    end \
+    redis.call("sadd", "ticker:" .. ticker .. ":" .. servertype .. ":" .. id .. ":symbols", symbol) \
+    redis.call("sadd", "ticker:" .. ticker .. ":symbol:" .. symbol .. ":" .. servertype, id) \
+    redis.call("sadd", "ticker:" .. ticker .. ":" .. servertype .. ":symbols", symbol) \
+    local needtosubscribe = 0 \
+    local needtopublish = 0 \
+    local tickers = {} \
+    if redis.call("scard", "ticker:" .. ticker .. ":" .. servertype) == 0 then \
+      redis.call("sadd", "ticker:" .. ticker .. ":" .. servertype, id) \
+      needtosubscribe = 1 \
+      if redis.call("scard", "ticker:" .. ticker .. ":servers") == 0 then \
+        redis.call("sadd", "tickers", ticker) \
+        tickers = redis.call("smembers", "tickers") \
+        needtopublish = 1 \
+      end \
+      redis.call("sadd", "ticker:" .. ticker .. ":servers", servertype) \
+    end \
+    redis.call("sadd", "server:" .. servertype .. ":tickers", ticker) \
+    redis.call("sadd", servertype .. ":" .. id .. ":tickers", ticker) \
+    return {needtosubscribe, ticker, needtopublish, tickers} \
+  end \
+  ';
+
+  exports.subscribeinstrumentdl = subscribeinstrumentdl;
+
   unsubscribeinstrument = '\
   local unsubscribeinstrument = function(symbol, id, servertype) \
     local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
@@ -878,6 +998,42 @@ exports.registerCommonScripts = function () {
       end \
     end \
     return {needtounsubscribe, topic} \
+  end \
+  ';
+
+  //
+  // unsubscribe an instrument from the digitallook feed
+  // see scriptunsubscribeinstrument
+  //
+  unsubscribeinstrumentdl = '\
+  local unsubscribeinstrumentdl = function(symbol, id, servertype) \
+    local ticker = redis.call("hget", "symbol:" .. symbol, "ticker") \
+    if not ticker then \
+      return {0, "", 0, ""} \
+    end \
+    redis.call("srem", "ticker:" .. ticker .. ":symbol:" .. symbol .. ":" .. servertype, id) \
+    redis.call("srem", "ticker:" .. ticker .. ":" .. servertype .. ":" .. id .. ":symbols", symbol) \
+    if redis.call("scard", "ticker:" .. ticker .. ":symbol:" .. symbol .. ":" .. servertype) == 0 then \
+      redis.call("srem", "ticker:" .. ticker .. ":" .. servertype .. ":symbols", symbol) \
+    end \
+    local needtounsubscribe = 0 \
+    local needtopublish = 0 \
+    local tickers = {} \
+    if redis.call("scard", "ticker:" .. ticker .. ":" .. servertype .. ":" .. id .. ":symbols") == 0 then \
+      redis.call("srem", servertype .. ":" .. id .. ":tickers", ticker) \
+      redis.call("srem", "ticker:" .. ticker .. ":" .. servertype, id) \
+      if redis.call("scard", "ticker:" .. ticker .. ":" .. servertype) == 0 then \
+        needtounsubscribe = 1 \
+        redis.call("srem", "ticker:" .. ticker .. ":servers", servertype) \
+        redis.call("srem", "server:" .. servertype .. ":tickers", ticker) \
+        if redis.call("scard", "ticker:" .. ticker .. ":servers") == 0 then \
+          redis.call("srem", "tickers", ticker) \
+          tickers = redis.call("smembers", "tickers") \
+          needtopublish = 1 \
+        end \
+      end \
+    end \
+    return {needtounsubscribe, ticker, needtopublish, tickers} \
   end \
   ';
 
@@ -1020,35 +1176,53 @@ exports.registerCommonScripts = function () {
 
   //
   // subscribe to a new instrument
-  // params: symbol, client/user/ifa id, servertype
+  // params: symbol, client/user/ifa id, servertype, feedtype
+  // i.e. "BARC.L", 1, "client", "digitallook"
   //
-  exports.scriptsubscribeinstrument = subscribeinstrument + '\
+  exports.scriptsubscribeinstrument = subscribeinstrument + subscribeinstrumentdl + '\
   redis.call("sadd", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
   redis.call("sadd", KEYS[3] .. ":" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
-  local ret = subscribeinstrument(KEYS[1], KEYS[2], KEYS[3]) \
+  local ret = {0, ""} \
+  if KEYS[4] == "proquote" then \
+    ret = subscribeinstrument(KEYS[1], KEYS[2], KEYS[3]) \
+  elseif KEYS[4] == "digitallook" then \
+    ret = subscribeinstrumentdl(KEYS[1], KEYS[2], KEYS[3]) \
+  end \
   return ret \
   ';
 
   //
   // unsubscribe from an instrument
-  // params: symbol, client/user id, servertype
+  // params: symbol, client/user id, servertype, feedtype
+  // i.e. "BARC.L", 1, "client", "digitallook"
   //
-  exports.scriptunsubscribeinstrument = unsubscribeinstrument + '\
+  exports.scriptunsubscribeinstrument = unsubscribeinstrument + unsubscribeinstrumentdl + '\
   redis.call("srem", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
   redis.call("srem", KEYS[3] .. ":" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
-  local ret = unsubscribeinstrument(KEYS[1], KEYS[2], KEYS[3]) \
+  local ret = {0, "", 0, ""} \
+  if KEYS[4] == "proquote" then \
+    ret = unsubscribeinstrument(KEYS[1], KEYS[2], KEYS[3]) \
+  elseif KEYS[4] == "digitallook" then \
+    ret = unsubscribeinstrumentdl(KEYS[1], KEYS[2], KEYS[3]) \
+  end \
   return ret \
   ';
 
   //
   // unsubscribe a user/client/other connection
-  // params: servertype, client/user id
+  // params: servertype, client/user id, feedtype
+  // i.e. "client", 1, "digitallook"
   //
-  exports.scriptunsubscribeid = unsubscribeinstrument + '\
+  exports.scriptunsubscribeid = unsubscribeinstrument + unsubscribeinstrumentdl + '\
   local orderbooks = redis.call("smembers", KEYS[2] .. ":" .. KEYS[1] .. ":orderbooks") \
   local unsubscribetopics = {} \
   for i = 1, #orderbooks do \
-    local ret = unsubscribeinstrument(orderbooks[i], KEYS[1], KEYS[2]) \
+    local ret = {0, "", 0, ""} \
+    if KEYS[3] == "proquote" then \
+      ret = unsubscribeinstrument(orderbooks[i], KEYS[1], KEYS[2]) \
+    elseif KEYS[3] == "digitallook" then \
+      ret = unsubscribeinstrumentdl(orderbooks[i], KEYS[1], KEYS[2]) \
+    end \
     if ret[1] == 1 then \
       table.insert(unsubscribetopics, ret[2]) \
     end \
