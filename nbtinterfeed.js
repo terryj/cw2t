@@ -23,6 +23,8 @@ var tradeserverchannel = 3;
 var ifaserverchannel = 4;
 var webserverchannel = 5;
 var tradechannel = 6;
+var pricechannel = 7;
+var pricehistorychannel = 8;
 var host = "85.133.96.85";
 var messageport = 50900;
 var buf = new Buffer(1024 * 256); // incoming data buffer
@@ -98,10 +100,10 @@ function pubsub() {
 
   dbsub.on("message", function(channel, message) {
     console.log(message);
-    sendData(message);
+    requestData(message);
   });
 
-  dbsub.subscribe("interfeed");
+  dbsub.subscribe(pricechannel);
 }
 
 //
@@ -137,6 +139,7 @@ conn.on('data', function(data) {
 
   var datalen = data.length;
   console.log("---data.length="+data.length+"---");
+  console.log("bytestoread="+bytestoread);
 
   // copy this data to our global buffer, offset for any messages waiting to be read
   data.copy(buf, bytestoread);
@@ -147,6 +150,10 @@ conn.on('data', function(data) {
     switch (parsestate) {
     case 0:
       if (buf[i] == 28) { // <FS>
+        // we need at least 4 bytes
+        if (i - bufbytesread - 4 < 0) {
+          continue;
+        }
         // message length is contained in the first 4 bytes of each message
         msglen = buf.readUInt32BE(i-4);
 
@@ -180,7 +187,11 @@ conn.on('data', function(data) {
         instrumentcode = buf.toString('utf8', groupseparator+1, i);
         console.log("instrumentcode="+instrumentcode);
         unitseparator = i;
-        parsestate = 4;
+        if (functioncode == "340") {
+          parsestate = 4;
+        } else {
+          parsestate = 5;          
+        }
       } else if (buf[i] == 30) { // <RS>
         var errorcode = buf.toString('utf8', groupseparator+1, i);
         console.log("errorcode="+errorcode);
@@ -345,7 +356,7 @@ function priceReceived(message) {
   return true;
 }
 
-function sendData(msg) {
+function requestData(msg) {
   if (msg.substr(0, 2) == "rp") {
     // real-time partial record i.e. "<FS>332<US>mtag<GS>BARC.L<RS>FID<RS>FID<FS>"
 
@@ -364,9 +375,9 @@ function sendData(msg) {
     buf[13] = 29;
     buf.write(instcode, 14);
     buf[14+instcodelen] = 30;
-    buf.write("22", 15+instcodelen);
+    buf.write("22", 15+instcodelen); // bid
     buf[17+instcodelen] = 30;
-    buf.write("25", 18+instcodelen);
+    buf.write("25", 18+instcodelen); // offer
     buf[20+instcodelen] = 28;
   
     conn.write(buf);
@@ -927,12 +938,12 @@ function getFid(fid) {
 
 function registerScripts() {
   // add tick to price history
-  // instrumentcode, timestamp, bid, offer
+  // params: instrumentcode, timestamp, bid, offer
   scriptpricehist = '\
-  --[[ get an id for this tick for this symbol ]] \
-  local pricehistid = redis.call("incr", "pricehistid:" .. KEYS[1]) \
+  --[[ get an id for this tick ]] \
+  local pricehistoryid = redis.call("incr", "pricehistoryid") \
   --[[ add id to sorted set, indexed on timestamp ]] \
-  redis.call("zadd", "pricehist:" .. KEYS[1], KEYS[2], pricehistid) \
-  redis.call("hmset", "pricehist:" .. KEYS[1] .. ":" .. pricehistid, "timestamp", KEYS[2], "symbol", KEYS[1], "bid", KEYS[3], "offer", KEYS[4]) \
+  redis.call("zadd", "pricehistory:" .. KEYS[1], KEYS[2], pricehistoryid) \
+  redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbol", KEYS[1], "bid", KEYS[3], "offer", KEYS[4], "id", pricehistoryid) \
   ';
 }

@@ -31,6 +31,8 @@ var tradeserverchannel = 3;
 var ifaserverchannel = 4;
 var webserverchannel = 5;
 var tradechannel = 6;
+var pricechannel = 7;
+var pricehistorychannel = 8;
 var servertype = "client";
 var feedtype = "digitallook";
 

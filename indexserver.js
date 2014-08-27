@@ -30,6 +30,8 @@ var tradeserverchannel = 3;
 var ifaserverchannel = 4;
 var webserverchannel = 5;
 var tradechannel = 6;
+var pricechannel = 7;
+var pricehistorychannel = 8;
 var servertype = "web";
 var nextclientid = 1;
 var feedtype = "digitallook";
@@ -141,55 +143,45 @@ function listen() {
 
     // data callback
     conn.on('data', function(msg) {
-      //console.log('recd:' + msg);
+      try {
+        var obj = JSON.parse(msg);
 
-      if (msg.substr(2, 18) == "ordercancelrequest") {
-        db.publish(tradeserverchannel, msg);
-      } else if (msg.substr(2, 6) == "order\"") {
-        db.publish(tradeserverchannel, msg);
-      } else if (msg.substr(2, 13) == "quoterequest\"") {
-        db.publish(tradeserverchannel, msg);
-      } else if (msg.substr(2, 4) == "chat") {
-        db.publish(userserverchannel, msg);
-      } else {
-        try {
-          var obj = JSON.parse(msg);
-
-          if ("orderbookrequest" in obj) {
-            orderBookRequest(clientid, obj.orderbookrequest, conn);
-          } else if ("orderbookremoverequest" in obj) {
-            orderBookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
-          } else if ("positionrequest" in obj) {
-            positionRequest(obj.positionrequest, clientid, conn);
-          } else if ("cashrequest" in obj) {
-            cashRequest(obj.cashrequest, clientid, conn);
-          } else if ("accountrequest" in obj) {
-            accountRequest(obj.accountrequest, clientid, conn);
-          } else if ("quoterequesthistoryrequest" in obj) {
-            quoteRequestHistory(obj.quoterequesthistoryrequest, clientid, conn);
-          } else if ("quotehistoryrequest" in obj) {
-            quoteHistory(obj.quotehistoryrequest, clientid, conn);
-          } else if ("tradehistoryrequest" in obj) {
-            tradeHistory(obj.tradehistoryrequest, clientid, conn);
-          } else if ("orderhistoryrequest" in obj) {
-            orderHistory(obj.orderhistoryrequest, clientid, conn);
-          } else if ("cashhistoryrequest" in obj) {
-            cashHistory(obj.cashhistoryrequest, clientid, conn);
-          } else if ("index" in obj) {
-            common.sendIndex(obj.index, conn);
-          } else if ("pwdrequest" in obj) {
-            passwordRequest(clientid, obj.pwdrequest, conn);
-          } else if ("register" in obj) {
-            registerClient(obj.register, conn);
-          } else if ("ping" in obj) {
-            conn.write("pong");
-          } else {
-            console.log("unknown msg received:" + msg);
-          }
-        } catch (e) {
-          console.log(e);
-          return;
+        if ("orderbookrequest" in obj) {
+          orderBookRequest(clientid, obj.orderbookrequest, conn);
+        } else if ("orderbookremoverequest" in obj) {
+          orderBookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
+        } else if ("positionrequest" in obj) {
+          positionRequest(obj.positionrequest, clientid, conn);
+        } else if ("cashrequest" in obj) {
+          cashRequest(obj.cashrequest, clientid, conn);
+        } else if ("accountrequest" in obj) {
+          accountRequest(obj.accountrequest, clientid, conn);
+        } else if ("quoterequesthistoryrequest" in obj) {
+          quoteRequestHistory(obj.quoterequesthistoryrequest, clientid, conn);
+        } else if ("quotehistoryrequest" in obj) {
+          quoteHistory(obj.quotehistoryrequest, clientid, conn);
+        } else if ("tradehistoryrequest" in obj) {
+          tradeHistory(obj.tradehistoryrequest, clientid, conn);
+        } else if ("orderhistoryrequest" in obj) {
+          orderHistory(obj.orderhistoryrequest, clientid, conn);
+        } else if ("cashhistoryrequest" in obj) {
+          cashHistory(obj.cashhistoryrequest, clientid, conn);
+        } else if ("index" in obj) {
+          common.sendIndex(obj.index, conn);
+        } else if ("pricehistoryrequest" in obj) {
+          pricehistoryRequest(obj.pricehistoryrequest, clientid);
+        } else if ("pwdrequest" in obj) {
+          passwordRequest(clientid, obj.pwdrequest, conn);
+        } else if ("register" in obj) {
+          registerClient(obj.register, conn);
+        } else if ("ping" in obj) {
+          conn.write("pong");
+        } else {
+          console.log("unknown msg received:" + msg);
         }
+      } catch (e) {
+        console.log(e);
+        return;
       }
     });
 
@@ -1182,6 +1174,14 @@ function newChat(chat) {
     console.log(e);
     return;
   }
+}
+
+function pricehistoryRequest(pricehistoryrequest, clientid) {
+  console.log(pricehistoryrequest);
+
+  // add client id, so we can identify on the way back
+  pricehistoryrequest.clientid = clientid;
+  db.publish(pricehistorychannel, "{\"pricehistoryrequest\":" + JSON.stringify(pricehistoryrequest) + "}");
 }
 
 function registerScripts() {
