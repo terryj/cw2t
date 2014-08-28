@@ -27,7 +27,7 @@ var pricechannel = 7;
 var pricehistorychannel = 8;
 var host = "85.133.96.85";
 var messageport = 50900;
-var buf = new Buffer(1024 * 256); // incoming data buffer
+var buf = new Buffer(1024 * 1024); // incoming data buffer
 var bufbytesread = 0;
 var bytestoread = 0;
 
@@ -177,7 +177,6 @@ conn.on('data', function(data) {
     case 2:
       if (buf[i] == 29) { // <GS>
         var tag = buf.toString('utf8', unitseparator+1, i);
-        console.log("tag="+tag);
         groupseparator = i;
         parsestate = 3;
       }
@@ -194,7 +193,8 @@ conn.on('data', function(data) {
         }
       } else if (buf[i] == 30) { // <RS>
         var errorcode = buf.toString('utf8', groupseparator+1, i);
-        console.log("errorcode="+errorcode);
+        var err = getError(errorcode);
+        console.log("error: " + err);
         rtlseparator = i;
         parsestate = 7;
       }
@@ -218,13 +218,10 @@ conn.on('data', function(data) {
     case 5:
       if (buf[i] == 30) { // <RS>
         var rtl = buf.toString('utf8', unitseparator+1, i);
-        console.log("rtl="+rtl);
         rtlseparator = i;
         parsestate = 6;
       } else if (buf[i] == 28) { // <FS>
-        console.log("complete msg");
-        var value = buf.toString('utf8', unitseparator+1, i);
-        console.log("value="+value);
+        var rtl = buf.toString('utf8', unitseparator+1, i);
 
         // we have finished a message
         bufbytesread = i + 1;
@@ -243,7 +240,7 @@ conn.on('data', function(data) {
         var value = buf.toString('utf8', unitseparator+1, i);
 
         // get a field:value pair
-        updateRec(parseInt(fid), value, instrec);
+        updateRec(fid, value, instrec);
         rtlseparator = i;
         parsestate = 6;
       } else if (buf[i] == 28) { // <FS>
@@ -254,7 +251,7 @@ conn.on('data', function(data) {
           var value = buf.toString('utf8', unitseparator+1, i);
 
           // get the last field:value pair
-          updateRec(parseInt(fid), value, instrec);
+          updateRec(fid, value, instrec);
 
           // update the database
           updateDb(functioncode, instrumentcode, instrec);
@@ -287,11 +284,10 @@ conn.on('error', function(error) {
   console.log(error);
 });
 
-function updateRec(fid, value, obj) {
+function updateRec(fid, value, instrec) {
   var field = getFid(fid);
   if (field != "") {
-    //console.log(field, value);
-    obj[field] = value;
+    instrec[field] = value;
   }
 }
 
@@ -310,7 +306,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
   // update price history
   db.eval(scriptpricehist, 4, instrumentcode, timestamp, instrec.bid, instrec.ask, function(err, ret) {
     if (err) throw err;
-    console.log("pricehist updated");
+    console.log("pricehist updated: " + instrumentcode);
   });
 }
 
@@ -460,375 +456,377 @@ function getMarkettype() {
 function registerScripts() {
 }
 
-function getFid(fid) {
-  var field = "";
+function getFid(field) {
+  var desc = "";
+
+  var fid = parseInt(field);
 
   switch (fid) {
     case -1:
-      field = "automaticturnover";
+      desc = "automaticturnover";
       break;
     case -2:
-      field = "autovol";
+      desc = "autovol";
       break;
     case -6:
-      field = "industrysector";
+      desc = "industrysector";
       break;
     case -7:
-      field = "publicationlimit";
+      desc = "publicationlimit";
       break;
     case -8:
-      field = "issuercode";
+      desc = "issuercode";
       break;
     case -9:
-      field = "issuername";
+      desc = "issuername";
       break;
     case -10:
-      field = "longname";
+      desc = "longname";
       break;
     case -11:
-      field = "shortname";
+      desc = "shortname";
       break;
     case -12:
-      field = "quotesize";
+      desc = "quotesize";
       break;
     case -13:
-      field = "orderlotsize";
+      desc = "orderlotsize";
       break;
     case -14:
-      field = "minpord";
+      desc = "minpord";
       break;
     case -15:
-      field = "minaord";
+      desc = "minaord";
       break;
     case -16:
-      field = "normmarketsize";
+      desc = "normmarketsize";
       break;
     case -18:
-      field = "mnemonic";
+      desc = "mnemonic";
       break;
     case -19:
-      field = "ticksize";
+      desc = "ticksize";
       break;
     case -20:
-      field = "sector";
+      desc = "sector";
       break;
     case -21:
-      field = "segment";
+      desc = "segment";
       break;
     case -22:
-      field = "stocksts";
+      desc = "stocksts";
       break;
     case -23:
-      field = "entrytype";
+      desc = "entrytype";
       break;
     case -25:
-      field = "maxpord";
+      desc = "maxpord";
       break;
     case -26:
-      field = "maxaord";
+      desc = "maxaord";
       break;
     case -27:
-      field = "minquote";
+      desc = "minquote";
       break;
     case -28:
-      field = "maxquote";
+      desc = "maxquote";
       break;
     case -29:
-      field = "periodname";
+      desc = "periodname";
       break;
     case -30:
-      field = "insttype";
+      desc = "insttype";
       break;
     case -31:
-      field = "tradetype";
+      desc = "tradetype";
       break;
     case -32:
-      field = "asknetchg"
+      desc = "asknetchg"
       break;
     case -33:
-      field = "maxorderdays";
+      desc = "maxorderdays";
       break;
     case -34:
-      field = "updatetime";
+      desc = "updatetime";
       break;
     case -51:
-      field = "midhigh";
+      desc = "midhigh";
       break;
     case -52:
-      field = "midlow";
+      desc = "midlow";
       break;
     case -53:
-      field = "midlowtime";
+      desc = "midlowtime";
       break;
     case -54:
-      field = "midhightime";
+      desc = "midhightime";
       break;
     case -55:
-      field = "midtime";
+      desc = "midtime";
       break;
     case -56:
-      field = "bidpctchg";
+      desc = "bidpctchg";
       break;
     case -57:
-      field = "askpctchg";
+      desc = "askpctchg";
       break;
     case -58:
-      field = "midpctchg";
+      desc = "midpctchg";
       break;
     case -59:
-      field = "vwapalltrd";
+      desc = "vwapalltrd";
       break;
     case -60:
-      field = "vwapautotrd";
+      desc = "vwapautotrd";
       break;
     case -61:
-      field = "midtick";
+      desc = "midtick";
       break;
     case -80:
-      field = "firstaucprice";
+      desc = "firstaucprice";
       break;
     case -81:
-      field = "firstauctime";
+      desc = "firstauctime";
       break;
     case -82:
-      field = "firstaucvol";
+      desc = "firstaucvol";
       break;
     case -97:
-      field = "timezone";
+      desc = "timezone";
       break;
     case -98:
-      field = "soldvol";
+      desc = "soldvol";
       break;
     case -99:
-      field = "boughtvol";
+      desc = "boughtvol";
       break;
     case -108:
-      field = "tradeid";
+      desc = "tradeid";
       break;
     case -118:
-      field = "periodendtime";
+      desc = "periodendtime";
       break;
     case -119:
-      field = "yestclosebid";
+      desc = "yestclosebid";
       break;
     case -120:
-      field = "yestcloseask";
+      desc = "yestcloseask";
       break;
     case -121:
-      field = "yestclosemid";
+      desc = "yestclosemid";
       break;
     case -129:
-      field = "couponrate";
+      desc = "couponrate";
       break;
     case -133:
-      field = "xdivdate";
+      desc = "xdivdate";
       break;
     case -135:
-      field = "accrueddays";
+      desc = "accrueddays";
       break;
     case -338:
-      field = "icbsectornum";
+      desc = "icbsectornum";
       break;
     case -339:
-      field = "closedatetime";
+      desc = "closedatetime";
       break;
     case -350:
-      field = "closetime";
+      desc = "closetime";
       break;
     case -357:
-      field = "highestbid";
+      desc = "highestbid";
       break;
     case -358:
-      field = "highbidtime";
+      desc = "highbidtime";
       break;
     case -359:
-      field = "highbiddate";
+      desc = "highbiddate";
       break;
     case -360:
-      field = "lowestbid";
+      desc = "lowestbid";
       break;
     case -361:
-      field = "lowbidtime";
+      desc = "lowbidtime";
       break;
     case -362:
-      field = "lowbiddate";
+      desc = "lowbiddate";
       break;
     case -363:
-      field = "highestoffer";
+      desc = "highestoffer";
       break;
     case -364:
-      field = "highoffertime";
+      desc = "highoffertime";
       break;
     case -365:
-      field = "highofferdate";
+      desc = "highofferdate";
       break;
     case -366:
-      field = "lowestoffer";
+      desc = "lowestoffer";
       break;
     case -367:
-      field = "lowoffertime";
+      desc = "lowoffertime";
       break;
     case -368:
-      field = "lowofferdate";
+      desc = "lowofferdate";
       break;
     case -369:
-      field = "calcmidprice";
+      desc = "calcmidprice";
       break;
     case -373:
-      field = "yieldincadv";
+      desc = "yieldincadv";
       break;
     case -374:
-      field = "calcmidnetchg";
+      desc = "calcmidnetchg";
       break;
     case -375:
-      field = "calcmidpctchg";
+      desc = "calcmidpctchg";
       break;
     case -376:
-      field = "midtime";
+      desc = "midtime";
       break;
     case -377:
-      field = "middate";
+      desc = "middate";
       break;
     case -378:
-      field = "dailyinterest";
+      desc = "dailyinterest";
       break;
     case -384:
-      field = "xdivdate";
+      desc = "xdivdate";
       break;
     case 6:
-      field = "tradeprice1";
+      desc = "tradeprice1";
       break;
     case 12:
-      field = "tradehigh";
+      desc = "tradehigh";
       break;
     case 13:
-      field = "tradelow";
+      desc = "tradelow";
       break;
     case 14:
-      field = "tradetick";
+      desc = "tradetick";
       break;
     case 15:
-      field = "currency";
+      desc = "currency";
       break;
     case 16:
-      field = "tradedate";
+      desc = "tradedate";
       break;
     case 18:
-      field = "tradetime";
+      desc = "tradetime";
       break;
     case 19:
-      field = "openingprice";
+      desc = "openingprice";
       break;
     case 22:
-      field = "bid";
+      desc = "bid";
       break;
     case 25:
-      field = "ask";
+      desc = "ask";
       break;
     case 32:
-      field = "cumulativevol";
+      desc = "cumulativevol";
       break;
     case 33:
-      field = "peratio";
+      desc = "peratio";
       break;
     case 34:
-      field = "earnings";
+      desc = "earnings";
       break;
     case 35:
-      field = "yield";
+      desc = "yield";
       break;
     case 36:
-      field = "midclose";
+      desc = "midclose";
       break;
     case 57:
-      field = "openbid";
+      desc = "openbid";
       break;
     case 58:
-      field = "openask";
+      desc = "openask";
       break;
     case 60:
-      field = "closebid";
+      desc = "closebid";
       break;
     case 61:
-      field = "closeask";
+      desc = "closeask";
       break;
     case 71:
-      field = "dividend";
+      desc = "dividend";
       break;
     case 77:
-      field = "numtrades";
+      desc = "numtrades";
       break;
     case 78:
-      field = "isin";
+      desc = "isin";
       break;
     case 79:
-      field = "closedate";
+      desc = "closedate";
       break;
     case 90:
-      field = "yrhigh";
+      desc = "yrhigh";
       break;
     case 91:
-      field = "yrlow";
+      desc = "yrlow";
       break;
     case 100:
-      field = "dayturnover";
+      desc = "dayturnover";
       break;
     case 114:
-      field = "bidnetchg";
+      desc = "bidnetchg";
       break;
     case 115:
-      field = "bidtick";
+      desc = "bidtick";
       break;
     case 134:
-      field = "midprice";
+      desc = "midprice";
       break;
     case 135:
-      field = "midpricech";
+      desc = "midpricech";
       break;
     case 259:
-      field = "rtl";
+      desc = "rtl";
       break;
     case 285:
-      field = "opentime";
+      desc = "opentime";
       break;
     case 286:
-      field = "hightime";
+      desc = "hightime";
       break;
     case 287:
-      field = "lowtime";
+      desc = "lowtime";
       break;
     case 350:
-      field = "yrhighdate";
+      desc = "yrhighdate";
       break;
     case 351:
-      field = "yrlowdate";
+      desc = "yrlowdate";
       break;
     case 383:
-      field = "histvol";
+      desc = "histvol";
       break;
     case 791:
-      field = "dealtvol1";
+      desc = "dealtvol1";
       break;
     case 990:
-      field = "voltype1";
+      desc = "voltype1";
       break;
     case 1238:
-      field = "marketcap";
+      desc = "marketcap";
       break;
     case 1246:
-      field = "sharesinissue";
+      desc = "sharesinissue";
       break;
     case 1499:
-      field = "qtybuy";
+      desc = "qtybuy";
       break;
     case 1500:
-      field = "qtysell";
+      desc = "qtysell";
       break;
     case 1629:
-      field = "asktick";
+      desc = "asktick";
       break;
     case 1653:
-      field = "countryofissue";
+      desc = "countryofissue";
       break;
     case -275:
     case -276:
@@ -924,26 +922,96 @@ function getFid(fid) {
     case -370:
     case -371:
     case -372:
-      field = "";
       // ignore
+      desc = "";
       break;
     default:
-      field = "";
-      console.log("unknown field:" + fid);
+      desc = "";
+      console.log("unknown field:" + field);
       break;
   }
 
-  return field;
+  return desc;
+}
+
+function getError(errorcode) {
+  var desc = "";
+
+  var code = parseInt(errorcode);
+
+  switch (code) {
+    case 1:
+      desc = "Technical Problem.";
+      break;
+    case 2:
+      desc = "Instrument Not Found";
+      break;
+    case 3:
+      desc = "No Permission";
+      break;
+    case 4:
+      desc = "Record Format Failed";
+      break;
+    case 5:
+      desc = "Update Failed";
+      break;
+    case 6:
+      desc = "Invalid Message Received";
+      break;
+    case 7:
+      desc = "Unknown Function Code received";
+      break;
+    case 8:
+      desc = "Tag received when not expected, or Tag not received when expected";
+      break;
+    case 9:
+      desc = "Missing Instrument Code";
+      break;
+    case 31:
+      desc = "Server communication link Status change";
+      break;
+    case 35:
+      desc = "Updates successfully halted";
+      break;
+    case 36:
+      desc = "Updates were not active";
+      break;
+    case 105:
+      desc = "Error occurred in the Server attempting to format output record";
+      break;
+    case -22:
+      desc = "A wildcard request has completed.";
+      break;
+    case -23:
+      desc = "A wildcard request has completed.";
+      break;
+    default:
+      desc = "Unknown error";
+      break;
+  }
+
+  return desc;
 }
 
 function registerScripts() {
-  // add tick to price history
+  // update the latest price & add a tick to price history
   // params: instrumentcode, timestamp, bid, offer
   scriptpricehist = '\
   --[[ get an id for this tick ]] \
   local pricehistoryid = redis.call("incr", "pricehistoryid") \
+  --[[ may only get bid or ask, so make sure we have the latest of both ]] \
+  local bid = KEYS[3] \
+  local ask = KEYS[4] \
+  if bid == "" then \
+    bid = redis.call("hget", "symbol:" .. KEYS[1], "bid") \
+  end \
+  if ask == "" then \
+    ask = redis.call("hget", "symbol:" .. KEYS[1], "ask") \
+  end \
+  --[[ update latest prices ]] \
+  redis.call("hmset", "symbol:" .. KEYS[1], "bid", bid, "ask", ask) \
   --[[ add id to sorted set, indexed on timestamp ]] \
   redis.call("zadd", "pricehistory:" .. KEYS[1], KEYS[2], pricehistoryid) \
-  redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbol", KEYS[1], "bid", KEYS[3], "offer", KEYS[4], "id", pricehistoryid) \
+  redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbol", KEYS[1], "bid", bid, "ask", ask, "id", pricehistoryid) \
   ';
 }
