@@ -15,6 +15,10 @@ var sockjs = require('sockjs');
 var node_static = require('node-static');
 var redis = require('redis');
 
+    //<script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
+    //<script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
+    //gillian telforth
+
 // cw2t libraries
 var common = require('./common.js');
 

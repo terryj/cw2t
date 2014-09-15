@@ -123,10 +123,17 @@ function pricehistoryRequest(phr) {
 }
 
 function registerScripts() {
-  // get price history
+  // get price history between two datetimes for a symbol
   // params: symbol, startperiod, endperiod
   scriptgetpricehist = '\
+    local fields = {"bid", "ask", "timestamp", "id"} \
+    local tblpricehist = {} \
+    local vals \
     local pricehist = redis.call("zrangebyscore", "pricehistory:" .. KEYS[1], KEYS[2], KEYS[3]) \
-    return pricehist \
+    for index = 1, #pricehist do \
+      vals = redis.call("hmget", "pricehistory:" .. pricehist[index], unpack(fields)) \
+      table.insert(tblpricehist, {bid = vals[1], ask = vals[2], timestamp = vals[3], id = vals[4]}) \
+    end \
+    return tblpricehist \
   ';
 }

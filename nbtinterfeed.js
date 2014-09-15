@@ -303,8 +303,8 @@ function updateDb(functioncode, instrumentcode, instrec) {
     db.hmset("symbol:" + instrumentcode, instrec);
   }
 
-  // update price history
-  db.eval(scriptpricehist, 4, instrumentcode, timestamp, instrec.bid, instrec.ask, function(err, ret) {
+  // update price & history
+  db.eval(scriptpriceupdate, 4, instrumentcode, timestamp, instrec.bid, instrec.ask, function(err, ret) {
     if (err) throw err;
     console.log("pricehist updated: " + instrumentcode);
   });
@@ -996,7 +996,7 @@ function getError(errorcode) {
 function registerScripts() {
   // update the latest price & add a tick to price history
   // params: instrumentcode, timestamp, bid, offer
-  scriptpricehist = '\
+  scriptpriceupdate = '\
   --[[ get an id for this tick ]] \
   local pricehistoryid = redis.call("incr", "pricehistoryid") \
   --[[ may only get bid or ask, so make sure we have the latest of both ]] \
