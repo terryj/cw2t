@@ -1181,10 +1181,13 @@ function newChat(chat) {
 }
 
 function pricehistoryRequest(pricehistoryrequest, clientid) {
+  console.log("pricehistoryrequest");
   console.log(pricehistoryrequest);
 
-  // add client id, so we can identify on the way back
+  // add client id, so we can identify who the result is for
   pricehistoryrequest.clientid = clientid;
+
+  // publish the request for the price history server
   db.publish(pricehistorychannel, "{\"pricehistoryrequest\":" + JSON.stringify(pricehistoryrequest) + "}");
 }
 

@@ -363,6 +363,7 @@ function sendIndex(index, conn) {
         }
 
         instrument.symbol = symbol;
+        instrument.shortname = inst.shortname;
 
         // add the order to the array
         i.symbols.push(instrument);
