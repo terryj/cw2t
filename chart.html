@@ -15,6 +15,14 @@
         shape-rendering: crispEdges;
     }
 
+    .sb {
+        color: steelblue;
+    }
+
+    .yl {
+        color: yellow;
+    }
+
     body {
         /*font: 12px Arial;*/
         font: 12px sans-serif;
@@ -77,8 +85,8 @@
                     updateIndex(obj.index);
                     displayIndex(ukx);
                 } else if ("pricehistory" in obj) {
-                    updatePricehistory(obj.pricehistory);
-                    createChart();
+                    //updatePricehistory(obj.pricehistory);
+                    createChart(obj.pricehistory.prices);
                 }
             } catch(e) {
                 console.log(e);
@@ -115,7 +123,8 @@
         // things start here
         function start() {
             // start with FTSE 100
-            requestIndex("UKX");
+            //requestIndex("UKX");
+            requestPricehistory("BARC.L");
         }
 
         function loadOrderBooks(orderbookarr) {
@@ -238,14 +247,18 @@
         function requestPricehistory(symbol) {
             var pricehistoryrequest = {};
 
-            var today = new Date().getTime();
+            var today = new Date();
+            var startofday = new Date();
+            startofday.setHours(08);
+            startofday.setMinutes(00);
+            startofday.setSeconds(00);
 
-            var startperiod = today;
-            var endperiod = today;
+            console.log(startofday.getTime());
+            console.log(today.getTime());
 
             pricehistoryrequest.symbol = symbol;
-            pricehistoryrequest.startperiod = startperiod;
-            pricehistoryrequest.endperiod = endperiod;
+            pricehistoryrequest.startperiod = startofday.getTime();
+            pricehistoryrequest.endperiod = today.getTime();
             sockjs.send("{\"pricehistoryrequest\":" + JSON.stringify(pricehistoryrequest) + "}");
         }
 
@@ -390,22 +403,17 @@
             }
         }
 
-        function createChart() {
+        // chart an array of prices
+        function createChart(pricehist) {
             console.log("createChartBaby");
-
-            var data = [{date:"2012-05-12 08:00:00",close:"58.13"},
-                        {date:"2012-05-12 09:00:00",close:"53.98"},
-                        {date:"2012-05-12 10:00:00",close:"67.00"},
-                        {date:"2012-05-12 11:00:00",close:"89.70"},
-                        {date:"2012-05-12 12:00:00",close:"99.00"}];
 
             // set margin around graph & set width & height of graph canvas to reflect this
             var margin = {top: 50, right: 20, bottom: 30, left: 50},
                 width = 960 - margin.left - margin.right,
                 height = 500 - margin.top - margin.bottom;
 
-            // parse function for recognisable datetime values
-            var parseDate = d3.time.format("%Y-%m-%d %H:%M:%S").parse;
+            //  function for recognising datetime values
+            var parseDate = d3.format();
 
             // make sure range pixel values fit the x-axis & state that we are using datetime values
             var x = d3.time.scale()
@@ -417,32 +425,28 @@
 
             // set-up the x-axis
             var xaxis = d3.svg.axis().scale(x)
-                .orient("bottom").ticks(5);
+                .orient("bottom").ticks(6);
 
              // set-up the y-axis
             var yaxis = d3.svg.axis().scale(y)
-                .orient("left").ticks(5);
+                .orient("left").ticks(6);
 
             // convert data to work for graph coordinates
             var line = d3.svg.line()
-                .x(function(d) { return x(d.date); })
-                .y(function(d) { return y(d.close); });
+                .x(function(d) { return x(d.timestamp); })
+                .y(function(d) { return y(d.bid); });
 
-            // create a div
+            // create our div
             var divchart = d3.select("body")
                 .attr("class", "divchart")
                 .append("div");
 
             var button = divchart.append("button")
                 .on('click', function(d,i) {
-                    var test = {};
-                    test.date = parseDate("2012-05-12 13:00:00");
-                    test.close = +"88.00";
-                    data.push(test);
-
                     // scale the range of the data again
-                    x.domain(d3.extent(data, function(d) { return d.date; }));
-                    y.domain([0, d3.max(data, function(d) { return d.close; })]);
+                    x.domain(d3.extent(pricehist, function(d) { return d.timestamp; }));
+                    y.domain(d3.extent(pricehist, function(d) { return d.bid; }));
+                    //y.domain([0, d3.max(pricehist, function(d) { return d.bid; })]);
 
                     var svg = d3.select("body").transition();
 
@@ -456,7 +460,8 @@
 
                     // change the line
                     svg.select(".line")
-                        .attr("d", line(data));
+                        .datum(pricehist)
+                        .attr("d", line);
                 });
 
             // add an svg canvas
@@ -466,15 +471,17 @@
                 .append("g")
                     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
-            // convert data
-            data.forEach(function(d) {
-                d.date = parseDate(d.date);
-                d.close = +d.close;
+            // convert data to something usable
+            pricehist.forEach(function(d) {
+                var dt = new Date(+d.timestamp);
+                d.timestamp = parseDate(dt);
+                d.bid = +d.bid;
             });
 
             // set the scope of data values for both axes
-            x.domain(d3.extent(data, function(d) { return d.date; }));
-            y.domain([0, d3.max(data, function(d) { return d.close; })]);
+            x.domain(d3.extent(pricehist, function(d) { return d.timestamp; }));
+            y.domain(d3.extent(pricehist, function(d) { return d.bid; }));
+            //y.domain([0, d3.max(pricehist, function(d) { return d.bid; })]);
 
             // add the x-axis
             svg.append("g")
@@ -489,7 +496,7 @@
 
             // add the line
             svg.append("path")
-                .datum(data)
+                .datum(pricehist)
                 .attr("class", "line")
                 .attr("d", line);
 

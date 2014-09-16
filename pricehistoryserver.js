@@ -112,13 +112,19 @@ function initDb() {
 
 // receives a pricehistoryrequest object
 function pricehistoryRequest(phr) {
-  console.log(phr);
+  //console.log(phr);
+  var pricehist = {};
+  pricehist.clientid = phr.clientid;
 
   // get price history
   db.eval(scriptgetpricehist, 3, phr.symbol, phr.startperiod, phr.endperiod, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
+    //console.log(ret);
     console.log("got pricehist");
+    console.log(ret);
+    //pricehist.prices = ret;
+    //console.log(ret.length);
+    db.publish(webserverchannel, "{\"pricehistory\":{\"clientid\":" + phr.clientid + ",\"prices\":" + ret + "}}");
   });
 }
 
@@ -134,6 +140,6 @@ function registerScripts() {
       vals = redis.call("hmget", "pricehistory:" .. pricehist[index], unpack(fields)) \
       table.insert(tblpricehist, {bid = vals[1], ask = vals[2], timestamp = vals[3], id = vals[4]}) \
     end \
-    return tblpricehist \
+    return cjson.encode(tblpricehist) \
   ';
 }

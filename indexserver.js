@@ -88,6 +88,8 @@ function pubsub() {
 
     if (message.substr(1, 6) == "prices") {
       common.newPrice(channel, servertype, message, connections);
+    } else if (message.substr(2, 12) =="pricehistory") {
+      sendPricehistory(message);
     } else if (message.substr(0, 8) == "quoteack") {
       sendQuoteack(message.substr(9));
     } else if (message.substr(0, 5) == "quote") {
@@ -256,6 +258,12 @@ function unsubscribeConnection(id) {
     });
   });
 }*/
+
+function sendPricehistory(message) {
+  console.log(connections);
+  // todo: extract clientid
+  connections["1"].write(message);
+}
 
 /*
 // Convert dd-mmm-yyyy to FIX date format 'yyyymmdd'

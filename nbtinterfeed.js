@@ -293,7 +293,8 @@ function updateRec(fid, value, instrec) {
 
 function updateDb(functioncode, instrumentcode, instrec) {
   console.log(instrec);
-  var timestamp = new Date().getTime();
+  var now = new Date();
+  var timestamp = +now;
 
   // publish to server
   //db.publish(ret[1], "quoteack:" + quoteack.quotereqid);
