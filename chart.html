@@ -1,0 +1,517 @@
+<!doctype html>
+<html>
+<head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <title>TG-Online v0.9</title>
+    <script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
+    <script src="http://localhost:8080/d3.min.js"></script>
+    <style>
+    .axis path,
+    .axis line {
+        fill: none;
+        /*stroke: grey;*/
+        stroke: #ccc;
+        stroke-width: 1;
+        shape-rendering: crispEdges;
+    }
+
+    body {
+        /*font: 12px Arial;*/
+        font: 12px sans-serif;
+    }
+
+    .x.axis path {
+        /*stroke: blue;*/
+        /*display: none;*/
+    }
+
+    .line {
+        fill: none;
+        stroke: steelblue;
+        stroke-width: 1.5px;
+    }
+
+    .divchart {
+        width: 960px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .node {
+        cursor: pointer;
+    }
+
+    .node circle {
+        fill: #fff;
+        stroke: steelblue;
+        stroke-width: 1.5px;
+    }
+
+    .node text {
+        font: 12px sans-serif;
+    }
+
+    .link {
+        fill: none;
+        stroke: #ccc;
+        stroke-width: 1.5px;
+    }
+    </style>
+</head>
+<body lang="en">
+    <script>
+        var sockjs_url = '/echo';
+        var sockjs;
+        var orderbooks = {};
+        var ukx = [];
+
+        var datain = function(msg) {
+            try {
+                var obj = JSON.parse(msg);
+
+                if ("orderbooks" in obj) {
+                    loadOrderBooks(obj.orderbooks);
+                } else if ("orderbook" in obj) {
+                    updateOrderBook(obj.orderbook);
+                } else if ("index" in obj) {
+                    updateIndex(obj.index);
+                    displayIndex(ukx);
+                } else if ("pricehistory" in obj) {
+                    updatePricehistory(obj.pricehistory);
+                    createChart();
+                }
+            } catch(e) {
+                console.log(e);
+                console.log(msg);
+                return;
+            }
+        };
+
+        var newconn = function() {
+            sockjs = new SockJS(sockjs_url);
+
+            sockjs.onopen = function()  {
+                console.log("connection open");
+
+                // we are ready
+                start();
+            };
+
+            sockjs.onmessage = function(e) {
+                datain(e.data);
+            };
+
+            sockjs.onclose = function()  {
+                console.log("connection closed");
+            };
+
+            sockjs.onheartbeat = function() {
+            };
+        };
+
+        // get a connection
+        newconn();
+
+        // things start here
+        function start() {
+            // start with FTSE 100
+            requestIndex("UKX");
+        }
+
+        function loadOrderBooks(orderbookarr) {
+            for (var i = 0; i < orderbookarr.length; ++i) {
+                updateOrderBook(orderbookarr[i]);
+            }
+        }
+
+        function updateOrderBook(orderbook) {
+            var level;
+
+            // create an entry in the orderbooks array for this symbol
+            if (!(orderbook.symbol in orderbooks)) {
+                // 6 levels
+                orderbooks[orderbook.symbol] = [{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0}];
+            }
+        }
+
+        function updatePricehistory(pricehist) {
+            console.log("pricehist");
+        }
+
+        function removeOrderBook(symbol) {
+            delete orderbooks[symbol];
+        }
+
+        function updateIndex(index) {
+            console.log("updateIndex");
+
+            var rootnode = {};
+            rootnode.name = "FTSE 100";
+            rootnode.children = [];
+            ukx.push(rootnode);
+
+            for (var i = 0; i < index.symbols.length; ++i) {
+                var node = {};
+                node.name = index.symbols[i].shortname;
+                node.parent = "FTSE 100";
+                node.symbol = index.symbols[i].symbol;
+                ukx[0].children.push(node);
+            }
+        }
+
+        /*function displayIndex() {
+            var lstindex = getList("lstindex");
+
+            document.body.appendChild(lstindex);
+
+            for (var i = 0; i < ukx.length; i++) {
+                addElement(ukx[i].symbol, lstindex, i);
+            }
+
+            lstindex.onclick = function(e) {
+                if (!e) e = window.event;
+                element = e.target || e.srcElement;
+
+                //createChart();
+
+                sockjs.send("{\"orderbookrequest\":" + JSON.stringify(element.innerHTML) + "}");
+            }
+
+            var divorderbooks = getDiv("divorderbooks");
+            document.body.appendChild(divorderbooks);
+        }*/
+
+        function getList(liststr) {
+            var list = document.getElementById(liststr);
+
+            if (list == null) {
+                list = document.createElement("list");
+                list.className = "list";
+                list.id = liststr;
+            }
+
+            return list;
+        }
+
+        function addElement(msg, list, index) {
+            var listelem;
+
+            listelem = document.createElement("li");
+            listelem.setAttribute('value', index);
+
+            newlink("lnk" + index, msg, "", listelem);
+
+            list.appendChild(listelem);
+
+            return listelem;
+        }
+
+        function newlink(id, text, classname, form) {
+            var link = document.createElement('a');
+            link.id = id;
+            link.innerHTML = text;
+            if (classname != "") {
+                link.className = classname;
+            }
+            form.appendChild(link);
+            return link;
+        }
+
+        function getDiv(divid, classname) {
+            var div = document.getElementById(divid);
+
+            if (div == null) {
+                div = document.createElement("div");
+                div.id = divid;
+                div.className = classname;
+            }
+
+            return div;
+        }
+
+        function requestIndex(index) {
+            console.log("requestIndex");
+            sockjs.send("{\"index\":" + JSON.stringify(index) + "}");
+        }
+
+        // assumes today
+        function requestPricehistory(symbol) {
+            var pricehistoryrequest = {};
+
+            var today = new Date().getTime();
+
+            var startperiod = today;
+            var endperiod = today;
+
+            pricehistoryrequest.symbol = symbol;
+            pricehistoryrequest.startperiod = startperiod;
+            pricehistoryrequest.endperiod = endperiod;
+            sockjs.send("{\"pricehistoryrequest\":" + JSON.stringify(pricehistoryrequest) + "}");
+        }
+
+        // display a tree
+        function displayIndex(treedata) {
+            var margin = {top: 20, right: 120, bottom: 20, left: 120},
+                width = 960 - margin.right - margin.left,
+                height = 1200 - margin.top - margin.bottom;
+    
+            var i = 0;
+            var duration = 750;
+
+            var tree = d3.layout.tree()
+                .size([height, width]);
+
+            var diagonal = d3.svg.diagonal()
+                .projection(function(d) { return [d.y, d.x]; });
+
+            var svg = d3.select("body").append("svg")
+                .attr("width", width + margin.right + margin.left)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            var root = treedata[0];
+            root.x0 = height / 2;
+            root.y0 = 0;
+
+            function collapse(d) {
+                if (d.children) {
+                    d._children = d.children;
+                    d._children.forEach(collapse);
+                    d.children = null;
+                }
+            }
+
+            root.children.forEach(collapse);
+            update(root);
+
+            d3.select(self.frameElement).style("height", "500px");
+
+            function update(source) {
+                console.log("update");
+                // Compute the new tree layout.
+                var nodes = tree.nodes(root).reverse(),
+                    links = tree.links(nodes);
+
+                // Normalize for fixed-depth.
+                nodes.forEach(function(d) { d.y = d.depth * 48; });
+
+                // Update the nodes…
+                var node = svg.selectAll("g.node")
+                    .data(nodes, function(d) { return d.id || (d.id = ++i); });
+
+                // Enter any new nodes at the parent's previous position.
+                var nodeEnter = node.enter().append("g")
+                    .attr("class", "node")
+                    .attr("transform", function(d) { return "translate(" + source.y0 + "," + source.x0 + ")"; })
+                    .on("click", click);
+
+                nodeEnter.append("circle")
+                    .attr("r", 1e-6)
+                    .style("fill", function(d) { return d._children ? "lightsteelblue" : "#fff"; });
+
+                nodeEnter.append("text")
+                    .attr("x", function(d) { return d.children || d._children ? -10 : 10; })
+                    .attr("dy", ".35em")
+                    .attr("text-anchor", function(d) { return d.children || d._children ? "end" : "start"; })
+                    .text(function(d) { return d.name; })
+                    .style("fill-opacity", 1e-6);
+
+                // Transition nodes to their new position.
+                var nodeUpdate = node.transition()
+                    .duration(duration)
+                    .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; });
+
+                nodeUpdate.select("circle")
+                    .attr("r", 4.5)
+                    .style("fill", function(d) { return d._children ? "lightsteelblue" : "#fff"; });
+
+                nodeUpdate.select("text")
+                    .style("fill-opacity", 1);
+
+                // Transition exiting nodes to the parent's new position.
+                var nodeExit = node.exit().transition()
+                    .duration(duration)
+                    .attr("transform", function(d) { return "translate(" + source.y + "," + source.x + ")"; })
+                    .remove();
+
+                nodeExit.select("circle")
+                    .attr("r", 1e-6);
+
+                nodeExit.select("text")
+                    .style("fill-opacity", 1e-6);
+
+                // Update the links…
+                var link = svg.selectAll("path.link")
+                    .data(links, function(d) { return d.target.id; });
+
+                // Enter any new links at the parent's previous position.
+                link.enter().insert("path", "g")
+                    .attr("class", "link")
+                    .attr("d", function(d) {
+                        var o = {x: source.x0, y: source.y0};
+                        return diagonal({source: o, target: o});
+                    });
+
+                // Transition links to their new position.
+                link.transition()
+                    .duration(duration)
+                    .attr("d", diagonal);
+
+                // Transition exiting nodes to the parent's new position.
+                link.exit().transition()
+                    .duration(duration)
+                    .attr("d", function(d) {
+                        var o = {x: source.x, y: source.y};
+                        return diagonal({source: o, target: o});
+                    })
+                    .remove();
+
+                // Stash the old positions for transition.
+                nodes.forEach(function(d) {
+                    d.x0 = d.x;
+                    d.y0 = d.y;
+                });
+            }
+
+            // Toggle children on click.
+            function click(d) {
+                if (d.children) {
+                    d._children = d.children;
+                    d.children = null;
+                } else {
+                    d.children = d._children;
+                    d._children = null;
+
+                    requestPricehistory(d.symbol);
+                }
+
+                update(d);
+            }
+        }
+
+        function createChart() {
+            console.log("createChartBaby");
+
+            var data = [{date:"2012-05-12 08:00:00",close:"58.13"},
+                        {date:"2012-05-12 09:00:00",close:"53.98"},
+                        {date:"2012-05-12 10:00:00",close:"67.00"},
+                        {date:"2012-05-12 11:00:00",close:"89.70"},
+                        {date:"2012-05-12 12:00:00",close:"99.00"}];
+
+            // set margin around graph & set width & height of graph canvas to reflect this
+            var margin = {top: 50, right: 20, bottom: 30, left: 50},
+                width = 960 - margin.left - margin.right,
+                height = 500 - margin.top - margin.bottom;
+
+            // parse function for recognisable datetime values
+            var parseDate = d3.time.format("%Y-%m-%d %H:%M:%S").parse;
+
+            // make sure range pixel values fit the x-axis & state that we are using datetime values
+            var x = d3.time.scale()
+                .range([0, width]);
+
+            // make sure range of pixel values fit the y-axis
+            var y = d3.scale.linear()
+                .range([height, 0]);
+
+            // set-up the x-axis
+            var xaxis = d3.svg.axis().scale(x)
+                .orient("bottom").ticks(5);
+
+             // set-up the y-axis
+            var yaxis = d3.svg.axis().scale(y)
+                .orient("left").ticks(5);
+
+            // convert data to work for graph coordinates
+            var line = d3.svg.line()
+                .x(function(d) { return x(d.date); })
+                .y(function(d) { return y(d.close); });
+
+            // create a div
+            var divchart = d3.select("body")
+                .attr("class", "divchart")
+                .append("div");
+
+            var button = divchart.append("button")
+                .on('click', function(d,i) {
+                    var test = {};
+                    test.date = parseDate("2012-05-12 13:00:00");
+                    test.close = +"88.00";
+                    data.push(test);
+
+                    // scale the range of the data again
+                    x.domain(d3.extent(data, function(d) { return d.date; }));
+                    y.domain([0, d3.max(data, function(d) { return d.close; })]);
+
+                    var svg = d3.select("body").transition();
+
+                    // change the x-axis
+                    svg.select(".x.axis")
+                        .call(xaxis);
+
+                    // change the y-axis
+                    svg.select(".y.axis")
+                        .call(yaxis);
+
+                    // change the line
+                    svg.select(".line")
+                        .attr("d", line(data));
+                });
+
+            // add an svg canvas
+            var svg = divchart.append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            // convert data
+            data.forEach(function(d) {
+                d.date = parseDate(d.date);
+                d.close = +d.close;
+            });
+
+            // set the scope of data values for both axes
+            x.domain(d3.extent(data, function(d) { return d.date; }));
+            y.domain([0, d3.max(data, function(d) { return d.close; })]);
+
+            // add the x-axis
+            svg.append("g")
+                .attr("class", "x axis")
+                .attr("transform", "translate(0," + height + ")")
+                .call(xaxis);
+
+            // add the y-axis
+            svg.append("g")
+                .attr("class", "y axis")
+                .call(yaxis);
+
+            // add the line
+            svg.append("path")
+                .datum(data)
+                .attr("class", "line")
+                .attr("d", line);
+
+            // title
+            svg.append("text")
+                .attr("x", (width / 2))
+                .attr("y", 0 - (margin.top / 2))
+                .attr("text-anchor", "middle")
+                .style("font-size", "26px")
+                .style("fill", "grey")
+                .text("Barclays PLC - ")
+                .append("tspan")
+                    .style("fill", "red")
+                    .style("font-size", "33px")
+                    .text("23.10")
+                .append("tspan")
+                    .style("fill", "grey")
+                    .text(" / ")
+                .append("tspan")
+                    .style("fill", "blue")
+                    .text(" 23.25");
+        }
+     </script>
+</body>
+</html>
