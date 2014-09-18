@@ -15,21 +15,16 @@ var redis = require('redis');
 // cw2t libraries
 var common = require('./common.js');
 
-// globals
-var markettype; // comes from database, 0=normal market, 1=out of hours
+// publish & subscribe channels
 var clientserverchannel = 1;
 var userserverchannel = 2;
 var tradeserverchannel = 3;
 var ifaserverchannel = 4;
 var webserverchannel = 5;
 var tradechannel = 6;
-var pricechannel = 7;
+var priceserverchannel = 7;
 var pricehistorychannel = 8;
-var host = "85.133.96.85";
-var messageport = 50900;
-var buf = new Buffer(1024 * 1024); // incoming data buffer
-var bufbytesread = 0;
-var bytestoread = 0;
+var pricechannel = 9;
 
 // redis
 var redishost;
@@ -37,7 +32,14 @@ var redisport;
 var redisauth;
 var redispassword;
 var redislocal = true; // local or external server
-var holidays = {};
+
+// globals
+var markettype; // comes from database, 0=normal market, 1=out of hours
+var host = "85.133.96.85";
+var messageport = 50900;
+var buf = new Buffer(1024 * 2048); // incoming data buffer
+var bufbytesread = 0;
+var bytestoread = 0;
 
 if (redislocal) {
   // local
@@ -103,7 +105,7 @@ function pubsub() {
     requestData(message);
   });
 
-  dbsub.subscribe(pricechannel);
+  dbsub.subscribe(priceserverchannel);
 }
 
 //
@@ -293,11 +295,10 @@ function updateRec(fid, value, instrec) {
 
 function updateDb(functioncode, instrumentcode, instrec) {
   console.log(instrec);
+
+  // create a unix timestamp
   var now = new Date();
   var timestamp = +now;
-
-  // publish to server
-  //db.publish(ret[1], "quoteack:" + quoteack.quotereqid);
 
   // store a complete record for a symbol
   if (functioncode == "340") {
@@ -317,40 +318,6 @@ function loginReceived(message) {
   } else {
     console.log("login failed");
   }
-}
-
-function priceReceived(message) {
-  // split string into array
-  var arr = message.split("|");
-
-  // only process a complete message
-  if (arr.length < 23) {
-    console.log("incomplete arr");
-    return false;
-  }
-
-  var jsonmsg = "\"prices\":[";
-  jsonmsg += "{\"level\":" + "1" +  ",\"" + "bid" + "\":\"" + arr[2] + "\"}";
-  jsonmsg += ",{\"level\":" + "1" +  ",\"" + "offer" + "\":\"" + arr[3] + "\"}";
-  jsonmsg += "]";
-  jsonmsg += ",\"open\":" + arr[5];
-  jsonmsg += ",\"close\":" + arr[6];
-  jsonmsg += ",\"high\":" + arr[7];
-  jsonmsg += ",\"low\":" + arr[8];
-  jsonmsg += ",\"change\":" + arr[9];
-  jsonmsg += ",\"changepercent\":" + arr[10];
-  jsonmsg += ",\"volume\":" + arr[11];
-  jsonmsg += ",\"52weekhigh\":" + arr[18];
-  jsonmsg += ",\"52weeklow\":" + arr[19];
-  jsonmsg += ",\"currency\":" + arr[21];
-
-  // publish the price
-  db.publish("ticker:" + arr[0], jsonmsg);
-
-  // & store it
-  db.hmset("ticker:" + arr[0], "bid", arr[2], "offer", arr[3], "open", arr[5], "close", arr[6], "high", arr[7], "low", arr[8], "change", arr[9], "changepercent", arr[10], "volume", arr[11], "52weekhigh", arr[18], "52weeklow", arr[19], "currency", arr[21]);
-
-  return true;
 }
 
 function requestData(msg) {
@@ -1003,13 +970,25 @@ function registerScripts() {
   --[[ may only get bid or ask, so make sure we have the latest of both ]] \
   local bid = KEYS[3] \
   local ask = KEYS[4] \
+  local pricetbl = {} \
   if bid == "" then \
     bid = redis.call("hget", "symbol:" .. KEYS[1], "bid") \
+    if ask == "" then \
+      return \
+    else \
+      table.insert(pricetbl, {symbol=KEYS[1], level=1, ask=ask, timestamp=KEYS[2], id=pricehistoryid}) \
+    end \
+  else \
+    table.insert(pricetbl, {symbol=KEYS[1], level=1, bid=bid, timestamp=KEYS[2], id=pricehistoryid}) \
+    if ask == "" then \
+      ask = redis.call("hget", "symbol:" .. KEYS[1], "ask") \
+    else \
+      table.insert(pricetbl, {symbol=KEYS[1], level=1, ask=ask, timestamp=KEYS[2], id=pricehistoryid}) \
+    end \
   end \
-  if ask == "" then \
-    ask = redis.call("hget", "symbol:" .. KEYS[1], "ask") \
-  end \
-  --[[ update latest prices ]] \
+  --[[ publish a price message for this symbol ]] \
+  redis.call("publish", KEYS[1], "{" .. cjson.encode("prices") .. ":" .. cjson.encode(pricetbl) .. "}") \
+  --[[ store latest prices ]] \
   redis.call("hmset", "symbol:" .. KEYS[1], "bid", bid, "ask", ask) \
   --[[ add id to sorted set, indexed on timestamp ]] \
   redis.call("zadd", "pricehistory:" .. KEYS[1], KEYS[2], pricehistoryid) \

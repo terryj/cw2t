@@ -18,6 +18,17 @@ var redis = require('redis');
 // cw2t libraries
 var common = require('./common.js');
 
+// publish & subscribe channels
+var clientserverchannel = 1;
+var userserverchannel = 2;
+var tradeserverchannel = 3;
+var ifaserverchannel = 4;
+var webserverchannel = 5;
+var tradechannel = 6;
+var priceserverchannel = 7;
+var pricehistorychannel = 8;
+var pricechannel = 9;
+
 // globals
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
@@ -25,14 +36,6 @@ var cw2tport = 443; // client listen port
 var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;
-var clientserverchannel = 1;
-var userserverchannel = 2;
-var tradeserverchannel = 3;
-var ifaserverchannel = 4;
-var webserverchannel = 5;
-var tradechannel = 6;
-var pricechannel = 7;
-var pricehistorychannel = 8;
 var servertype = "client";
 var feedtype = "digitallook";
 

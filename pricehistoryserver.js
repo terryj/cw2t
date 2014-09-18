@@ -12,15 +12,16 @@ var redis = require('redis');
 // cw2t libraries
 var common = require('./common.js');
 
-// globals
+// publish & subscribe channels
 var clientserverchannel = 1;
 var userserverchannel = 2;
 var tradeserverchannel = 3;
 var ifaserverchannel = 4;
 var webserverchannel = 5;
 var tradechannel = 6;
-var pricechannel = 7;
+var priceserverchannel = 7;
 var pricehistorychannel = 8;
+var pricechannel = 9;
 
 // redis
 var redishost;
@@ -28,7 +29,6 @@ var redisport;
 var redisauth;
 var redispassword;
 var redislocal = true; // local or external server
-var holidays = {};
 
 if (redislocal) {
   // local
@@ -42,6 +42,8 @@ if (redislocal) {
   redisauth = true;
   redispassword = "4dfeb4b84dbb9ce73f4dd0102cc7707a";
 }
+
+// globals
 
 // redis scripts
 

@@ -18,24 +18,6 @@ var redis = require('redis');
 // internal libraries
 var common = require('./common.js');
 
-// globals
-var connections = {}; // added to if & when a client logs on
-var static_directory = new node_static.Server(__dirname); // static files server
-var cw2tport = 8081; // user listen port
-var ordertypes = {};
-var brokerid = "1"; // todo: via logon
-var defaultnosettdays = 3;
-var operatortype = 2; // user
-var clientserverchannel = 1;
-var userserverchannel = 2;
-var tradeserverchannel = 3;
-var ifaserverchannel = 4;
-var webserverchannel = 5;
-var tradechannel = 6;
-var servertype = "user";
-var serverstatus = {};
-var feedtype = "digitallook";
-
 // redis
 var redishost;
 var redisport;
@@ -55,6 +37,29 @@ if (redislocal) {
   redisauth = true;
   redispassword = "4dfeb4b84dbb9ce73f4dd0102cc7707a";
 }
+
+// publish & subscribe channels
+var clientserverchannel = 1;
+var userserverchannel = 2;
+var tradeserverchannel = 3;
+var ifaserverchannel = 4;
+var webserverchannel = 5;
+var tradechannel = 6;
+var priceserverchannel = 7;
+var pricehistorychannel = 8;
+var pricechannel = 9;
+
+// globals
+var connections = {}; // added to if & when a client logs on
+var static_directory = new node_static.Server(__dirname); // static files server
+var cw2tport = 8081; // user listen port
+var ordertypes = {};
+var brokerid = "1"; // todo: via logon
+var defaultnosettdays = 3;
+var operatortype = 2; // user
+var servertype = "user";
+var serverstatus = {};
+var feedtype = "digitallook";
 
 // redis scripts
 var scriptgetclients;

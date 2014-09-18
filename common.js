@@ -934,7 +934,26 @@ exports.registerCommonScripts = function () {
   exports.subscribeinstrument = subscribeinstrument;
 
   //
-  // subscribe an instrument with digitallook
+  // subscribe to an instrument with nbtrader
+  // see scriptsubscribeinstrument
+  //
+  subscribeinstrumentnbt = '\
+  local subscribeinstrumentnbt = function(symbol, id, servertype) \
+    local needtosubscribe = 0 \
+    if redis.call("scard", "symbol:" .. symbol .. ":" .. servertype) == 0 then \
+      --[[ this server needs to subscribe, needs to be done on another connection ]] \
+      needtosubscribe = 1 \
+    end \
+    --[[ add this id ]] \
+    redis.call("sadd", "symbol:" .. symbol .. ":" .. servertype, id) \
+    return {needtosubscribe, symbol} \
+  end \
+  ';
+
+  exports.subscribeinstrumentnbt = subscribeinstrumentnbt;
+
+  //
+  // subscribe to an instrument with digitallook
   // see scriptsubscribeinstrument
   //
   subscribeinstrumentdl = '\
@@ -999,6 +1018,22 @@ exports.registerCommonScripts = function () {
       end \
     end \
     return {needtounsubscribe, topic} \
+  end \
+  ';
+
+  //
+  // unsubscribe an instrument from the nbtrader feed
+  // see scriptunsubscribeinstrument
+  //
+  unsubscribeinstrumentnbt = '\
+  local unsubscribeinstrumentnbt = function(symbol, id, servertype) \
+    local needtounsubscribe = 0 \
+    --[[ remove this id from the list for this server ]] \
+    redis.call("srem", "symbol:" .. symbol .. ":" .. servertype, id) \
+    if redis.call("scard", "symbol:" .. symbol .. ":" .. servertype) == 0 then \
+      needtounsubscribe = 1 \
+    end \
+    return {needtounsubscribe, symbol} \
   end \
   ';
 
@@ -1180,7 +1215,7 @@ exports.registerCommonScripts = function () {
   // params: symbol, client/user/ifa id, servertype, feedtype
   // i.e. "BARC.L", 1, "client", "digitallook"
   //
-  exports.scriptsubscribeinstrument = subscribeinstrument + subscribeinstrumentdl + '\
+  exports.scriptsubscribeinstrument = subscribeinstrument + subscribeinstrumentdl + subscribeinstrumentnbt + '\
   redis.call("sadd", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
   redis.call("sadd", KEYS[3] .. ":" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
   local ret = {0, ""} \
@@ -1188,6 +1223,8 @@ exports.registerCommonScripts = function () {
     ret = subscribeinstrument(KEYS[1], KEYS[2], KEYS[3]) \
   elseif KEYS[4] == "digitallook" then \
     ret = subscribeinstrumentdl(KEYS[1], KEYS[2], KEYS[3]) \
+  elseif KEYS[4] == "nbtrader" then \
+    ret = subscribeinstrumentnbt(KEYS[1], KEYS[2], KEYS[3]) \
   end \
   return ret \
   ';
@@ -1197,7 +1234,7 @@ exports.registerCommonScripts = function () {
   // params: symbol, client/user id, servertype, feedtype
   // i.e. "BARC.L", 1, "client", "digitallook"
   //
-  exports.scriptunsubscribeinstrument = unsubscribeinstrument + unsubscribeinstrumentdl + '\
+  exports.scriptunsubscribeinstrument = unsubscribeinstrument + unsubscribeinstrumentdl + unsubscribeinstrumentnbt + '\
   redis.call("srem", "orderbook:" .. KEYS[1] .. ":" .. KEYS[3], KEYS[2]) \
   redis.call("srem", KEYS[3] .. ":" .. KEYS[2] .. ":orderbooks", KEYS[1]) \
   local ret = {0, "", 0, ""} \
@@ -1205,6 +1242,8 @@ exports.registerCommonScripts = function () {
     ret = unsubscribeinstrument(KEYS[1], KEYS[2], KEYS[3]) \
   elseif KEYS[4] == "digitallook" then \
     ret = unsubscribeinstrumentdl(KEYS[1], KEYS[2], KEYS[3]) \
+  elseif KEYS[4] == "nbtrader" then \
+    ret = unsubscribeinstrumentnbt(KEYS[1], KEYS[2], KEYS[3]) \
   end \
   return ret \
   ';

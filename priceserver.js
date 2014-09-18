@@ -1,6 +1,6 @@
 /****************
 * priceserver.js
-* Front-office information server
+* Digital Look server
 * Cantwaittotrade Limited
 * Terry Johnston
 * July 2014

@@ -17,16 +17,16 @@ var redis = require('redis');
 var nbtrader = require('./nbtrader.js'); // NBTrader API connection 
 var common = require('./common.js');
 
-// globals
-var markettype; // comes from database, 0=normal market, 1=out of hours
+// publish & subscribe channels
 var clientserverchannel = 1;
 var userserverchannel = 2;
 var tradeserverchannel = 3;
 var ifaserverchannel = 4;
 var webserverchannel = 5;
 var tradechannel = 6;
-var pricechannel = 7;
+var priceserverchannel = 7;
 var pricehistorychannel = 8;
+var pricechannel = 9;
 
 // redis
 var redishost;
@@ -34,6 +34,9 @@ var redisport;
 var redisauth;
 var redispassword;
 var redislocal = true; // local or external server
+
+// globals
+var markettype; // comes from database, 0=normal market, 1=out of hours
 var holidays = {};
 
 if (redislocal) {

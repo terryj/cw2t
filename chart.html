@@ -72,12 +72,15 @@
         var sockjs;
         var orderbooks = {};
         var ukx = [];
+        var pricehist = [];
 
         var datain = function(msg) {
             try {
                 var obj = JSON.parse(msg);
 
-                if ("orderbooks" in obj) {
+                if ("prices" in obj) {
+                    updateChart(obj.prices);
+                } else if ("orderbooks" in obj) {
                     loadOrderBooks(obj.orderbooks);
                 } else if ("orderbook" in obj) {
                     updateOrderBook(obj.orderbook);
@@ -86,7 +89,8 @@
                     displayIndex(ukx);
                 } else if ("pricehistory" in obj) {
                     //updatePricehistory(obj.pricehistory);
-                    createChart(obj.pricehistory.prices);
+                    pricehist = obj.pricehistory.prices;
+                    createChart();
                 }
             } catch(e) {
                 console.log(e);
@@ -124,7 +128,7 @@
         function start() {
             // start with FTSE 100
             //requestIndex("UKX");
-            requestPricehistory("BARC.L");
+            requestPricehistory("LLOY.L");
         }
 
         function loadOrderBooks(orderbookarr) {
@@ -404,7 +408,7 @@
         }
 
         // chart an array of prices
-        function createChart(pricehist) {
+        function createChart() {
             console.log("createChartBaby");
 
             // set margin around graph & set width & height of graph canvas to reflect this
@@ -413,26 +417,26 @@
                 height = 500 - margin.top - margin.bottom;
 
             //  function for recognising datetime values
-            var parseDate = d3.format();
+            parseDate = d3.format();
 
             // make sure range pixel values fit the x-axis & state that we are using datetime values
-            var x = d3.time.scale()
+            x = d3.time.scale()
                 .range([0, width]);
 
             // make sure range of pixel values fit the y-axis
-            var y = d3.scale.linear()
+            y = d3.scale.linear()
                 .range([height, 0]);
 
             // set-up the x-axis
-            var xaxis = d3.svg.axis().scale(x)
+            xaxis = d3.svg.axis().scale(x)
                 .orient("bottom").ticks(6);
 
              // set-up the y-axis
-            var yaxis = d3.svg.axis().scale(y)
+            yaxis = d3.svg.axis().scale(y)
                 .orient("left").ticks(6);
 
             // convert data to work for graph coordinates
-            var line = d3.svg.line()
+            line = d3.svg.line()
                 .x(function(d) { return x(d.timestamp); })
                 .y(function(d) { return y(d.bid); });
 
@@ -507,7 +511,7 @@
                 .attr("text-anchor", "middle")
                 .style("font-size", "26px")
                 .style("fill", "grey")
-                .text("Barclays PLC - ")
+                .text("Lloyds - ")
                 .append("tspan")
                     .style("fill", "red")
                     .style("font-size", "33px")
@@ -518,6 +522,48 @@
                 .append("tspan")
                     .style("fill", "blue")
                     .text(" 23.25");
+        }
+
+        function updateChart(prices) {
+            console.log("updateChartBaby");
+            console.log(prices);
+
+            for (var i = 0; i < prices.length; i++) {
+                var d = {};
+                var dt = new Date(+prices[i].timestamp);
+
+                if ("bid" in prices) {
+                    d.bid = prices[i].bid;
+                } else {
+                    d.bid = prices[i].ask;
+                }
+
+                d.timestamp = parseDate(dt);
+                d.bid = +d.bid;
+
+                pricehist.push(d);
+            }
+
+            // re-scale the range of the data again
+            x.domain(d3.extent(pricehist, function(d) { return d.timestamp; }));
+            y.domain(d3.extent(pricehist, function(d) { return d.bid; }));
+
+            var svg = d3.select("body").transition();
+
+            // reset the x-axis
+            svg.select(".x.axis")
+                .call(xaxis);
+
+            // reset the y-axis
+            svg.select(".y.axis")
+                .call(yaxis);
+
+            // update the line
+            var line = svg.select(".line");
+                //.datum(pricehist)
+                //.attr("d", line(pricehist));
+
+            console.log(line);
         }
      </script>
 </body>

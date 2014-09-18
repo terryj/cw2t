@@ -15,12 +15,23 @@ var sockjs = require('sockjs');
 var node_static = require('node-static');
 var redis = require('redis');
 
-    //<script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
-    //<script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
-    //gillian telforth
-
 // cw2t libraries
 var common = require('./common.js');
+
+// publish & subscribe channels
+var clientserverchannel = 1;
+var userserverchannel = 2;
+var tradeserverchannel = 3;
+var ifaserverchannel = 4;
+var webserverchannel = 5;
+var tradechannel = 6;
+var priceserverchannel = 7;
+var pricehistorychannel = 8;
+var pricechannel = 9;
+
+// redis
+var redishost = "127.0.0.1";
+var redisport = 6379;
 
 // globals
 var connections = {}; // added to if & when a client logs on
@@ -28,21 +39,9 @@ var static_directory = new node_static.Server(__dirname); // static files server
 var cw2tport = 8080; // listen port
 var ordertypes = {};
 var defaultnosettdays = 3;
-var clientserverchannel = 1;
-var userserverchannel = 2;
-var tradeserverchannel = 3;
-var ifaserverchannel = 4;
-var webserverchannel = 5;
-var tradechannel = 6;
-var pricechannel = 7;
-var pricehistorychannel = 8;
 var servertype = "web";
 var nextclientid = 1;
-var feedtype = "digitallook";
-
-// redis
-var redishost = "127.0.0.1";
-var redisport = 6379;
+var feedtype = "nbtrader";
 
 // redis scripts
 var scriptgetinst;
@@ -84,30 +83,34 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    //console.log("channel " + channel + ": " + message);
+    console.log("channel " + channel + ": " + message);
 
-    if (message.substr(1, 6) == "prices") {
-      common.newPrice(channel, servertype, message, connections);
-    } else if (message.substr(2, 12) =="pricehistory") {
-      sendPricehistory(message);
-    } else if (message.substr(0, 8) == "quoteack") {
-      sendQuoteack(message.substr(9));
-    } else if (message.substr(0, 5) == "quote") {
-      sendQuote(message.substr(6));
-    } else if (message.substr(0, 15) == "orderbookupdate") {
-      common.broadcastLevelOne(message.substr(16), connections);
-    } else if (message.substr(0, 5) == "order") {
-      getSendOrder(message.substr(6));
-    } else if (message.substr(0, 5) == "trade") {
-      getSendTrade(message.substr(6));
-    } else if (message.substr(2, 4) == "chat") {
-      newChat(message);
+    if (channel == webserverchannel) {
+      if (message.substr(1, 6) == "prices") {
+        common.newPrice(channel, servertype, message, connections);
+      } else if (message.substr(2, 12) =="pricehistory") {
+        sendPricehistory(message);
+      } else if (message.substr(0, 8) == "quoteack") {
+        sendQuoteack(message.substr(9));
+      } else if (message.substr(0, 5) == "quote") {
+        sendQuote(message.substr(6));
+      } else if (message.substr(0, 15) == "orderbookupdate") {
+        common.broadcastLevelOne(message.substr(16), connections);
+      } else if (message.substr(0, 5) == "order") {
+        getSendOrder(message.substr(6));
+      } else if (message.substr(0, 5) == "trade") {
+        getSendTrade(message.substr(6));
+      } else if (message.substr(2, 4) == "chat") {
+        newChat(message);
+      } else {
+        console.log("unknown message: " + message);
+      }
     } else {
-      console.log("unknown message, channel=" + channel + ", message=" + message);
+      checkChannel(channel, message);
     }
   });
 
-  // listem for web server related messages
+  // listen for web server related messages
   dbsub.subscribe(webserverchannel);
 }
 
@@ -194,6 +197,23 @@ function listen() {
     conn.on('close', function() {
       tidy(clientid, conn);
       clientid = "0";
+    });
+  });
+}
+
+function checkChannel(channel, message) {
+  console.log("checkChannel");
+
+  // get the users watching this symbol
+  db.smembers("symbol:" + channel + ":" + servertype, function(err, ids) {
+    if (err) throw err;
+    console.log("ids="+ids);
+
+    // send the message to each user
+    ids.forEach(function(id, j) {
+      if (id in connections) {
+        connections[id].write(message);
+      }
     });
   });
 }
@@ -1188,15 +1208,27 @@ function newChat(chat) {
   }
 }
 
-function pricehistoryRequest(pricehistoryrequest, clientid) {
+function pricehistoryRequest(phr, clientid) {
   console.log("pricehistoryrequest");
-  console.log(pricehistoryrequest);
+  console.log(phr);
 
   // add client id, so we can identify who the result is for
-  pricehistoryrequest.clientid = clientid;
+  phr.clientid = clientid;
 
-  // publish the request for the price history server
-  db.publish(pricehistorychannel, "{\"pricehistoryrequest\":" + JSON.stringify(pricehistoryrequest) + "}");
+  // publish a request to the pricehistory server
+  db.publish(pricehistorychannel, "{\"pricehistoryrequest\":" + JSON.stringify(phr) + "}");
+
+  // subscribe to this symbol
+  db.eval(common.scriptsubscribeinstrument, 4, phr.symbol, clientid, servertype, feedtype, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    // the script tells us if we need to subscribe to a symbol/topic
+    //if (ret[0]) {
+      // subscribe to the returned value, may be symbol/topic.., depending on feed
+      dbsub.subscribe(ret[1]);
+    //}
+  });
 }
 
 function registerScripts() {
