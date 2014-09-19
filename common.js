@@ -1345,4 +1345,37 @@ exports.registerCommonScripts = function () {
   end \
   return cjson.encode(clienttype) \
   ';
+
+  // update the latest price & add a tick to price history
+  // params: symbol, timestamp, bid, offer
+  exports.scriptpriceupdate = '\
+  --[[ get an id for this tick ]] \
+  local pricehistoryid = redis.call("incr", "pricehistoryid") \
+  --[[ may only get bid or ask, so make sure we have the latest of both ]] \
+  local bid = KEYS[3] \
+  local ask = KEYS[4] \
+  local pricetbl = {} \
+  if bid == "" then \
+    bid = redis.call("hget", "symbol:" .. KEYS[1], "bid") \
+    if ask == "" then \
+      return \
+    else \
+      table.insert(pricetbl, {symbol=KEYS[1], level=1, ask=ask, timestamp=KEYS[2], id=pricehistoryid}) \
+    end \
+  else \
+    table.insert(pricetbl, {symbol=KEYS[1], level=1, bid=bid, timestamp=KEYS[2], id=pricehistoryid}) \
+    if ask == "" then \
+      ask = redis.call("hget", "symbol:" .. KEYS[1], "ask") \
+    else \
+      table.insert(pricetbl, {symbol=KEYS[1], level=1, ask=ask, timestamp=KEYS[2], id=pricehistoryid}) \
+    end \
+  end \
+  --[[ publish a price message for this symbol ]] \
+  redis.call("publish", KEYS[1], "{" .. cjson.encode("prices") .. ":" .. cjson.encode(pricetbl) .. "}") \
+  --[[ store latest prices ]] \
+  redis.call("hmset", "symbol:" .. KEYS[1], "bid", bid, "ask", ask) \
+  --[[ add id to sorted set, indexed on timestamp ]] \
+  redis.call("zadd", "pricehistory:" .. KEYS[1], KEYS[2], pricehistoryid) \
+  redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbol", KEYS[1], "bid", bid, "ask", ask, "id", pricehistoryid) \
+  ';
 };
