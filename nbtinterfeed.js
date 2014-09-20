@@ -84,6 +84,7 @@ db.on("error", function(err) {
 
 function initialise() {
   initDb();
+  common.registerCommonScripts();
   registerScripts();
   pubsub();
 }
@@ -406,7 +407,6 @@ function requestData(msg) {
 }
 
 function initDb() {
-  common.registerCommonScripts();
   getMarkettype();
 }
 

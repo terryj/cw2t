@@ -114,34 +114,57 @@ function initDb() {
 
 // receives a pricehistoryrequest object
 function pricehistoryRequest(phr) {
-  //console.log(phr);
-  var pricehist = {};
-  pricehist.clientid = phr.clientid;
+  console.log(phr);
+
+  phr.startperiod = 1411110000245;
+  phr.endperiod = 1411111004245;
+  var interval = 10;
 
   // get price history
-  db.eval(scriptgetpricehist, 3, phr.symbol, phr.startperiod, phr.endperiod, function(err, ret) {
+  db.eval(scriptgetpricehistinterval, 6, phr.symbol, phr.startperiod, phr.endperiod, phr.clientid, webserverchannel, interval, function(err, ret) {
     if (err) throw err;
-    //console.log(ret);
-    console.log("got pricehist");
-    console.log(ret);
-    //pricehist.prices = ret;
-    //console.log(ret.length);
-    db.publish(webserverchannel, "{\"pricehistory\":{\"clientid\":" + phr.clientid + ",\"prices\":" + ret + "}}");
+    console.log("got pricehist:" + phr.symbol);
   });
 }
 
 function registerScripts() {
-  // get price history between two datetimes for a symbol
-  // params: symbol, startperiod, endperiod
-  scriptgetpricehist = '\
+  // get price tick history between two datetimes for a symbol
+  // params: symbol, startperiod, endperiod, clientid, channel
+  // i.e. "LLOY.D", 1411110004245, 1411111004245, 1, 5
+  scriptgetpricehisttick = '\
     local fields = {"bid", "ask", "timestamp", "id"} \
     local tblpricehist = {} \
     local vals \
     local pricehist = redis.call("zrangebyscore", "pricehistory:" .. KEYS[1], KEYS[2], KEYS[3]) \
     for index = 1, #pricehist do \
       vals = redis.call("hmget", "pricehistory:" .. pricehist[index], unpack(fields)) \
-      table.insert(tblpricehist, {bid = vals[1], ask = vals[2], timestamp = vals[3], id = vals[4]}) \
+      table.insert(tblpricehist, {bid=vals[1], ask=vals[2], timestamp=vals[3], id=vals[4]}) \
     end \
-    return cjson.encode(tblpricehist) \
+    --[[ publish to requested channel ]] \
+    local pricehist = "{" .. cjson.encode("pricehistory") .. ":{" .. cjson.encode("symbol") .. ":" .. cjson.encode(KEYS[1]) .. "," .. cjson.encode("clientid") .. ":" .. KEYS[4] .. "," .. cjson.encode("prices") .. ":" .. cjson.encode(tblpricehist) .. "}}" \
+    redis.call("publish", KEYS[5], pricehist) \
+  ';
+
+  // get interval price history between two datetimes for a symbol
+  // params: symbol, startperiod, endperiod, clientid, channel, interval
+  // i.e. "LLOY.D", 1411110004245, 1411111004245, 10, 1, 5
+  scriptgetpricehistinterval = '\
+    local fields = {"bid", "ask", "timestamp", "id"} \
+    local tblpricehist = {} \
+    local vals \
+    local mid \
+    local interval = KEYS[6] * 1000 \
+    local nexttimeinterval = KEYS[2] + interval \
+    local pricehist = redis.call("zrangebyscore", "pricehistory:" .. KEYS[1], KEYS[2], KEYS[3]) \
+    for index = 1, #pricehist do \
+      vals = redis.call("hmget", "pricehistory:" .. pricehist[index], unpack(fields)) \
+      mid = (tonumber(vals[1]) + tonumber(vals[2])) / 2 \
+      if tonumber(vals[3]) > nexttimeinterval then \
+        table.insert(tblpricehist, {mid=mid, timestamp=nexttimeinterval}) \
+        nexttimeinterval = nexttimeinterval + interval \
+      end \
+    end \
+    local pricehist = "{" .. cjson.encode("pricehistory") .. ":{" .. cjson.encode("symbol") .. ":" .. cjson.encode(KEYS[1]) .. "," .. cjson.encode("clientid") .. ":" .. KEYS[4] .. "," .. cjson.encode("prices") .. ":" .. cjson.encode(tblpricehist) .. "}}" \
+    redis.call("publish", KEYS[5], pricehist) \
   ';
 }

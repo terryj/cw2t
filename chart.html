@@ -79,7 +79,7 @@
                 var obj = JSON.parse(msg);
 
                 if ("prices" in obj) {
-                    updateChart(obj.prices);
+                    //updateChart(obj.prices);
                 } else if ("orderbooks" in obj) {
                     loadOrderBooks(obj.orderbooks);
                 } else if ("orderbook" in obj) {
@@ -447,12 +447,19 @@
 
             var button = divchart.append("button")
                 .on('click', function(d,i) {
+                    updateChart();
+                    return;
                     // scale the range of the data again
                     x.domain(d3.extent(pricehist, function(d) { return d.timestamp; }));
                     y.domain(d3.extent(pricehist, function(d) { return d.bid; }));
                     //y.domain([0, d3.max(pricehist, function(d) { return d.bid; })]);
 
                     var svg = d3.select("body").transition();
+
+                    // change the line
+                    svg.select(".line")
+                        //.datum(pricehist)
+                        .attr("d", line(pricehist));
 
                     // change the x-axis
                     svg.select(".x.axis")
@@ -462,10 +469,7 @@
                     svg.select(".y.axis")
                         .call(yaxis);
 
-                    // change the line
-                    svg.select(".line")
-                        .datum(pricehist)
-                        .attr("d", line);
+                        console.log("updated, i think");
                 });
 
             // add an svg canvas
@@ -524,11 +528,11 @@
                     .text(" 23.25");
         }
 
-        function updateChart(prices) {
+        function updateChart() {
             console.log("updateChartBaby");
-            console.log(prices);
+            //console.log(prices);
 
-            for (var i = 0; i < prices.length; i++) {
+            /*for (var i = 0; i < prices.length; i++) {
                 var d = {};
                 var dt = new Date(+prices[i].timestamp);
 
@@ -542,13 +546,18 @@
                 d.bid = +d.bid;
 
                 pricehist.push(d);
-            }
+            }*/
 
             // re-scale the range of the data again
             x.domain(d3.extent(pricehist, function(d) { return d.timestamp; }));
             y.domain(d3.extent(pricehist, function(d) { return d.bid; }));
 
             var svg = d3.select("body").transition();
+
+            // update the line
+            svg.select(".line")
+                //.datum(pricehist)
+                .attr("d", line(pricehist));
 
             // reset the x-axis
             svg.select(".x.axis")
@@ -558,12 +567,7 @@
             svg.select(".y.axis")
                 .call(yaxis);
 
-            // update the line
-            var line = svg.select(".line");
-                //.datum(pricehist)
-                //.attr("d", line(pricehist));
-
-            console.log(line);
+            //console.log(line);
         }
      </script>
 </body>

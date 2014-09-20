@@ -83,7 +83,7 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    console.log("channel " + channel + ": " + message);
+    console.log("msg rec'd, channel " + channel);
 
     if (channel == webserverchannel) {
       if (message.substr(1, 6) == "prices") {
@@ -106,6 +106,7 @@ function pubsub() {
         console.log("unknown message: " + message);
       }
     } else {
+      // todo: check channel is found, if not, log
       checkChannel(channel, message);
     }
   });
@@ -212,6 +213,7 @@ function checkChannel(channel, message) {
     // send the message to each user
     ids.forEach(function(id, j) {
       if (id in connections) {
+      console.log("sending to id:" + id);
         connections[id].write(message);
       }
     });
@@ -280,7 +282,7 @@ function unsubscribeConnection(id) {
 }*/
 
 function sendPricehistory(message) {
-  console.log(connections);
+  //console.log(connections);
   // todo: extract clientid
   connections["1"].write(message);
 }
@@ -1221,7 +1223,7 @@ function pricehistoryRequest(phr, clientid) {
   // subscribe to this symbol
   db.eval(common.scriptsubscribeinstrument, 4, phr.symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
+    //console.log(ret);
 
     // the script tells us if we need to subscribe to a symbol/topic
     //if (ret[0]) {
