@@ -1348,7 +1348,7 @@ exports.registerCommonScripts = function () {
 
   // update the latest price & add a tick to price history
   // params: symbol, timestamp, bid, offer
-  exports.scriptpriceupdate = '\
+  scriptpriceupdate = '\
   --[[ get an id for this tick ]] \
   local pricehistoryid = redis.call("incr", "pricehistoryid") \
   --[[ may only get bid or ask, so make sure we have the latest of both ]] \
@@ -1378,4 +1378,12 @@ exports.registerCommonScripts = function () {
   redis.call("zadd", "pricehistory:" .. KEYS[1], KEYS[2], pricehistoryid) \
   redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbol", KEYS[1], "bid", bid, "ask", ask, "id", pricehistoryid) \
   ';
+
+  exports.scriptpriceupdate = scriptpriceupdate;
+
+  scripttest = '\
+  return "script test ok" \
+  ';
+
+  exports.scripttest = scripttest;
 };
