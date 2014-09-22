@@ -88,6 +88,7 @@
                     updateIndex(obj.index);
                     displayIndex(ukx);
                 } else if ("pricehistory" in obj) {
+                    console.log(obj);
                     //updatePricehistory(obj.pricehistory);
                     pricehist = obj.pricehistory.prices;
                     createChart();
@@ -410,6 +411,9 @@
         // chart an array of prices
         function createChart() {
             console.log("createChartBaby");
+            for (var i = 0; i < pricehist.length; i++) {
+                console.log(pricehist[i].mid);
+            }
 
             // set margin around graph & set width & height of graph canvas to reflect this
             var margin = {top: 50, right: 20, bottom: 30, left: 50},
@@ -438,7 +442,7 @@
             // convert data to work for graph coordinates
             line = d3.svg.line()
                 .x(function(d) { return x(d.timestamp); })
-                .y(function(d) { return y(d.bid); });
+                .y(function(d) { return y(d.mid); });
 
             // create our div
             var divchart = d3.select("body")
@@ -451,7 +455,7 @@
                     return;
                     // scale the range of the data again
                     x.domain(d3.extent(pricehist, function(d) { return d.timestamp; }));
-                    y.domain(d3.extent(pricehist, function(d) { return d.bid; }));
+                    y.domain(d3.extent(pricehist, function(d) { return d.mid; }));
                     //y.domain([0, d3.max(pricehist, function(d) { return d.bid; })]);
 
                     var svg = d3.select("body").transition();
@@ -483,12 +487,12 @@
             pricehist.forEach(function(d) {
                 var dt = new Date(+d.timestamp);
                 d.timestamp = parseDate(dt);
-                d.bid = +d.bid;
+                d.mid = +d.mid;
             });
 
             // set the scope of data values for both axes
             x.domain(d3.extent(pricehist, function(d) { return d.timestamp; }));
-            y.domain(d3.extent(pricehist, function(d) { return d.bid; }));
+            y.domain(d3.extent(pricehist, function(d) { return d.mid; }));
             //y.domain([0, d3.max(pricehist, function(d) { return d.bid; })]);
 
             // add the x-axis
@@ -550,7 +554,7 @@
 
             // re-scale the range of the data again
             x.domain(d3.extent(pricehist, function(d) { return d.timestamp; }));
-            y.domain(d3.extent(pricehist, function(d) { return d.bid; }));
+            y.domain(d3.extent(pricehist, function(d) { return d.mid; }));
 
             var svg = d3.select("body").transition();
 
