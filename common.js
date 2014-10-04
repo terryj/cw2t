@@ -1377,6 +1377,7 @@ exports.registerCommonScripts = function () {
   --[[ add id to sorted set, indexed on timestamp ]] \
   redis.call("zadd", "pricehistory:" .. KEYS[1], KEYS[2], pricehistoryid) \
   redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbol", KEYS[1], "bid", bid, "ask", ask, "id", pricehistoryid) \
+  return {pricehistoryid, KEYS[1], bid, ask} \
   ';
 
   exports.scriptpriceupdate = scriptpriceupdate;

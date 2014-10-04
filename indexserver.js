@@ -213,7 +213,7 @@ function checkChannel(channel, message) {
     // send the message to each user
     ids.forEach(function(id, j) {
       if (id in connections) {
-      console.log("sending to id:" + id);
+        console.log("sending to id:" + id);
         connections[id].write(message);
       }
     });

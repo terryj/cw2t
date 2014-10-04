@@ -295,6 +295,7 @@ function updateRec(fid, value, instrec) {
 }
 
 function updateDb(functioncode, instrumentcode, instrec) {
+  console.log("updateDb");
   console.log(instrec);
 
   // create a unix timestamp
@@ -309,7 +310,8 @@ function updateDb(functioncode, instrumentcode, instrec) {
   // update price & history
   db.eval(common.scriptpriceupdate, 4, instrumentcode, timestamp, instrec.bid, instrec.ask, function(err, ret) {
     if (err) throw err;
-    console.log("pricehist updated: " + instrumentcode);
+    //console.log("pricehist updated: " + instrumentcode + ",ts:" + timestamp + ",bid:" + instrec.bid + ",ask:" + instrec.ask);
+    console.log(ret);
   });
 }
 

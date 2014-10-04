@@ -56,7 +56,7 @@
     }
 
     .node text {
-        font: 12px sans-serif;
+        font: 14px sans-serif;
     }
 
     .link {
@@ -79,7 +79,7 @@
                 var obj = JSON.parse(msg);
 
                 if ("prices" in obj) {
-                    //updateChart(obj.prices);
+                    updateChart(obj.prices);
                 } else if ("orderbooks" in obj) {
                     loadOrderBooks(obj.orderbooks);
                 } else if ("orderbook" in obj) {
@@ -128,8 +128,8 @@
         // things start here
         function start() {
             // start with FTSE 100
-            //requestIndex("UKX");
-            requestPricehistory("LLOY.L");
+            requestIndex("UKX");
+            //requestPricehistory("LLOY.L");
         }
 
         function loadOrderBooks(orderbookarr) {
@@ -303,7 +303,7 @@
             root.children.forEach(collapse);
             update(root);
 
-            d3.select(self.frameElement).style("height", "500px");
+            d3.select(self.frameElement).style("height", "700px");
 
             function update(source) {
                 console.log("update");
@@ -411,9 +411,9 @@
         // chart an array of prices
         function createChart() {
             console.log("createChartBaby");
-            for (var i = 0; i < pricehist.length; i++) {
+            /*for (var i = 0; i < pricehist.length; i++) {
                 console.log(pricehist[i].mid);
-            }
+            }*/
 
             // set margin around graph & set width & height of graph canvas to reflect this
             var margin = {top: 50, right: 20, bottom: 30, left: 50},
@@ -451,7 +451,7 @@
 
             var button = divchart.append("button")
                 .on('click', function(d,i) {
-                    updateChart();
+                    //updateChart();
                     return;
                     // scale the range of the data again
                     x.domain(d3.extent(pricehist, function(d) { return d.timestamp; }));
@@ -516,25 +516,32 @@
             svg.append("text")
                 .attr("x", (width / 2))
                 .attr("y", 0 - (margin.top / 2))
+                .attr("id", "textid")
                 .attr("text-anchor", "middle")
                 .style("font-size", "26px")
                 .style("fill", "grey")
                 .text("Lloyds - ")
                 .append("tspan")
+                    .attr("id", "bid")
+                    .html("23.10")
                     .style("fill", "red")
                     .style("font-size", "33px")
-                    .text("23.10")
+                    //.text("23.10")
                 .append("tspan")
+                    .html(" / ")
                     .style("fill", "grey")
-                    .text(" / ")
+                    //.text(" / ")
                 .append("tspan")
-                    .style("fill", "blue")
-                    .text(" 23.25");
+                    .attr("id", "ask")
+                    .html(" 23.25")
+                    .style("fill", "blue");
+                    //.text(" 23.25");
         }
 
-        function updateChart() {
+        function updateChart(prices) {
             console.log("updateChartBaby");
-            //console.log(prices);
+            console.log(prices);
+            return;
 
             /*for (var i = 0; i < prices.length; i++) {
                 var d = {};
@@ -552,6 +559,24 @@
                 pricehist.push(d);
             }*/
 
+            //var svg = d3.select("body").transition();
+
+            /*svg.select("#textid")
+                .text("Lloyds - " + prices[0].bid + " / " + prices[0].ask);*/
+
+            for (var i = 0; i < prices.length; i++) {
+                if ("bid" in prices[i]) {
+                    d3.select("tspan")
+                        .html(prices[i].bid);
+                        console.log("updating bid");
+                } else {
+                    d3.select("#ask")
+                        .html(prices[i].ask);
+                        console.log("updating ask");
+                }
+            }
+
+/*
             // re-scale the range of the data again
             x.domain(d3.extent(pricehist, function(d) { return d.timestamp; }));
             y.domain(d3.extent(pricehist, function(d) { return d.mid; }));
@@ -570,8 +595,17 @@
             // reset the y-axis
             svg.select(".y.axis")
                 .call(yaxis);
-
+*/
             //console.log(line);
+        }
+
+        function createTable() {
+/*d3.select("thead").select("tr")
+     .selectAll("th")
+     .data(cols, function(d) { return d; })
+     .enter()
+     .insert("th")
+     .text(function (d) { return (d);  });*/
         }
      </script>
 </body>
