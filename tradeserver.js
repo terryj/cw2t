@@ -14,6 +14,7 @@ var redis = require('redis');
 // cw2t libraries
 //var winnclient = require('./winnclient.js'); // Winner API connection
 //var ptpclient = require('./ptpclient.js'); // Proquote API connection
+var externalconn = "NBTrader";
 var nbtrader = require('./nbtrader.js'); // NBTrader API connection 
 var common = require('./common.js');
 
@@ -149,7 +150,7 @@ winner.on('finished', function(message) {
 // connection to NBTrader
 var nbt = new nbtrader.Nbt();
 nbt.on("connected", function() {
-  console.log("connected to Proquote");
+  console.log("connected to " + externalconn);
 });
 nbt.on('finished', function(message) {
     console.log(message);
@@ -176,8 +177,6 @@ function quoteRequest(quoterequest) {
   // get settlement date from T+n no. of days
   quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, quoterequest.nosettdays, holidays));
 
-  // todo: get nbsymbol
-
   // store the quote request & get an id
   db.eval(scriptquoterequest, 12, quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, quoterequest.orderdivnum, function(err, ret) {
     if (err) throw err;
@@ -189,20 +188,33 @@ function quoteRequest(quoterequest) {
       return;
     }
 
-    // add the quote request id & symbol details required for proquote
+    // add the quote request id & symbol details required for fix connection
     quoterequest.quotereqid = ret[1];
     quoterequest.isin = ret[2];
     quoterequest.proquotesymbol = ret[3];
     quoterequest.exchange = ret[4];
 
+    // match the number of settlement days requested to the default number for this instrument type
+    if (quoterequest.nosettdays == ret[5]) {
+      quoterequest.settlmnttyp = 0;
+    } else if (quoterequest.nosettdays == 2) {
+      quoterequest.settlmnttyp = 3;      
+    } else if (quoterequest.nosettdays == 3) {
+      quoterequest.settlmnttyp = 4;      
+    } else if (quoterequest.nosettdays == 4) {
+      quoterequest.settlmnttyp = 5;
+    } else {
+      quoterequest.settlmnttyp = 6; // future, in which case, settlement date is required
+    }
+
+    // adjust the quote request to the default equity settlement date
+    // the stored settlement date stays as requested
+    // the different settlement will be dealt with using finance
     if (ret[6] == "CFD") {
-      // make the quote request to proquote for the default equity settlement date
-      // the stored settlement date stays as requested
-      // the different settlement will be dealt with using finance
       quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[5], holidays));
     }
 
-    // forward the request to Proquote
+    // forward the request
     nbt.quoteRequest(quoterequest);
   });
 }
@@ -296,14 +308,14 @@ function newOrder(order) {
     order.orderid = ret[1];
     order.instrumenttype = ret[7];
 
-    // use the returned instrument values required by proquote
+    // use the returned instrument values required by fix connection
     if (order.markettype == 0) {
       order.isin = ret[2];
       order.proquotesymbol = ret[3];
       order.exchange = ret[4];
     }
 
-    // use the returned quote values required by proquote
+    // use the returned quote values required by fix connection
     if (order.ordertype == "D") {
       order.externalquoteid = ret[5];
       order.qbroker = ret[6];
@@ -366,7 +378,7 @@ function orderCancelRequest(ocr) {
       return;
     }
 
-    // forward to Proquote & wait for outcome
+    // forward & wait for outcome
     if (ret[4] != "") {
       ocr.ordercancelreqid = ret[2];
       ocr.symbol = ret[3];
@@ -424,7 +436,7 @@ function orderFillRequest(ofr) {
 function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
   //
   // the order has been credit checked
-  // now, either forward to Proquote or attempt to match the order, depending on the type of instrument & whether the market is open
+  // now, either forward or attempt to match the order, depending on the type of instrument & whether the market is open
   //
   if (order.markettype == 1) {
     console.log("matching");
@@ -459,7 +471,7 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
         db.publish(tradechannel, "trade:" + hedgetradeid);
       }
 
-      // if we are hedging, change the order id to that of the hedge & forward to proquote
+      // if we are hedging, change the order id to that of the hedge & forward
       if (hedgeorderid != "") {
         order.orderid = hedgeorderid;
         nbt.newOrder(order);
@@ -562,7 +574,7 @@ nbt.on("orderAck", function(exereport) {
 });
 
 nbt.on("orderCancel", function(exereport) {
-  console.log("Order cancelled by Proquote, ordercancelrequest id:" + exereport.clordid);
+  console.log("Order cancelled externally, ordercancelrequest id:" + exereport.clordid);
 
   db.eval(scriptordercancel, 1, exereport.clordid, function(err, ret) {
     if (err) throw err;
@@ -609,7 +621,7 @@ nbt.on("orderFill", function(exereport) {
     exereport.settlcurrfxrate = 1;
   }
 
-  // we don't get this from proquote - todo: set based on currency pair
+  // we don't get this extrnally - todo: set based on currency pair
   exereport.settlcurrfxratecalc = 1;
 
   // milliseconds since epoch, used for scoring trades so they can be retrieved in a range
@@ -630,7 +642,7 @@ nbt.on("orderFill", function(exereport) {
 });
 
 //
-// ordercancelrequest rejected by proquote
+// ordercancelrequest rejected
 //
 nbt.on("orderCancelReject", function(ordercancelreject) {
   var text = "";
@@ -704,9 +716,9 @@ nbt.on("quote", function(quote, header) {
 
     // exit if this is the first part of the quote as waiting for a two-way quote
     // todo: do we need to handle event of only getting one leg?
-    if (ret[1] == 1) {return};
+    //if (ret[1] == 1) {return};
 
-    db.publish(ret[3], "quote:" + ret[2]);
+    //db.publish(ret[3], "quote:" + ret[2]);
   });
 });
 
@@ -1255,6 +1267,13 @@ function registerScripts() {
   end \
   ';
 
+  publishquote = '\
+  local publishquote = function(quoteid, operatortype) \
+    local fields = {"clientid", "symbol", "quoteid"} \
+    local vals = redis.call("hmget", "quote:" .. quoteid, unpack(fields)) \
+    redis.call("publish", operatortype, "{" .. cjson.encode("quote") .. ":" .. cjson.encode(vals) .. "}") \
+  ';
+
   scriptrejectorder = rejectorder + adjustmarginreserve + '\
   rejectorder(KEYS[1], KEYS[2], KEYS[3]) \
   local fields = {"clientid", "symbol", "side", "price", "margin", "settlcurrency", "remquantity", "futsettdate", "nosettdays", "operatortype"} \
@@ -1624,7 +1643,7 @@ function registerScripts() {
   ';
 
   // todo: check proquotsymbol against quote request symbol?
-  scriptquote = calcfinance + '\
+  scriptquote = calcfinance + publishquote + '\
   local errorcode = 0 \
   local sides = 0 \
   local quoteid = "" \
@@ -1696,6 +1715,8 @@ function registerScripts() {
       redis.call("hmset", "quote:" .. quoteid, "bidquoteid", KEYS[2], "bidpx", KEYS[5], "bidquantity", bidquantity, "bidsize", KEYS[7], "bidqbroker", KEYS[13], "bidfinance", bidfinance, "bidquotedepth", KEYS[16]) \
     end \
     sides = 2 \
+    --[[ publish quote to operator type ]] \
+    publishquote(quoteid, vals[8]) \
   end \
   return {errorcode, sides, quoteid, vals[8]} \
   ';

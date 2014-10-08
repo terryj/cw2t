@@ -85,7 +85,19 @@ function pubsub() {
   dbsub.on("message", function(channel, message) {
     console.log("msg rec'd, channel " + channel);
 
-    if (channel == webserverchannel) {
+    try {
+      var obj = JSON.parse(message);
+
+      if ("quote" in obj) {
+        quoteReceived(obj.quote);
+      }
+    } catch (e) {
+      console.log(e);
+      console.log(message);
+      return;
+    }
+
+    /*if (channel == webserverchannel) {
       if (message.substr(1, 6) == "prices") {
         common.newPrice(channel, servertype, message, connections);
       } else if (message.substr(2, 12) =="pricehistory") {
@@ -108,7 +120,7 @@ function pubsub() {
     } else {
       // todo: check channel is found, if not, log
       checkChannel(channel, message);
-    }
+    }*/
   });
 
   // listen for web server related messages
@@ -156,7 +168,11 @@ function listen() {
       try {
         var obj = JSON.parse(msg);
 
-        if ("orderbookrequest" in obj) {
+        if ("quoterequest" in obj) {
+
+          console.log("quote request received");
+          db.publish(tradeserverchannel, msg);
+        } else if ("orderbookrequest" in obj) {
           orderBookRequest(clientid, obj.orderbookrequest, conn);
         } else if ("orderbookremoverequest" in obj) {
           orderBookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
@@ -1161,6 +1177,12 @@ function sendQuoteack(quotereqid) {
       connections[quoterequest.operatorid].write("{\"quoteack\":" + JSON.stringify(quoteack) + "}");
     }
   });
+}
+
+function quoteReceived(quote, msg) {
+  console.log(quote);
+  console.log(quote.clientid);
+  console.log(quote[0]);
 }
 
 function sendQuote(quoteid) {
