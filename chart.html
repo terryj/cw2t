@@ -63,7 +63,21 @@
         border-radius: 4px;
         text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
     }
-
+    .tradebutton {
+        font-size: 21px;
+        border-style: none;
+        cursor: pointer;
+        border-radius: 4px;
+        text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);        
+    }
+    .buybutton {
+        background-color: blue;
+        color: white;
+    }
+    .sellbutton {
+        background-color: red;
+        color: white;        
+    }
     </style>
 </head>
 <body lang="en">
@@ -575,7 +589,7 @@
                                         rfq.quantity = this.value;
                                         break;
                                     case 1:
-                                        rfq.settldate = this.value;
+                                        rfq.futsettdate = this.value;
                                         break;
                                     }
                                 });
@@ -659,8 +673,95 @@
 
         }
 
+        function getDateString(utcdatetime) {
+            return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
+        }
+
+        function getSeconds(startutctime, finishutctime) {
+            var startdt = new Date(getDateString(startutctime));
+            var finishdt = new Date(getDateString(finishutctime));
+            return ((finishdt - startdt) / 1000);
+        }
+
         function quoteReceived(quote) {
-            console.log("quote received:" + quote);
+            console.log("quote received");
+            console.log(quote);
+
+            // get the number of seconds the quote is valid for
+            var noseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+
+            var tbody = d3.select("tbody");
+
+            var row = tbody.append("tr");
+
+            // add a buy button
+            row.append("td")
+                    .append("input")
+                        .attr("type", "button")
+                        .attr("value", "Buy " + quote.offerquantity + " @ " + quote.offerpx)
+                        .attr("class", "tradebutton buybutton")
+                        .on("click", function() {
+                        sendOrder(quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
+                        });
+
+            // add a label for time remaining
+            var lblSeconds = row.append("td")
+                    .text("Seconds remaining: " + noseconds);
+
+            // add a sell button
+            row.append("td")
+                .append("input")
+                    .attr("type", "button")
+                    .attr("value", "Sell " + quote.bidquantity + " @ " + quote.bidpx)
+                    .attr("class", "tradebutton sellbutton")
+                    .on("click", function() {
+                        sendOrder(quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
+                    });
+
+            // function to count down seconds remaining
+            var quotetimer = setInterval(function() {
+                console.log("hello");
+                noseconds -= 1;
+                if (noseconds == 0) {
+                    disable();
+                } else {
+                    lblSeconds.text("Seconds remaining: " + noseconds);
+                }
+            }, 1000);
+
+            // nothing done, so tidy
+            function disable() {
+                clearInterval(quotetimer);
+                lblSeconds.text("Quote Expired");
+
+                // disable both buy & sell buttons
+                d3.selectAll(".tradebutton")
+                    .style("cursor", "default")
+                    .disabled = true;
+            }
+        }
+
+        function sendOrder(symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
+            var neworder = {};
+
+            neworder.clientid = clientid;
+            neworder.side = side;
+            neworder.quantity = quantity;
+            neworder.symbol = symbol;
+            neworder.currency = "GBP"; // todo - use quote currency? instruments[symbol].currency;
+            neworder.price = price;
+            neworder.ordertype = ordertype;
+            neworder.settlcurrency = settlcurrency;
+            neworder.nosettdays = nosettdays;
+            neworder.futsettdate = settdate;
+            neworder.quoteid = quoteid;
+            neworder.timeinforce = timeinforce;
+            neworder.expiredate = expiredate;
+            neworder.expiretime = expiretime;
+            neworder.operatortype = operatortype;
+            neworder.operatorid = clientid;
+
+            sockjs.send("{\"order\":" + JSON.stringify(neworder) + "}");
         }
      </script>
 </body>

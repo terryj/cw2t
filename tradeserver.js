@@ -1271,9 +1271,9 @@ function registerScripts() {
 
   publishquote = '\
   local publishquote = function(quoteid, operatortype) \
-    local fields = {"quotereqid","clientid","quoteid","symbol","bestbid","bestoffer","validuntiltime","transacttime"} \
+    local fields = {"quotereqid","clientid","quoteid","symbol","bidpx","offerpx","bidquantity","offerquantity","validuntiltime","transacttime","settlcurrency","nosettdays","futsettdate"} \
     local vals = redis.call("hmget", "quote:" .. quoteid, unpack(fields)) \
-    local quote = {quotereqid=vals[1], clientid=vals[2], quoteid=vals[3], symbol=vals[4], bestbid=vals[5], bestoffer=vals[6], validuntiltime=vals[7], transacttime=vals[8]} \
+    local quote = {quotereqid=vals[1], clientid=vals[2], quoteid=vals[3], symbol=vals[4], bidpx=vals[5], offerpx=vals[6], bidquantity=vals[7], offerquantity=vals[8], validuntiltime=vals[9], transacttime=vals[10], settlcurrency=vals[11], nosettdays=vals[12], futsettdate=vals[13]} \
     redis.call("publish", operatortype, "{" .. cjson.encode("quote") .. ":" .. cjson.encode(quote) .. "}") \
   end \
   ';
