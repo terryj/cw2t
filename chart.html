@@ -94,6 +94,8 @@
                     //updatePricehistory(obj.pricehistory);
                     pricehist = obj.pricehistory.prices;
                     createChart();
+                } else if ("quote" in obj) {
+                    quoteReceived(obj.quote);
                 }
             } catch(e) {
                 console.log(e);
@@ -132,8 +134,9 @@
             // start with FTSE 100
             //requestIndex("UKX");
             //requestPricehistory("LLOY.L");
-            displayTable("LLOY.L");
+            //displayTable("LLOY.L");
             //displayForm("LLOY.L");
+            requestQuote("LLOY.L");
         }
 
         function loadOrderBooks(orderbookarr) {
@@ -533,27 +536,62 @@
             //console.log(line);
         }
 
-        function displayTable(symbol) {
-            // not used
-            var fields = ["Quantity","Price","Settlement Date",""];
-            var inputtypes = ["text","date"];
-            var inputtexts = ["","","","Request Quote"];
-            var fs = ["", "", "", "18px"];
-            var onclicks = [null, null, null, "john()"];
-            var tbldata = [{name:"Quantity",value:4},{name:"Price",value:3},{name:"Settlement Date",value:5},{name:"",value:6}];
-            var columns = ["name","value","test"];
-
+        function requestQuote(symbol) {
+            // table data
             var data = [
             ["Quantity",""],
             ["Settlement Date",""]
             ];
 
-            console.log("displayTable:" + symbol);
+            // input field data
+            var inputtypes = ["text","date"];
 
+            // create a table
+            var tbody = displayTable(data, inputtypes, "rfqbody");
+
+            // add a button, with associated function to send rfq
+            tbody.append("tr")
+                .append("td")
+                    .append("input")
+                        .attr("type", "button")
+                        .attr("value", "Request Quote")
+                        .attr("class", "rfqbutton")
+                        .on("click", function() {
+                            var rfq = {};
+
+                            rfq.clientid = clientid;
+                            rfq.symbol = symbol;
+                            rfq.cashorderqty = "";
+                            rfq.currency = "GBP"; // todo
+                            rfq.settlcurrency = "GBP"; // todo
+                            rfq.nosettdays = 2;
+                            rfq.operatortype = operatortype;
+                            rfq.operatorid = clientid;
+
+                            var inps = d3.selectAll("td input")
+                                .each(function(d,i) {
+                                    switch (i) {
+                                    case 0:
+                                        rfq.quantity = this.value;
+                                        break;
+                                    case 1:
+                                        rfq.settldate = this.value;
+                                        break;
+                                    }
+                                });
+
+                            console.log(rfq);
+                            sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
+                        });
+        }
+
+        function displayTable(data, inputtypes) {
+            // create a table
             var table = d3.select("body")
                 .append("table");
                 //.attr("style", "margin-left: 250px");
 
+            // add header & body
             var thead = table.append("thead");
             var tbody = table.append("tbody");
 
@@ -589,252 +627,7 @@
                     }
                 });
 
-            //var descs = cells.filter(function(d, i) {return i == 0});
-            //descs.text(function(d) { return d; });
-
-            //console.log(descs);
-
-
-
-            //var inputs = cells.filter(function(d, i) {return i == 1});
-
-            /*d3.selectAll("td")
-                .append("input")
-                .attr("type", function(d, i) { console.log(d); console.log(i); return inputtypes[i]; });*/
-
-                //console.log(inps);
-
-            /*inputs.selectAll()
-                .each(function(d,i) {
-                    console.log(d);
-                    console.log(i);
-                });*/
-
-            //console.log(inputs);
-            //inputs.append("input");
-
-            /*inputs.selectAll("input")
-                .data(function(d, i) { console.log(d);console.log(i);return inputtypes[i]; })
-                .enter()
-                .append("input");*/
-                //.attr("type", function(d, i) { console.log(d);return inputtypes[i]; });
-
-
-                /*.each(function(d,i) {console.log("d="+d);console.log("i="+i);
-                });*.
-                //.attr("type", function(d, i) {console.log(i); return d; });
-                /*.on("input", function(d, i) {
-                    console.log(i);
-                    console.log(this.value);
-                    inputdata[i] = this.value;
-                    console.log(inputdata);
-                    //updateHeight(+this.value);
-                });*/
-
-            tbody.append("tr")
-                .append("td")
-                    .append("input")
-                        .attr("type", "button")
-                        .attr("value", "Request Quote")
-                        .attr("class", "rfqbutton")
-                        .on("click", sendRfq);
-
-            // send a request for quote
-            function sendRfq() {
-                var rfq = {};
-
-                rfq.clientid = clientid;
-                rfq.symbol = symbol;
-                rfq.cashorderqty = "";
-                rfq.currency = "GBP"; // todo
-                rfq.settlcurrency = "GBP"; // todo
-                rfq.nosettdays = 2;
-                rfq.operatortype = operatortype;
-                rfq.operatorid = clientid;
-
-                var inps = d3.selectAll("td input")
-                    .each(function(d,i) {
-                        switch (i) {
-                        case 0:
-                            rfq.quantity = this.value;
-                            break;
-                        case 1:
-                            rfq.settldate = this.value;
-                            break;
-                        }
-                    });
-
-                    //symbol, quantity, cashorderqty, currency, settlcurrency, nosettdays
-
-                console.log(rfq);
-                sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
-            }
-
-            /*d3.selectAll("input")
-                .each(function(d, i) {
-                    var inp = d3.select(this);
-                    console.log(inp[0]);
-                    console.log(inp[1]);
-                });*/
-
-
-            //console.log(inputs);
-
-            //d3.selectAll('input').data(...)
-                //inputs.property('value', function (d) { return d.field; }) .on('change', function (d) { d.field = this.value; });
-
-
-            //var jj = d3.select("input #input:0");
-
-
-
-
-
-                //console.log(cells);
-
-                    //.attr("value", "hello");
-
-                //.attr("style", "font-family: Courier") // sets the font style
-                //.text(function(d) { return d; });
-
-            /*var colinput = cells.filter(function(d, i) { console.log(d); console.log(i);
-                if (i == 1) return d; return null;  })*/
-//var odds = cells.select(function(d, i) { return i & 1 ? this : null; });
-            //console.log("colinput");
-            //console.log(colinput);
-
-            //console.log(odds);
-
-            /*odds.selectAll("input")
-                .data(function(d) { return d; })
-                .enter()
-                .append("input");*/
-
-/*var td = d3.selectAll("tbody tr").selectAll("td");
-td.style("color", function(d, i) { return i ? null : "red"; });
-var odds = td.select(function(d, i) { return i ? null : this; });
-
-            odds.selectAll("input")
-                .data(function(d, i) { return d; })
-                .enter()
-                .append("input");*/
-
-            //console.log(cells);
-
-            // create a cell in each row for each column
-            /*var cells = rows.selectAll("td")
-                .data(function(row) {
-                    return columns.map(function(column) {
-                        console.log(column);
-                        return {
-                            column: column,
-                            value: row[column]
-                        };
-                    });
-                })
-                .enter()
-                .append("td")
-                //.attr("style", "font-family: Courier") // sets the font style
-                .html(function(d) { //console.log(d);
-                    return d.value;
-                });*/
-
-                //console.log(cells);
-
-            /*cells.append("td")
-                .attr("style", "font-family: Courier") // sets the font style
-                .html(function(d) { return d; });
-
-            cells.append("td")
-                .attr("style", "font-family: Courier") // sets the font style
-                .attr("style", "font-size: 18px") // sets the font style
-                .html(function(d) { return d; });*/
-
-                /*cells.append("td")
-                //.attr("style", "font-family: Courier") // sets the font style
-                .html(function(d) { return d; });*/
-
-            // add a column for each field description
-            /*rows.append("td")
-                .html(function(d) { return d; });*/
-
-            /*rows.append("td")
-                .append("input")
-                    .attr("id", function(d, i) { return "input:" + i; });*/
-
-            // add an input element for each field, using the inputtypes array to determine type
-            /*rows.append("input")
-                .style("font-size", function(d, i) { return fs[i]; })
-                .attr("type", function(d, i) { return inputtypes[i]; })
-                .attr("id", function(d, i) { return "input:" + i; })
-                .attr("value", function(d, i) { return inputtexts[i]; });*/
-
-            //d3.select("#input:3");
-                //.style("font-size", "44px");
-
-            //console.log(rows);
-
-                //.on("click", john);
-
-                //.on("click", function(d, i) { scopepreserver(d, i); });
-
-                    /*d3.select(this)
-                        //.style("font-size", "18px")
-                        .attr("value", function() {
-                            console.log("d="+d);
-                            console.log("i="+i);
-                            return inputtexts[i];});*/
-
-                        /*.on("click", function(d) {console.log("d:"+d);
-                            console.log("i=:"+i);return onclicks[i];})*/
-
-
-            /*d3.select("#input:0")
-                .attr("width", "220px");*/
-
-            /*var cols = rows.selectAll("td")
-                .data(fields)
-                .enter()
-                .append("td")
-                .html(function(d) {return d;});*/
-
-            /*var row = tbody.append("tr");
-
-            row.append("td")
-                .html("test");
-
-            row.append("td")
-                .append("input")
-                .attr("type","button");
-
-            row.append("td").html("test1");*/
-        }
-
-/*function scopepreserver(a, b) {
-  return function () {
-    //do something with a and b
-console.log("yipee!");
-  };
-}*/
-
-        function john(d, i) {
-            console.log("john");
-            var smith = d3.select(this);
-            console.log(smith);
-            console.log(d);
-            console.log(i);
-            //console.log(smith.value);
-
-/*d3.selectAll('input').data(...)
-.property('value', function (d) { return d.field; }) .on('change', function (d) { d.field = this.value; });*/
-        };
-
-        function test(sel) {
-            console.log(sel);
-            sel.html(function(d,i) {
-                console.log("d:"+d);
-                console.log("i:"+i);
-            });
+            return tbody;
         }
 
         function displayForm(symbol) {
@@ -864,29 +657,11 @@ console.log("yipee!");
                     .attr("id", function(d,i) { return 'a'+i; })
                     .attr("onClick", "change(this)");
 
-        var sel = d3.select("body");//.append('form');
-
-sel.append('form').call(function (sel) { sel.append('label'); sel.append('textarea'); sel.append('p').text("Detailed instructions..."); sel.append('label').call(function (sel) {
-sel.append('input').attr('type', "checkbox");
-sel.append('span').text("Some option"); });
-});
-
-            /*form.append("label")
-                .text("test");
-
-            form.append("input");
-
-            form.append("label")
-                .text("test2");
-
-            form.append("input");*/
         }
 
-        function change(sel) {
-            console.log(sel);
+        function quoteReceived(quote) {
+            console.log("quote received:" + quote);
         }
-
-        //d3.select('button').on('click', function() {
      </script>
 </body>
 </html>

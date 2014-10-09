@@ -84,12 +84,13 @@ function pubsub() {
 
   dbsub.on("message", function(channel, message) {
     console.log("msg rec'd, channel " + channel);
+    console.log(message);
 
     try {
       var obj = JSON.parse(message);
 
       if ("quote" in obj) {
-        quoteReceived(obj.quote);
+        quoteReceived(obj.quote, message);
       }
     } catch (e) {
       console.log(e);
@@ -1180,9 +1181,16 @@ function sendQuoteack(quotereqid) {
 }
 
 function quoteReceived(quote, msg) {
+  console.log("quoteReceived");
   console.log(quote);
   console.log(quote.clientid);
-  console.log(quote[0]);
+
+  // get the number of seconds the quote is valid for
+  quote.noseconds = common.getSeconds(quote.transacttime, quote.validuntiltime);
+
+  if (quote.clientid in connections) {
+    connections[quote.clientid].write(msg);
+  }
 }
 
 function sendQuote(quoteid) {

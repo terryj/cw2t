@@ -714,6 +714,8 @@ nbt.on("quote", function(quote, header) {
       return;
     }
 
+    // script publishes quote to the operator type that made the request
+
     // exit if this is the first part of the quote as waiting for a two-way quote
     // todo: do we need to handle event of only getting one leg?
     //if (ret[1] == 1) {return};
@@ -1269,9 +1271,11 @@ function registerScripts() {
 
   publishquote = '\
   local publishquote = function(quoteid, operatortype) \
-    local fields = {"clientid", "symbol", "quoteid"} \
+    local fields = {"quotereqid","clientid","quoteid","symbol","bestbid","bestoffer","validuntiltime","transacttime"} \
     local vals = redis.call("hmget", "quote:" .. quoteid, unpack(fields)) \
-    redis.call("publish", operatortype, "{" .. cjson.encode("quote") .. ":" .. cjson.encode(vals) .. "}") \
+    local quote = {quotereqid=vals[1], clientid=vals[2], quoteid=vals[3], symbol=vals[4], bestbid=vals[5], bestoffer=vals[6], validuntiltime=vals[7], transacttime=vals[8]} \
+    redis.call("publish", operatortype, "{" .. cjson.encode("quote") .. ":" .. cjson.encode(quote) .. "}") \
+  end \
   ';
 
   scriptrejectorder = rejectorder + adjustmarginreserve + '\
