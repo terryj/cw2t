@@ -299,8 +299,7 @@ function newOrder(order) {
 
     // credit check failed
     if (ret[0] == 0) {
-      // only publish to sending operator type
-      db.publish(order.operatortype, "order:" + ret[1]);
+      // script will publish the order back to the operator type, with the error
       return;
     }
 
@@ -621,7 +620,7 @@ nbt.on("orderFill", function(exereport) {
     exereport.settlcurrfxrate = 1;
   }
 
-  // we don't get this extrnally - todo: set based on currency pair
+  // we don't get this externally - todo: set based on currency pair
   exereport.settlcurrfxratecalc = 1;
 
   // milliseconds since epoch, used for scoring trades so they can be retrieved in a range
@@ -633,11 +632,9 @@ nbt.on("orderFill", function(exereport) {
       return
     }
 
-    // send the order to the returned operator type
-    db.publish(ret[1], "order:" + exereport.clordid);
-
-    // publish the trade
-    db.publish(tradechannel, "trade:" + ret[0]);
+    // script will publish the order & trade
+    // order will be published to the operator type
+    // trade will be published to the trade channel
   });
 });
 
@@ -708,19 +705,13 @@ nbt.on("quote", function(quote, header) {
       return;
     }
 
-    if (ret[0] != 0) {
+    if (ret != 0) {
       // can't find quote request, so don't know which client to inform
       console.log("Error in scriptquote:" + common.getReasonDesc(ret[0]));
       return;
     }
 
     // script publishes quote to the operator type that made the request
-
-    // exit if this is the first part of the quote as waiting for a two-way quote
-    // todo: do we need to handle event of only getting one leg?
-    //if (ret[1] == 1) {return};
-
-    //db.publish(ret[3], "quote:" + ret[2]);
   });
 });
 
@@ -1231,7 +1222,34 @@ function registerScripts() {
   end \
   ';
 
-  newtrade = updateposition + updatecash + '\
+  publishquote = '\
+  local publishquote = function(quoteid, channel) \
+    local fields = {"quotereqid","clientid","quoteid","symbol","bidpx","offerpx","bidquantity","offerquantity","validuntiltime","transacttime","settlcurrency","nosettdays","futsettdate"} \
+    local vals = redis.call("hmget", "quote:" .. quoteid, unpack(fields)) \
+    local quote = {quotereqid=vals[1], clientid=vals[2], quoteid=vals[3], symbol=vals[4], bidpx=vals[5], offerpx=vals[6], bidquantity=vals[7], offerquantity=vals[8], validuntiltime=vals[9], transacttime=vals[10], settlcurrency=vals[11], nosettdays=vals[12], futsettdate=vals[13]} \
+    redis.call("publish", channel, "{" .. cjson.encode("quote") .. ":" .. cjson.encode(quote) .. "}") \
+  end \
+  ';
+
+  publishorder = '\
+  local publishorder = function(orderid, channel) \
+    local fields = {"clientid","symbol","side","quantity","price","ordertype","remquantity","status","markettype","futsettdate","partfill","quoteid","currency","currencyratetoorg","currencyindtoorg","timestamp","margin","timeinforce","expiredate","expiretime","settlcurrency","settlcurrfxrate","settlcurrfxratecalc","orderid","externalorderid","execid","nosettdays","operatortype","operatorid","hedgeorderid","orderdivnum"} \
+    local vals = redis.call("hmget", "order:" .. orderid, unpack(fields)) \
+    local order = {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],price=vals[5],ordertype=vals[6],remquantity=vals[7],status=vals[8],markettype=vals[9],futsettdate=vals[10],partfill=vals[11],quoteid=vals[12],currency=vals[13],currencyratetoorg=vals[14],currencyindtoorg=vals[15],timestamp=vals[16],margin=vals[17],timeinforce=vals[18],expiredate=vals[19],expiretime=vals[20],settlcurrency=vals[21],settlcurrfxrate=vals[22],settlcurrfxratecalc=vals[23],orderid=vals[24],externalorderid=vals[25],execid=vals[26],nosettdays=vals[27],operatortype=vals[28],operatorid=vals[29],hedgeorderid=vals[30],orderdivnum=vals[31]} \
+    redis.call("publish", channel, "{" .. cjson.encode("order") .. ":" .. cjson.encode(order) .. "}") \
+  end \
+  ';
+
+  publishtrade = '\
+  local publishtrade = function(tradeid, channel) \
+    local fields = {"clientid","orderid","symbol","side","quantity","price","currency","currencyratetoorg","currencyindtoorg","commission","ptmlevy","stampduty","contractcharge","counterpartyid","markettype","externaltradeid","futsettdate","timestamp","lastmkt","externalorderid","tradeid","settlcurrency","settlcurramt","settlcurrfxrate","settlcurrfxratecalc","nosettdays","finance","margin","positionid"} \
+    local vals = redis.call("hmget", "trade:" .. tradeid, unpack(fields)) \
+    local trade = {clientid=vals[1],orderid=vals[2],symbol=vals[3],side=vals[4],quantity=vals[5],price=vals[6],currency=vals[7],currencyratetoorg=vals[8],currencyindtoorg=vals[9],commission=vals[10],ptmlevy=vals[11],stampduty=vals[12],contractcharge=vals[13],counterpartyid=vals[14],markettype=vals[15],externaltradeid=vals[16],futsettdate=vals[17],timestamp=vals[18],lastmkt=vals[19],externalorderid=vals[20],tradeid=vals[21],settlcurrency=vals[22],settlcurramt=vals[23],settlcurrfxrate=vals[24],settlcurrfxratecalc=vals[25],nosettdays=vals[26],finance=vals[27],margin=vals[28],positionid=vals[29]} \
+    redis.call("publish", channel, "{" .. cjson.encode("trade") .. ":" .. cjson.encode(trade) .. "}") \
+  end \
+  ';
+
+  newtrade = updateposition + updatecash + publishtrade + '\
   local newtrade = function(clientid, orderid, symbol, side, quantity, price, currency, currencyratetoorg, currencyindtoorg, costs, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrency, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, operatortype, operatorid, finance, milliseconds) \
     local tradeid = redis.call("incr", "tradeid") \
     if not tradeid then return 0 end \
@@ -1250,6 +1268,7 @@ function registerScripts() {
     end \
     local positionid = updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, initialmargin, tradeid) \
     redis.call("hset", tradekey, "positionid", positionid) \
+    publishtrade(tradeid, 6) \
     return tradeid \
   end \
   ';
@@ -1269,15 +1288,6 @@ function registerScripts() {
   end \
   ';
 
-  publishquote = '\
-  local publishquote = function(quoteid, operatortype) \
-    local fields = {"quotereqid","clientid","quoteid","symbol","bidpx","offerpx","bidquantity","offerquantity","validuntiltime","transacttime","settlcurrency","nosettdays","futsettdate"} \
-    local vals = redis.call("hmget", "quote:" .. quoteid, unpack(fields)) \
-    local quote = {quotereqid=vals[1], clientid=vals[2], quoteid=vals[3], symbol=vals[4], bidpx=vals[5], offerpx=vals[6], bidquantity=vals[7], offerquantity=vals[8], validuntiltime=vals[9], transacttime=vals[10], settlcurrency=vals[11], nosettdays=vals[12], futsettdate=vals[13]} \
-    redis.call("publish", operatortype, "{" .. cjson.encode("quote") .. ":" .. cjson.encode(quote) .. "}") \
-  end \
-  ';
-
   scriptrejectorder = rejectorder + adjustmarginreserve + '\
   rejectorder(KEYS[1], KEYS[2], KEYS[3]) \
   local fields = {"clientid", "symbol", "side", "price", "margin", "settlcurrency", "remquantity", "futsettdate", "nosettdays", "operatortype"} \
@@ -1289,7 +1299,7 @@ function registerScripts() {
   return {0, vals[10]} \
   ';
 
-  scriptneworder = neworder + creditcheck + newtrade + getproquotesymbol + getproquotequote + '\
+  scriptneworder = neworder + creditcheck + newtrade + getproquotesymbol + getproquotequote + publishorder + '\
   local orderid = neworder(KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[4], "0", KEYS[7], KEYS[8], KEYS[9], KEYS[10], KEYS[11], KEYS[12], KEYS[13], KEYS[14], 0, KEYS[15], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], "", "", KEYS[21], KEYS[22], KEYS[23], "", KEYS[24]) \
   local side = tonumber(KEYS[3]) \
   local markettype = tonumber(KEYS[7]) \
@@ -1299,8 +1309,9 @@ function registerScripts() {
   local cc = creditcheck(orderid, KEYS[1], KEYS[2], side, KEYS[4], KEYS[5], KEYS[18], KEYS[8], instrumenttype, KEYS[21]) \
   --[[ cc[1] = ok/fail, cc[2] = margin, cc[3] = costs array, cc[4] = finance ]] \
   if cc[1] == 0 then \
-    --[[ return order id for lookup, if credit check has failed, error message will be in order ]] \
-    return {cc[1], orderid} \
+    --[[ publish the order back to the operatortype - the order contains the error ]] \
+    publishorder(orderid, KEYS[22]) \
+    return {cc[1]} \
   end \
   local proquotesymbol = {"", "", "", ""} \
   local proquotequote = {"", ""} \
@@ -1468,12 +1479,12 @@ function registerScripts() {
   ';
 
   //
-  // fill
+  // fill from the market
   //
-  //updatetrademargin
-  scriptnewtrade = newtrade + getinitialmargin + getcosts + calcfinance + adjustmarginreserve + '\
+  scriptnewtrade = newtrade + getinitialmargin + getcosts + calcfinance + adjustmarginreserve + publishorder + '\
+  local orderid = KEYS[1] \
   local fields = {"clientid", "symbol", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "operatortype", "hedgeorderid", "futsettdate", "operatorid"} \
-  local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
+  local vals = redis.call("hmget", "order:" .. orderid, unpack(fields)) \
   local quantity = tonumber(KEYS[4]) \
   local price = tonumber(KEYS[5]) \
   local consid = quantity * price \
@@ -1481,13 +1492,14 @@ function registerScripts() {
   local initialmargin = getinitialmargin(vals[2], consid) \
   local costs = getcosts(vals[1], vals[2], instrumenttype, vals[3], consid, KEYS[17]) \
   local finance = calcfinance(instrumenttype, consid, KEYS[17], vals[3], vals[8]) \
-  local tradeid = newtrade(vals[1], KEYS[1], vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
+  local tradeid = newtrade(vals[1], orderid, vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
   --[[ adjust order related margin/reserve ]] \
-  adjustmarginreserve(KEYS[1], vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[17], vals[7], KEYS[15], KEYS[11], vals[8]) \
+  adjustmarginreserve(orderid, vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[17], vals[7], KEYS[15], KEYS[11], vals[8]) \
   --[[ adjust order ]] \
-  redis.call("hmset", "order:" .. KEYS[1], "remquantity", KEYS[15], "status", KEYS[13]) \
+  redis.call("hmset", "order:" .. orderid, "remquantity", KEYS[15], "status", KEYS[13]) \
   --[[ todo: adjust trade related margin ]] \
   --[[updatetrademargin(tradeid, vals[1], KEYS[17], initialmargin[1])]] \
+  publishorder(orderid, vals[9]) \
   return {tradeid, vals[9], vals[10]} \
   ';
 
@@ -1656,7 +1668,7 @@ function registerScripts() {
   local vals = redis.call("hmget", "quoterequest:" .. KEYS[1], unpack(fields)) \
   if not vals[1] then \
     errorcode = 1014 \
-    return {errorcode, sides, quoteid, ""} \
+    return errorcode \
   end \
   local instrumenttype = redis.call("hget", "symbol:" .. vals[3], "instrumenttype") \
   local bidquantity = "" \
@@ -1722,7 +1734,7 @@ function registerScripts() {
     --[[ publish quote to operator type ]] \
     publishquote(quoteid, vals[8]) \
   end \
-  return {errorcode, sides, quoteid, vals[8]} \
+  return errorcode \
   ';
 
   scriptquoteack = '\

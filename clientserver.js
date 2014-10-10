@@ -91,6 +91,7 @@ db.on("error", function(err) {
 });
 
 function initialise() {
+  console.log("initialise");
   common.registerCommonScripts();
   registerScripts();
   initDb();
@@ -113,7 +114,23 @@ function pubsub() {
   dbsub.on("message", function(channel, message) {
     console.log("channel: " + channel + ", message: " + message);
 
-    if (message.substr(1, 6) == "prices") {
+    try {
+      var obj = JSON.parse(message);
+
+      if ("quote" in obj) {
+        forwardQuote(obj.quote, message);
+      } else if ("order" in obj) {
+        forwardOrder(obj.order, message);
+      } else if ("trade" in obj) {
+        forwardTrade(obj.trade, message);
+      }
+    } catch (e) {
+      console.log(e);
+      console.log(message);
+      return;
+    }
+
+    /*if (message.substr(1, 6) == "prices") {
       common.newPrice(channel, servertype, message, connections, feedtype);
     } else if (message.substr(0, 8) == "quoteack") {
       sendQuoteack(message.substr(9));
@@ -129,7 +146,7 @@ function pubsub() {
       newChat(message);
     } else {
       console.log("unknown message, channel=" + channel + ", message=" + message);
-    }
+    }*/
   });
 
   // listen for client related messages
@@ -152,7 +169,7 @@ var options = {
 // https server
 function listen() {
   var server = https.createServer(options);
-
+ 
   server.addListener('request', function(req, res) {
     static_directory.serve(req, res);
   });
@@ -161,14 +178,18 @@ function listen() {
   });
 
   sockjs_svr.installHandlers(server, {prefix:'/echo'});
-
+ 
   server.listen(cw2tport, function() {
     console.log('Listening on port ' + cw2tport);
   });
-
+ 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a client logs on
     var clientid = "0";
+
+    // todo: remove
+    clientid = "1";
+    connections[clientid] = conn;
 
     console.log('new connection');
 
@@ -399,7 +420,7 @@ function getSideDesc(side) {
   }
 }
 
-function getSendOrder(orderid, sendmarginreserve, sendcash) {
+/*function getSendOrder(orderid, sendmarginreserve, sendcash) {
   db.hgetall("order:" + orderid, function(err, order) {
     if (err) {
       console.log(err);
@@ -425,9 +446,9 @@ function getSendOrder(orderid, sendmarginreserve, sendcash) {
       getSendCash(order.clientid, order.settlcurrency);
     }
   });
-}
+}*/
 
-function getSendTrade(tradeid) {
+/*function getSendTrade(tradeid) {
   db.hgetall("trade:" + tradeid, function(err, trade) {
     if (err) {
       console.log(err);
@@ -448,7 +469,7 @@ function getSendTrade(tradeid) {
       getSendPosition(trade.positionid, trade.clientid);
     }
   });
-}
+}*/
 
 function getSendPosition(positionid, orgclientid) {
   var position = {};
@@ -1288,6 +1309,36 @@ function sendQuote(quoteid) {
       }
     });
   });
+}
+
+// forward quote to relevant client
+function forwardQuote(quote, msg) {
+  console.log("forwardQuote");
+  console.log(quote);
+
+  if (quote.clientid in connections) {
+    connections[quote.clientid].write(msg);
+  }
+}
+
+// forward order to relevant client
+function forwardOrder(order, msg) {
+  console.log("forwardOrder");
+  console.log(order);
+
+  if (order.clientid in connections) {
+    connections[order.clientid].write(msg);
+  }
+}
+
+// forward trade to relevant client
+function forwardTrade(trade, msg) {
+  console.log("forwardTrade");
+  console.log(trade);
+
+  if (trade.clientid in connections) {
+    connections[trade.clientid].write(msg);
+  }
 }
 
 //

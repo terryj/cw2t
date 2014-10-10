@@ -503,15 +503,15 @@ function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgs
 	msg += checksumstr;
 
 	// only log the message if not connected
-	if (connectstatus != 1) {
+	//if (connectstatus != 1) {
 		console.log("--- sending ---");
 		console.log(msg);
 		console.log("---------------");
-	}
+	//}
 
 	// send the message
-	console.log("sending...");
-	console.log(msg);
+	//console.log("sending...");
+	//console.log(msg);
 
 	nbconn.write(msg, 'ascii'); // todo: need ascii option?
 }
@@ -647,6 +647,7 @@ function completeMessage(tagvalarr, self) {
 						// resetting sequence numbers, allow to pass through - todo: check & test this
 					} else {
 						// normal logon reply & we haven't missed anything, so just set the stored sequence number to that received
+						console.log("Resetting incoming sequence number to " + header.msgseqnum);
 						db.set("fixseqnumin", header.msgseqnum);
 					}
 				} else if (header.msgtype == '5') {
@@ -700,6 +701,10 @@ function completeMessage(tagvalarr, self) {
 				if (header.msgtype == '2') {
 					// record that we need to do our own resend request after servicing the requested resend
 					resendrequestrequired = true;
+				} else if (header.msgtype == 'A') {
+					// normal logon reply & we haven't missed anything, so just set the stored sequence number to that received
+					console.log("Resetting incoming sequence number to " + header.msgseqnum);
+					db.set("fixseqnumin", header.msgseqnum);
 				} else {
 					// request resend of messages from this point, but wait to adjust the stored value
 					// until we know the recovery process has started, as in the first possible duplicate received
@@ -1035,6 +1040,12 @@ function getBody(msgtype, tagvalarr) {
 			case 646:
 				body.mktofferpx = tagvalarr[i].value;
 				break;
+			case 117:
+				body.quoteid = tagvalarr[i].value;
+				break;
+			case 159:
+				body.accruedinterest = tagvalarr[i].value;
+				break;
 			default:
 				unknownTag(tagvalarr[i].tag);
 			}
@@ -1215,14 +1226,14 @@ function rejectReceived(reject, self) {
 	self.emit('reject', reject);
 }
 
-function logonReplyReceived(logon, self) {
+function logonReplyReceived(logonreply, self) {
 	// we are connected
 	setStatus(1);
 
 	var timestamp = common.getUTCTimeStamp(new Date());
 	console.log(timestamp + ' - logon reply received');
 
-	if (logon.resetseqnumflag) {
+	if (logonreply.resetseqnumflag) {
 		// reset both sequence numbers
 		resetSequenceNumbers();
 
@@ -1424,7 +1435,7 @@ function resendMessage(msgno, endseqno, self) {
 				if (msgno == msgseqnumout) {
 					// send any sequence gap message
 					if (sequencegapnum != 0) {
-						sequenceGap(sequencegapnum, msgno, sequencegaptimestamp);
+						sequenceGap(sequencegapnum, parseInt(msgseqnumout) + 1, sequencegaptimestamp);
 					}
 
 					// we are done
@@ -1436,11 +1447,20 @@ function resendMessage(msgno, endseqno, self) {
 				resendMessage(msgno + 1, endseqno);
 			});
 		} else {
-			// check for having reached the request number
+			// check for having reached the requested number
 			if (msgno == endseqno) {
 				// send any sequence gap message
 				if (sequencegapnum != 0) {
-					sequenceGap(sequencegapnum, msgno, sequencegaptimestamp);
+					// get the last outgoing message sequence number, so we can tell the other side what to expect next
+					db.get("fixseqnumout", function(err, msgseqnumout) {
+						if (err) {
+							console.log(err);
+							disconnect(self);
+							return;
+						}
+
+						sequenceGap(sequencegapnum, parseInt(msgseqnumout) + 1, sequencegaptimestamp);
+					});
 				}
 
 				// we are done

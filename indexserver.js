@@ -1185,9 +1185,6 @@ function quoteReceived(quote, msg) {
   console.log(quote);
   console.log(quote.clientid);
 
-  // get the number of seconds the quote is valid for
-  quote.noseconds = common.getSeconds(quote.transacttime, quote.validuntiltime);
-
   if (quote.clientid in connections) {
     connections[quote.clientid].write(msg);
   }

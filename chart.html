@@ -87,7 +87,7 @@
         var orderbooks = {};
         var ukx = [];
         var pricehist = [];
-        var operatortype = 5; // web
+        var operatortype = 1; // client
         var clientid = 1; // todo
 
         var datain = function(msg) {
@@ -103,13 +103,17 @@
                 } else if ("index" in obj) {
                     updateIndex(obj.index);
                     displayIndex(ukx);
+                } else if ("quote" in obj) {
+                    quoteReceived(obj.quote);
+                } else if ("order" in obj) {
+                    orderReceived(obj.order);
+                } else if ("trade" in obj) {
+                    tradeReceived(obj.trade);
                 } else if ("pricehistory" in obj) {
                     console.log(obj);
                     //updatePricehistory(obj.pricehistory);
                     pricehist = obj.pricehistory.prices;
                     createChart();
-                } else if ("quote" in obj) {
-                    quoteReceived(obj.quote);
                 }
             } catch(e) {
                 console.log(e);
@@ -148,7 +152,6 @@
             // start with FTSE 100
             //requestIndex("UKX");
             //requestPricehistory("LLOY.L");
-            //displayTable("LLOY.L");
             //displayForm("LLOY.L");
             requestQuote("LLOY.L");
         }
@@ -561,7 +564,7 @@
             var inputtypes = ["text","date"];
 
             // create a table
-            var tbody = displayTable(data, inputtypes, "rfqbody");
+            var tbody = displayInputTable(data, inputtypes);
 
             // add a button, with associated function to send rfq
             tbody.append("tr")
@@ -599,7 +602,7 @@
                         });
         }
 
-        function displayTable(data, inputtypes) {
+        function displayInputTable(data, inputtypes) {
             // create a table
             var table = d3.select("body")
                 .append("table");
@@ -673,6 +676,48 @@
 
         }
 
+        function displayTable(data) {
+            console.log("displayTable");
+
+            var columns = ["key", "value"];
+
+            // create a table
+            var table = d3.select("body")
+                .append("table");
+                //.attr("style", "margin-left: 250px");
+
+            // add header & body
+            var thead = table.append("thead");
+            var tbody = table.append("tbody");
+
+            // append the header row
+            thead.append("tr")
+                .selectAll("th")
+                .data(columns)
+                .enter()
+                .append("th")
+                    .text(function(column) { return column; });
+
+            // create a row for each field
+            var rows = tbody.selectAll("tr")
+                .data(data)
+                .enter()
+                .append("tr");
+
+            // create a cell in each row for each column
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return columns.map(function(column) {
+                        return {column: column, value: row[column]};
+                    });
+                 })
+                .enter()
+                .append("td")
+                    .text(function(d) { console.log(d); return d.value; });
+
+            return tbody;
+        }
+
         function getDateString(utcdatetime) {
             return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
         }
@@ -701,12 +746,15 @@
                         .attr("value", "Buy " + quote.offerquantity + " @ " + quote.offerpx)
                         .attr("class", "tradebutton buybutton")
                         .on("click", function() {
-                        sendOrder(quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
+                            sendOrder(quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
+                            disable();
+                            lblseconds.text("Order sent, please wait...");
                         });
 
             // add a label for time remaining
-            var lblSeconds = row.append("td")
-                    .text("Seconds remaining: " + noseconds);
+            var lblseconds = row.append("td")
+                .attr("id", "lblseconds")
+                .text("Seconds remaining: " + noseconds);
 
             // add a sell button
             row.append("td")
@@ -716,23 +764,24 @@
                     .attr("class", "tradebutton sellbutton")
                     .on("click", function() {
                         sendOrder(quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
+                        disable();
+                        lblseconds.text("Order sent, please wait...");
                     });
 
             // function to count down seconds remaining
             var quotetimer = setInterval(function() {
-                console.log("hello");
                 noseconds -= 1;
                 if (noseconds == 0) {
                     disable();
+                    lblseconds.text("Quote Expired");
                 } else {
-                    lblSeconds.text("Seconds remaining: " + noseconds);
+                    lblseconds.text("Seconds remaining: " + noseconds);
                 }
             }, 1000);
 
             // nothing done, so tidy
             function disable() {
                 clearInterval(quotetimer);
-                lblSeconds.text("Quote Expired");
 
                 // disable both buy & sell buttons
                 d3.selectAll(".tradebutton")
@@ -742,26 +791,50 @@
         }
 
         function sendOrder(symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
-            var neworder = {};
+            var order = {};
 
-            neworder.clientid = clientid;
-            neworder.side = side;
-            neworder.quantity = quantity;
-            neworder.symbol = symbol;
-            neworder.currency = "GBP"; // todo - use quote currency? instruments[symbol].currency;
-            neworder.price = price;
-            neworder.ordertype = ordertype;
-            neworder.settlcurrency = settlcurrency;
-            neworder.nosettdays = nosettdays;
-            neworder.futsettdate = settdate;
-            neworder.quoteid = quoteid;
-            neworder.timeinforce = timeinforce;
-            neworder.expiredate = expiredate;
-            neworder.expiretime = expiretime;
-            neworder.operatortype = operatortype;
-            neworder.operatorid = clientid;
+            order.clientid = clientid;
+            order.side = side;
+            order.quantity = quantity;
+            order.symbol = symbol;
+            order.currency = "GBP"; // todo - use quote currency? instruments[symbol].currency;
+            order.price = price;
+            order.ordertype = ordertype;
+            order.settlcurrency = settlcurrency;
+            order.nosettdays = nosettdays;
+            order.futsettdate = settdate;
+            order.quoteid = quoteid;
+            order.timeinforce = timeinforce;
+            order.expiredate = expiredate;
+            order.expiretime = expiretime;
+            order.operatortype = operatortype;
+            order.operatorid = clientid;
 
-            sockjs.send("{\"order\":" + JSON.stringify(neworder) + "}");
+            sockjs.send("{\"order\":" + JSON.stringify(order) + "}");
+        }
+
+        function orderReceived(order) {
+            console.log(order);
+        }
+
+        function tradeReceived(trade) {
+            console.log(trade);
+
+            var tbldata = [];
+
+            d3.select("#lblseconds")
+                .text("Order filled");
+
+            for (var key in trade) {
+                if (trade.hasOwnProperty(key)) {
+                    var elem = {};
+                    elem.key = key;
+                    elem.value = trade[key];
+                    tbldata.push(elem);
+                }
+            }
+
+            displayTable(tbldata);
         }
      </script>
 </body>
