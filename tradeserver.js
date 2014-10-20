@@ -37,7 +37,7 @@ var redispassword;
 var redislocal = true; // local or external server
 
 // globals
-var markettype; // comes from database, 0=normal market, 1=out of hours
+//var markettype; // comes from database, 0=normal market, 1=out of hours
 var holidays = {};
 
 if (redislocal) {
@@ -275,8 +275,9 @@ function newOrder(order) {
   order.timestamp = common.getUTCTimeStamp(today);
   order.partfill = 1; // accept part-fill
 
-  // default value is in hours
-  order.markettype = markettype;
+  // get hour & minute for comparison with timezone to determine in/out of hours
+  var hour = today.getHours();
+  var minute = today.getMinutes();
 
   // always put a price in the order
   if (!("price" in order)) {
@@ -294,7 +295,8 @@ function newOrder(order) {
   }
 
   // store the order, get an id & credit check it
-  db.eval(scriptneworder, 24, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, order.orderdivnum, function(err, ret) {
+  // note: param #7 not used
+  db.eval(scriptneworder, 26, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, 0, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, order.orderdivnum, hour, minute, function(err, ret) {
     if (err) throw err;
 
     // credit check failed
@@ -306,6 +308,7 @@ function newOrder(order) {
     // update order details
     order.orderid = ret[1];
     order.instrumenttype = ret[7];
+    order.markettype = ret[12];
 
     // use the returned instrument values required by fix connection
     if (order.markettype == 0) {
@@ -437,6 +440,10 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
   // the order has been credit checked
   // now, either forward or attempt to match the order, depending on the type of instrument & whether the market is open
   //
+
+  ///
+  order.markettype = 0;
+  ///
   if (order.markettype == 1) {
     console.log("matching");
     matchOrder(order);
@@ -445,30 +452,30 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
     if (order.instrumenttype == "DE" || order.instrumenttype == "IE") {
       if (tradeid != "") {
         // the order has been executed, so publish the order to the sending server type
-        db.publish(order.operatortype, "order:" + order.orderid);
+        //db.publish(order.operatortype, "order:" + order.orderid);
 
         // publish the trade
-        db.publish(tradechannel, "trade:" + tradeid);
+        //db.publish(tradechannel, "trade:" + tradeid);
 
         // publish the hedge
-        db.publish(tradechannel, "trade:" + hedgetradeid);
+        //db.publish(tradechannel, "trade:" + hedgetradeid);
       } else {
         // forward order to the market
         nbt.newOrder(order);
       }
     } else {
       // publish the order to whence it came
-      db.publish(order.operatortype, "order:" + order.orderid);
+      //db.publish(order.operatortype, "order:" + order.orderid);
 
       // publish the trade if there is one
-      if (tradeid != "") {
+      /*if (tradeid != "") {
         db.publish(tradechannel, "trade:" + tradeid);
-      }
+      }*/
 
       // publish any hedge to the client server, so anyone viewing the hedgebook receives it
-      if (hedgetradeid != "") {
+      /*if (hedgetradeid != "") {
         db.publish(tradechannel, "trade:" + hedgetradeid);
-      }
+      }*/
 
       // if we are hedging, change the order id to that of the hedge & forward
       if (hedgeorderid != "") {
@@ -495,7 +502,6 @@ function initDb() {
   common.registerCommonScripts();
   registerScripts();
   loadHolidays();
-  getMarkettype();
 }
 
 function loadHolidays() {
@@ -509,7 +515,13 @@ function loadHolidays() {
   });
 }
 
-function getMarkettype() {
+// markettype determined by timezone per instrument
+/*function getMarkettype(symbol) {
+  db.eval(scriptmarkettype, 1, symbol, function(err, ret) {
+    if (err) throw err;
+
+  });
+
   db.get("markettype", function(err, mkttype) {
     if (err) {
       console.log(err);
@@ -518,7 +530,7 @@ function getMarkettype() {
 
     markettype = parseInt(mkttype);
   });
-}
+}*/
 
 nbt.on("orderReject", function(exereport) {
   var text = "";
@@ -541,14 +553,13 @@ nbt.on("orderReject", function(exereport) {
       return;
     }
 
-    if (ret[0] != 0) {
+    if (ret != 0) {
       // todo: message to operator
-      console.log("Error in scriptrejectorder, reason:" + common.getReasonDesc(ret[0]));
+      console.log("Error in scriptrejectorder, reason:" + common.getReasonDesc(ret));
       return;
     }
 
-    // send to operator
-    db.publish(ret[1], "order:" + exereport.clordid);
+    // order published to operator by script
   });
 });
 
@@ -740,8 +751,10 @@ nbt.on("quoteack", function(quoteack) {
 
 //
 // message error
+// todo: get fix message & inform client
 //
 nbt.on("reject", function(reject) {
+  console.log(reject);
   console.log("Error: reject received, fixseqnum:" + reject.refseqnum);
   console.log("Text:" + reject.text);
   console.log("Tag id:" + reject.reftagid);
@@ -1288,7 +1301,24 @@ function registerScripts() {
   end \
   ';
 
-  scriptrejectorder = rejectorder + adjustmarginreserve + '\
+  // compare hour & minute with timezone open/close times to determine in/out of hours - 0=in hours, 1=ooh
+  getmarkettype = '\
+  local getmarkettype = function(timezone, hour, minute) \
+    local markettype = 0 \
+    local fields = {"openhour","openminute","closehour","closeminute"} \
+    local vals = redis.call("hmget", "timezone:" .. timezone, unpack(fields)) \
+    if tonumber(hour) < tonumber(vals[1]) or tonumber(hour) > tonumber(vals[3]) then \
+      markettype = 1 \
+    elseif tonumber(hour) == tonumber(vals[1]) and tonumber(minute) < tonumber(vals[2]) then \
+      markettype = 1 \
+    elseif tonumber(hour) == tonumber(vals[3]) and tonumber(minute) > tonumber(vals[4]) then \
+      markettype = 1 \
+    end \
+    return markettype \
+  end \
+  ';
+
+  scriptrejectorder = rejectorder + adjustmarginreserve + publishorder + '\
   rejectorder(KEYS[1], KEYS[2], KEYS[3]) \
   local fields = {"clientid", "symbol", "side", "price", "margin", "settlcurrency", "remquantity", "futsettdate", "nosettdays", "operatortype"} \
   local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
@@ -1296,16 +1326,29 @@ function registerScripts() {
     return 1009 \
   end \
   adjustmarginreserve(KEYS[1], vals[1], vals[2], vals[3], vals[4], vals[5], vals[6], vals[7], 0, vals[8], vals[9]) \
-  return {0, vals[10]} \
+  publishorder(KEYS[1], vals[10]) \
+  return 0 \
   ';
 
-  scriptneworder = neworder + creditcheck + newtrade + getproquotesymbol + getproquotequote + publishorder + '\
+  // note: param #7 not used
+  scriptneworder = neworder + creditcheck + newtrade + getproquotesymbol + getproquotequote + publishorder + getmarkettype + '\
   local orderid = neworder(KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[4], "0", KEYS[7], KEYS[8], KEYS[9], KEYS[10], KEYS[11], KEYS[12], KEYS[13], KEYS[14], 0, KEYS[15], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], "", "", KEYS[21], KEYS[22], KEYS[23], "", KEYS[24]) \
   local side = tonumber(KEYS[3]) \
   local markettype = tonumber(KEYS[7]) \
   --[[ calculate consideration in settlement currency, costs will be added later ]] \
   local settlcurramt = tonumber(KEYS[4]) * tonumber(KEYS[5]) \
-  local instrumenttype = redis.call("hget", "symbol:" .. KEYS[2], "instrumenttype") \
+  --[[ get instrument values ]] \
+  local fields = {"instrumenttype", "timezone", "hedge"} \
+  local vals = redis.call("hmget", "symbol:" .. KEYS[2], unpack(fields)) \
+  if not vals[2] then \
+    rejectorder(orderid, 1007, "") \
+    publishorder(orderid, KEYS[22]) \
+    return {0} \
+  end \
+  local instrumenttype = vals[1] \
+  local markettype = getmarkettype(vals[2], KEYS[25], KEYS[26]) \
+  local hedge = vals[3] \
+  --[[ do the credit check ]] \
   local cc = creditcheck(orderid, KEYS[1], KEYS[2], side, KEYS[4], KEYS[5], KEYS[18], KEYS[8], instrumenttype, KEYS[21]) \
   --[[ cc[1] = ok/fail, cc[2] = margin, cc[3] = costs array, cc[4] = finance ]] \
   if cc[1] == 0 then \
@@ -1333,8 +1376,8 @@ function registerScripts() {
         reverseside = 1 \
       end \
       local hedgecosts = {0,0,0,0} \
-      tradeid = newtrade(KEYS[1], orderid, KEYS[2], side, KEYS[4], KEYS[5], KEYS[11], 1, 1, cc[3], hedgebookid, KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], cc[2], KEYS[22], KEYS[23], cc[4]) \
-      hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
+      tradeid = newtrade(KEYS[1], orderid, KEYS[2], side, KEYS[4], KEYS[5], KEYS[11], 1, 1, cc[3], hedgebookid, markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], cc[2], KEYS[22], KEYS[23], cc[4]) \
+      hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
       --[[ adjust order as filled ]] \
       redis.call("hmset", "order:" .. orderid, "remquantity", 0, "status", 2) \
       --[[ todo: may need to adjust margin here ]] \
@@ -1345,7 +1388,7 @@ function registerScripts() {
         --[[ create a hedge order in the underlying product ]] \
         proquotesymbol = getproquotesymbol(KEYS[2]) \
         if proquotesymbol[4] then \
-          hedgeorderid = neworder(hedgebookid, proquotesymbol[4], KEYS[3], KEYS[4], KEYS[5], "X", KEYS[4], 0, KEYS[7], KEYS[8], KEYS[9], "", KEYS[11], KEYS[12], KEYS[13], KEYS[14], 0, KEYS[15], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], "", "", KEYS[21], KEYS[22], KEYS[23], orderid, "") \
+          hedgeorderid = neworder(hedgebookid, proquotesymbol[4], KEYS[3], KEYS[4], KEYS[5], "X", KEYS[4], 0, markettype, KEYS[8], KEYS[9], "", KEYS[11], KEYS[12], KEYS[13], KEYS[14], 0, KEYS[15], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], "", "", KEYS[21], KEYS[22], KEYS[23], orderid, "") \
           --[[ get proquote values ]] \
           proquotequote = getproquotequote(KEYS[10], side) \
           --[[ assume uk equity as underlying for default settl days ]] \
@@ -1371,8 +1414,8 @@ function registerScripts() {
           reverseside = 1 \
         end \
         local hedgecosts = {0,0,0,0} \
-        tradeid = newtrade(KEYS[1], orderid, KEYS[2], side, KEYS[4], KEYS[5], KEYS[11], 1, 1, cc[3], hedgebookid, KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], cc[2], KEYS[22], KEYS[23], cc[4]) \
-        hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], KEYS[7], "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
+        tradeid = newtrade(KEYS[1], orderid, KEYS[2], side, KEYS[4], KEYS[5], KEYS[11], 1, 1, cc[3], hedgebookid, markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], cc[2], KEYS[22], KEYS[23], cc[4]) \
+        hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
       else \
         proquotesymbol = getproquotesymbol(KEYS[2]) \
         proquotequote = getproquotequote(KEYS[10], side) \
@@ -1380,7 +1423,7 @@ function registerScripts() {
       end \
     end \
   end \
-  return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttype, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays} \
+  return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttype, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays, markettype} \
   ';
 
   // todo: add lastmkt

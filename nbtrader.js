@@ -390,6 +390,8 @@ Nbt.prototype.newOrder = function(order) {
 		// add quote id & who the quote was from
 		msg += '117=' + order.externalquoteid + SOH;
 		delivertocompid = order.qbroker;
+	} else if (order.delivertocompid != "") {
+		delivertocompid = order.delivertocompid;
 	}
 
 	// quantity as shares or cash

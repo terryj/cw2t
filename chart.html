@@ -153,7 +153,8 @@
             //requestIndex("UKX");
             //requestPricehistory("LLOY.L");
             //displayForm("LLOY.L");
-            requestQuote("LLOY.L");
+            //requestQuote("LLOY.L.CFD");
+            sendOrder("LLOY.L", '1', 100, 0.75, '1', "BEST", "GBP", 2, "", "", "4", "", "");
         }
 
         function loadOrderBooks(orderbookarr) {
@@ -746,7 +747,7 @@
                         .attr("value", "Buy " + quote.offerquantity + " @ " + quote.offerpx)
                         .attr("class", "tradebutton buybutton")
                         .on("click", function() {
-                            sendOrder(quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
+                            sendOrder(quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', "", quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
                             disable();
                             lblseconds.text("Order sent, please wait...");
                         });
@@ -763,7 +764,7 @@
                     .attr("value", "Sell " + quote.bidquantity + " @ " + quote.bidpx)
                     .attr("class", "tradebutton sellbutton")
                     .on("click", function() {
-                        sendOrder(quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
+                        sendOrder(quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', "", quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
                         disable();
                         lblseconds.text("Order sent, please wait...");
                     });
@@ -790,7 +791,7 @@
             }
         }
 
-        function sendOrder(symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
+        function sendOrder(symbol, side, quantity, price, ordertype, delivertocompid, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
             var order = {};
 
             order.clientid = clientid;
@@ -800,6 +801,7 @@
             order.currency = "GBP"; // todo - use quote currency? instruments[symbol].currency;
             order.price = price;
             order.ordertype = ordertype;
+            order.delivertocompid = delivertocompid;
             order.settlcurrency = settlcurrency;
             order.nosettdays = nosettdays;
             order.futsettdate = settdate;
