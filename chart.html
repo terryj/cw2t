@@ -154,7 +154,8 @@
             //requestPricehistory("LLOY.L");
             //displayForm("LLOY.L");
             //requestQuote("LLOY.L.CFD");
-            sendOrder("LLOY.L", '1', 100, 0.75, '1', "BEST", "GBP", 2, "", "", "4", "", "");
+            //sendOrder("LLOY.L", '1', 100, 0, 1, "BEST", "GBP", 2, "", "", "4", "", "");
+            requestOrderbook("LLOY.L");
         }
 
         function loadOrderBooks(orderbookarr) {
@@ -196,6 +197,10 @@
                 node.symbol = index.symbols[i].symbol;
                 ukx[0].children.push(node);
             }
+        }
+
+        function requestOrderbook(symbol) {
+            sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
         }
 
         function requestIndex(index) {

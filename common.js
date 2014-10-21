@@ -160,6 +160,8 @@ function sendCurrentOrderBook(symbol, topic, conn, feedtype) {
     sendCurrentOrderBookPQ(symbol, topic, conn);
   } else if (feedtype == "digitallook") {
     sendCurrentOrderBookDL(symbol, topic, conn);
+  } else if (feedtype == "nbtrader") {
+    sendCurrentOrderBookNBT(symbol, topic, conn);
   }
 }
 
@@ -273,6 +275,10 @@ function sendCurrentOrderBookDL(symbol, topic, conn) {
   });
 }
 
+function sendCurrentOrderBookNBT(symbol, topic, conn) {
+  var msg = {"prices":[{"symbol":"LLOY.L","bid":"75.42","level":1,"id":81272,"timestamp":"1413891352055"}]};
+}
+
 function sendErrorMsg(error, conn) {
   conn.write("{\"errormsg\":" + JSON.stringify(getReasonDesc(error)) + "}");
 }
@@ -322,6 +328,18 @@ function newPrice(topic, servertype, msg, connections, feedtype) {
             }
           });
         });
+      });
+    });
+  } else if (feedtype == "nbtrader") {
+    // get the users watching this symbol
+    db.smembers("symbol:" + topic + ":" + servertype, function(err, users) {
+      if (err) throw err;
+
+      // send the message to each user
+      users.forEach(function(user, j) {
+        if (user in connections) {
+          connections[user].write(msg);
+        }
       });
     });
   }
@@ -1371,7 +1389,7 @@ exports.registerCommonScripts = function () {
     end \
   end \
   --[[ publish a price message for this symbol ]] \
-  redis.call("publish", KEYS[1], "{" .. cjson.encode("prices") .. ":" .. cjson.encode(pricetbl) .. "}") \
+  redis.call("publish", "price:" .. KEYS[1], "{" .. cjson.encode("prices") .. ":" .. cjson.encode(pricetbl) .. "}") \
   --[[ store latest prices ]] \
   redis.call("hmset", "symbol:" .. KEYS[1], "bid", bid, "ask", ask) \
   --[[ add id to sorted set, indexed on timestamp ]] \

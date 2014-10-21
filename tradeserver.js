@@ -281,7 +281,7 @@ function newOrder(order) {
 
   // always put a price in the order
   if (!("price" in order)) {
-    order.price = "";
+    order.price = "0";
   }
 
   // and always have a quote id
@@ -301,6 +301,8 @@ function newOrder(order) {
 
     // credit check failed
     if (ret[0] == 0) {
+      console.log("credit check failed, order #" + ret[1]);
+
       // script will publish the order back to the operator type, with the error
       return;
     }
@@ -342,27 +344,30 @@ function matchOrder(order) {
     if (err) throw err;
 
     // todo: sort out publishing
+    console.log(ret);
+    displayOrderBook(order.symbol, "-inf", "+inf");
+
 
     // return the active order to the sending operator type
-    db.publish(order.operatortype, "order:" + order.orderid);
+    //db.publish(order.operatortype, "order:" + order.orderid);
 
     // send any trades for active order client
-    for (var i = 0; i < ret[1].length; ++i) {
+    /*for (var i = 0; i < ret[1].length; ++i) {
       db.publish(tradechannel, "trade:" + ret[1][i]);
-    }
+    }*/
 
     // send any matched orders - todo: review
-    for (var i = 0; i < ret[0].length; ++i) {
+    /*for (var i = 0; i < ret[0].length; ++i) {
       db.publish(order.operatortype, "order:" + ret[0][i]);
-    }
+    }*/
 
     // send any matched trades
-    for (var i = 0; i < ret[2].length; ++i) {
+    /*for (var i = 0; i < ret[2].length; ++i) {
       db.publish(tradechannel, "trade:" + ret[2][i]);
-    }
+    }*/
 
     // indicate orderbook may have changed - todo: review, maybe send updated orderbook?
-    db.publish(order.operatortype, "orderbookupdate:" + order.symbol);
+    //db.publish(order.operatortype, "orderbookupdate:" + order.symbol);
   });
 }
 
@@ -441,13 +446,11 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
   // now, either forward or attempt to match the order, depending on the type of instrument & whether the market is open
   //
 
-  ///
-  order.markettype = 0;
-  ///
   if (order.markettype == 1) {
     console.log("matching");
     matchOrder(order);
   } else {
+    console.log("not matching");
     // equity orders
     if (order.instrumenttype == "DE" || order.instrumenttype == "IE") {
       if (tradeid != "") {
@@ -487,12 +490,12 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
 }
 
 function displayOrderBook(symbol, lowerbound, upperbound) {
-  db.zrangebyscore(symbol, lowerbound, upperbound, function(err, matchorders) {
+  db.zrangebyscore("orderbook:" + symbol, lowerbound, upperbound, function(err, matchorders) {
     console.log("order book for instrument " + symbol + " has " + matchorders.length + " order(s)");
 
     matchorders.forEach(function (matchorderid, i) {
       db.hgetall("order:" + matchorderid, function(err, matchorder) {
-        console.log("orderid="+matchorder.orderid+", clientid="+matchorder.clientid+", price="+matchorder.price+", side="+matchorder.side+", quantity="+matchorder.remquantity);
+        console.log("orderid="+matchorder.orderid+", clientid="+matchorder.clientid+", price="+matchorder.price+", side="+matchorder.side+", remquantity="+matchorder.remquantity);
       });
     });
   });
@@ -1220,14 +1223,14 @@ function registerScripts() {
       price = "-" .. price \
     end \
     --[[ add order to order book ]] \
-    redis.call("zadd", symbol, price, orderid) \
+    redis.call("zadd", "orderbook:" .. symbol, price, orderid) \
     redis.call("sadd", "orderbooks", symbol) \
   end \
   ';
 
   removefromorderbook = '\
   local removefromorderbook = function(symbol, orderid) \
-    redis.call("zrem", symbol, orderid) \
+    redis.call("zrem", "orderbook:" .. symbol, orderid) \
     if (redis.call("zcount", symbol, "-inf", "+inf") == 0) then \
       --[[ todo: dont think so ]] \
       redis.call("srem", "orderbooks", symbol) \
@@ -1354,7 +1357,7 @@ function registerScripts() {
   if cc[1] == 0 then \
     --[[ publish the order back to the operatortype - the order contains the error ]] \
     publishorder(orderid, KEYS[22]) \
-    return {cc[1]} \
+    return {cc[1], orderid} \
   end \
   local proquotesymbol = {"", "", "", ""} \
   local proquotequote = {"", ""} \
@@ -1453,7 +1456,7 @@ function registerScripts() {
   local mt = {} \
   local mc = {} \
   local j = 1 \
-  local matchorders = redis.call("zrangebyscore", vals[2], lowerbound, upperbound) \
+  local matchorders = redis.call("zrangebyscore", "orderbook:" .. vals[2], lowerbound, upperbound) \
   for i = 1, #matchorders do \
     local matchvals = redis.call("hmget", "order:" .. matchorders[i], unpack(fields)) \
     local matchclientid = matchvals[1] \

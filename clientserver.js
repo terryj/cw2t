@@ -37,7 +37,7 @@ var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;
 var servertype = "client";
-var feedtype = "digitallook";
+var feedtype = "nbtrader";
 
 // redis
 var redishost;
@@ -114,20 +114,24 @@ function pubsub() {
   dbsub.on("message", function(channel, message) {
     console.log("channel: " + channel + ", message: " + message);
 
-    try {
-      var obj = JSON.parse(message);
+    if (channel.substr(0, 6) == "price:") {
+      common.newPrice(channel.substr(6), servertype, message, connections, feedtype);
+    } else {
+      try {
+        var obj = JSON.parse(message);
 
-      if ("quote" in obj) {
-        forwardQuote(obj.quote, message);
-      } else if ("order" in obj) {
-        forwardOrder(obj.order, message);
-      } else if ("trade" in obj) {
-        forwardTrade(obj.trade, message);
+        if ("quote" in obj) {
+          forwardQuote(obj.quote, message);
+        } else if ("order" in obj) {
+          forwardOrder(obj.order, message);
+        } else if ("trade" in obj) {
+          forwardTrade(obj.trade, message);
+        }
+      } catch (e) {
+        console.log(e);
+        console.log(message);
+        return;
       }
-    } catch (e) {
-      console.log(e);
-      console.log(message);
-      return;
     }
 
     /*if (message.substr(1, 6) == "prices") {
@@ -1136,7 +1140,8 @@ function registerClient(reg, conn) {
   });
 }
 
-function orderBookRequest(clientid, symbol, conn) {
+/*function orderBookRequest(clientid, symbol, conn) {
+  console.log("orderBookRequest");
   db.eval(common.scriptsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
 
@@ -1155,9 +1160,25 @@ function orderBookRequest(clientid, symbol, conn) {
     // send the orderbook, with the current stored prices
     common.sendCurrentOrderBook(symbol, ret[1], conn, feedtype);
   });
+}*/
+
+function orderBookRequest(clientid, symbol, conn) {
+  console.log("orderBookRequest");
+  db.eval(common.scriptsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    // the script tells us if we need to subscribe to a topic
+    if (ret[0]) {
+      dbsub.subscribe("price:" + ret[1]);
+    }
+
+    // send the orderbook, with the current stored prices
+    common.sendCurrentOrderBook(symbol, ret[1], conn, feedtype);
+  });
 }
 
-function orderBookRemoveRequest(clientid, symbol, conn) {
+/*function orderBookRemoveRequest(clientid, symbol, conn) {
   db.eval(common.scriptunsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
@@ -1169,6 +1190,17 @@ function orderBookRemoveRequest(clientid, symbol, conn) {
 
     if (ret[2]) {
       db.publish("digitallook", ret[3]);
+    }
+  });
+}*/
+
+function orderBookRemoveRequest(clientid, symbol, conn) {
+  db.eval(common.scriptunsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
+    if (err) throw err;
+
+    // the script will tell us if we need to unsubscribe from the topic
+    if (ret[0]) {
+      dbsub.unsubscribe("price:" + ret[1]);
     }
   });
 }
