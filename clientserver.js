@@ -214,9 +214,9 @@ function listen() {
           var obj = JSON.parse(msg);
 
           if ("orderbookrequest" in obj) {
-            orderBookRequest(clientid, obj.orderbookrequest, conn);
+            orderbookRequest(clientid, obj.orderbookrequest, conn);
           } else if ("orderbookremoverequest" in obj) {
-            orderBookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
+            orderbookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
           } else if ("positionrequest" in obj) {
             positionRequest(obj.positionrequest, clientid, conn);
           } else if ("signin" in obj) {
@@ -1162,13 +1162,13 @@ function registerClient(reg, conn) {
   });
 }*/
 
-function orderBookRequest(clientid, symbol, conn) {
-  console.log("orderBookRequest");
+function orderbookRequest(clientid, symbol, conn) {
+  console.log("orderbookRequest");
   db.eval(common.scriptsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
-    // the script tells us if we need to subscribe to a topic
+    // the script tells us if we need to subscribe to a topic - the topic is returned as may be different from the symbol
     if (ret[0]) {
       dbsub.subscribe("price:" + ret[1]);
     }
@@ -1194,9 +1194,10 @@ function orderBookRequest(clientid, symbol, conn) {
   });
 }*/
 
-function orderBookRemoveRequest(clientid, symbol, conn) {
+function orderbookRemoveRequest(clientid, symbol, conn) {
   db.eval(common.scriptunsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
 
     // the script will tell us if we need to unsubscribe from the topic
     if (ret[0]) {

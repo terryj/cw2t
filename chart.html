@@ -155,7 +155,8 @@
             //displayForm("LLOY.L");
             //requestQuote("LLOY.L.CFD");
             //sendOrder("LLOY.L", '1', 100, 0, 1, "BEST", "GBP", 2, "", "", "4", "", "");
-            requestOrderbook("LLOY.L");
+            //requestOrderbook("LLOY.L");
+            requestRemoveOrderbook("LLOY.L");
         }
 
         function loadOrderBooks(orderbookarr) {
@@ -201,6 +202,10 @@
 
         function requestOrderbook(symbol) {
             sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
+        }
+
+        function requestRemoveOrderbook(symbol) {
+            sockjs.send("{\"orderbookremoverequest\":" + JSON.stringify(symbol) + "}");
         }
 
         function requestIndex(index) {
