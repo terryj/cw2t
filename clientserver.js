@@ -94,6 +94,7 @@ function initialise() {
   console.log("initialise");
   common.registerCommonScripts();
   registerScripts();
+  clearSubscriptions();
   initDb();
   pubsub();
   listen();
@@ -215,6 +216,7 @@ function listen() {
 
           if ("orderbookrequest" in obj) {
             orderbookRequest(clientid, obj.orderbookrequest, conn);
+            testpub();
           } else if ("orderbookremoverequest" in obj) {
             orderbookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
           } else if ("positionrequest" in obj) {
@@ -330,6 +332,7 @@ function listen() {
 }
 
 function tidy(clientid, conn) {
+  console.log("tidy");
   if (clientid != "0") {
     if (clientid in connections) {
       var timestamp = common.getUTCTimeStamp(new Date());
@@ -354,7 +357,7 @@ function unsubscribeConnection(id) {
 
     // unsubscribe returned topics
     for (var i = 0; i < ret.length; i++) {
-      dbsub.unsubscribe("ticker:" + ret[i]);
+      dbsub.unsubscribe("price:" + ret[i]);
     }
   });
 }
@@ -1089,9 +1092,28 @@ function replySignIn(reply, conn) {
     conn.write("{\"signinreply\":" + JSON.stringify(reply) + "}");
 }
 
+function clearSubscriptions() {
+  // clears connections & subscriptions
+  db.eval(common.scriptunsubscribeserver, 1, servertype, function(err, ret) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    console.log(ret);
+
+    // unsubscribe to the returned topics
+    for (var i = 0; i < ret.length; i++) {
+      dbsub.unsubscribe("price:" + ret[i]);
+    }
+  });  
+}
+
 function initDb() {
+  console.log("initDb");
+
   // clear any connected clients
-  db.smembers("connections:" + servertype, function(err, connections) {
+  /*db.smembers("connections:" + servertype, function(err, connections) {
     if (err) {
       console.log(err);
       return;
@@ -1102,7 +1124,7 @@ function initDb() {
 
       db.srem("connections:" + servertype, connection);
     });
-  });
+  });*/
 }
 
 function registerClient(reg, conn) {
@@ -1203,6 +1225,21 @@ function orderbookRemoveRequest(clientid, symbol, conn) {
     if (ret[0]) {
       dbsub.unsubscribe("price:" + ret[1]);
     }
+  });
+}
+
+function testpub() {
+  var now = new Date();
+  var timestamp = +now;
+  var instrumentcode = "LLOY.L";
+  var instrec = {};
+  instrec.bid = 1.23;
+  instrec.ask = 1.25;
+
+  db.eval(common.scriptpriceupdate, 4, instrumentcode, timestamp, instrec.bid, instrec.ask, function(err, ret) {
+    if (err) throw err;
+    //console.log("pricehist updated: " + instrumentcode + ",ts:" + timestamp + ",bid:" + instrec.bid + ",ask:" + instrec.ask);
+    console.log(ret);
   });
 }
 
