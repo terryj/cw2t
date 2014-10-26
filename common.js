@@ -317,13 +317,13 @@ function newPrice(topic, servertype, msg, connections, feedtype) {
         var jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
 
         // get the users watching this symbol
-        db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + servertype, function(err, users) {
+        db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + servertype, function(err, ids) {
           if (err) throw err;
 
           // send the message to each user
-          users.forEach(function(user, j) {
-            if (user in connections) {
-              connections[user].write(jsonmsg);
+          ids.forEach(function(id, j) {
+            if (id in connections) {
+              connections[id].write(jsonmsg);
             }
           });
         });
@@ -339,27 +339,27 @@ function newPrice(topic, servertype, msg, connections, feedtype) {
         var jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
 
         // get the users watching this symbol
-        db.smembers(topic + ":symbol:" + symbol + ":" + servertype, function(err, users) {
+        db.smembers(topic + ":symbol:" + symbol + ":" + servertype, function(err, ids) {
           if (err) throw err;
 
           // send the message to each user
-          users.forEach(function(user, j) {
-            if (user in connections) {
-              connections[user].write(jsonmsg);
+          ids.forEach(function(id, j) {
+            if (id in connections) {
+              connections[id].write(jsonmsg);
             }
           });
         });
       });
     });
   } else if (feedtype == "nbtrader") {
-    // get the users watching this symbol
-    db.smembers("symbol:" + topic + ":" + servertype, function(err, users) {
+    // get the users watching this symbol on this server
+    db.smembers("symbol:" + topic + ":servertype:" + servertype + ":ids", function(err, ids) {
       if (err) throw err;
 
       // send the message to each user
-      users.forEach(function(user, j) {
-        if (user in connections) {
-          connections[user].write(msg);
+      ids.forEach(function(id, j) {
+        if (id in connections) {
+          connections[id].write(msg);
         }
       });
     });
@@ -983,8 +983,8 @@ exports.registerCommonScripts = function () {
       return {0, ""} \
     end \
     local subscribe = 0 \
-    redis.call("sadd", "nbtsymbol:" .. nbtsymbol .. ":symbol:" .. symbol .. ":servertype:" .. servertype .. ":ids", id) \
-    redis.call("sadd", "nbtsymbol:" .. nbtsymbol .. ":symbol:" .. symbol .. ":servertypes", servertype) \
+    redis.call("sadd", "symbol:" .. symbol .. ":servertype:" .. servertype .. ":ids", id) \
+    redis.call("sadd", "symbol:" .. symbol .. ":servertypes", servertype) \
     redis.call("sadd", "nbtsymbol:" .. nbtsymbol .. ":symbols", symbol) \
     if redis.call("sismember", "nbtsymbols", nbtsymbol) == 0 then \
       redis.call("sadd", "nbtsymbols", nbtsymbol) \
@@ -1009,10 +1009,10 @@ exports.registerCommonScripts = function () {
     end \
     --[[ deal with unsubscribing nbtsymbol ]] \
     local unsubscribe = 0 \
-    redis.call("srem",  "nbtsymbol:" .. nbtsymbol .. ":symbol:" .. symbol .. ":servertype:" .. servertype .. ":ids", id) \
-    if redis.call("scard", "nbtsymbol:" .. nbtsymbol .. ":symbol:" .. symbol .. ":servertype:" .. servertype .. ":ids") == 0 then \
-      redis.call("srem", "nbtsymbol:" .. nbtsymbol .. ":symbol:" .. symbol .. ":servertypes", servertype) \
-      if redis.call("scard", "nbtsymbol:" .. nbtsymbol .. ":symbol:" .. symbol .. ":servertypes") == 0 then \
+    redis.call("srem", "symbol:" .. symbol .. ":servertype:" .. servertype .. ":ids", id) \
+    if redis.call("scard", "symbol:" .. symbol .. ":servertype:" .. servertype .. ":ids") == 0 then \
+      redis.call("srem", "symbol:" .. symbol .. ":servertypes", servertype) \
+      if redis.call("scard", "symbol:" .. symbol .. ":servertypes") == 0 then \
         redis.call("srem", "nbtsymbol:" .. nbtsymbol .. ":symbols", symbol) \
         if redis.call("scard", "nbtsymbol:" .. nbtsymbol .. ":symbols") == 0 then \
           redis.call("srem", "nbtsymbols", nbtsymbol) \
@@ -1029,7 +1029,6 @@ exports.registerCommonScripts = function () {
   end \
   ';
 
-  
   //
   // subscribe to an instrument with digitallook
   // see scriptsubscribeinstrument
