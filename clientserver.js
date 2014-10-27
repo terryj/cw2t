@@ -36,6 +36,7 @@ var cw2tport = 443; // client listen port
 var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;
+var serverid = 1; // needs to be unique, should be in an .ini file
 var servertype = "client";
 var feedtype = "nbtrader";
 
@@ -91,7 +92,6 @@ db.on("error", function(err) {
 });
 
 function initialise() {
-  console.log("initialise");
   common.registerCommonScripts();
   registerScripts();
   clearSubscriptions();
@@ -116,7 +116,7 @@ function pubsub() {
     console.log("channel: " + channel + ", message: " + message);
 
     if (channel.substr(0, 6) == "price:") {
-      common.newPrice(channel.substr(6), servertype, message, connections, feedtype);
+      common.newPrice(channel.substr(6), serverid, message, connections, feedtype);
     } else {
       try {
         var obj = JSON.parse(message);
@@ -216,7 +216,7 @@ function listen() {
 
           if ("orderbookrequest" in obj) {
             orderbookRequest(clientid, obj.orderbookrequest, conn);
-            testpub();
+            //testpub();
           } else if ("orderbookremoverequest" in obj) {
             orderbookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
           } else if ("positionrequest" in obj) {
@@ -352,7 +352,7 @@ function tidy(clientid, conn) {
 }
 
 function unsubscribeConnection(id) {
-  db.eval(common.scriptunsubscribeid, 3, id, servertype, feedtype, function(err, ret) {
+  db.eval(common.scriptunsubscribeid, 3, id, serverid, feedtype, function(err, ret) {
     if (err) throw err;
 
     // unsubscribe returned topics
@@ -1094,7 +1094,7 @@ function replySignIn(reply, conn) {
 
 function clearSubscriptions() {
   // clears connections & subscriptions
-  db.eval(common.scriptunsubscribeserver, 1, servertype, function(err, ret) {
+  db.eval(common.scriptunsubscribeserver, 1, serverid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -1113,7 +1113,7 @@ function initDb() {
   console.log("initDb");
 
   // clear any connected clients
-  /*db.smembers("connections:" + servertype, function(err, connections) {
+  /*db.smembers("connections:" + serverid, function(err, connections) {
     if (err) {
       console.log(err);
       return;
@@ -1122,7 +1122,7 @@ function initDb() {
     connections.forEach(function(connection, i) {
       unsubscribeConnection(connection);
 
-      db.srem("connections:" + servertype, connection);
+      db.srem("connections:" + serverid, connection);
     });
   });*/
 }
@@ -1162,7 +1162,37 @@ function registerClient(reg, conn) {
   });
 }
 
-/*function orderBookRequest(clientid, symbol, conn) {
+function orderbookRequest(clientid, symbol, conn) {
+  console.log("orderbookRequest");
+  db.eval(common.scriptsubscribeinstrument, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    // the script tells us if we need to subscribe to a topic - the topic is returned as may be different from the symbol
+    if (ret[0]) {
+      dbsub.subscribe("price:" + ret[1]);
+    } else {
+      //send price
+    }
+
+    // send the current stored price
+    //common.sendCurrentOrderbook(symbol, ret[1], conn, feedtype);
+  });
+}
+
+function orderbookRemoveRequest(clientid, symbol, conn) {
+  db.eval(common.scriptunsubscribeinstrument, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    // the script will tell us if we need to unsubscribe from the topic
+    if (ret[0]) {
+      dbsub.unsubscribe("price:" + ret[1]);
+    }
+  });
+}
+
+/*function orderBookRequestDL(clientid, symbol, conn) {
   console.log("orderBookRequest");
   db.eval(common.scriptsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
@@ -1182,25 +1212,9 @@ function registerClient(reg, conn) {
     // send the orderbook, with the current stored prices
     common.sendCurrentOrderBook(symbol, ret[1], conn, feedtype);
   });
-}*/
-
-function orderbookRequest(clientid, symbol, conn) {
-  console.log("orderbookRequest");
-  db.eval(common.scriptsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
-    if (err) throw err;
-    console.log(ret);
-
-    // the script tells us if we need to subscribe to a topic - the topic is returned as may be different from the symbol
-    if (ret[0]) {
-      dbsub.subscribe("price:" + ret[1]);
-    }
-
-    // send the orderbook, with the current stored prices
-    common.sendCurrentOrderBook(symbol, ret[1], conn, feedtype);
-  });
 }
 
-/*function orderBookRemoveRequest(clientid, symbol, conn) {
+function orderBookRemoveRequestDL(clientid, symbol, conn) {
   db.eval(common.scriptunsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
@@ -1215,18 +1229,6 @@ function orderbookRequest(clientid, symbol, conn) {
     }
   });
 }*/
-
-function orderbookRemoveRequest(clientid, symbol, conn) {
-  db.eval(common.scriptunsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
-    if (err) throw err;
-    console.log(ret);
-
-    // the script will tell us if we need to unsubscribe from the topic
-    if (ret[0]) {
-      dbsub.unsubscribe("price:" + ret[1]);
-    }
-  });
-}
 
 function testpub() {
   var now = new Date();

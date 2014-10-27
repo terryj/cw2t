@@ -155,19 +155,19 @@ exports.broadcastLevelOne = broadcastLevelOne;
 
 exports.broadcastLevelTwo = broadcastLevelTwo;*/
 
-function sendCurrentOrderBook(symbol, topic, conn, feedtype) {
+function sendCurrentOrderbook(symbol, topic, conn, feedtype) {
   if (feedtype == "proquote") {
-    sendCurrentOrderBookPQ(symbol, topic, conn);
+    sendCurrentOrderbookPQ(symbol, topic, conn);
   } else if (feedtype == "digitallook") {
-    sendCurrentOrderBookDL(symbol, topic, conn);
+    sendCurrentOrderbookDL(symbol, topic, conn);
   } else if (feedtype == "nbtrader") {
-    sendCurrentOrderBookNBT(symbol, topic, conn);
+    sendCurrentOrderbookNBT(symbol, topic, conn);
   }
 }
 
-exports.sendCurrentOrderBook = sendCurrentOrderBook;
+exports.sendCurrentOrderbook = sendCurrentOrderbook;
 
-function sendCurrentOrderBookPQ(symbol, topic, conn) {
+function sendCurrentOrderbookPQ(symbol, topic, conn) {
   var orderbook = {prices : []};
   var level1 = {};
   var level2 = {};
@@ -223,7 +223,7 @@ function sendCurrentOrderBookPQ(symbol, topic, conn) {
   });
 }
 
-function sendCurrentOrderBookDL(symbol, topic, conn) {
+function sendCurrentOrderbookDL(symbol, topic, conn) {
   var orderbook = {prices : []};
   var level1 = {};
   var level2 = {};
@@ -275,7 +275,7 @@ function sendCurrentOrderBookDL(symbol, topic, conn) {
   });
 }
 
-function sendCurrentOrderBookNBT(symbol, topic, conn) {
+function sendCurrentOrderbookNBT(symbol, topic, conn) {
   // prices are stored against 'topic', as in the symbol used by the feed, so this is used to look up a price
   db.hgetall("price:" + topic, function(err, price) {
     if (err) {
@@ -353,7 +353,7 @@ function newPrice(topic, servertype, msg, connections, feedtype) {
     });
   } else if (feedtype == "nbtrader") {
     // get the users watching this symbol on this server
-    db.smembers("symbol:" + topic + ":servertype:" + servertype + ":ids", function(err, ids) {
+    db.smembers("symbol:" + topic + ":serverid:" + serverid + ":ids", function(err, ids) {
       if (err) throw err;
 
       // send the message to each user
@@ -716,8 +716,8 @@ exports.getPTPOrderCancelRejectReason = getPTPOrderCancelRejectReason;
 
 
 exports.registerCommonScripts = function () {
-	var subscribeinstrument;
-	var unsubscribeinstrument;
+	//var subscribeinstrument;
+	//var unsubscribeinstrument;
   var updatecash;
   var gettotalpositions;
   var getcash;
@@ -728,8 +728,8 @@ exports.registerCommonScripts = function () {
   var gettrades;
   var getquoterequests;
   var stringsplit;
-  var subscribeinstrumentdl;
-  var unsubscribeinstrumentdl;
+  //var subscribeinstrumentdl;
+  //var unsubscribeinstrumentdl;
 
   round = '\
   local round = function(num, dp) \
@@ -939,8 +939,8 @@ exports.registerCommonScripts = function () {
 
   exports.getquoterequests = getquoterequests;
 
-	subscribeinstrument = '\
-  local subscribeinstrument = function(symbol, id, servertype) \
+	subscribeinstrumentpq = '\
+  local subscribeinstrumentpq = function(symbol, id, servertype) \
     local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
     if not topic then \
       return {0, ""} \
@@ -970,29 +970,35 @@ exports.registerCommonScripts = function () {
   end \
   ';
 
-  exports.subscribeinstrument = subscribeinstrument;
+  exports.subscribeinstrumentpq = subscribeinstrumentpq;
 
   //
   // subscribe to an instrument with nbtrader
   // any number of symbols can subscribe to a nbtsymbol to support derivatives
   //
   subscribeinstrumentnbt = '\
-  local subscribeinstrumentnbt = function(symbol, id, servertype) \
+  local subscribeinstrumentnbt = function(symbol, id, serverid) \
     local nbtsymbol = redis.call("hget", "symbol:" .. symbol, "nbtsymbol") \
     if not nbtsymbol then \
       return {0, ""} \
     end \
+    local bid = "" \
+    local offer = "" \
+    local vals = {"", "", ""} \
     local subscribe = 0 \
-    redis.call("sadd", "symbol:" .. symbol .. ":servertype:" .. servertype .. ":ids", id) \
-    redis.call("sadd", "symbol:" .. symbol .. ":servertypes", servertype) \
+    redis.call("sadd", "symbol:" .. symbol .. ":serverid:" .. serverid .. ":ids", id) \
+    redis.call("sadd", "symbol:" .. symbol .. ":serverids", serverid) \
     redis.call("sadd", "nbtsymbol:" .. nbtsymbol .. ":symbols", symbol) \
     if redis.call("sismember", "nbtsymbols", nbtsymbol) == 0 then \
       redis.call("sadd", "nbtsymbols", nbtsymbol) \
       subscribe = 1 \
+    else \
+      local fields = {"bid", "ask", "timestamp"} \
+      vals  = redis.call("hmget", "price:" .. symbol, unpack(fields)) \
     end \
-    redis.call("sadd", "servertype:" .. servertype .. ":id:" .. id .. ":symbols", symbol) \
-    redis.call("sadd", "servertype:" .. servertype .. ":ids", id) \
-    return {subscribe, nbtsymbol} \
+    redis.call("sadd", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
+    redis.call("sadd", "serverid:" .. serverid .. ":ids", id) \
+    return {subscribe, nbtsymbol, vals[1], vals[2], vals[3]} \
   end \
   ';
 
@@ -1002,17 +1008,17 @@ exports.registerCommonScripts = function () {
   // unsubscribe an instrument from the nbtrader feed
   //
   unsubscribeinstrumentnbt = '\
-  local unsubscribeinstrumentnbt = function(symbol, id, servertype) \
+  local unsubscribeinstrumentnbt = function(symbol, id, serverid) \
     local nbtsymbol = redis.call("hget", "symbol:" .. symbol, "nbtsymbol") \
     if not nbtsymbol then \
       return {0, ""} \
     end \
     --[[ deal with unsubscribing nbtsymbol ]] \
     local unsubscribe = 0 \
-    redis.call("srem", "symbol:" .. symbol .. ":servertype:" .. servertype .. ":ids", id) \
-    if redis.call("scard", "symbol:" .. symbol .. ":servertype:" .. servertype .. ":ids") == 0 then \
-      redis.call("srem", "symbol:" .. symbol .. ":servertypes", servertype) \
-      if redis.call("scard", "symbol:" .. symbol .. ":servertypes") == 0 then \
+    redis.call("srem", "symbol:" .. symbol .. ":serverid:" .. serverid .. ":ids", id) \
+    if redis.call("scard", "symbol:" .. symbol .. ":serverid:" .. serverid .. ":ids") == 0 then \
+      redis.call("srem", "symbol:" .. symbol .. ":serverids", serverid) \
+      if redis.call("scard", "symbol:" .. symbol .. ":serverids") == 0 then \
         redis.call("srem", "nbtsymbol:" .. nbtsymbol .. ":symbols", symbol) \
         if redis.call("scard", "nbtsymbol:" .. nbtsymbol .. ":symbols") == 0 then \
           redis.call("srem", "nbtsymbols", nbtsymbol) \
@@ -1021,9 +1027,9 @@ exports.registerCommonScripts = function () {
       end \
     end \
     --[[ deal with symbols/ids required by servers ]] \
-    redis.call("srem", "servertype:" .. servertype .. ":id:" .. id .. ":symbols", symbol) \
-    if redis.call("scard", "servertype:" .. servertype .. ":id:" .. id .. ":symbols") == 0 then \
-      redis.call("srem", "servertype:" .. servertype .. ":ids", id) \
+    redis.call("srem", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
+    if redis.call("scard", "serverid:" .. serverid .. ":id:" .. id .. ":symbols") == 0 then \
+      redis.call("srem", "serverid:" .. serverid .. ":ids", id) \
     end \
     return {unsubscribe, nbtsymbol} \
   end \
@@ -1031,7 +1037,6 @@ exports.registerCommonScripts = function () {
 
   //
   // subscribe to an instrument with digitallook
-  // see scriptsubscribeinstrument
   //
   subscribeinstrumentdl = '\
   local subscribeinstrumentdl = function(symbol, id, servertype) \
@@ -1063,8 +1068,8 @@ exports.registerCommonScripts = function () {
 
   exports.subscribeinstrumentdl = subscribeinstrumentdl;
 
-  unsubscribeinstrument = '\
-  local unsubscribeinstrument = function(symbol, id, servertype) \
+  unsubscribeinstrumentpq = '\
+  local unsubscribeinstrumentpq = function(symbol, id, servertype) \
     local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
     if not topic then \
       return {0, ""} \
@@ -1100,7 +1105,6 @@ exports.registerCommonScripts = function () {
 
   //
   // unsubscribe an instrument from the digitallook feed
-  // see scriptunsubscribeinstrument
   //
   unsubscribeinstrumentdl = '\
   local unsubscribeinstrumentdl = function(symbol, id, servertype) \
@@ -1273,62 +1277,62 @@ exports.registerCommonScripts = function () {
 
   //
   // subscribe to a new instrument
-  // params: symbol, client/user/ifa id, servertype, feedtype
-  // i.e. "BARC.L", 1, "client", "digitallook"
+  // params: symbol, client/user/ifa id, serverid, feedtype
+  // i.e. "BARC.L", 1, 1, "digitallook"
   //
-  exports.scriptsubscribeinstrument = subscribeinstrument + subscribeinstrumentdl + subscribeinstrumentnbt + '\
+  exports.scriptsubscribeinstrument = subscribeinstrumentpq + subscribeinstrumentdl + subscribeinstrumentnbt + '\
   local symbol = KEYS[1] \
   local id = KEYS[2] \
-  local servertype = KEYS[3] \
+  local serverid = KEYS[3] \
   local ret = {0, ""} \
   if KEYS[4] == "proquote" then \
-    ret = subscribeinstrument(symbol, id, servertype) \
+    ret = subscribeinstrumentpq(symbol, id, serverid) \
   elseif KEYS[4] == "digitallook" then \
-    ret = subscribeinstrumentdl(symbol, id, servertype) \
+    ret = subscribeinstrumentdl(symbol, id, serverid) \
   elseif KEYS[4] == "nbtrader" then \
-    ret = subscribeinstrumentnbt(symbol, id, servertype) \
+    ret = subscribeinstrumentnbt(symbol, id, serverid) \
   end \
   return ret \
   ';
 
   //
   // unsubscribe from an instrument
-  // params: symbol, client/user id, servertype, feedtype
-  // i.e. "BARC.L", 1, "client", "digitallook"
+  // params: symbol, client/user id, serverid, feedtype
+  // i.e. "BARC.L", 1, 1, "digitallook"
   //
-  exports.scriptunsubscribeinstrument = unsubscribeinstrument + unsubscribeinstrumentdl + unsubscribeinstrumentnbt + '\
+  exports.scriptunsubscribeinstrument = unsubscribeinstrumentpq + unsubscribeinstrumentdl + unsubscribeinstrumentnbt + '\
   local symbol = KEYS[1] \
   local id = KEYS[2] \
-  local servertype = KEYS[3] \
+  local serverid = KEYS[3] \
   local ret = {0, ""} \
   if KEYS[4] == "proquote" then \
-    ret = unsubscribeinstrument(symbol, id, servertype) \
+    ret = unsubscribeinstrumentpq(symbol, id, serverid) \
   elseif KEYS[4] == "digitallook" then \
-    ret = unsubscribeinstrumentdl(symbol, id, servertype) \
+    ret = unsubscribeinstrumentdl(symbol, id, serverid) \
   elseif KEYS[4] == "nbtrader" then \
-    ret = unsubscribeinstrumentnbt(symbol, id, servertype) \
+    ret = unsubscribeinstrumentnbt(symbol, id, serverid) \
   end \
   return ret \
   ';
 
   //
   // unsubscribe a user/client/other connection
-  // params: client/user id, servertype, feedtype
-  // i.e. 1, "client", "digitallook"
+  // params: client/user id, serverid, feedtype
+  // i.e. 1, 1, "digitallook"
   //
-  exports.scriptunsubscribeid = unsubscribeinstrument + unsubscribeinstrumentdl + unsubscribeinstrumentnbt + '\
+  exports.scriptunsubscribeid = unsubscribeinstrumentpq + unsubscribeinstrumentdl + unsubscribeinstrumentnbt + '\
   local id = KEYS[1] \
-  local servertype = KEYS[2] \
-  local symbols = redis.call("smembers", "servertype:" .. servertype .. ":id:" .. id .. ":symbols") \
+  local serverid = KEYS[2] \
+  local symbols = redis.call("smembers", "serverid:" .. serverid .. ":id:" .. id .. ":symbols") \
   local unsubscribetopics = {} \
   for i = 1, #symbols do \
     local ret = {0, ""} \
     if KEYS[3] == "proquote" then \
-      ret = unsubscribeinstrument(symbols[i], id, servertype) \
+      ret = unsubscribeinstrumentpq(symbols[i], id, serverid) \
     elseif KEYS[3] == "digitallook" then \
-      ret = unsubscribeinstrumentdl(symbols[i], id, servertype) \
+      ret = unsubscribeinstrumentdl(symbols[i], id, serverid) \
     elseif KEYS[3] == "nbtrader" then \
-      ret = unsubscribeinstrumentnbt(symbols[i], id, servertype) \
+      ret = unsubscribeinstrumentnbt(symbols[i], id, serverid) \
     end \
     if ret[1] == 1 then \
       table.insert(unsubscribetopics, ret[2]) \
@@ -1339,16 +1343,16 @@ exports.registerCommonScripts = function () {
 
   //
   // unsubscribe a server from nbtrader
-  // params: servertype
+  // params: serverid, i.e. 1
   //
   exports.scriptunsubscribeserver = unsubscribeinstrumentnbt + '\
-  local servertype = KEYS[1] \
+  local serverid = KEYS[1] \
   local unsubscribetopics = {} \
-  local ids = redis.call("smembers", "servertype:" .. servertype .. ":ids") \
+  local ids = redis.call("smembers", "serverid:" .. serverid .. ":ids") \
   for i = 1, #ids do \
-    local symbols = redis.call("smembers", "servertype:" .. servertype .. ":id:" .. ids[i] .. ":symbols") \
+    local symbols = redis.call("smembers", "serverid:" .. serverid .. ":id:" .. ids[i] .. ":symbols") \
     for j = 1, #symbols do \
-      local ret = unsubscribeinstrumentnbt(symbols[j], ids[i], servertype) \
+      local ret = unsubscribeinstrumentnbt(symbols[j], ids[i], serverid) \
       if ret[1] == 1 then \
         table.insert(unsubscribetopics, ret[2]) \
       end \
@@ -1448,26 +1452,27 @@ exports.registerCommonScripts = function () {
     if ask == "" then \
       return \
     else \
-      pricemsg = "{" .. cjson.encode("ask") .. ":" .. ask .. "}" \
+      pricemsg = "{" .. cjson.encode("price") .. ":" .. "{" .. cjson.encode("ask") .. ":" .. ask .. "}}" \
     end \
   else \
     if ask == "" then \
       ask = redis.call("hget", "price:" .. nbtsymbol, "ask") \
-      pricemsg = "{" .. cjson.encode("bid") .. ":" .. bid .. "}" \
+      pricemsg = "{" .. cjson.encode("price") .. ":" .. "{" .. cjson.encode("bid") .. ":" .. bid .. "}}" \
     else \
-      pricemsg = "{" .. cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("ask") .. ":" .. ask .. "}" \
+      pricemsg = "{" .. cjson.encode("price") .. ":" .. "{" .. cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("ask") .. ":" .. ask .. "}}" \
     end \
   end \
-  --[[ publish a price message for any symbols subscribed to that use this nbtsymbol ]] \
+  --[[ publish a price message, store latest price & history for any symbols subscribed to that use this nbtsymbol ]] \
   local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbols") \
   for index = 1, #symbols do \
+    --[[ publish price ]] \
     redis.call("publish", "price:" .. symbols[index], pricemsg) \
+    --[[ store latest price ]] \
+    redis.call("hmset", "price:" .. symbols[index], "bid", bid, "ask", ask, "timestamp", KEYS[2]) \
+    --[[ add id to sorted set, indexed on timestamp ]] \
+    redis.call("zadd", "pricehistory:" .. symbols[index], KEYS[2], pricehistoryid) \
+    redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbol", symbols[index], "bid", bid, "ask", ask, "id", pricehistoryid) \
   end \
-  --[[ store latest prices ]] \
-  redis.call("hmset", "price:" .. nbtsymbol, "bid", bid, "ask", ask, "timestamp", KEYS[2]) \
-  --[[ add id to sorted set, indexed on timestamp ]] \
-  redis.call("zadd", "pricehistory:" .. nbtsymbol, KEYS[2], pricehistoryid) \
-  redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbol", nbtsymbol, "bid", bid, "ask", ask, "id", pricehistoryid) \
   return {pricehistoryid, nbtsymbol, bid, ask} \
   ';
 
