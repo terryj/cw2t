@@ -306,10 +306,10 @@ function sendErrorMsg(error, conn) {
 
 exports.sendErrorMsg = sendErrorMsg;
 
-function newPrice(topic, servertype, msg, connections, feedtype) {
+function newPrice(topic, serverid, msg, connections, feedtype) {
   if (feedtype == "proquote") {
     // which symbols are subscribed to for this topic (may be more than 1 as covers derivatives)
-    db.smembers("topic:" + topic + ":" + servertype + ":symbols", function(err, symbols) {
+    db.smembers("topic:" + topic + ":" + serverid + ":symbols", function(err, symbols) {
       if (err) throw err;
 
       symbols.forEach(function(symbol, i) {
@@ -317,7 +317,7 @@ function newPrice(topic, servertype, msg, connections, feedtype) {
         var jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
 
         // get the users watching this symbol
-        db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + servertype, function(err, ids) {
+        db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + serverid, function(err, ids) {
           if (err) throw err;
 
           // send the message to each user
@@ -331,7 +331,7 @@ function newPrice(topic, servertype, msg, connections, feedtype) {
     });
   } else if (feedtype == "digitallook") {
     // which symbols are subscribed to for this topic (may be more than 1 as covers derivatives)
-    db.smembers(topic + ":" + servertype + ":symbols", function(err, symbols) {
+    db.smembers(topic + ":" + serverid + ":symbols", function(err, symbols) {
       if (err) throw err;
 
       symbols.forEach(function(symbol, i) {
@@ -339,7 +339,7 @@ function newPrice(topic, servertype, msg, connections, feedtype) {
         var jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
 
         // get the users watching this symbol
-        db.smembers(topic + ":symbol:" + symbol + ":" + servertype, function(err, ids) {
+        db.smembers(topic + ":symbol:" + symbol + ":" + serverid, function(err, ids) {
           if (err) throw err;
 
           // send the message to each user
@@ -991,14 +991,18 @@ exports.registerCommonScripts = function () {
     redis.call("sadd", "nbtsymbol:" .. nbtsymbol .. ":symbols", symbol) \
     if redis.call("sismember", "nbtsymbols", nbtsymbol) == 0 then \
       redis.call("sadd", "nbtsymbols", nbtsymbol) \
+      --[[ tell the price server to subscribe ]] \
+       redis.call("publish", 7, "rp:" .. nbtsymbol) \
+      --[[ subscribing from db will be done on separate connection ]] \
       subscribe = 1 \
     else \
+      --[[ return latest price ]] \
       local fields = {"bid", "ask", "timestamp"} \
-      vals  = redis.call("hmget", "price:" .. symbol, unpack(fields)) \
+      vals = redis.call("hmget", "price:" .. symbol, unpack(fields)) \
     end \
     redis.call("sadd", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
     redis.call("sadd", "serverid:" .. serverid .. ":ids", id) \
-    return {subscribe, nbtsymbol, vals[1], vals[2], vals[3]} \
+    return {subscribe, vals[1], vals[2], vals[3]} \
   end \
   ';
 
@@ -1022,6 +1026,9 @@ exports.registerCommonScripts = function () {
         redis.call("srem", "nbtsymbol:" .. nbtsymbol .. ":symbols", symbol) \
         if redis.call("scard", "nbtsymbol:" .. nbtsymbol .. ":symbols") == 0 then \
           redis.call("srem", "nbtsymbols", nbtsymbol) \
+          --[[ tell the price server to unsubscribe ]] \
+          redis.call("publish", 7, "halt:" .. nbtsymbol) \
+          --[[ unsubscribing from db will be done on separate connection ]] \
           unsubscribe = 1 \
         end \
       end \
@@ -1452,19 +1459,20 @@ exports.registerCommonScripts = function () {
     if ask == "" then \
       return \
     else \
-      pricemsg = "{" .. cjson.encode("price") .. ":" .. "{" .. cjson.encode("ask") .. ":" .. ask .. "}}" \
+      pricemsg = cjson.encode("ask") .. ":" .. ask \
     end \
   else \
     if ask == "" then \
       ask = redis.call("hget", "price:" .. nbtsymbol, "ask") \
-      pricemsg = "{" .. cjson.encode("price") .. ":" .. "{" .. cjson.encode("bid") .. ":" .. bid .. "}}" \
+      pricemsg = cjson.encode("bid") .. ":" .. bid \
     else \
-      pricemsg = "{" .. cjson.encode("price") .. ":" .. "{" .. cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("ask") .. ":" .. ask .. "}}" \
+      pricemsg = cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("ask") .. ":" .. ask \
     end \
   end \
   --[[ publish a price message, store latest price & history for any symbols subscribed to that use this nbtsymbol ]] \
   local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbols") \
   for index = 1, #symbols do \
+    pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbol") .. ":" .. cjson.encode(symbols[index]) .. "," .. pricemsg .. "}}" \
     --[[ publish price ]] \
     redis.call("publish", "price:" .. symbols[index], pricemsg) \
     --[[ store latest price ]] \

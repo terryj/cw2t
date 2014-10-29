@@ -36,7 +36,7 @@ var cw2tport = 443; // client listen port
 var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;
-var serverid = 1; // needs to be unique, should be in an .ini file
+var serverid = 1; // must be unique, use .ini file?
 var servertype = "client";
 var feedtype = "nbtrader";
 
@@ -94,8 +94,8 @@ db.on("error", function(err) {
 function initialise() {
   common.registerCommonScripts();
   registerScripts();
-  clearSubscriptions();
   initDb();
+  clearSubscriptions();
   pubsub();
   listen();
 }
@@ -195,12 +195,14 @@ function listen() {
     // todo: remove
     clientid = "1";
     connections[clientid] = conn;
+    sendInstruments(1, conn);
+    //
 
     console.log('new connection');
 
     // data callback
     conn.on('data', function(msg) {
-      //console.log('recd:' + msg);
+      console.log('recd:' + msg);
 
       if (msg.substr(2, 18) == "ordercancelrequest") {
         db.publish(tradeserverchannel, msg);
@@ -324,6 +326,7 @@ function listen() {
 
             // send the data
             start(clientid, conn);
+            console.log("after start");
           });
         });
       });
@@ -655,6 +658,8 @@ function sendInstruments(clientid, conn) {
       console.log(err);
       return;
     }
+
+    //console.log(ret);
 
     conn.write("{\"instruments\":" + ret + "}");
   });
@@ -1071,8 +1076,11 @@ function getTimeInForceDesc(timeinforce) {
 }
 
 function start(clientid, conn) {
-  sendOrderBooksClient(clientid, conn);
-  sendOrderTypes(conn);
+  console.log("start");
+  //sendOrderBooksClient(clientid, conn);
+  console.log("ordertypes");
+  //sendOrderTypes(conn);
+  console.log("inst");
   sendInstruments(clientid, conn);
   //sendPositions(clientid, conn);
   //sendOrders(clientid, conn);
@@ -1099,8 +1107,6 @@ function clearSubscriptions() {
       console.log(err);
       return;
     }
-
-    console.log(ret);
 
     // unsubscribe to the returned topics
     for (var i = 0; i < ret.length; i++) {
@@ -1163,17 +1169,32 @@ function registerClient(reg, conn) {
 }
 
 function orderbookRequest(clientid, symbol, conn) {
-  console.log("orderbookRequest");
+  console.log("orderbookRequest:" + symbol);
   db.eval(common.scriptsubscribeinstrument, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
     // the script tells us if we need to subscribe to a topic - the topic is returned as may be different from the symbol
     if (ret[0]) {
-      dbsub.subscribe("price:" + ret[1]);
+      dbsub.subscribe("price:" + symbol);
     } else {
-      //send price
+      //send latest price
+      var price = {};
+      price.symbol = symbol;
+      price.bid = ret[1];
+      price.ask = ret[2];
+      price.timestamp = ret[3];
+
+      conn.write("{\"price\":" + JSON.stringify(price) + "}");
     }
+
+    // todo: remove
+    /*var price = {};
+    price.symbol = "LLOY.L";
+    price.bid = 1.23;
+    price.ask = 1.25;
+          conn.write("{\"price\":" + JSON.stringify(price) + "}");*/
+
 
     // send the current stored price
     //common.sendCurrentOrderbook(symbol, ret[1], conn, feedtype);
@@ -1437,23 +1458,25 @@ function registerScripts() {
   //
   scriptgetinst = '\
   local instruments = redis.call("sort", "instruments", "ALPHA") \
-  local fields = {"instrumenttype", "description", "currency", "marginpercent"} \
+  local fields = {"instrumenttype", "description"} \
   local vals \
   local inst = {} \
-  local marginpc \
   for index = 1, #instruments do \
     vals = redis.call("hmget", "symbol:" .. instruments[index], unpack(fields)) \
     if redis.call("sismember", KEYS[1] .. ":instrumenttypes", vals[1]) == 1 then \
+      table.insert(inst, {symbol = instruments[index], description = vals[2]}) \
+    end \
+  end \
+  return cjson.encode(inst) \
+  ';
+
+/* removed
       if vals[4] then \
         marginpc = vals[4] \
       else \
         marginpc = 100 \
       end \
-      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc}) \
-    end \
-  end \
-  return cjson.encode(inst) \
-  ';
+*/
 
   scriptupdatepassword = '\
     local retval = 0 \

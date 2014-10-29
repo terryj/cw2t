@@ -116,6 +116,8 @@ console.log("Trying to connect to host: " + host + ", port:" + messageport);
 
 var conn = net.connect(messageport, host, function() {
   console.log('Connected to: ' + host);
+
+  subscriptions();
 });
 
 //
@@ -287,6 +289,42 @@ conn.on('error', function(error) {
   console.log(error);
 });
 
+function subscribe(instcode) {
+  var instcodelen = instcode.length;
+  var buf = new Buffer(21+instcodelen);
+
+  buf[0] = 0;
+  buf[1] = 0;
+  buf[2] = 0;
+  buf[3] = 17+instcodelen;
+  buf[4] = 28;
+  buf.write("332", 5);
+  buf[8] = 31;
+  buf.write("mtag", 9);
+  buf[13] = 29;
+  buf.write(instcode, 14);
+  buf[14+instcodelen] = 30;
+  buf.write("22", 15+instcodelen); // bid
+  buf[17+instcodelen] = 30;
+  buf.write("25", 18+instcodelen); // offer
+  buf[20+instcodelen] = 28;
+  
+  conn.write(buf);
+}
+
+function subscriptions() {
+  db.smembers("nbtsymbols", function(err, nbtsymbols) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    nbtsymbols.forEach(function(nbtsymbol, i) {
+      subscribe(nbtsymbol);
+    });
+  });
+}
+
 function updateRec(fid, value, instrec) {
   var field = getFid(fid);
   if (field != "") {
@@ -328,7 +366,8 @@ function requestData(msg) {
     // real-time partial record i.e. "<FS>332<US>mtag<GS>BARC.L<RS>FID<RS>FID<FS>"
 
     var instcode = msg.substr(3);
-    var instcodelen = instcode.length;
+    subscribe(instcode);
+    /*var instcodelen = instcode.length;
     var buf = new Buffer(21+instcodelen);
 
     buf[0] = 0;
@@ -347,7 +386,7 @@ function requestData(msg) {
     buf.write("25", 18+instcodelen); // offer
     buf[20+instcodelen] = 28;
   
-    conn.write(buf);
+    conn.write(buf);*/
   } else if (msg.substr(0, 2) == "rf") {
     // real-time full record i.e. "<FS>332<US>mtag<GS>BARC.L<FS>"
 
@@ -403,6 +442,29 @@ function requestData(msg) {
     buf[13] = 29;
     buf.write("103", 14);
     buf[17] = 28;
+
+    conn.write(buf);
+  } else if (msg.substr(0, 4) == "halt") {
+    // remove instrument from watchlist i.e. "<FS>348<US>mtag<GS>BARC.L<FS>"
+
+    var instcode = msg.substr(5);
+    var instcodelen = instcode.length;
+
+    console.log("halting:" + instcode);
+
+    var buf = new Buffer(15+instcodelen);
+
+    buf[0] = 0;
+    buf[1] = 0;
+    buf[2] = 0;
+    buf[3] = 11+instcodelen;
+    buf[4] = 28;
+    buf.write("348", 5);
+    buf[8] = 31;
+    buf.write("mtag", 9);
+    buf[13] = 29;
+    buf.write(instcode, 14);
+    buf[14+instcodelen] = 28;
 
     conn.write(buf);
   }
