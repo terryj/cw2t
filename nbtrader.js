@@ -85,11 +85,11 @@ function tryToConnect(self) {
 		// any received data
 		nbconn.on('data', function(data) {
 			// only log if not connected
-			//if (connectstatus != 1) {
+			if (connectstatus != 1) {
 				console.log("--- received ---");
 				console.log(data);
 				console.log("----------------");
-			//}
+			}
 
 			// add new data to buffer
 			datainbuf += data;
@@ -505,11 +505,11 @@ function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgs
 	msg += checksumstr;
 
 	// only log the message if not connected
-	//if (connectstatus != 1) {
+	if (connectstatus != 1) {
 		console.log("--- sending ---");
 		console.log(msg);
 		console.log("---------------");
-	//}
+	}
 
 	// send the message
 	//console.log("sending...");

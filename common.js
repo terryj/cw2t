@@ -939,6 +939,29 @@ exports.registerCommonScripts = function () {
 
   exports.getquoterequests = getquoterequests;
 
+  // compare hour & minute with timezone open/close times to determine in/out of hours - 0=in hours, 1=ooh
+  getmarkettype = '\
+  local getmarkettype = function(symbol, hour, minute) \
+    local markettype = 0 \
+    local timezone = redis.call("hget", "symbol:" .. symbol, "timezone") \
+    if not timezone then \
+      return markettype \
+    end \
+    local fields = {"openhour","openminute","closehour","closeminute"} \
+    local vals = redis.call("hmget", "timezone:" .. timezone, unpack(fields)) \
+    if tonumber(hour) < tonumber(vals[1]) or tonumber(hour) > tonumber(vals[3]) then \
+      markettype = 1 \
+    elseif tonumber(hour) == tonumber(vals[1]) and tonumber(minute) < tonumber(vals[2]) then \
+      markettype = 1 \
+    elseif tonumber(hour) == tonumber(vals[3]) and tonumber(minute) > tonumber(vals[4]) then \
+      markettype = 1 \
+    end \
+    return markettype \
+  end \
+  ';
+
+  exports.getmarkettype = getmarkettype;
+
 	subscribeinstrumentpq = '\
   local subscribeinstrumentpq = function(symbol, id, servertype) \
     local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
@@ -976,15 +999,12 @@ exports.registerCommonScripts = function () {
   // subscribe to an instrument with nbtrader
   // any number of symbols can subscribe to a nbtsymbol to support derivatives
   //
-  subscribeinstrumentnbt = '\
-  local subscribeinstrumentnbt = function(symbol, id, serverid) \
+  subscribeinstrumentnbt = getmarkettype + '\
+  local subscribeinstrumentnbt = function(symbol, id, serverid, hour, minute) \
     local nbtsymbol = redis.call("hget", "symbol:" .. symbol, "nbtsymbol") \
     if not nbtsymbol then \
       return {0, ""} \
     end \
-    local bid = "" \
-    local offer = "" \
-    local vals = {"", "", ""} \
     local subscribe = 0 \
     redis.call("sadd", "symbol:" .. symbol .. ":serverid:" .. serverid .. ":ids", id) \
     redis.call("sadd", "symbol:" .. symbol .. ":serverids", serverid) \
@@ -995,14 +1015,15 @@ exports.registerCommonScripts = function () {
        redis.call("publish", 7, "rp:" .. nbtsymbol) \
       --[[ subscribing from db will be done on separate connection ]] \
       subscribe = 1 \
-    else \
-      --[[ return latest price ]] \
-      local fields = {"bid", "ask", "timestamp"} \
-      vals = redis.call("hmget", "price:" .. symbol, unpack(fields)) \
     end \
+    --[[ get latest price ]] \
+    local fields = {"bid", "ask", "timestamp"} \
+    local vals = redis.call("hmget", "price:" .. symbol, unpack(fields)) \
+    --[[ get in/out of hours ]] \
+    local markettype = getmarkettype(symbol, hour, minute) \
     redis.call("sadd", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
     redis.call("sadd", "serverid:" .. serverid .. ":ids", id) \
-    return {subscribe, vals[1], vals[2], vals[3]} \
+    return {subscribe, vals[1], vals[2], vals[3], markettype} \
   end \
   ';
 
@@ -1288,16 +1309,13 @@ exports.registerCommonScripts = function () {
   // i.e. "BARC.L", 1, 1, "digitallook"
   //
   exports.scriptsubscribeinstrument = subscribeinstrumentpq + subscribeinstrumentdl + subscribeinstrumentnbt + '\
-  local symbol = KEYS[1] \
-  local id = KEYS[2] \
-  local serverid = KEYS[3] \
   local ret = {0, ""} \
   if KEYS[4] == "proquote" then \
-    ret = subscribeinstrumentpq(symbol, id, serverid) \
+    ret = subscribeinstrumentpq(KEYS[1], KEYS[2], KEYS[3]) \
   elseif KEYS[4] == "digitallook" then \
-    ret = subscribeinstrumentdl(symbol, id, serverid) \
+    ret = subscribeinstrumentdl(KEYS[1], KEYS[2], KEYS[3]) \
   elseif KEYS[4] == "nbtrader" then \
-    ret = subscribeinstrumentnbt(symbol, id, serverid) \
+    ret = subscribeinstrumentnbt(KEYS[1], KEYS[2], KEYS[3], KEYS[5], KEYS[6]) \
   end \
   return ret \
   ';

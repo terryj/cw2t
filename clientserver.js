@@ -127,6 +127,8 @@ function pubsub() {
           forwardOrder(obj.order, message);
         } else if ("trade" in obj) {
           forwardTrade(obj.trade, message);
+        } else if ("quoterequest" in obj) {
+          forwardQuoterequest(obj.quoterequest, message);
         }
       } catch (e) {
         console.log(e);
@@ -159,6 +161,9 @@ function pubsub() {
 
   // listen for trading messages
   dbsub.subscribe(tradechannel);
+
+  // listen for ooh quoterequests
+  dbsub.subscribe("quoterequest");
 }
 
 // sockjs server
@@ -193,9 +198,9 @@ function listen() {
     var clientid = "0";
 
     // todo: remove
-    clientid = "1";
-    connections[clientid] = conn;
-    sendInstruments(1, conn);
+    //clientid = "1";
+    //connections[clientid] = conn;
+    //sendInstruments(1, conn);
     //
 
     console.log('new connection');
@@ -218,7 +223,6 @@ function listen() {
 
           if ("orderbookrequest" in obj) {
             orderbookRequest(clientid, obj.orderbookrequest, conn);
-            //testpub();
           } else if ("orderbookremoverequest" in obj) {
             orderbookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
           } else if ("positionrequest" in obj) {
@@ -659,8 +663,6 @@ function sendInstruments(clientid, conn) {
       return;
     }
 
-    //console.log(ret);
-
     conn.write("{\"instruments\":" + ret + "}");
   });
 }
@@ -1076,11 +1078,8 @@ function getTimeInForceDesc(timeinforce) {
 }
 
 function start(clientid, conn) {
-  console.log("start");
   //sendOrderBooksClient(clientid, conn);
-  console.log("ordertypes");
   //sendOrderTypes(conn);
-  console.log("inst");
   sendInstruments(clientid, conn);
   //sendPositions(clientid, conn);
   //sendOrders(clientid, conn);
@@ -1093,7 +1092,11 @@ function start(clientid, conn) {
 }
 
 function sendReadyToTrade(conn) {
-  conn.write("{\"status\":\"readytotrade\"}");
+  var status = {};
+
+  status.readytotrade = true;
+
+  conn.write("{\"status\":" + JSON.stringify(status) + "}");
 }
 
 function replySignIn(reply, conn) {
@@ -1170,15 +1173,26 @@ function registerClient(reg, conn) {
 
 function orderbookRequest(clientid, symbol, conn) {
   console.log("orderbookRequest:" + symbol);
-  db.eval(common.scriptsubscribeinstrument, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
+
+  // get hour & minute for comparison with timezone to determine in/out of hours
+  var today = new Date();
+  var hour = today.getHours();
+  var minute = today.getMinutes();
+
+  db.eval(common.scriptsubscribeinstrument, 6, symbol, clientid, serverid, feedtype, hour, minute, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
-    // the script tells us if we need to subscribe to a topic - the topic is returned as may be different from the symbol
-    if (ret[0]) {
+    var subscribe = ret[0];
+    var markettype = ret[4];
+
+    // see if we need to subscribe
+    if (subscribe == 1) {
       dbsub.subscribe("price:" + symbol);
-    } else {
-      //send latest price
+    }
+
+    //send latest price if ooh or already subscribed
+    if (markettype == 1 || subscribe == 0) {
       var price = {};
       price.symbol = symbol;
       price.bid = ret[1];
@@ -1187,14 +1201,6 @@ function orderbookRequest(clientid, symbol, conn) {
 
       conn.write("{\"price\":" + JSON.stringify(price) + "}");
     }
-
-    // todo: remove
-    /*var price = {};
-    price.symbol = "LLOY.L";
-    price.bid = 1.23;
-    price.ask = 1.25;
-          conn.write("{\"price\":" + JSON.stringify(price) + "}");*/
-
 
     // send the current stored price
     //common.sendCurrentOrderbook(symbol, ret[1], conn, feedtype);
@@ -1250,21 +1256,6 @@ function orderBookRemoveRequestDL(clientid, symbol, conn) {
     }
   });
 }*/
-
-function testpub() {
-  var now = new Date();
-  var timestamp = +now;
-  var instrumentcode = "LLOY.L";
-  var instrec = {};
-  instrec.bid = 1.23;
-  instrec.ask = 1.25;
-
-  db.eval(common.scriptpriceupdate, 4, instrumentcode, timestamp, instrec.bid, instrec.ask, function(err, ret) {
-    if (err) throw err;
-    //console.log("pricehist updated: " + instrumentcode + ",ts:" + timestamp + ",bid:" + instrec.bid + ",ask:" + instrec.ask);
-    console.log(ret);
-  });
-}
 
 /*function positionHistory(clientid, symbol, conn) {
   // todo: remove
@@ -1431,6 +1422,19 @@ function forwardTrade(trade, msg) {
 
   if (trade.clientid in connections) {
     connections[trade.clientid].write(msg);
+  }
+}
+
+function forwardQuoterequest(quoterequest, msg) {
+  console.log("forwardQuoterequest");
+  console.log(quoterequest);
+
+  // send to everyone?
+  for (var i in connections) {
+    // not to sender
+    if (i != quoterequest.clientid) {
+      connections[i].write(msg);
+    }
   }
 }
 

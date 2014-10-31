@@ -177,6 +177,7 @@
         var clientid = 1; // todo
         var instruments = {};
         var pricedata = [];
+        var quotes = [];
 
         var datain = function(msg) {
             //console.log(msg);
@@ -207,6 +208,12 @@
                     createChart();
                 } else if ("instruments" in obj) {
                     loadInstruments(obj.instruments);
+                } else if ("quoterequest" in obj) {
+                    quoterequestReceived(obj.quoterequest);
+                } else if ("signinreply" in obj) {
+                    replySignin(obj.signinreply);
+                } else if ("status" in obj) {
+                    statusReceived(obj.status);
                 }
             } catch(e) {
                 console.log(e);
@@ -250,7 +257,8 @@
             //sendOrder("LLOY.L", '1', 100, 0, 1, "BEST", "GBP", 2, "", "", "4", "", "");
             //requestOrderbook("LLOY.L.CFD");
             //requestRemoveOrderbook("LLOY.L");
-            selectSymbol();
+            //selectSymbol();
+            displayFormSignin();
         }
 
         function loadOrderBooks(orderbookarr) {
@@ -393,12 +401,12 @@
                     requestQuote(symbol);
                 });
 
-            divprice.append("input")
+            /*divprice.append("input")
                 .attr("type", "button")
                 .attr("class", "rfqbutton")
                 .attr("value", "At Best Order")
                 .on('click', function(d,i) {
-                });
+                });*/
         }
 
         function createTradeTable() {
@@ -754,7 +762,6 @@
         function updateChart(prices) {
             console.log("updateChartBaby");
             console.log(prices);
-            return;
 
             /*for (var i = 0; i < prices.length; i++) {
                 var d = {};
@@ -830,7 +837,7 @@
                 .append("td")
                     .append("input")
                         .attr("type", "button")
-                        .attr("value", "Request Quote")
+                        .attr("value", "Send")
                         .attr("class", "rfqbutton")
                         .on("click", function() {
                             var rfq = {};
@@ -1098,6 +1105,7 @@
         }
 
         function selectSymbol() {
+            console.log("selectSymbol");
             var data = [];
 
             var stockboxdiv = d3.select("body")
@@ -1185,7 +1193,187 @@
                     .property("value", "")
                     .attr("class", "stockboxinputtop");*/
             }
+        }
 
+        function quoterequestReceived(quoterequest) {
+            console.log("quoterequestReceived");
+            console.log(quoterequest);
+
+            var quote = {};
+            quote.quantity = quoterequest.quantity;
+            quote.bidpx = "";
+            quote.offerpx = "";
+
+            quotes.push(quote);
+
+            var cols = ["quantity"];
+
+            // create a quote table if one does not exist
+            var tblquote = d3.select("#tblquote");
+            if (tblquote.empty()) {
+                createQuoteTable(quoterequest, cols);
+            }
+
+            // get the table price row
+            var rows = d3.select("#tblquoterows");
+
+            // update
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(column) {
+                        return {column: column, value: row[column]};
+                    });
+                 })
+                .text(function(d, i) { return d.value; });
+        }
+
+        function createQuoteTable(quoterequest, cols) {
+            var hdr = [];
+            hdr.push("Quote Requests");
+
+            var buttons = ["Quote price To buy", "Quote price to sell"];
+
+            var divquote = d3.select("body")
+                .append("div")
+                .attr("id", "divquote");
+
+            // create a table
+            var tblquote = divquote.append("table")
+                .attr("id", "tblquote");
+
+            // add header & body
+            var thead = tblquote.append("thead");
+            var tbody = tblquote.append("tbody");
+
+            // append the header row
+            thead.append("tr")
+                .selectAll("th")
+                .data(hdr)
+                .enter()
+                .append("th")
+                    .attr("colspan", 2)
+                    .attr("class", "tblquotehdr")
+                    .text(function(d) { return d; });
+
+            // create a row for each quote
+            var rows = tbody.selectAll("tr")
+                .data(quotes)
+                .enter()
+                .append("tr")
+                .attr("class", "tblprice")
+                .attr("id", "tblquoterows");
+
+            // create a cell in each row for each quote column
+            cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(col) {
+                        return {col: col, value: row[col]};
+                    });
+                 })
+                .enter()
+                .append("td")
+                    .text(function(d, i) { return d.value; });
+
+            // create a cell & button in each row for each button column
+            cells = rows.selectAll("td")
+                .data(buttons);
+                /*.data(function(row) {
+                    return buttons.map(function(col) {
+                        return col;
+                        //return {col: col, value: row[col]};
+                    });
+                 })*/
+                cells.enter()
+                .append("td")
+                    .text("test");
+                    /*.append("input")
+                        .attr("type", "button")
+                        .attr("value", function(d, i) { console.log(d);return d; });*/
+
+            /*cells.selectAll("td")
+                .data(buttons)
+                .each(function(d) { console.log(d) });*/
+                /*.enter()
+                .append("input")
+                    .attr("type", "button")
+                    .attr("class", "tradebutton sellbutton")
+                    .attr("value", "test");*/
+
+            /*cells.each(function(d) {
+                console.log(d);
+                console.log(this);
+                d3.select(this)
+                    .append("input")
+                        .attr("type", "button")
+                    .attr("class", "tradebutton sellbutton")
+                        .attr("value", "test");
+                    });*/
+                    console.log("jjj");
+
+            /*cells.selectAll("input")
+                .data(buttons)
+                .enter()
+                .append("input")
+                    .attr("type", "button")
+                    .attr("value", function(d) { return d; });*/
+        }
+
+        //
+        // sign-in form
+        //
+        function displayFormSignin() {
+            var signindiv = d3.select("body")
+                .append("div")
+                .attr("id", "signindiv")
+                .append("div")
+                .attr("class", "signindiv");
+
+            var signinemail = signindiv.append("input")
+                .attr("id", "signinemail")
+                .attr("class", "signininput")
+                .attr("placeholder", "Email");
+
+            var signinpwd = signindiv.append("input")
+                .attr("id", "signinpwd")
+                .attr("class", "signininput")
+                .attr("placeholder", "Password");
+
+            signindiv.append("input")
+                .attr("type", "button")
+                .attr("value", "Sign In")
+                    .attr("class", "")
+                    .on("click", function() {
+                        var signin = {};
+                        signin.email = document.getElementById("signinemail").value;
+                        signin.password = document.getElementById("signinpwd").value;
+                        sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");
+                    });
+
+            d3.select("#signinemail").node().focus();
+        }
+
+        //
+        // signin reply
+        //
+        function replySignin(reply) {
+            if (reply.success) {
+                // clear the sign in form
+                d3.select("#signindiv").remove();
+
+                // single symbol select
+                selectSymbol();
+            } else {
+                // signin failed
+                d3.select("#signindiv")
+                    .append("p")
+                    .html("Sign in failed, please try again");
+
+                d3.select("#signinemail").node().focus();
+            }
+        }
+
+        function statusReceived(status) {
+            console.log(status);
         }
      </script>
 </body>
