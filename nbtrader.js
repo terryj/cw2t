@@ -828,7 +828,7 @@ function getBody(msgtype, tagvalarr) {
 				body.quotereqid = tagvalarr[i].value;
 				break;
 			case 117:
-				body.quoteid = tagvalarr[i].value;
+				body.externalquoteid = tagvalarr[i].value;
 				break;
 			case 55:
 			 	body.symbol = tagvalarr[i].value;

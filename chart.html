@@ -994,9 +994,11 @@
             return ((finishdt - startdt) / 1000);
         }
 
-        function quoteReceived(quote) {
+        /*function quoteReceived(quote) {
             console.log("quote received");
             console.log(quote);
+
+            quotes.push(quote);
 
             // get the number of seconds the quote is valid for
             var noseconds = getSeconds(quote.transacttime, quote.validuntiltime);
@@ -1054,7 +1056,7 @@
                     .style("cursor", "default")
                     .disabled = true;
             }
-        }
+        }*/
 
         function sendOrder(symbol, side, quantity, price, ordertype, delivertocompid, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
             var order = {};
@@ -1195,23 +1197,204 @@
             }
         }
 
-        function quoterequestReceived(quoterequest) {
-            console.log("quoterequestReceived");
-            console.log(quoterequest);
+        function quoteReceived(quote) {
+            console.log("quoteReceived");
+            var cols = ["bidquantity", "bidpx"];
 
-            var quote = {};
-            quote.quantity = quoterequest.quantity;
-            quote.bidpx = "";
-            quote.offerpx = "";
-
-            quotes.push(quote);
-
-            var cols = ["quantity"];
+            updateQuoteLadder(quote);
+            console.log(quote);
+            console.log(quotes);
 
             // create a quote table if one does not exist
             var tblquote = d3.select("#tblquote");
             if (tblquote.empty()) {
-                createQuoteTable(quoterequest, cols);
+                createQuoteTable();
+            }
+
+            // create a row for each quote
+            var rows = d3.select("#tblquote").select("tbody").selectAll("tr")
+                .data(quotes)
+                .enter()
+                .append("tr")
+                .attr("class", "tblquote");
+
+            // create the buttons
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    console.log("row");
+                        console.log(row);
+                    return cols.map(function(col) {
+                        console.log("col");
+                        console.log(col);
+                        return {col: col, value: row[col]};
+                    });
+                 })
+                .enter()
+                .append("td")
+                .each(function(d, i, j) { // i=column, j=row
+                    console.log(d);
+                    console.log(i);
+                    console.log(j);
+                    /*if (d.col == "bidquantity") {
+                        d3.select(this)
+                            .append("input")
+                            .attr("type", "button")
+                            .attr("value", "bid");                        
+                    }*/
+                    /*if (i == 0) {
+                        // text in first column
+                        d3.select(this)
+                            .text(function(d) { return d; });
+                    } else if (i == 1) {
+                        // input fields in second column
+                        d3.select(this)
+                            .append("input")
+                            .attr("type", function(d) { return "button"; });
+                    }*/
+                });
+        }
+
+        function updateQuoteLadder(quote) {
+            var bidupdated = false;
+            var offerupdated = false;
+
+            if (quote.bidpx == "") { bidupdated = true };
+            if (quote.offerpx == "") { offerupdated = true };
+
+            // may have a one or two-way quote
+            for (var i = 0; i < quotes.length; i++) {
+                // add bid quote to existing 'highest level' quote, if there is one
+                if (quote.bidpx != "" && quotes[i].bidpx == "") {
+                    console.log("ipdating bid");
+                    quotes[i].bidpx = quote.bidpx;
+                    //quotes[i].bidsize = quote.bidsize;
+                    quotes[i].bidquantity = quote.bidquantity;
+                    quotes[i].bidnoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+                    bidupdated = true;
+                }
+
+                // add offer quote to existing 'highest level' quote, if there is one
+                if (quote.offerpx != "" && quotes[i].offerpx == "") {
+                    console.log("ipdating offer");
+                    quotes[i].offerpx = quote.offerpx;
+                    //quotes[i].offersize = quote.offersize;
+                    quotes[i].offerquantity = quote.offerquantity;
+                    quotes[i].offernoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+                    offerupdated = true;
+                }
+            }
+
+            // add a new quote to array
+            if (!bidupdated || !offerupdated) {
+                console.log("new level");
+                var newquote = {};
+                newquote.bidpx = "";
+                //newquote.bidsize = "";
+                newquote.bidquantity = "";
+                newquote.offerpx = "";
+                //newquote.offersize = "";
+                newquote.offerquantity = "";
+
+                if (!bidupdated) {
+                    newquote.bidpx = quote.bidpx;
+                    //newquote.bidsize = quote.bidsize;
+                    newquote.bidquantity = quote.bidquantity;
+                    newquote.bidnoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+                }
+
+                if (!offerupdated) {
+                    newquote.offerpx = quote.offerpx;
+                    //newquote.offersize = quote.offersize;
+                    newquote.offerquantity = quote.offerquantity;
+                    newquote.offernoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+                }
+                quotes.push(newquote);
+            }
+        }
+
+        function createQuoteTable() {
+            console.log("createQuoteTable");
+            var hdr = ["Quotes"];
+
+            // quote div
+            var divquote = d3.select("body")
+                .append("div")
+                .attr("id", "divquote");
+
+            // create a table
+            var tblquote = divquote.append("table")
+                .attr("id", "tblquote");
+
+            // add header & body
+            var thead = tblquote.append("thead");
+            var tbody = tblquote.append("tbody");
+
+            // add header
+            thead.append("tr")
+                .selectAll("th")
+                .data(hdr)
+                .enter()
+                .append("th")
+                    .attr("class", "tblquotehdr")
+                    .text(function(d) { return d; });
+
+            // create a row for each quote
+            /*var rows = tbody.selectAll("tr")
+                .data(quotes)
+                .enter()
+                .append("tr")
+                .attr("class", "tblquote");
+
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(col) {
+                        return {col: col, value: row[col]};
+                    });
+                 })
+                .enter()
+                .append("td")
+                .each(function(d, i, j) { // i=column, j=row
+                    console.log(d);
+                    console.log(i);
+                    console.log(j);
+                    if (d.col == "bidquantity") {
+                        d3.select(this)
+                            .append("input")
+                            .attr("type", "button");                        
+                    }*/
+                    /*if (i == 0) {
+                        // text in first column
+                        d3.select(this)
+                            .text(function(d) { return d; });
+                    } else if (i == 1) {
+                        // input fields in second column
+                        d3.select(this)
+                            .append("input")
+                            .attr("type", function(d) { return "button"; });
+                    }*/
+                //});
+        }
+
+        function quoterequestReceived(quoterequest) {
+            console.log("quoterequestReceived");
+            console.log(quoterequest);
+
+            var quotereq = {};
+            quotereq.quantity = quoterequest.quantity;
+            quotereq.bidpx = "";
+            quotereq.offerpx = "";
+
+            //quotes.push(quote);
+            quoterequests = [
+            ["100","",""]
+            ];
+
+            var cols = ["quantity","",""];
+
+            // create a quote table if one does not exist
+            var tblquote = d3.select("#tblquote");
+            if (tblquote.empty()) {
+                createQuoterequestTable(quoterequest, cols);
             }
 
             // get the table price row
@@ -1227,23 +1410,22 @@
                 .text(function(d, i) { return d.value; });
         }
 
-        function createQuoteTable(quoterequest, cols) {
-            var hdr = [];
-            hdr.push("Quote Requests");
+        function createQuoterequestTable(quoterequest, cols) {
+            var hdr = ["Quote Requests"];
 
             var buttons = ["Quote price To buy", "Quote price to sell"];
 
-            var divquote = d3.select("body")
+            var divquotereq = d3.select("body")
                 .append("div")
-                .attr("id", "divquote");
+                .attr("id", "divquotereq");
 
             // create a table
-            var tblquote = divquote.append("table")
-                .attr("id", "tblquote");
+            var tblquotereq = divquotereq.append("table")
+                .attr("id", "tblquotereq");
 
             // add header & body
-            var thead = tblquote.append("thead");
-            var tbody = tblquote.append("tbody");
+            var thead = tblquotereq.append("thead");
+            var tbody = tblquotereq.append("tbody");
 
             // append the header row
             thead.append("tr")
@@ -1252,7 +1434,7 @@
                 .enter()
                 .append("th")
                     .attr("colspan", 2)
-                    .attr("class", "tblquotehdr")
+                    .attr("class", "tblquotereqhdr")
                     .text(function(d) { return d; });
 
             // create a row for each quote
@@ -1260,35 +1442,69 @@
                 .data(quotes)
                 .enter()
                 .append("tr")
-                .attr("class", "tblprice")
-                .attr("id", "tblquoterows");
+                .attr("class", "tblquotereq");
 
             // create a cell in each row for each quote column
-            cells = rows.selectAll("td")
-                .data(function(row) {
+            var cells = rows.selectAll("td")
+                .data(function(d) { return d; })
+                /*.data(function(row) {
                     return cols.map(function(col) {
                         return {col: col, value: row[col]};
                     });
-                 })
+                 })*/
                 .enter()
                 .append("td")
-                    .text(function(d, i) { return d.value; });
+                .each(function(d, i, j) { // i=column, j=row
+                    console.log(d);
+                    console.log(i);
+                    console.log(j);
+                    if (i == 0) {
+                        // text in first column
+                        d3.select(this)
+                            .text(function(d) { return d; });
+                    } else if (i == 1) {
+                        // input fields in second column
+                        d3.select(this)
+                            .append("input")
+                            .attr("type", function(d) { return "button"; });
+                    }
+                });
+
+                /*.append("td")
+                    .text(function(d, i) { return d.value; });*/
 
             // create a cell & button in each row for each button column
-            cells = rows.selectAll("td")
-                .data(buttons);
+            /*cells = rows.selectAll("td")
+                .data(buttons);*/
                 /*.data(function(row) {
                     return buttons.map(function(col) {
                         return col;
                         //return {col: col, value: row[col]};
                     });
                  })*/
-                cells.enter()
+                /*cells.enter()
                 .append("td")
-                    .text("test");
+                    .text("test");*/
                     /*.append("input")
                         .attr("type", "button")
                         .attr("value", function(d, i) { console.log(d);return d; });*/
+
+            /*var cells = rows.selectAll("td")
+                .data(function(d) { return d; })
+                .enter()
+                .append("td")
+                .each(function(d, i, j) { // i=column, j=row
+                    if (i == 0) {
+                        // text in first column
+                        d3.select(this)
+                            .text(function(d) { return d; });
+                    } else if (i == 1) {
+                        // input fields in second column
+                        d3.select(this)
+                            .append("input")
+                            .attr("type", function(d) { return inputtypes[j]; });
+                    }
+                });*/
 
             /*cells.selectAll("td")
                 .data(buttons)
@@ -1308,7 +1524,6 @@
                     .attr("class", "tradebutton sellbutton")
                         .attr("value", "test");
                     });*/
-                    console.log("jjj");
 
             /*cells.selectAll("input")
                 .data(buttons)

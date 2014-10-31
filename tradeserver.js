@@ -179,7 +179,7 @@ function quoteRequest(quoterequest) {
   var minute = today.getMinutes();
 
   //todo - remove
-  hour = hour + 4;
+  //hour = hour + 4;
   //
 
   // get settlement date from T+n no. of days
@@ -553,6 +553,44 @@ function loadHolidays() {
   });
 }*/
 
+// quote received
+function newQuote(quote) {
+  // a two-way quote arrives in two bits, so fill in 'missing' price/size/quote id (note: separate external quote id for bid & offer)
+  if (!('bidpx' in quote)) {
+    quote.bidpx = '';
+    quote.bidsize = '';
+    //quote.bidquoteid = '';
+    //quote.offerquoteid = quote.quoteid;
+    //quote.offerqbroker = quote.qbroker;
+    quote.bidquotedepth = "";
+  }
+  if (!('offerpx' in quote)) {
+    quote.offerpx = '';
+    quote.offersize = '';
+    //quote.offerquoteid = '';
+    //quote.bidquoteid = quote.quoteid;
+    //quote.bidqbroker = quote.qbroker;
+    quote.offerquotedepth = "";
+  }
+
+  // quote script
+  // note: not passing securityid & idsource as proquote symbol should be enough
+  db.eval(scriptquote, 15, quote.quotereqid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, function(err, ret) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (ret != 0) {
+      // can't find quote request, so don't know which client to inform
+      console.log("Error in scriptquote:" + common.getReasonDesc(ret[0]));
+      return;
+    }
+
+    // script publishes quote to the operator type that made the request
+  });
+}
+
 nbt.on("orderReject", function(exereport) {
   var text = "";
   var ordrejreason = "";
@@ -695,7 +733,7 @@ nbt.on("orderCancelReject", function(ordercancelreject) {
 });
 
 nbt.on("quote", function(quote, header) {
-  console.log("quote received");
+  console.log("quote received from market");
   console.log(quote);
 
   // check to see if the quote may be a duplicate &, if it is, reject messages older than a limit
@@ -710,6 +748,10 @@ nbt.on("quote", function(quote, header) {
       }
     }
   }
+
+  newQuote(quote);
+
+  /*
 
   // a two-way quote arrives in two bits, so fill in 'missing' price/size/quote id (note: separate external quote id for bid & offer)
   if (!('bidpx' in quote)) {
@@ -745,6 +787,7 @@ nbt.on("quote", function(quote, header) {
 
     // script publishes quote to the operator type that made the request
   });
+*/
 });
 
 //
@@ -1724,7 +1767,6 @@ function registerScripts() {
 
   scriptquote = calcfinance + publishquote + '\
   local errorcode = 0 \
-  local sides = 0 \
   local quoteid = "" \
   --[[ get the quote request ]] \
   local fields = {"clientid", "quoteid", "symbol", "quantity", "cashorderqty", "nosettdays", "settlcurrency", "operatortype", "futsettdate", "orderdivnum"} \
@@ -1733,14 +1775,15 @@ function registerScripts() {
     errorcode = 1014 \
     return errorcode \
   end \
-  local instrumenttype = redis.call("hget", "symbol:" .. vals[3], "instrumenttype") \
+  local symbol = vals[3] \
+  local instrumenttype = redis.call("hget", "symbol:" .. symbol, "instrumenttype") \
   local bidquantity = "" \
   local offerquantity = "" \
   local bidfinance = 0 \
   local offerfinance = 0 \
   --[[ calculate the quantity from the cashorderqty, if necessary, & calculate any finance ]] \
-  if KEYS[2] == "" then \
-    local offerprice = tonumber(KEYS[6]) \
+  if KEYS[3] == "" then \
+    local offerprice = tonumber(KEYS[4]) \
     if vals[4] == "" then \
       offerquantity = round(tonumber(vals[5]) / offerprice, 0) \
     else \
@@ -1748,7 +1791,7 @@ function registerScripts() {
     end \
     offerfinance = calcfinance(instrumenttype, offerquantity * offerprice, vals[7], 1, vals[6]) \
   else \
-    local bidprice = tonumber(KEYS[5]) \
+    local bidprice = tonumber(KEYS[3]) \
     if vals[4] == "" then \
       bidquantity = round(tonumber(vals[5]) / bidprice, 0) \
     else \
@@ -1756,47 +1799,33 @@ function registerScripts() {
     end \
     bidfinance = calcfinance(instrumenttype, bidquantity * bidprice, vals[7], 2, vals[6]) \
   end \
-  --[[ quotes for bid/offer arrive separately, so see if this is the first by checking for a quote id ]] \
-  if vals[2] == "" then \
-    --[[ get touch prices - using delayed - todo: may need to look up delayed/live ]] \
-    local bestbid = "" \
-    local bestoffer = "" \
-    local pricefields = {"bid1", "offer1"} \
-    local pricevals = redis.call("hmget", "topic:TIT." .. KEYS[4] .. ".LD", unpack(pricefields)) \
-    if pricevals[1] then \
-      bestbid = pricevals[1] \
-      bestoffer = pricevals[2] \
-    end \
-    --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
-    quoteid = redis.call("incr", "quoteid") \
-    --[[ store the quote ]] \
-    redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "clientid", vals[1], "quoteid", quoteid, "bidquoteid", KEYS[2], "offerquoteid", KEYS[3], "symbol", vals[3], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", KEYS[5], "offerpx", KEYS[6], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", KEYS[7], "offersize", KEYS[8], "validuntiltime", KEYS[9], "transacttime", KEYS[10], "currency", KEYS[11], "settlcurrency", KEYS[12], "bidqbroker", KEYS[13], "offerqbroker", KEYS[14], "nosettdays", vals[6], "futsettdate", vals[9], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", KEYS[16], "offerquotedepth", KEYS[17]) \
-    --[[ keep a list ]] \
-    redis.call("sadd", vals[1] .. ":quotes", quoteid) \
-    --[[ quoterequest status - 0=new, 1=quoted, 2=rejected ]] \
-    local status \
-    --[[ bid or offer size needs to be non-zero ]] \
-    if KEYS[9] == 0 and KEYS[10] == 0 then \
-      status = "5" \
-    else \
-      status = "0" \
-    end \
-    --[[ add quote id, status to stored quoterequest ]] \
-    redis.call("hmset", "quoterequest:" .. KEYS[1], "quoteid", quoteid, "quotestatus", status) \
-    --[[ return to show only one side of quote received ]] \
-    sides = 1 \
-  else \
-    quoteid = vals[2] \
-    --[[ update quote, either bid or offer price/size/quote id ]] \
-    if KEYS[2] == "" then \
-      redis.call("hmset", "quote:" .. quoteid, "offerquoteid", KEYS[3], "offerpx", KEYS[6], "offerquantity", offerquantity, "offersize", KEYS[8], "offerqbroker", KEYS[14], "offerfinance", offerfinance, "offerquotedepth", KEYS[17])\
-    else \
-      redis.call("hmset", "quote:" .. quoteid, "bidquoteid", KEYS[2], "bidpx", KEYS[5], "bidquantity", bidquantity, "bidsize", KEYS[7], "bidqbroker", KEYS[13], "bidfinance", bidfinance, "bidquotedepth", KEYS[16]) \
-    end \
-    sides = 2 \
-    --[[ publish quote to operator type ]] \
-    publishquote(quoteid, vals[8]) \
+  --[[ get touch prices - using delayed - todo: may need to look up delayed/live ]] \
+  local bestbid = "" \
+  local bestoffer = "" \
+  local pricefields = {"bid", "ask"} \
+  local pricevals = redis.call("hmget", "price:" .. symbol, unpack(pricefields)) \
+  if pricevals[1] then \
+    bestbid = pricevals[1] \
+    bestoffer = pricevals[2] \
   end \
+  --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
+  quoteid = redis.call("incr", "quoteid") \
+  --[[ store the quote ]] \
+  redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "clientid", vals[1], "quoteid", quoteid, "symbol", symbol, "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", KEYS[3], "offerpx", KEYS[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", KEYS[5], "offersize", KEYS[6], "validuntiltime", KEYS[7], "transacttime", KEYS[8], "currency", KEYS[9], "settlcurrency", KEYS[10], "qbroker", KEYS[11], "nosettdays", vals[6], "futsettdate", vals[9], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", KEYS[13], "offerquotedepth", KEYS[14], "externalquoteid", KEYS[15]) \
+  --[[ keep a list of quotes for the quoterequest ]] \
+  redis.call("sadd", "quoterequest:" .. KEYS[1] .. ":quotes", quoteid) \
+  --[[ quoterequest status - 0=new, 1=quoted, 2=rejected ]] \
+  local status \
+  --[[ bid or offer size needs to be non-zero ]] \
+  if KEYS[5] == 0 and KEYS[6] == 0 then \
+    status = "5" \
+  else \
+    status = "0" \
+  end \
+  --[[ add quote id, status to stored quoterequest ]] \
+  redis.call("hmset", "quoterequest:" .. KEYS[1], "quoteid", quoteid, "quotestatus", status) \
+  --[[ publish quote to operator type ]] \
+  publishquote(quoteid, vals[8]) \
   return errorcode \
   ';
 
