@@ -1203,10 +1203,14 @@
             if (bidoffer == "bid") {
                 if (quotes[index].bidnoseconds > 0) {
                     quotes[index].bidnoseconds--;
+                } else {
+                    clearInterval(quotes[index].bidinterval);
                 }
             } else {
                 if (quotes[index].offernoseconds > 0) {
                     quotes[index].offernoseconds--;
+                } else {
+                    clearInterval(quotes[index].offerinterval);                    
                 }
             }
         }
@@ -1340,7 +1344,7 @@
                     quotes[i].bidquantity = quote.bidquantity;
                     quotes[i].bidnoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
                     bidupdated = true;
-                    startQuoteTimer("bid", i);
+                    startQuoteInterval("bid", i);
                 }
 
                 // add offer quote to existing 'highest level' quote, if there is one
@@ -1350,7 +1354,7 @@
                     quotes[i].offerquantity = quote.offerquantity;
                     quotes[i].offernoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
                     offerupdated = true;
-                    startQuoteTimer("offer", i);
+                    startQuoteInterval("offer", i);
                 }
             }
 
@@ -1369,7 +1373,7 @@
                     newquote.bidsize = quote.bidsize;
                     newquote.bidquantity = quote.bidquantity;
                     newquote.bidnoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
-                    startQuoteTimer("bid", quotes.length);
+                    startQuoteInterval("bid", quotes.length);
                 }
 
                 if (!offerupdated) {
@@ -1377,18 +1381,27 @@
                     newquote.offersize = quote.offersize;
                     newquote.offerquantity = quote.offerquantity;
                     newquote.offernoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
-                    startQuoteTimer("offer", quotes.length);
+                    startQuoteInterval("offer", quotes.length);
                 }
                 quotes.push(newquote);
             }
         }
 
-        function startQuoteTimer(bidoffer, index) {
-            // function to count down seconds remaining
-            var quotetimer = setInterval(function() {
+        // function to count down seconds remaining per quote
+        function startQuoteInterval(bidoffer, index) {
+            console.log("startQuoteTimer:"+bidoffer+":"+index);
+            var quoteinterval = setInterval(function() {
                 countdownQuotes(bidoffer, index);
                 updateQuoteTable();
             }, 1000);
+
+            // keep track of timers as there may be more than one
+            if (bidoffer == "bid") {
+                quotes[index].bidinterval = quoteinterval;
+            }
+            if (bidoffer == "offer") {
+                quotes[index].offerinterval = quoteinterval;
+            }
         }
 
         function createQuoteTable() {
