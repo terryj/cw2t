@@ -129,6 +129,8 @@ function pubsub() {
           forwardTrade(obj.trade, message);
         } else if ("quoterequest" in obj) {
           forwardQuoterequest(obj.quoterequest, message);
+        } else if ("quoteack" in obj) {
+          forwardQuoteAck(obj.quoteack, message);
         }
       } catch (e) {
         console.log(e);
@@ -1336,10 +1338,11 @@ function passwordRequest(clientid, pwdrequest, conn) {
   });
 }
 
-function sendQuoteack(quotereqid) {
-  var quoteack = {};
+function sendQuoteack(quoteack) {
+  console.log(quoteack);
+  return;
 
-  db.hgetall("quoterequest:" + quotereqid, function(err, quoterequest) {
+  db.hgetall("quoterequest:" + quoteack.quotereqid, function(err, quoterequest) {
     if (err) {
       console.log(err);
       return;
@@ -1350,7 +1353,7 @@ function sendQuoteack(quotereqid) {
       return;
     }
 
-    quoteack.quotereqid = quoterequest.quotereqid;
+    //quoteack.quotereqid = quoterequest.quotereqid;
     quoteack.clientid = quoterequest.clientid;
     quoteack.symbol = quoterequest.symbol;
     quoteack.quoterejectreasondesc = common.getPTPQuoteRejectReason(quoterequest.quoterejectreason);
@@ -1393,6 +1396,16 @@ function sendQuote(quoteid) {
       }
     });
   });
+}
+
+// forward quoteack to relevant client
+function forwardQuoteAck(quoteack, msg) {
+  console.log("forwardQuoteAck");
+  console.log(quoteack);
+
+  if (quoteack.clientid in connections) {
+    connections[quoteack.clientid].write(msg);
+  }
 }
 
 // forward quote to relevant client
