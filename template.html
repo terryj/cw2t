@@ -109,6 +109,11 @@
         function mmparamsReplyReceived(mmparamsreply) {
             console.log("mmparamsReplyReceived");
             console.log(mmparamsreply);
+
+            if (mmparamsreply.updated) {
+                d3.select("#divmmparams").append("p")
+                    .html("parameters updated ok");
+            }
         }
 
      </script>
