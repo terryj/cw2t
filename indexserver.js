@@ -95,7 +95,6 @@ function pubsub() {
     } catch (e) {
       console.log(e);
       console.log(message);
-      return;
     }
 
     /*if (channel == webserverchannel) {

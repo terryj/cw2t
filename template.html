@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <title>Cantwaittotrade v0.9</title>
+    <script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
+    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <style>
+    </style>
+</head>
+<body lang="en">
+    <script>
+        var sockjs_url = '/echo';
+        var sockjs;
+
+        // parse incoming data
+        var datain = function(msg) {
+            console.log(msg);
+
+            try {
+                var obj = JSON.parse(msg);
+
+                if ("price" in obj) {
+                    priceReceived(obj.price);
+                } else if ("mmparamsreply" in obj) {
+                    mmparamsReplyReceived(obj.mmparamsreply);
+                }
+            } catch(e) {
+                console.log(e);
+                console.log(msg);
+            }
+        };
+
+        // set-up connection
+        var newconn = function() {
+            sockjs = new SockJS(sockjs_url);
+
+            sockjs.onopen = function()  {
+                console.log("connection open");
+
+                // we are ready
+                start();
+            };
+
+            // data from the server arrives here
+            sockjs.onmessage = function(e) {
+                datain(e.data);
+            };
+
+            sockjs.onclose = function()  {
+                console.log("connection closed");
+            };
+
+            sockjs.onheartbeat = function() {
+            };
+        };
+
+        // get a connection
+        newconn();
+
+        // things start here
+        function start() {
+            console.log("start");
+
+            mmparams();
+        }
+
+        function priceReceived(price) {
+            console.log("priceReceived");
+            console.log(price);
+        }
+
+        function mmparams() {
+            var divmmparams = d3.select("body")
+                .append("div")
+                .attr("id", "divmmparams");
+
+            divmmparams.append("h1")
+                .html("MM Parameters");
+
+            var inpquantity = divmmparams.append("input")
+                .attr("placeholder", "Quantity")
+                .attr("class", "inpquantity");
+
+            var inpprice = divmmparams.append("input")
+                .attr("placeholder", "Price")
+                .attr("class", "inpprice");
+
+            divmmparams.append("input")
+                .attr("type", "button")
+                .attr("class", "button")
+                .attr("value", "Update")
+                .on('click', function() {
+                    updateMMParams();
+                });
+
+            function updateMMParams() {
+                console.log("updateMMParams");
+                var mmparams = {};
+
+                mmparams.quantity = inpquantity.node().value;
+                mmparams.price = inpprice.node().value;
+
+                //send it
+                sockjs.send("{\"mmparams\":" + JSON.stringify(mmparams) + "}");
+            }
+        }
+
+        function mmparamsReplyReceived(mmparamsreply) {
+            console.log("mmparamsReplyReceived");
+            console.log(mmparamsreply);
+        }
+
+     </script>
+</body>
+</html>
