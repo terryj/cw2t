@@ -1374,6 +1374,8 @@ function testRequestReply(reqid) {
 }
 
 function resendRequestReceived(resendrequest, self) {
+	console.log("resendRequestReceived");
+	
 	// check we have a valid begin & end sequence number
 	// end number may be '0' to indicate infinity
 	if (resendrequest.beginseqno < 1 || (resendrequest.endseqno < resendrequest.beginseqno && resendrequest.endseqno != 0)) {

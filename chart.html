@@ -3,7 +3,7 @@
 <head>
     <meta http-equiv="content-type" content="text/html;charset=utf-8" />
     <title>TG-Online v0.9</title>
-    <script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
+    <script src="https://d1fxtkz8shb9d2.cloudfront.net/sockjs-0.3.js"></script>
     <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
     <style>
     .axis path,
@@ -1086,7 +1086,20 @@
         }
 
         function orderReceived(order) {
+            console.log("orderReceived");
             console.log(order);
+
+            if (order.status == "8") {
+                var msg = "Order rejected";
+
+                if ("text" in order) {
+                    msg += ": " + order.text;
+                }
+
+                d3.select("#divquote")
+                    .append("p")
+                    .html(msg);
+            }
         }
 
         function tradeReceived(trade) {
@@ -1268,6 +1281,11 @@
             // create a new quote & add to array
             if (!bidupdated || !offerupdated) {
                 var newquote = {};
+                newquote.symbol = quote.symbol;
+                newquote.settlcurrency = quote.settlcurrency;
+                newquote.nosettdays = quote.nosettdays;
+                newquote.futsettdate = quote.futsettdate;
+                newquote.quoteid = quote.quoteid;
                 newquote.bidpx = "";
                 newquote.bidsize = "";
                 newquote.bidquantity = "";
@@ -1280,7 +1298,6 @@
                     newquote.bidsize = quote.bidsize;
                     newquote.bidquantity = quote.bidquantity;
                     newquote.bidnoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
-                    startQuoteInterval("bid", quotes.length);
                 }
 
                 if (!offerupdated) {
@@ -1288,11 +1305,18 @@
                     newquote.offersize = quote.offersize;
                     newquote.offerquantity = quote.offerquantity;
                     newquote.offernoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
-                    startQuoteInterval("offer", quotes.length);
                 }
 
                 // add to array
                 quotes.push(newquote);
+
+                // start interval
+                if (!bidupdated) {
+                    startQuoteInterval("bid", quotes.length - 1);
+                }
+                if (!offerupdated) {
+                    startQuoteInterval("offer", quotes.length - 1);
+                }
             }
         }
 
@@ -1320,7 +1344,6 @@
             var cells = rows.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(col) {
-                        console.log("toupdate");
                         var ret = "";
                         if (col == "bid") {
                             if (row.bidpx != "") {
@@ -1336,12 +1359,27 @@
                     });
                  })
                 .each(function(d, i, j) { // i=column, j=row
+                    //console.log("update");
+                    //console.log(d);
+                    //console.log(this.value);
+                    //console.log(d3.select(this).size());
+                    //console.log(d3.select(this).node());
+                    d3.select(this).select("input")
+                        .attr("value", function(d) { return d.value; });
+                    //var t = d3.select(this).property("value");
+                    //console.log(t);
+                    //d3.select(this)//.property("value", "test")
+                        //.attr("value", "test");//function(d) { return d.value; });
+                });
+
+                //.text(function(d) { return d.value; });
+                /*.each(function(d, i, j) { // i=column, j=row
                     console.log("update");
                     console.log(d);
                     console.log(i);
                     console.log(j);
                     d3.select(this)
-                        .text(function(d) { console.log("changed");return d.value; });
+                        .text(function(d) { console.log("changed");return d.value; });*/
 
                     /*if (d.col == "bidquantity") {
                         d3.select(this)
@@ -1358,19 +1396,51 @@
                         d3.select(this)
                             .append("input")
                             .attr("type", function(d) { return "button"; });
-                    }*/
-                });
+                    }
+                });*/
 
             // create quote buttons
             cells.enter()
                 .append("td")
-                .each(function(d, i, j) { // i=column, j=row
+                .append("input")
+                    .attr("type", "button")
+                    .attr("value", function(d) { return d.value; })
+                    .on("click", function(d, i, j) { // i=col, j=row
+                        //var order = {};
+                        console.log("clicked");
+                        console.log(d);
+                        console.log(i);
+                        console.log(j);
+                        if (d.col == "bid") {
+                            sendOrder(quotes[j].symbol, '2', quotes[j].bidquantity, quotes[j].bidpx, 'D', "", quotes[j].settlcurrency, quotes[j].nosettdays, quotes[j].futsettdate, quotes[j].quoteid, "4", "", "");
+
+                            // stop timer
+                            clearInterval(quotes[j].bidinterval);
+                        } else {
+                            sendOrder(quotes[j].symbol, '1', quotes[j].offerquantity, quotes[j].offerpx, 'D', "", quotes[j].settlcurrency, quotes[j].nosettdays, quotes[j].futsettdate, quotes[j].quoteid, "4", "", "");
+
+                            // stop timer
+                            clearInterval(quotes[j].offerinterval);
+                        }
+
+                        d3.select(this)
+                            .on('click', null);  //this should remove the event listener
+
+                        // disable button
+                        d3.select(this)
+                            .style("cursor", "default")
+                            .disabled = true;
+                    });
+
+            //cells.text(function(d) { return d.value; });
+
+            /*cells.each(function(d, i, j) { // i=column, j=row
                     console.log("new");
                     console.log(d);
                     console.log(i);
                     console.log(j);
                     d3.select(this)
-                        .text(function(d) { return d.value; });
+                        .value(function(d) { console.log("creating");return d.value; });*/
 
                     /*if (d.col == "bidquantity") {
                         d3.select(this)
@@ -1388,7 +1458,7 @@
                             .append("input")
                             .attr("type", function(d) { return "button"; });
                     }*/
-                });
+                //});
         }
 
         function createQuoteTable() {
@@ -1420,7 +1490,6 @@
 
         // function to count down seconds remaining per quote
         function startQuoteInterval(bidoffer, index) {
-            console.log("startQuoteTimer:"+bidoffer+":"+index);
             var quoteinterval = setInterval(function() {
                 countdownQuotes(bidoffer, index);
                 updateQuoteTable();
@@ -1439,10 +1508,8 @@
             console.log("quoterequestReceived");
             console.log(quoterequest);
 
-            var cols = ["quantity","",""];
-
             // add quote request to global array
-            quoterequests.push(quote);
+            quoterequests.push(quoterequest);
 
             // update display
             updateQuoterequestTable();
@@ -1452,10 +1519,12 @@
             console.log("updateQuoterequestTable");
             //input type="number" min="0" max="360" step="5" value="0" id="nValue"
 
+            var cols = ["quantity","timestamp","buyquote","sellquote"];
+
             // create a quoterequest table if one does not exist
             var tblquoterequest = d3.select("#tblquoterequest");
             if (tblquoterequest.empty()) {
-                createQuoterequestTable(quoterequest, cols);
+                createQuoterequestTable();
             }
 
             // create a row for each quote
@@ -1468,18 +1537,32 @@
 
             // update
             var cells = rows.selectAll("td")
-                .data()
-                /*.data(function(row) {
+                .data(function(row) {
                     return cols.map(function(column) {
-                        return {column: column, value: row[column]};
+                        var ret;
+                        if (column == "quantity") {
+                            ret = row[column];
+                        } else if (column == "timestamp") {
+                            ret == row[column];
+                        } else {
+                            ret == "";
+                        }
+                        return {column: column, value: ret};
                     });
-                 })*/
-                .enter()
-                .append("td")
-                    .text(function(d, i) { return d; });
+                 });
+
+            cells.enter()
+                .each(function(d, i) {
+                    console.log(d);
+                    console.log(i);
+                });
+                /*.append("td")
+                    .text(function(d, i) { return d.value; });*/
+
+            cells.exit().remove();
         }
 
-        function createQuoterequestTable(quoterequest, cols) {
+        function createQuoterequestTable() {
             console.log("createQuoterequestTable");
             var hdr = ["Quote Requests"];
 

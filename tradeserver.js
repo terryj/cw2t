@@ -323,6 +323,7 @@ function newOrder(order) {
       // script will publish the order back to the operator type, with the error
       return;
     }
+    console.log(ret);
 
     // update order details
     order.orderid = ret[1];
@@ -1215,19 +1216,10 @@ function registerScripts() {
   // get proquote quote id & quoting rsp
   //
   getproquotequote = '\
-    local getproquotequote = function(quoteid, side) \
+    local getproquotequote = function(quoteid) \
       local quotekey = "quote:" .. quoteid \
-      local pqquoteid = "" \
-      local qbroker = "" \
-      if quoteid ~= "" then \
-        if side == 1 then \
-          pqquoteid = redis.call("hget", quotekey, "offerquoteid") \
-          qbroker = redis.call("hget", quotekey, "offerqbroker") \
-        else \
-          pqquoteid = redis.call("hget", quotekey, "bidquoteid") \
-          qbroker = redis.call("hget", quotekey, "bidqbroker") \
-        end \
-      end \
+      local pqquoteid = redis.call("hget", quotekey, "externalquoteid") \
+      local qbroker = redis.call("hget", quotekey, "qbroker") \
       return {pqquoteid, qbroker} \
     end \
   ';
@@ -1274,9 +1266,9 @@ function registerScripts() {
 
   publishorder = '\
   local publishorder = function(orderid, channel) \
-    local fields = {"clientid","symbol","side","quantity","price","ordertype","remquantity","status","markettype","futsettdate","partfill","quoteid","currency","currencyratetoorg","currencyindtoorg","timestamp","margin","timeinforce","expiredate","expiretime","settlcurrency","settlcurrfxrate","settlcurrfxratecalc","orderid","externalorderid","execid","nosettdays","operatortype","operatorid","hedgeorderid","orderdivnum"} \
+    local fields = {"clientid","symbol","side","quantity","price","ordertype","remquantity","status","markettype","futsettdate","partfill","quoteid","currency","currencyratetoorg","currencyindtoorg","timestamp","margin","timeinforce","expiredate","expiretime","settlcurrency","settlcurrfxrate","settlcurrfxratecalc","orderid","externalorderid","execid","nosettdays","operatortype","operatorid","hedgeorderid","orderdivnum","text"} \
     local vals = redis.call("hmget", "order:" .. orderid, unpack(fields)) \
-    local order = {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],price=vals[5],ordertype=vals[6],remquantity=vals[7],status=vals[8],markettype=vals[9],futsettdate=vals[10],partfill=vals[11],quoteid=vals[12],currency=vals[13],currencyratetoorg=vals[14],currencyindtoorg=vals[15],timestamp=vals[16],margin=vals[17],timeinforce=vals[18],expiredate=vals[19],expiretime=vals[20],settlcurrency=vals[21],settlcurrfxrate=vals[22],settlcurrfxratecalc=vals[23],orderid=vals[24],externalorderid=vals[25],execid=vals[26],nosettdays=vals[27],operatortype=vals[28],operatorid=vals[29],hedgeorderid=vals[30],orderdivnum=vals[31]} \
+    local order = {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],price=vals[5],ordertype=vals[6],remquantity=vals[7],status=vals[8],markettype=vals[9],futsettdate=vals[10],partfill=vals[11],quoteid=vals[12],currency=vals[13],currencyratetoorg=vals[14],currencyindtoorg=vals[15],timestamp=vals[16],margin=vals[17],timeinforce=vals[18],expiredate=vals[19],expiretime=vals[20],settlcurrency=vals[21],settlcurrfxrate=vals[22],settlcurrfxratecalc=vals[23],orderid=vals[24],externalorderid=vals[25],execid=vals[26],nosettdays=vals[27],operatortype=vals[28],operatorid=vals[29],hedgeorderid=vals[30],orderdivnum=vals[31],text=vals[32]} \
     redis.call("publish", channel, "{" .. cjson.encode("order") .. ":" .. cjson.encode(order) .. "}") \
   end \
   ';
@@ -1346,6 +1338,10 @@ function registerScripts() {
   end \
   ';*/
 
+  //
+  // order rejected externally
+  // params: order id, reason, text
+  //
   scriptrejectorder = rejectorder + adjustmarginreserve + publishorder + '\
   rejectorder(KEYS[1], KEYS[2], KEYS[3]) \
   local fields = {"clientid", "symbol", "side", "price", "margin", "settlcurrency", "remquantity", "futsettdate", "nosettdays", "operatortype"} \
@@ -1417,8 +1413,8 @@ function registerScripts() {
         proquotesymbol = getproquotesymbol(symbol) \
         if proquotesymbol[4] then \
           hedgeorderid = neworder(hedgebookid, proquotesymbol[4], KEYS[3], KEYS[4], KEYS[5], "X", KEYS[4], 0, markettype, KEYS[8], KEYS[9], "", KEYS[11], KEYS[12], KEYS[13], KEYS[14], 0, KEYS[15], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], "", "", KEYS[21], KEYS[22], KEYS[23], orderid, "") \
-          --[[ get proquote values ]] \
-          proquotequote = getproquotequote(KEYS[10], side) \
+          --[[ get quote broker ]] \
+          proquotequote = getproquotequote(KEYS[10]) \
           --[[ assume uk equity as underlying for default settl days ]] \
           defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. KEYS[18] .. ":" .. side, "defaultnosettdays") \
         end \
@@ -1446,7 +1442,7 @@ function registerScripts() {
         hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
       else \
         proquotesymbol = getproquotesymbol(KEYS[2]) \
-        proquotequote = getproquotequote(KEYS[10], side) \
+        proquotequote = getproquotequote(KEYS[10]) \
         defaultnosettdays = redis.call("hget", "cost:" .. instrumenttype .. ":" .. KEYS[18] .. ":" .. side, "defaultnosettdays") \
       end \
     end \

@@ -1420,7 +1420,7 @@ function forwardQuote(quote, msg) {
 
 // forward order to relevant client
 function forwardOrder(order, msg) {
-  console.log("forwardOrder");
+  console.log("forwarding order to client");
   console.log(order);
 
   if (order.clientid in connections) {
