@@ -215,6 +215,8 @@ function listen() {
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 6) == "order\"") {
         db.publish(tradeserverchannel, msg);
+      } else if (msg.substr(2, 6) == "quote\"") {
+        db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 13) == "quoterequest\"") {
         db.publish(tradeserverchannel, msg);
       } else if (msg.substr(2, 4) == "chat") {
@@ -229,8 +231,6 @@ function listen() {
             orderbookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
           } else if ("positionrequest" in obj) {
             positionRequest(obj.positionrequest, clientid, conn);
-          } else if ("signin" in obj) {
-            signIn(obj.signin);
           } else if ("cashrequest" in obj) {
             cashRequest(obj.cashrequest, clientid, conn);
           } else if ("accountrequest" in obj) {
@@ -251,6 +251,8 @@ function listen() {
             passwordRequest(clientid, obj.pwdrequest, conn);
           } else if ("register" in obj) {
             registerClient(obj.register, conn);
+          } else if ("signin" in obj) {
+            signIn(obj.signin);
           } else if ("ping" in obj) {
             conn.write("pong");
           } else {
@@ -1178,10 +1180,12 @@ function orderbookRequest(clientid, symbol, conn) {
 
   // get hour & minute for comparison with timezone to determine in/out of hours
   var today = new Date();
+
   var hour = today.getHours();
   var minute = today.getMinutes();
+  var day = today.getDay();
 
-  db.eval(common.scriptsubscribeinstrument, 6, symbol, clientid, serverid, feedtype, hour, minute, function(err, ret) {
+  db.eval(common.scriptsubscribeinstrument, 7, symbol, clientid, serverid, feedtype, hour, minute, day, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 

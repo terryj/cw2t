@@ -350,7 +350,7 @@ function getFixDate(date) {
   var quote = {};
 
   // send a quote with bid & offer size set to 0 to imply rejection
-  quote.quotereqid = quoterequest.quotereqid;
+  quote.quoterequestid = quoterequest.quoterequestid;
   quote.symbol = quoterequest.symbol;
   quote.bidsize = 0;
   quote.offersize = 0;
@@ -1150,21 +1150,21 @@ function passwordRequest(clientid, pwdrequest, conn) {
   });
 }
 
-function sendQuoteack(quotereqid) {
+function sendQuoteack(quoterequestid) {
   var quoteack = {};
 
-  db.hgetall("quoterequest:" + quotereqid, function(err, quoterequest) {
+  db.hgetall("quoterequest:" + quoterequestid, function(err, quoterequest) {
     if (err) {
       console.log(err);
       return;
     }
 
     if (quoterequest == null) {
-      console.log("can't find quote request id " + quotereqid);
+      console.log("can't find quote request id " + quoterequestid);
       return;
     }
 
-    quoteack.quotereqid = quoterequest.quotereqid;
+    quoteack.quoterequestid = quoterequest.quoterequestid;
     quoteack.clientid = quoterequest.clientid;
     quoteack.symbol = quoterequest.symbol;
     quoteack.quoterejectreasondesc = common.getPTPQuoteRejectReason(quoterequest.quoterejectreason);
@@ -1206,7 +1206,7 @@ function sendQuote(quoteid) {
     quote.noseconds = common.getSeconds(quote.transacttime, quote.validuntiltime);
 
     // send quote to the client who placed the quote request
-    db.hget("quoterequest:" + quote.quotereqid, "operatorid", function(err, operatorid) {
+    db.hget("quoterequest:" + quote.quoterequestid, "operatorid", function(err, operatorid) {
       if (err) {
         console.log(err);
         return;

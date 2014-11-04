@@ -118,12 +118,14 @@ function pubsub() {
 
       if ("quoterequest" in obj) {
         quoteRequest(obj.quoterequest);
+      } else if ("order" in obj) {
+        newOrder(obj.order);
+      } else if ("quote" in obj) {
+        newQuote(obj.quote);
       } else if ("ordercancelrequest" in obj) {
         orderCancelRequest(obj.ordercancelrequest);
       } else if ("orderfillrequest" in obj) {
         orderFillRequest(obj.orderfillrequest);
-      } else if ("order" in obj) {
-        newOrder(obj.order);
       }
     } catch(e) {
       console.log(e);
@@ -177,16 +179,18 @@ function quoteRequest(quoterequest) {
   // get hour & minute for comparison with timezone to determine in/out of hours
   var hour = today.getHours();
   var minute = today.getMinutes();
+  var day = today.getDay();
 
   //todo - remove
   //hour = hour + 4;
+  day = 0;
   //
 
   // get settlement date from T+n no. of days
   quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, quoterequest.nosettdays, holidays));
 
   // store the quote request & get an id
-  db.eval(scriptquoterequest, 13, quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, function(err, ret) {
+  db.eval(scriptquoterequest, 14, quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, day, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
@@ -234,6 +238,12 @@ function quoteRequest(quoterequest) {
       //db.publish("quoterequest", "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
     }
   });
+}
+
+function quoteReceived(quote) {
+  console.log("quoteReceived");
+  console.log(quote);
+
 }
 
 /*
@@ -295,6 +305,7 @@ function newOrder(order) {
   // get hour & minute for comparison with timezone to determine in/out of hours
   var hour = today.getHours();
   var minute = today.getMinutes();
+  var day = today.getDay();
 
   // always put a price in the order
   if (!("price" in order)) {
@@ -313,7 +324,7 @@ function newOrder(order) {
 
   // store the order, get an id & credit check it
   // note: param #7 not used
-  db.eval(scriptneworder, 25, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, 0, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, hour, minute, function(err, ret) {
+  db.eval(scriptneworder, 26, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, 0, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, hour, minute, day, function(err, ret) {
     if (err) throw err;
 
     // credit check failed
@@ -555,6 +566,8 @@ function loadHolidays() {
 
 // quote received
 function newQuote(quote) {
+  console.log("newquote");
+
   // a two-way quote arrives in two bits, so fill in 'missing' price/size/quote id (note: separate external quote id for bid & offer)
   if (!('bidpx' in quote)) {
     quote.bidpx = '';
@@ -1247,10 +1260,10 @@ function registerScripts() {
   ';
 
   publishquoteack = '\
-  local publishquoteack = function(quoterequestid) \
+  local publishquoteack = function(quotereqid) \
     local fields = {"clientid", "symbol", "operatortype", "quotestatus", "quoterejectreason", "text"} \
-    local vals = redis.call("hmget", "quoterequest:" .. quoterequestid, unpack(fields)) \
-    local quoteack = {quotereqid=quoterequestid, clientid=vals[1], symbol=vals[2], quotestatus=vals[4], quoterejectreason=vals[5], text=vals[6]} \
+    local vals = redis.call("hmget", "quoterequest:" .. quotereqid, unpack(fields)) \
+    local quoteack = {quotereqid=quotereqid, clientid=vals[1], symbol=vals[2], quotestatus=vals[4], quoterejectreason=vals[5], text=vals[6]} \
     redis.call("publish", vals[3], "{" .. cjson.encode("quoteack") .. ":" .. cjson.encode(quoteack) .. "}") \
     end \
   ';
@@ -1371,7 +1384,7 @@ function registerScripts() {
   end \
   local instrumenttype = vals[1] \
   local hedge = vals[2] \
-  local markettype = getmarkettype(symbol, KEYS[24], KEYS[25]) \
+  local markettype = getmarkettype(symbol, KEYS[24], KEYS[25], KEYS[26]) \
   --[[ do the credit check ]] \
   local cc = creditcheck(orderid, KEYS[1], symbol, side, KEYS[4], KEYS[5], KEYS[18], KEYS[8], instrumenttype, KEYS[21]) \
   --[[ cc[1] = ok/fail, cc[2] = margin, cc[3] = costs array, cc[4] = finance ]] \
@@ -1719,7 +1732,7 @@ function registerScripts() {
   redis.call("sadd", KEYS[1] .. ":quoterequests", quotereqid) \
   --[[ get required instrument values for proquote ]] \
   local proquotesymbol = getproquotesymbol(KEYS[2]) \
-  local markettype = getmarkettype(KEYS[2], KEYS[12], KEYS[13]) \
+  local markettype = getmarkettype(KEYS[2], KEYS[12], KEYS[13], KEYS[14]) \
   --[[ assuming equity buy to get default settlement days ]] \
   local defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. KEYS[6] .. ":" .. "1", "defaultnosettdays") \
   return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], defaultnosettdays, proquotesymbol[5], markettype} \

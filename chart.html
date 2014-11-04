@@ -179,6 +179,7 @@
         var pricedata = [];
         var quotes = [];
         var quoterequests = [];
+        var qbroker = "TGRANT";
 
         var datain = function(msg) {
             //console.log(msg);
@@ -1066,10 +1067,10 @@
 
             order.clientid = clientid;
             order.side = side;
-            order.quantity = quantity;
             order.symbol = symbol;
-            order.currency = "GBP"; // todo - use quote currency? instruments[symbol].currency;
+            order.quantity = quantity;
             order.price = price;
+            order.currency = "GBP"; // todo - use quote currency? instruments[symbol].currency;
             order.ordertype = ordertype;
             order.delivertocompid = delivertocompid;
             order.settlcurrency = settlcurrency;
@@ -1083,6 +1084,29 @@
             order.operatorid = clientid;
 
             sockjs.send("{\"order\":" + JSON.stringify(order) + "}");
+        }
+          //db.eval(scriptquote, 15, quote.quotereqid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, function(err, ret) {
+
+        function sendQuote(symbol, bidpx, offerpx, bidsize, offersize, settlcurrency, settdate, noseconds, quotereqid, delivertocompid) {
+            var quote = {};
+
+            quote.clientid = clientid;
+            quote.symbol = symbol;
+            quote.bidpx = bidpx;
+            quote.offerpx = offerpx;
+            quote.bidsize = bidsize;
+            quote.offersize = offersize;
+            quote.currency = "GBP"; // todo - use quote currency? instruments[symbol].currency;
+            quote.settlcurrency = settlcurrency;
+            quote.futsettdate = settdate;
+            quote.noseconds = noseconds;
+            quote.operatortype = operatortype;
+            quote.operatorid = clientid;
+            quote.qbroker = qbroker;
+            quote.quotereqid = quotereqid;
+            quote.delivertocompid = delivertocompid;
+
+            sockjs.send("{\"quote\":" + JSON.stringify(quote) + "}");
         }
 
         function orderReceived(order) {
@@ -1508,6 +1532,10 @@
             console.log("quoterequestReceived");
             console.log(quoterequest);
 
+            // todo: get from price
+            quoterequest.bidpx = 1.23;
+            quoterequest.offerpx = 1.25;
+
             // add quote request to global array
             quoterequests.push(quoterequest);
 
@@ -1519,7 +1547,7 @@
             console.log("updateQuoterequestTable");
             //input type="number" min="0" max="360" step="5" value="0" id="nValue"
 
-            var cols = ["quantity","timestamp","buyquote","sellquote"];
+            var cols = ["timestamp","quantity","bidpx","bidsize","noseconds","","offerpx","offersize","noseconds",""];
 
             // create a quoterequest table if one does not exist
             var tblquoterequest = d3.select("#tblquoterequest");
@@ -1540,33 +1568,75 @@
                 .data(function(row) {
                     return cols.map(function(column) {
                         var ret;
-                        if (column == "quantity") {
-                            ret = row[column];
-                        } else if (column == "timestamp") {
-                            ret == row[column];
+                        if (column == "") {
+                            ret = "";
+                        } else if (column == "bidsize" || column == "offersize") {
+                            ret = row["quantity"];
+                        } else if (column == "noseconds") {
+                            ret = 30;
                         } else {
-                            ret == "";
+                            ret = row[column];
                         }
                         return {column: column, value: ret};
                     });
-                 });
-
-            cells.enter()
-                .each(function(d, i) {
+                })
+                /*.each(function(d, i, j) { // i=column, j=row
+                    console.log("update");
                     console.log(d);
                     console.log(i);
-                });
-                /*.append("td")
-                    .text(function(d, i) { return d.value; });*/
+                    console.log(j);
+                });*/
 
+            // create columns
+            cells.enter()
+                .append("td");
+
+            // add text/buttons
+            cells.each(function(d, i, j) {
+                console.log(d);
+                if (d.column == "timestamp" || d.column == "quantity") {
+                    d3.select(this)
+                        .html(function(d) { return d.value; });
+                } else if (d.column == "bidpx" || d.column == "offerpx") {
+                    d3.select(this)
+                        .append("input")
+                        .attr("type", "number")
+                        .attr("step", "0.01")
+                        .attr("value", function(d) { return d.value; });
+                } else if (d.column == "bidsize" || d.column == "offersize") {
+                    d3.select(this)
+                        .append("input")
+                        .attr("type", "number")
+                        .attr("step", "10")
+                        .attr("value", function(d) { return d.value; });
+                } else if (d.column == "noseconds") {
+                    d3.select(this)
+                        .append("input")
+                        .attr("type", "number")
+                        .attr("value", function(d) { return d.value; });
+                } else {
+                    d3.select(this)
+                        .append("input")
+                        .attr("type", "button")
+                        .on("click", function(d, i, j) {
+                            console.log("cliecked");
+                            console.log(d);
+                            if (i == 3) {
+                                sendQuote(quoterequests[j].symbol, 1.23, "", 100, "", quoterequests[j].settlcurrency, quoterequests[j].futsettdate, 30, quoterequests[j].quotereqid, "");
+                            } else {
+                                sendQuote(quoterequests[j].symbol, "", 1.25, "", 100, quoterequests[j].settlcurrency, quoterequests[j].futsettdate, 30, quoterequests[j].quotereqid, "");
+                            }
+                        });
+                }
+            });
+
+            // exit
             cells.exit().remove();
         }
 
         function createQuoterequestTable() {
             console.log("createQuoterequestTable");
-            var hdr = ["Quote Requests"];
-
-            var buttons = ["Quote price To buy", "Quote price to sell"];
+            var hdr = ["Timestamp", "Quantity", "Buy Price", "Buy Size", "Valid For (Secs)", "", "Sell Price", "Sell Size", "Valid For (Secs)", ""];
 
             var divquoterequest = d3.select("body")
                 .append("div")
@@ -1586,7 +1656,6 @@
                 .data(hdr)
                 .enter()
                 .append("th")
-                    .attr("colspan", 2)
                     .attr("class", "tblquoterequesthdr")
                     .text(function(d) { return d; });
 
