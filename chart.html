@@ -1085,12 +1085,10 @@
 
             sockjs.send("{\"order\":" + JSON.stringify(order) + "}");
         }
-          //db.eval(scriptquote, 15, quote.quotereqid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, function(err, ret) {
 
-        function sendQuote(symbol, bidpx, offerpx, bidsize, offersize, settlcurrency, settdate, noseconds, quotereqid, delivertocompid) {
+        function sendQuote(symbol, bidpx, offerpx, bidsize, offersize, settlcurrency, settdate, noseconds, quotereqid) {
             var quote = {};
 
-            quote.clientid = clientid;
             quote.symbol = symbol;
             quote.bidpx = bidpx;
             quote.offerpx = offerpx;
@@ -1103,8 +1101,8 @@
             quote.operatortype = operatortype;
             quote.operatorid = clientid;
             quote.qbroker = qbroker;
+            quote.qclientid = clientid;
             quote.quotereqid = quotereqid;
-            quote.delivertocompid = delivertocompid;
 
             sockjs.send("{\"quote\":" + JSON.stringify(quote) + "}");
         }
@@ -1261,11 +1259,16 @@
             console.log("quoteReceived");
             console.log(quote);
 
-            // update quote array
-            updateQuoteLadder(quote);
+            // see if it is my quote
+            if (quote.qclientid == clientid) {
+                updateQuoterequestQuote(quote);
+            } else {
+                // update quote array
+                updateQuoteLadder(quote);
 
-            // update display
-            updateQuoteTable();
+                // update display
+                updateQuoteTable();
+            }
         }
 
         //
@@ -1535,6 +1538,9 @@
             // todo: get from price
             quoterequest.bidpx = 1.23;
             quoterequest.offerpx = 1.25;
+            quoterequest.quoted = false;
+            var quoteresponses = [];
+            quoterequest["quoteresponses"] = quoteresponses;
 
             // add quote request to global array
             quoterequests.push(quoterequest);
@@ -1544,6 +1550,133 @@
         }
 
         function updateQuoterequestTable() {
+            console.log("updateQuoterequestTable");
+            //input type="number" min="0" max="360" step="5" value="0" id="nValue"
+
+            var cols = ["timestamp", "quantity", "button", "quoted", "quoteresponses"];
+            var buysell = ["buy", "sell"];
+
+            // create a quoterequest table if one does not exist
+            var tblquoterequest = d3.select("#tblquoterequest");
+            if (tblquoterequest.empty()) {
+                createQuoterequestTable();
+            }
+
+            // create a row for each quote
+            var rows = d3.select("#tblquoterequest").select("tbody").selectAll("tr")
+                .data(quoterequests);
+
+            // enter
+            rows.enter()
+                .append("tr");
+
+            // update
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(column) {
+                        var ret;
+                        if (column == "") {
+                            ret = "";
+                        } else {
+                            ret = row[column];
+                        }
+                        return {column: column, value: ret};
+                    });
+                });
+
+            // update
+            cells.each(function(d, i, j) {
+                console.log("update?");
+                if (d.column == "quoted" && d.value == true) {
+                    if (document.getElementById("inpprice" + j) == null) {
+                        var buysellselect = d3.select(this)
+                            .append("select")
+                            .on("change", function() { console.log(this.value); });
+
+                        buysellselect.append("option")
+                            .text("Buy")
+                            .attr('value', "buy");
+
+                        buysellselect.append("option")
+                            .text("Sell")
+                            .attr('value', "sell");
+
+                        d3.select(this)
+                            .append("input")
+                            .attr("id", "inpprice" + j)
+                            .attr("type", "number")
+                            .attr("step", "0.01")
+                            .attr("value", function(d) { return quoterequests[j].bidpx; });
+
+                        d3.select(this)
+                            .append("input")
+                            .attr("type", "number")
+                            .attr("step", "10")
+                            .attr("value", function(d) { return quoterequests[j].quantity; });
+
+                        d3.select(this)
+                            .append("input")
+                            .attr("type", "button")
+                            .attr("value", "Send")
+                            .on("click", function() {
+                                console.log(d);
+                                console.log(i);
+                                console.log(j);
+                                sendQuote(quoterequests[j].symbol, 1.23, "", 100, "", quoterequests[j].settlcurrency, quoterequests[j].futsettdate, 30, quoterequests[j].quotereqid);
+                        });
+                    }
+                } else if (d.column == "quoteresponses") {
+                    console.log("build a table of quoteresponses, ouch!");
+                }
+            });
+
+            // enter - create columns
+            var cellsenter = cells.enter()
+                .append("td");
+
+            // enter - add variable inputs such as text/buttons
+            cellsenter.each(function(d, i, j) {
+                console.log("enter & update?");
+                console.log(d);
+                if (d.column == "timestamp" || d.column == "quantity") {
+                    d3.select(this)
+                        .html(function(d) { return d.value; });
+                } else if (d.column == "button") {
+                    d3.select(this)
+                        .append("input")
+                        .attr("type", "button")
+                        .attr("value", "Place a Quote")
+                        .on("click", function() {
+                            console.log("clicked");
+                            console.log(d);
+                            console.log(i);
+                            console.log(j);
+                            //cols.push("test");
+                            quoterequests[j].quoted = true;
+                            updateQuoterequestTable();
+                        });
+                }
+            });
+
+            // exit
+            cells.exit().remove();
+        }
+
+        // my quote returned
+        function updateQuoterequestQuote(quote) {
+            console.log("updateQuoterequestQuote");
+            console.log(quote);
+
+            for (var i = 0; i < quoterequests.length; i++) {
+                if (quoterequests[i].quotereqid == quote.quotereqid) {
+                    quoterequests[i]["quoteresponses"].push(quote);
+                    updateQuoterequestTable();
+                    break;
+                }
+            }
+        }
+
+        /*function updateQuoterequestTable() {
             console.log("updateQuoterequestTable");
             //input type="number" min="0" max="360" step="5" value="0" id="nValue"
 
@@ -1580,12 +1713,6 @@
                         return {column: column, value: ret};
                     });
                 })
-                /*.each(function(d, i, j) { // i=column, j=row
-                    console.log("update");
-                    console.log(d);
-                    console.log(i);
-                    console.log(j);
-                });*/
 
             // create columns
             cells.enter()
@@ -1632,11 +1759,12 @@
 
             // exit
             cells.exit().remove();
-        }
+        }*/
 
         function createQuoterequestTable() {
             console.log("createQuoterequestTable");
-            var hdr = ["Timestamp", "Quantity", "Buy Price", "Buy Size", "Valid For (Secs)", "", "Sell Price", "Sell Size", "Valid For (Secs)", ""];
+            //var hdr = ["Timestamp", "Quantity", "Buy Price", "Buy Size", "Valid For (Secs)", "", "Sell Price", "Sell Size", "Valid For (Secs)", ""];
+            var hdr = ["Timestamp", "Quantity"];
 
             var divquoterequest = d3.select("body")
                 .append("div")

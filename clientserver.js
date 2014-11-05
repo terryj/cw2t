@@ -1417,8 +1417,17 @@ function forwardQuote(quote, msg) {
   console.log("forwardQuote");
   console.log(quote);
 
+  // forward to requesting client
   if (quote.clientid in connections) {
     connections[quote.clientid].write(msg);
+  }
+
+  // forward to quoting client
+  if ('qclientid' in quote) {
+    if (quote.qclientid in connections) {
+      console.log("sending to " + quote.qclientid);
+      connections[quote.qclientid].write(msg);
+    }
   }
 }
 

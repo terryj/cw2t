@@ -568,21 +568,31 @@ function loadHolidays() {
 function newQuote(quote) {
   console.log("newquote");
 
-  // a two-way quote arrives in two bits, so fill in 'missing' price/size/quote id (note: separate external quote id for bid & offer)
-  if (!('bidpx' in quote)) {
-    quote.bidpx = '';
-    quote.bidsize = '';
-    quote.bidquotedepth = "";
+  if (!('bidquotedepth' in quote)) {
+    quote.bidquotedepth = 1;
+    quote.offerquotedepth = 1;
   }
-  if (!('offerpx' in quote)) {
-    quote.offerpx = '';
-    quote.offersize = '';
-    quote.offerquotedepth = "";
+
+  if (!('externalquoteid' in quote)) {
+    quote.externalquoteid = "";
+  }
+
+  if (!('transacttime' in quote)) {
+    var today = new Date();
+    quote.transacttime = common.getUTCTimeStamp(today);
+
+    if (!('validuntiltime' in quote)) {
+      today.setSeconds(today.getSeconds() + quote.noseconds);
+    }
+  }
+
+  if (!('qclientid' in quote)) {
+    quote.qclientid = "";
   }
 
   // quote script
   // note: not passing securityid & idsource as proquote symbol should be enough
-  db.eval(scriptquote, 15, quote.quotereqid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, function(err, ret) {
+  db.eval(scriptquote, 16, quote.quotereqid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.qclientid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -754,6 +764,16 @@ nbt.on("quote", function(quote, header) {
         return;
       }
     }
+  }
+
+  // a two-way quote arrives in two bits, so fill in 'missing' price/size/quote id (note: separate external quote id for bid & offer)
+  if (!('bidpx' in quote)) {
+    quote.bidpx = '';
+    quote.bidsize = '';
+  }
+  if (!('offerpx' in quote)) {
+    quote.offerpx = '';
+    quote.offersize = '';
   }
 
   newQuote(quote);
@@ -1270,9 +1290,9 @@ function registerScripts() {
 
   publishquote = '\
   local publishquote = function(quoteid, channel) \
-    local fields = {"quotereqid","clientid","quoteid","symbol","bidpx","offerpx","bidquantity","offerquantity","validuntiltime","transacttime","settlcurrency","nosettdays","futsettdate","bidsize","offersize"} \
+    local fields = {"quotereqid","clientid","quoteid","symbol","bidpx","offerpx","bidquantity","offerquantity","validuntiltime","transacttime","settlcurrency","nosettdays","futsettdate","bidsize","offersize","qclientid"} \
     local vals = redis.call("hmget", "quote:" .. quoteid, unpack(fields)) \
-    local quote = {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],symbol=vals[4],bidpx=vals[5],offerpx=vals[6],bidquantity=vals[7],offerquantity=vals[8],validuntiltime=vals[9],transacttime=vals[10],settlcurrency=vals[11],nosettdays=vals[12],futsettdate=vals[13],bidsize=vals[14],offersize=vals[15]} \
+    local quote = {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],symbol=vals[4],bidpx=vals[5],offerpx=vals[6],bidquantity=vals[7],offerquantity=vals[8],validuntiltime=vals[9],transacttime=vals[10],settlcurrency=vals[11],nosettdays=vals[12],futsettdate=vals[13],bidsize=vals[14],offersize=vals[15],qclientid=vals[16]} \
     redis.call("publish", channel, "{" .. cjson.encode("quote") .. ":" .. cjson.encode(quote) .. "}") \
   end \
   ';
@@ -1784,7 +1804,7 @@ function registerScripts() {
   --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
   quoteid = redis.call("incr", "quoteid") \
   --[[ store the quote ]] \
-  redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "clientid", vals[1], "quoteid", quoteid, "symbol", symbol, "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", KEYS[3], "offerpx", KEYS[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", KEYS[5], "offersize", KEYS[6], "validuntiltime", KEYS[7], "transacttime", KEYS[8], "currency", KEYS[9], "settlcurrency", KEYS[10], "qbroker", KEYS[11], "nosettdays", vals[6], "futsettdate", vals[9], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", KEYS[13], "offerquotedepth", KEYS[14], "externalquoteid", KEYS[15]) \
+  redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "clientid", vals[1], "quoteid", quoteid, "symbol", symbol, "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", KEYS[3], "offerpx", KEYS[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", KEYS[5], "offersize", KEYS[6], "validuntiltime", KEYS[7], "transacttime", KEYS[8], "currency", KEYS[9], "settlcurrency", KEYS[10], "qbroker", KEYS[11], "nosettdays", vals[6], "futsettdate", vals[9], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", KEYS[13], "offerquotedepth", KEYS[14], "externalquoteid", KEYS[15], "qclientid", KEYS[16]) \
   --[[ keep a list of quotes for the quoterequest ]] \
   redis.call("sadd", "quoterequest:" .. KEYS[1] .. ":quotes", quoteid) \
   --[[ quoterequest status - 0=new, 1=quoted, 2=rejected ]] \
