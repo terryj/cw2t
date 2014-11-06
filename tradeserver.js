@@ -336,6 +336,11 @@ function newOrder(order) {
     }
     console.log(ret);
 
+    // see if the order was client quoted, if so, we are done
+    if (ret[13] != "") {
+      return;
+    }
+
     // update order details
     order.orderid = ret[1];
     order.instrumenttype = ret[7];
@@ -582,7 +587,9 @@ function newQuote(quote) {
     quote.transacttime = common.getUTCTimeStamp(today);
 
     if (!('validuntiltime' in quote)) {
-      today.setSeconds(today.getSeconds() + quote.noseconds);
+      var validuntiltime = today;
+      validuntiltime.setSeconds(today.getSeconds() + quote.noseconds);
+      quote.validuntiltime = common.getUTCTimeStamp(validuntiltime);
     }
   }
 
@@ -1354,6 +1361,18 @@ function registerScripts() {
   end \
   ';
 
+  reverseside = '\
+  local reverseside = function(side) \
+    local rside \
+    if side == 1 then \
+      rside = 2 \
+    else \
+      rside = 1 \
+    end \
+    return rside \
+  end \
+  ';
+
   // compare hour & minute with timezone open/close times to determine in/out of hours - 0=in hours, 1=ooh
   /*getmarkettype = '\
   local getmarkettype = function(timezone, hour, minute) \
@@ -1388,7 +1407,7 @@ function registerScripts() {
   ';
 
   // note: param #7, markettype, not used - getmarkettype() used instead
-  scriptneworder = neworder + creditcheck + newtrade + getproquotesymbol + getproquotequote + publishorder + getmarkettype + '\
+  scriptneworder = neworder + creditcheck + newtrade + getproquotesymbol + getproquotequote + publishorder + getmarkettype + reverseside + '\
   local orderid = neworder(KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[4], "0", KEYS[7], KEYS[8], KEYS[9], KEYS[10], KEYS[11], KEYS[12], KEYS[13], KEYS[14], 0, KEYS[15], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], "", "", KEYS[21], KEYS[22], KEYS[23], "") \
   local symbol = KEYS[2] \
   local side = tonumber(KEYS[3]) \
@@ -1420,21 +1439,31 @@ function registerScripts() {
   local hedgeorderid = "" \
   local hedgetradeid = "" \
   local defaultnosettdays = 0 \
+  local qclientid = "" \
+  if KEYS[6] == "D" then \
+  --[[ see if order was quoted by a client ]] \
+    qclientid = redis.call("hget", "quote:" .. KEYS[10], "qclientid") \
+    if qclientid and qclientid ~= "" then \
+      local hedgecosts = {0,0,0,0} \
+      local rside = reverseside(side) \
+      --[[ create trades for both clients ]] \
+      tradeid = newtrade(KEYS[1], orderid, symbol, side, KEYS[4], KEYS[5], KEYS[11], 1, 1, cc[3], qclientid, markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], cc[2], KEYS[22], KEYS[23], cc[4]) \
+      hedgetradeid = newtrade(qclientid, orderid, symbol, rside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
+      --[[ adjust order as filled ]] \
+      redis.call("hmset", "order:" .. orderid, "remquantity", 0, "status", 2) \
+      return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttype, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays, markettype, qclientid} \
+    end \
+  end \
   if instrumenttype == "CFD" or instrumenttype == "SPB" or instrumenttype == "CCFD" then \
     --[[ ignore limit orders for derivatives as they will be handled manually, at least for the time being ]] \
     if KEYS[6] ~= "2" then \
       --[[ create trades for client & hedge book for off-exchange products ]] \
       hedgebookid = redis.call("get", "hedgebook:" .. instrumenttype .. ":" .. KEYS[18]) \
       if not hedgebookid then hedgebookid = 999999 end \
-      local reverseside \
-      if side == 1 then \
-        reverseside = 2 \
-      else \
-        reverseside = 1 \
-      end \
+      local rside = reverseside(side) \
       local hedgecosts = {0,0,0,0} \
       tradeid = newtrade(KEYS[1], orderid, symbol, side, KEYS[4], KEYS[5], KEYS[11], 1, 1, cc[3], hedgebookid, markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], cc[2], KEYS[22], KEYS[23], cc[4]) \
-      hedgetradeid = newtrade(hedgebookid, orderid, symbol, reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
+      hedgetradeid = newtrade(hedgebookid, orderid, symbol, rside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
       --[[ adjust order as filled ]] \
       redis.call("hmset", "order:" .. orderid, "remquantity", 0, "status", 2) \
       --[[ todo: may need to adjust margin here ]] \
@@ -1464,15 +1493,10 @@ function registerScripts() {
         --[[ we are taking on the trade, so create trades for client & hedge book ]] \
         hedgebookid = redis.call("get", "hedgebook:" .. instrumenttype .. ":" .. KEYS[18]) \
         if not hedgebookid then hedgebookid = 999999 end \
-        local reverseside \
-        if side == 1 then \
-          reverseside = 2 \
-        else \
-          reverseside = 1 \
-        end \
+        local rside = reverseside(side) \
         local hedgecosts = {0,0,0,0} \
         tradeid = newtrade(KEYS[1], orderid, KEYS[2], side, KEYS[4], KEYS[5], KEYS[11], 1, 1, cc[3], hedgebookid, markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], cc[2], KEYS[22], KEYS[23], cc[4]) \
-        hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], reverseside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
+        hedgetradeid = newtrade(hedgebookid, orderid, KEYS[2], rside, KEYS[4], KEYS[5], KEYS[11], 1, 1, hedgecosts, KEYS[1], markettype, "", KEYS[8], KEYS[14], "", "", KEYS[18], settlcurramt, KEYS[19], KEYS[20], KEYS[21], 0, KEYS[22], KEYS[23], 0) \
       else \
         proquotesymbol = getproquotesymbol(KEYS[2]) \
         proquotequote = getproquotequote(KEYS[10]) \
@@ -1480,7 +1504,7 @@ function registerScripts() {
       end \
     end \
   end \
-  return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttype, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays, markettype} \
+  return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttype, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays, markettype, qclientid} \
   ';
 
   // todo: add lastmkt
