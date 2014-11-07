@@ -215,6 +215,8 @@
                     loadInstruments(obj.instruments);
                 } else if ("quoterequest" in obj) {
                     quoterequestReceived(obj.quoterequest);
+                } else if ("positions" in obj) {
+                    positionsReceived(obj.positions);
                 } else if ("signinreply" in obj) {
                     replySignin(obj.signinreply);
                 } else if ("status" in obj) {
@@ -1898,6 +1900,7 @@
 
                 // single symbol select
                 selectSymbol();
+                //positionRequest();
             } else {
                 // signin failed
                 d3.select("#signindiv")
@@ -1919,6 +1922,17 @@
             d3.select("body")
                 .append("p")
                 .html("Quote request rejected: " + quoteack.text);
+        }
+
+        function positionRequest() {
+            var positionrequest = {};
+
+            sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
+        }
+
+        function positionsReceived(positions) {
+            console.log("positionsReceived");
+            console.log(positions);
         }
      </script>
 </body>

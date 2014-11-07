@@ -1315,8 +1315,10 @@ function cashHistory(req, clientid, conn) {
 }
 
 function positionRequest(posreq, clientid, conn) {
+  console.log("positionRequest");
   db.eval(common.scriptgetpositions, 1, clientid, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
     conn.write("{\"positions\":" + ret + "}");
   });
 }

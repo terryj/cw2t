@@ -836,8 +836,11 @@ exports.registerCommonScripts = function () {
 
   exports.calcfinance = calcfinance;
 
-  getunrealisedpandl = '\
-  local getunrealisedpandl = function(symbol, quantity, side, avgcost) \
+  //
+  // proquote version
+  //
+  getunrealisedpandlpq = '\
+  local getunrealisedpandlpq = function(symbol, quantity, side, avgcost) \
     local topic = redis.call("hget", "symbol:" .. symbol, "topic") \
     if not topic then return {0, 0} end \
     --[[ get delayed topic - todo: review ]] \
@@ -854,6 +857,31 @@ exports.registerCommonScripts = function () {
     else \
       if offerprice and tonumber(offerprice) ~= 0 then \
         price = tonumber(offerprice) / 100 \
+      end \
+      --[[ take account of short position ]] \
+      qty = -qty \
+    end \
+    if price ~= 0 then \
+      unrealisedpandl = qty * (price - tonumber(avgcost)) \
+    end \
+    return {unrealisedpandl, price} \
+  end \
+  ';
+
+  getunrealisedpandl = '\
+  local getunrealisedpandl = function(symbol, quantity, side, avgcost) \
+    local bidprice = redis.call("hget", "price:" .. symbol, "bid") \
+    local askprice = redis.call("hget", "price:" .. symbol, "ask") \
+    local unrealisedpandl = 0 \
+    local price = 0 \
+    local qty = tonumber(quantity) \
+    if tonumber(side) == 1 then \
+      if bidprice and tonumber(bidprice) ~= 0 then \
+        price = tonumber(bidprice) / 100 \
+      end \
+    else \
+      if askprice and tonumber(askprice) ~= 0 then \
+        price = tonumber(askprice) / 100 \
       end \
       --[[ take account of short position ]] \
       qty = -qty \
@@ -1260,7 +1288,7 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id
+  // params: client id
   //
   exports.scriptgetpositions = getunrealisedpandl + '\
   local tblresults = {} \
@@ -1277,7 +1305,7 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id
+  // params: client id
   //
   exports.scriptgetcash = '\
   local tblresults = {} \
