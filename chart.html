@@ -20,9 +20,14 @@
     .yl {
         color: yellow;
     }
+    header {
+        font: 24px courier;
+        text-align: center;
+        color: steelblue;
+    }
     body {
         /*font: 12px Arial;*/
-        font: 12px sans-serif;
+        /*font: 12px sans-serif;*/
     }
     li:hover { 
         background-color: #ccc;
@@ -87,60 +92,38 @@
     }
     .stockboxtitle {
         font: courier;
-        font-size: 36px;
+        font-size: 27px;
         text-align: center;
         color: steelblue;
     }
-    .stockboxtitletop {
-        font: courier;
-        font-size: 24px;
-        /*text-align: left;*/
-        color: steelblue;
-    }
     .stockboxdiv {
-        position: absolute;
-        left: 50%;
-        top: 33%;
-        width: 300px;
-        height: 100px;
-        margin-top: -50px; /* half of total height */
-        margin-left: -150px; /* half of total width */
-    }
-    .stockboxdivtop {
-        /*width: 600px;
-        height: 100px;*/
-        position: absolute;
-        left: 50%;
+        width: 100%;
+        float: left;
+        /*position: absolute;*/
+        /*width: 50%;
+        height: 50%;*/
+        /*left: 50%;*/
         /*top: 33%;*/
-        width: 300px;
-        height: 100px;
-        /*margin-top: -50px;*/ /* half of total height */
-        margin-left: -150px; /* half of total width */
+        /*width: 300px;
+        height: 100px;*/
+        /*margin-top: -50px;
+        margin-left: -150px;*/
     }
     .stockboxinput {
-        float: left;
-        position: relative;
+        display: block;
+             margin : 0 auto;
+        /*position: relative;*/
         width: 300px;
         height: 27px;
-        line-height: 27px;
+        /*line-height: 27px;*/
         text-indent: 3px;
-        font-family: arial, sans-serif; 
-        font-size: 1em; 
+        font-family: courier, arial, sans-serif; 
+        font-size: 1em;
         /*color: #333;*/
         /*background: #fff;*/
         border: solid 1px #c0c0c0;
         /*border:solid 1px #d9d9d9;*/
         /*border-top:solid 1px #c0c0c0;*/
-    }
-    .stockboxinputtop {
-        /*display: inline;*/
-        width: 300px;
-        height: 27px;
-        line-height: 27px;
-        text-indent: 3px;
-        font-family: arial, sans-serif;
-        font-size: 1em;
-        border: solid 1px #c0c0c0;
     }
     .stockboxinput:focus { 
         border: solid 1px steelblue;
@@ -164,6 +147,47 @@
         background-color: yellow;/*#c0c0c0;*/
         color: grey;
     }
+    .signindiv {
+        position: absolute;
+        left: 50%;
+        top: 33%;
+        width: 400px;
+        height: 200px;
+        margin-top: -50px;
+        margin-left: -150px;
+    }
+    .signininput {
+        font-size: 15px;
+        width: 100%;
+        margin-bottom: 20px;
+    }
+    .signinbutton {
+        background-color: lightgrey;
+        color: grey;
+        font-size: 21px;
+        border-style: none;
+        cursor: pointer;
+        border-radius: 4px;
+        text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);        
+    }
+    .signintitle {
+        font: courier;
+        font-size: 36px;
+        color: steelblue;
+    }
+    .divprice {
+        /*position: absolute;*/
+        left: 50%;
+        width: 300px;
+        height: 100px;
+        margin-left: -150px; /* half of total width */        
+    }
+    .divcontainer {
+        width: 70%;
+        /*background-color: #b0e0e6;*/
+        margin-left: auto;
+        margin-right: auto;
+    }
     </style>
 </head>
 <body lang="en">
@@ -181,6 +205,7 @@
         var quoterequests = [];
         var qbroker = "TGRANT";
         var quoteresponses = [];
+        var email = "";
 
         var datain = function(msg) {
             //console.log(msg);
@@ -188,7 +213,7 @@
                 var obj = JSON.parse(msg);
 
                 if ("price" in obj) {
-                    updatePrice(obj.price);
+                    priceReceived(obj.price);
                 } else if ("prices" in obj) {
                     updateChart(obj.prices);
                 } else if ("orderbooks" in obj) {
@@ -236,7 +261,8 @@
                 console.log("connection open");
 
                 // we are ready
-                start();
+                //displayFormSignin();
+                cheat();
             };
 
             sockjs.onmessage = function(e) {
@@ -254,8 +280,6 @@
         // get a connection
         newconn();
 
-        // things start here
-        function start() {
             // start with FTSE 100
             //requestIndex("UKX");
             //requestPricehistory("LLOY.L");
@@ -264,8 +288,29 @@
             //sendOrder("LLOY.L", '1', 100, 0, 1, "BEST", "GBP", 2, "", "", "4", "", "");
             //requestOrderbook("LLOY.L.CFD");
             //requestRemoveOrderbook("LLOY.L");
-            //selectSymbol();
-            displayFormSignin();
+
+
+        // things start here
+        function start() {
+            // create our container div
+            var divcontainer = d3.select("body").append("div")
+                .attr("id", "divcontainer")
+                .attr("class", "divcontainer");
+
+            // add a header
+            divcontainer.append("header")
+                .attr("id", "stockboxtitle")
+                .text("Cantwaittotrade - " + email);
+
+            // single symbol select
+            selectSymbol();
+        }
+
+        function cheat() {
+            var signin = {};
+            signin.email = "js@js.com";
+            signin.password = "js@js.com";
+            sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");
         }
 
         function loadOrderBooks(orderbookarr) {
@@ -316,7 +361,7 @@
             }
         }
 
-        function updatePrice(price) {
+        function priceReceived(price) {
             var cols = ["bid","ask"];
 
             // create a price table if one does not exist
@@ -357,6 +402,7 @@
 
             var divprice = d3.select("body")
                 .append("div")
+                .attr("class", "divprice")
                 .attr("id", "divprice");
 
             // create a table
@@ -464,6 +510,7 @@
         }
 
         function requestOrderbook(symbol) {
+            console.log("requestOrderbook:"+symbol);
             sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
         }
 
@@ -1148,20 +1195,17 @@
         }
 
         function selectSymbol() {
-            console.log("selectSymbol");
-            var data = [];
+            var symboldata = [];
 
-            var stockboxdiv = d3.select("body")
+            /*var stockboxdiv = d3.select("#divcontainer")
+            //var stockboxdiv = d3.select("body")
                 .append("div")
                 .attr("id", "stockboxdiv")
-                .attr("class", "stockboxdiv");
+                .attr("class", "stockboxdiv");*/
 
-            stockboxdiv.append("p")
-                .attr("id", "stockboxtitle")
-                .attr("class", "stockboxtitle")
-                .html("Cantwaittotrade");
-
-            var stockboxinput = stockboxdiv.append("input")
+            //var stockboxinput = stockboxdiv.append("input")
+            var stockboxinput = d3.select("#divcontainer")
+                .append("input")
                 .attr("id", "stockboxinput")
                 .attr("class", "stockboxinput")
                 .attr("placeholder", "Enter Symbol")
@@ -1170,15 +1214,15 @@
                     displayList();
                 });
 
-            var stocklist = stockboxdiv.append("ul")
+            /*var stocklist = stockboxdiv.append("ul")
                 .attr("id", "stocklist")
-                .attr("class", "stocklist");
+                .attr("class", "stocklist");*/
 
             d3.select("#stockboxinput").node().focus();      
 
             function buildList(searchtext) {
                 // clear array
-                data = [];
+                symboldata = [];
 
                 if (searchtext == "") return;
 
@@ -1191,15 +1235,31 @@
                     if (instruments[i].description.toLowerCase().substr(0, searchtextlen) == searchtext) {
                         var elem = {};
                         elem.name = instruments[i].description + " - " + instruments[i].symbol;
-                        data.push(elem);
+                        symboldata.push(elem);
                     }
                 }
             }
 
             function displayList() {
+                var stocklist = d3.select("#stocklist");
+
+                if (symboldata.length == 0) {
+                    // clear the list if no data
+                    if (!stocklist.empty()) {
+                        stocklist.remove();
+                    }
+                } else {
+                    // create the list if necessary
+                    if (stocklist.empty()) {
+                        stocklist = d3.select("#divcontainer").append("ul")
+                            .attr("id", "stocklist")
+                            .attr("class", "stocklist");
+                    }
+                }
+
                 // update
                 var stockitems = stocklist.selectAll("li")
-                    .data(data)
+                    .data(symboldata)
                         .text(function(d) { return d.name; });
 
                 // enter
@@ -1209,32 +1269,19 @@
                         .on("click", function(d, i) {
                             var lastspace = this.innerHTML.lastIndexOf(' ');
                             var symbol = this.innerHTML.substr(lastspace+1);
+
+                            // request a symbol
                             requestOrderbook(symbol);
-                            topleftList();
+
+                            // clear array
+                            symboldata = [];
+
+                            // clear display
+                            displayList();
                         });
 
                 // exit
                 stockitems.exit().remove();
-            }
-
-            function topleftList() {
-                // clear data & reflect in display
-                data = [];
-                displayList();
-
-                // move the stockselect div to the top
-                d3.select("#stockboxdiv")
-                    .attr("class", "stockboxdivtop");
-
-                // move the title to the left
-                d3.select("#stockboxtitle")
-                    .attr("class", "stockboxtitletop")
-                    .style("display", "inline");
-
-                // move the input box inline
-                /*d3.select("#stockboxinput")
-                    .property("value", "")
-                    .attr("class", "stockboxinputtop");*/
             }
         }
 
@@ -1861,8 +1908,11 @@
             var signindiv = d3.select("body")
                 .append("div")
                 .attr("id", "signindiv")
-                .append("div")
                 .attr("class", "signindiv");
+
+            signindiv.append("p")
+                .attr("class", "signintitle")
+                .html("Cantwaittotrade");
 
             var signinemail = signindiv.append("input")
                 .attr("id", "signinemail")
@@ -1872,12 +1922,13 @@
             var signinpwd = signindiv.append("input")
                 .attr("id", "signinpwd")
                 .attr("class", "signininput")
+                .attr("type", "password")
                 .attr("placeholder", "Password");
 
             signindiv.append("input")
                 .attr("type", "button")
                 .attr("value", "Sign In")
-                    .attr("class", "")
+                    .attr("class", "signinbutton")
                     .on("click", function() {
                         var signin = {};
                         signin.email = document.getElementById("signinemail").value;
@@ -1894,13 +1945,12 @@
         function replySignin(reply) {
             if (reply.success) {
                 clientid = reply.clientid;
+                email = reply.email;
 
                 // clear the sign in form
                 d3.select("#signindiv").remove();
 
-                // single symbol select
-                selectSymbol();
-                //positionRequest();
+                start();
             } else {
                 // signin failed
                 d3.select("#signindiv")
