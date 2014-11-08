@@ -97,9 +97,11 @@
         color: steelblue;
     }
     .stockboxdiv {
-        width: 100%;
-        float: left;
-        /*position: absolute;*/
+        width: 50%;
+        /*float: left;*/
+                     margin : 0 auto;
+
+        /*position: relative;*/
         /*width: 50%;
         height: 50%;*/
         /*left: 50%;*/
@@ -112,8 +114,10 @@
     .stockboxinput {
         display: block;
              margin : 0 auto;
+             margin-top: 10px;
         /*position: relative;*/
-        width: 300px;
+        /*width: 300px;*/
+        width: 30%;
         height: 27px;
         /*line-height: 27px;*/
         text-indent: 3px;
@@ -130,10 +134,22 @@
         outline: none;
     }
     .stocklist {
+        position: absolute;
         list-style-type: none;
-        border: 1px solid gray;
+        /*border: 1px solid gray;*/
+        border: 1px solid steelblue;
         padding: 3px;
+        background-color: white;
         /*margin: 0px;*/
+/*margin-left: auto;
+margin-right: auto;*/
+        /*width: 300px;*/
+        width: 30%;
+
+             margin : 0 auto;
+
+left: 0;
+right: 0;
     }
     .tblpricehdr {
         font: courier;
@@ -362,6 +378,9 @@
         }
 
         function priceReceived(price) {
+            console.log("priceReceived");
+            console.log(price);
+
             var cols = ["bid","ask"];
 
             // create a price table if one does not exist
@@ -400,14 +419,17 @@
             hdr.push(price.symbol);
             pricedata.push(price);
 
-            var divprice = d3.select("body")
+            /*var divprice = d3.select("body")
                 .append("div")
                 .attr("class", "divprice")
-                .attr("id", "divprice");
+                .attr("id", "divprice");*/
+
+            var divprice = d3.select("#divcontainer");
 
             // create a table
             var tblprice = divprice.append("table")
-                .attr("id", "tblprice");
+                .attr("id", "tblprice")
+                .attr("class", "tblprice");
 
             // add header & body
             var thead = tblprice.append("thead");
@@ -471,13 +493,13 @@
             pricedata.push(price);
 
             // create a table
-            var tblprice = d3.select("body")
+            var tbltrade = d3.select("body")
                 .append("table")
-                .attr("id", "tblprice");
+                .attr("id", "tbltrades");
 
             // add header & body
-            var thead = tblprice.append("thead");
-            var tbody = tblprice.append("tbody");
+            var thead = tbltrade.append("thead");
+            var tbody = tbltrade.append("tbody");
 
             // append the header row
             thead.append("tr")
@@ -486,7 +508,7 @@
                 .enter()
                 .append("th")
                     .attr("colspan", 2)
-                    .attr("class", "tblpricehdr")
+                    .attr("class", "tbltradehdr")
                     .text(function(d) { return d + " - " + instruments[d].description; });
 
             // create a row for each field
@@ -494,8 +516,8 @@
                 .data(pricedata)
                 .enter()
                 .append("tr")
-                .attr("class", "tblprice")
-                .attr("id", "tblpricerow");
+                .attr("class", "tbltraderow")
+                .attr("id", "tbltraderow");
 
             // create a cell in each row for each column
             var cells = rows.selectAll("td")
@@ -1197,14 +1219,14 @@
         function selectSymbol() {
             var symboldata = [];
 
-            /*var stockboxdiv = d3.select("#divcontainer")
+            var stockboxdiv = d3.select("#divcontainer")
             //var stockboxdiv = d3.select("body")
                 .append("div")
                 .attr("id", "stockboxdiv")
-                .attr("class", "stockboxdiv");*/
+                .attr("class", "stockboxdiv");
 
             //var stockboxinput = stockboxdiv.append("input")
-            var stockboxinput = d3.select("#divcontainer")
+            var stockboxinput = stockboxdiv
                 .append("input")
                 .attr("id", "stockboxinput")
                 .attr("class", "stockboxinput")
@@ -1251,7 +1273,7 @@
                 } else {
                     // create the list if necessary
                     if (stocklist.empty()) {
-                        stocklist = d3.select("#divcontainer").append("ul")
+                        stocklist = d3.select("#stockboxdiv").append("ul")
                             .attr("id", "stocklist")
                             .attr("class", "stocklist");
                     }
