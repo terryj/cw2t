@@ -1198,7 +1198,7 @@ function orderbookRequest(clientid, symbol, conn) {
     }
 
     //send latest price if ooh or already subscribed
-    if (markettype == 1 || subscribe == 0) {
+    //if (markettype == 1 || subscribe == 0) {
       var price = {};
       price.symbol = symbol;
       price.bid = ret[1];
@@ -1206,7 +1206,7 @@ function orderbookRequest(clientid, symbol, conn) {
       price.timestamp = ret[3];
 
       conn.write("{\"price\":" + JSON.stringify(price) + "}");
-    }
+    //}
 
     // send the current stored price
     //common.sendCurrentOrderbook(symbol, ret[1], conn, feedtype);

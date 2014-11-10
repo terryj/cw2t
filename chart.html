@@ -23,7 +23,7 @@
     header {
         font: 24px courier;
         text-align: center;
-        color: steelblue;
+        color: grey;
     }
     body {
         /*font: 12px Arial;*/
@@ -157,11 +157,13 @@ right: 0;
         color: lightgrey;        
     }
     .tblprice {
-        text-align: center;
-        font: courier;
-        font-size: 24px;
-        background-color: yellow;/*#c0c0c0;*/
-        color: grey;
+                     margin : 0 auto;
+
+        /*text-align: center;*/
+        /*font: courier;*/
+        /*font-size: 24px;
+        background-color: yellow;
+        color: grey;*/
     }
     .signindiv {
         position: absolute;
@@ -192,11 +194,14 @@ right: 0;
         color: steelblue;
     }
     .divprice {
+        /*width: 50%;*/
+        /*float: left;*/
+                     margin : 0 auto;
         /*position: absolute;*/
-        left: 50%;
+        /*left: 50%;
         width: 300px;
         height: 100px;
-        margin-left: -150px; /* half of total width */        
+        margin-left: -150px;*/
     }
     .divcontainer {
         width: 70%;
@@ -300,7 +305,6 @@ right: 0;
             //requestIndex("UKX");
             //requestPricehistory("LLOY.L");
             //displayForm("LLOY.L");
-            //requestQuote("LLOY.L.CFD");
             //sendOrder("LLOY.L", '1', 100, 0, 1, "BEST", "GBP", 2, "", "", "4", "", "");
             //requestOrderbook("LLOY.L.CFD");
             //requestRemoveOrderbook("LLOY.L");
@@ -386,7 +390,7 @@ right: 0;
             // create a price table if one does not exist
             var tblprice = d3.select("#tblprice");
             if (tblprice.empty()) {
-                createPriceTable(price);
+                createPriceTable(price, cols);
                 createTradeButtons(price.symbol);
             }
 
@@ -402,7 +406,7 @@ right: 0;
             var tblpricerow = d3.select("#tblpricerow");
 
             // update
-            var cells = tblpricerow.selectAll("td")
+            tblpricerow.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(column) {
                         return {column: column, value: row[column]};
@@ -411,20 +415,21 @@ right: 0;
                 .text(function(d, i) { return d.value; });
         }
 
-        function createPriceTable(price) {
-            var hdr = [];
-            var cols = ["bid","ask"];
+        function createPriceTable(price, cols) {
+            var hdr = ["bid","ask"];
 
-            // update data arrays
-            hdr.push(price.symbol);
             pricedata.push(price);
 
-            /*var divprice = d3.select("body")
-                .append("div")
-                .attr("class", "divprice")
-                .attr("id", "divprice");*/
+            // create a price div
+            var divprice = d3.select("#divcontainer").append("div")
+                .attr("id", "divprice");
 
-            var divprice = d3.select("#divcontainer");
+            divprice.append("header")
+                .text(instruments[price.symbol].description)
+                .style("margin-top", "10px");
+
+            divprice.append("header")
+                .text(price.symbol + " - " + price.timestamp);
 
             // create a table
             var tblprice = divprice.append("table")
@@ -441,16 +446,14 @@ right: 0;
                 .data(hdr)
                 .enter()
                 .append("th")
-                    .attr("colspan", 2)
                     .attr("class", "tblpricehdr")
-                    .text(function(d) { return d + " - " + instruments[d].description; });
+                    .text(function(d) { return d; });
 
             // create a row for each field
             var rows = tbody.selectAll("tr")
                 .data(pricedata)
                 .enter()
                 .append("tr")
-                .attr("class", "tblprice")
                 .attr("id", "tblpricerow");
 
             // create a cell in each row for each column
@@ -896,17 +899,49 @@ right: 0;
         }
 
         function requestQuote(symbol) {
-            // table data
-            var data = [
-            ["Quantity",""],
-            ["Settlement Date",""]
-            ];
+            var fields = ["Quantity"]; // one per row
 
-            // input field data
-            var inputtypes = ["text","date"];
+            var cashorshares = ["Number of shares", "Cash amount"];
+            var qtycashorshares = ["Quantity", "Cash amount"];
 
             // create a table
-            var tbody = displayInputTable(data, inputtypes);
+            var tblrfq = d3.select("#divcontainer")
+                .append("table");
+
+            // add header & body
+            var thead = tblrfq.append("thead");
+            var tbody = tblrfq.append("tbody");
+
+            // create a row for each field
+            var rows = tbody.selectAll("tr")
+                .data(fields)
+                .enter()
+                .append("tr");
+
+            // option to select cash or shares
+            var selcashorshares = rows.append("td")
+                .append("select")
+                    .attr("id", "selcashorshares")
+                    .on("change", function() {
+                        var rfqqty = d3.select("#rfqqty");
+                        if (this.value == cashorshares[0]) {
+                            rfqqty.attr("placeholder", qtycashorshares[0]);
+                        } else {
+                            rfqqty.attr("placeholder", qtycashorshares[1]);
+                        }
+                    });
+
+            selcashorshares.append("option")
+                        .text(cashorshares[0]);
+
+            selcashorshares.append("option")
+                        .text(cashorshares[1]);
+
+            // quantity
+            rows.append("td")
+                .append("input")
+                    .attr("id", "rfqqty")
+                    .attr("placeholder", qtycashorshares[0]);
 
             // add a button, with associated function to send rfq
             tbody.append("tr")
@@ -916,77 +951,36 @@ right: 0;
                         .attr("value", "Send")
                         .attr("class", "rfqbutton")
                         .on("click", function() {
-                            var rfq = {};
-
-                            rfq.clientid = clientid;
-                            rfq.symbol = symbol;
-                            rfq.cashorderqty = "";
-                            rfq.currency = "GBP"; // todo
-                            rfq.settlcurrency = "GBP"; // todo
-                            rfq.nosettdays = 2;
-                            rfq.operatortype = operatortype;
-                            rfq.operatorid = clientid;
-
-                            var inps = d3.selectAll("td input")
-                                .each(function(d,i) {
-                                    switch (i) {
-                                    case 0:
-                                        rfq.quantity = this.value;
-                                        break;
-                                    case 1:
-                                        rfq.futsettdate = this.value;
-                                        break;
-                                    }
-                                });
-
-                            console.log(rfq);
-                            sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
+                            sendRfq();
                         });
-        }
 
-        function displayInputTable(data, inputtypes) {
-            // create a table
-            var table = d3.select("body")
-                .append("table");
-                //.attr("style", "margin-left: 250px");
+            function sendRfq() {
+                var rfq = {};
 
-            // add header & body
-            var thead = table.append("thead");
-            var tbody = table.append("tbody");
+                // quantity as cash or shares
+                var selcashorshares = d3.select("#selcashorshares");
+                var quantity = d3.select("#rfqqty").node().value;
 
-            // append the header row
-            /*thead.append("tr")
-                .selectAll("th")
-                .data(columns)
-                .enter()
-                .append("th")
-                    .text(function(column) { return column; });*/
+                if (selcashorshares.node().value == cashorshares[0]) {
+                    rfq.cashorderqty = "";
+                    rfq.quantity = quantity;
+                } else {
+                    rfq.cashorderqty = quantity;
+                    rfq.quantity = "";                    
+                }
 
-            // create a row for each field
-            var rows = tbody.selectAll("tr")
-                .data(data)
-                .enter()
-                .append("tr");
+                rfq.clientid = clientid;
+                rfq.symbol = symbol;
+                rfq.currency = "GBP"; // todo
+                rfq.settlcurrency = "GBP"; // todo
+                rfq.nosettdays = 2;
+                rfq.operatortype = operatortype;
+                rfq.operatorid = clientid;
+                //rfq.futsettdate = this.value;
 
-            // create a cell in each row for each column
-            var cells = rows.selectAll("td")
-                .data(function(d) { return d; })
-                .enter()
-                .append("td")
-                .each(function(d, i, j) { // i=column, j=row
-                    if (i == 0) {
-                        // text in first column
-                        d3.select(this)
-                            .text(function(d) { return d; });
-                    } else if (i == 1) {
-                        // input fields in second column
-                        d3.select(this)
-                            .append("input")
-                            .attr("type", function(d) { return inputtypes[j]; });
-                    }
-                });
-
-            return tbody;
+                console.log(rfq);
+                sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
+            }
         }
 
         function displayForm(symbol) {
@@ -1362,6 +1356,7 @@ right: 0;
                     quotes[i].bidsize = quote.bidsize;
                     quotes[i].bidquantity = quote.bidquantity;
                     quotes[i].bidnoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+                    quotes[i].bidquoteid = quote.quoteid;
                     bidupdated = true;
                     startQuoteInterval("bid", i);
                 }
@@ -1372,6 +1367,7 @@ right: 0;
                     quotes[i].offersize = quote.offersize;
                     quotes[i].offerquantity = quote.offerquantity;
                     quotes[i].offernoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+                    quotes[i].offerquoteid = quote.quoteid;
                     offerupdated = true;
                     startQuoteInterval("offer", i);
                 }
@@ -1380,11 +1376,12 @@ right: 0;
             // create a new quote & add to array
             if (!bidupdated || !offerupdated) {
                 var newquote = {};
+
                 newquote.symbol = quote.symbol;
                 newquote.settlcurrency = quote.settlcurrency;
                 newquote.nosettdays = quote.nosettdays;
                 newquote.futsettdate = quote.futsettdate;
-                newquote.quoteid = quote.quoteid;
+                //newquote.quoteid = quote.quoteid;
                 newquote.bidpx = "";
                 newquote.bidsize = "";
                 newquote.bidquantity = "";
@@ -1397,6 +1394,7 @@ right: 0;
                     newquote.bidsize = quote.bidsize;
                     newquote.bidquantity = quote.bidquantity;
                     newquote.bidnoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+                    newquote.bidquoteid = quote.quoteid;
                 }
 
                 if (!offerupdated) {
@@ -1404,6 +1402,7 @@ right: 0;
                     newquote.offersize = quote.offersize;
                     newquote.offerquantity = quote.offerquantity;
                     newquote.offernoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+                    newquote.offerquoteid = quote.quoteid;
                 }
 
                 // add to array
@@ -1420,8 +1419,6 @@ right: 0;
         }
 
         function updateQuoteTable() {
-            console.log("updateQuoteTable");
-
             var cols = ["bid", "offer"];
 
             // create a quote table if one does not exist
@@ -1446,11 +1443,11 @@ right: 0;
                         var ret = "";
                         if (col == "bid") {
                             if (row.bidpx != "") {
-                                ret = "Sell " + row.bidquantity + " @ " + row.bidpx + " " + row.bidnoseconds;
+                                ret = "Sell " + row.bidquantity + " @ " + row.bidpx + " - " + row.bidnoseconds + " Seconds";
                             }
                         } else {
                             if (row.offerpx != "") {
-                                ret = "Buy " + row.offerquantity + " @ " + row.offerpx + " " + row.offernoseconds;
+                                ret = "Buy " + row.offerquantity + " @ " + row.offerpx + " - " + row.offernoseconds + " Seconds";
                             }
                         }
                         //return {col: col, value: row[col]};
@@ -1511,12 +1508,12 @@ right: 0;
                         console.log(i);
                         console.log(j);
                         if (d.col == "bid") {
-                            sendOrder(quotes[j].symbol, '2', quotes[j].bidquantity, quotes[j].bidpx, 'D', "", quotes[j].settlcurrency, quotes[j].nosettdays, quotes[j].futsettdate, quotes[j].quoteid, "4", "", "");
+                            sendOrder(quotes[j].symbol, '2', quotes[j].bidquantity, quotes[j].bidpx, 'D', "", quotes[j].settlcurrency, quotes[j].nosettdays, quotes[j].futsettdate, quotes[j].bidquoteid, "4", "", "");
 
                             // stop timer
                             clearInterval(quotes[j].bidinterval);
                         } else {
-                            sendOrder(quotes[j].symbol, '1', quotes[j].offerquantity, quotes[j].offerpx, 'D', "", quotes[j].settlcurrency, quotes[j].nosettdays, quotes[j].futsettdate, quotes[j].quoteid, "4", "", "");
+                            sendOrder(quotes[j].symbol, '1', quotes[j].offerquantity, quotes[j].offerpx, 'D', "", quotes[j].settlcurrency, quotes[j].nosettdays, quotes[j].futsettdate, quotes[j].offerquoteid, "4", "", "");
 
                             // stop timer
                             clearInterval(quotes[j].offerinterval);

@@ -295,6 +295,7 @@ function newOrder(order) {
   var settlcurrfxrate = 1; // settlement currency to product currency rate
   var settlcurrfxratecalc = 1;
 
+  console.log("newOrder");
   console.log(order);
 
   var today = new Date();
@@ -574,8 +575,10 @@ function newQuote(quote) {
   console.log("newquote");
 
   if (!('bidquotedepth' in quote)) {
-    quote.bidquotedepth = 1;
-    quote.offerquotedepth = 1;
+    quote.bidquotedepth = "";
+  }
+  if (!('offerquotedepth' in quote)) {
+    quote.offerquotedepth = "";
   }
 
   if (!('externalquoteid' in quote)) {
@@ -599,7 +602,7 @@ function newQuote(quote) {
 
   // quote script
   // note: not passing securityid & idsource as proquote symbol should be enough
-  db.eval(scriptquote, 16, quote.quotereqid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.qclientid, function(err, ret) {
+  db.eval(scriptquote, 17, quote.quotereqid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.qclientid, quote.cashorderqty, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -1770,7 +1773,7 @@ function registerScripts() {
   local quotereqid = redis.call("incr", "quotereqid") \
   if not quotereqid then return 1005 end \
   --[[ store the quote request ]] \
-  redis.call("hmset", "quoterequest:" .. quotereqid, "clientid", KEYS[1], "symbol", KEYS[2], "quantity", KEYS[3], "cashorderqty", KEYS[4], "currency", KEYS[5], "settlcurrency", KEYS[6], "nosettdays", KEYS[7], "futsettdate", KEYS[8], "quotestatus", "", "timestamp", KEYS[9], "quoteid", "", "quoterejectreason", "", "quotereqid", quotereqid, "operatortype", KEYS[10], "operatorid", KEYS[11]) \
+  redis.call("hmset", "quoterequest:" .. quotereqid, "clientid", KEYS[1], "symbol", KEYS[2], "quantity", KEYS[3], "cashorderqty", KEYS[4], "currency", KEYS[5], "settlcurrency", KEYS[6], "nosettdays", KEYS[7], "futsettdate", KEYS[8], "quotestatus", "", "timestamp", KEYS[9], "quoterejectreason", "", "quotereqid", quotereqid, "operatortype", KEYS[10], "operatorid", KEYS[11]) \
   --[[ add to set of quoterequests for this client ]] \
   redis.call("sadd", KEYS[1] .. ":quoterequests", quotereqid) \
   --[[ get required instrument values for proquote ]] \
@@ -1801,7 +1804,8 @@ function registerScripts() {
   if KEYS[3] == "" then \
     local offerprice = tonumber(KEYS[4]) \
     if vals[4] == "" then \
-      offerquantity = round(tonumber(vals[5]) / offerprice, 0) \
+      offerquantity = tonumber(KEYS[6]) \
+      --[[ offerquantity = round(tonumber(cashorderqty) / offerprice, 0) ]] \
     else \
       offerquantity = tonumber(vals[4]) \
     end \
@@ -1809,7 +1813,8 @@ function registerScripts() {
   else \
     local bidprice = tonumber(KEYS[3]) \
     if vals[4] == "" then \
-      bidquantity = round(tonumber(vals[5]) / bidprice, 0) \
+      bidquantity = tonumber(KEYS[5]) \
+      --[[ bidquantity = round(tonumber(cashorderqty) / bidprice, 0) ]] \
     else \
       bidquantity = tonumber(vals[4]) \
     end \
@@ -1827,7 +1832,7 @@ function registerScripts() {
   --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
   quoteid = redis.call("incr", "quoteid") \
   --[[ store the quote ]] \
-  redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "clientid", vals[1], "quoteid", quoteid, "symbol", symbol, "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", KEYS[3], "offerpx", KEYS[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", KEYS[5], "offersize", KEYS[6], "validuntiltime", KEYS[7], "transacttime", KEYS[8], "currency", KEYS[9], "settlcurrency", KEYS[10], "qbroker", KEYS[11], "nosettdays", vals[6], "futsettdate", vals[9], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", KEYS[13], "offerquotedepth", KEYS[14], "externalquoteid", KEYS[15], "qclientid", KEYS[16]) \
+  redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "clientid", vals[1], "quoteid", quoteid, "symbol", symbol, "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", KEYS[3], "offerpx", KEYS[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", KEYS[5], "offersize", KEYS[6], "validuntiltime", KEYS[7], "transacttime", KEYS[8], "currency", KEYS[9], "settlcurrency", KEYS[10], "qbroker", KEYS[11], "nosettdays", vals[6], "futsettdate", vals[9], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", KEYS[13], "offerquotedepth", KEYS[14], "externalquoteid", KEYS[15], "qclientid", KEYS[16], "cashorderqty", KEYS[17]) \
   --[[ keep a list of quotes for the quoterequest ]] \
   redis.call("sadd", "quoterequest:" .. KEYS[1] .. ":quotes", quoteid) \
   --[[ quoterequest status - 0=new, 1=quoted, 2=rejected ]] \
@@ -1838,8 +1843,8 @@ function registerScripts() {
   else \
     status = "0" \
   end \
-  --[[ add quote id, status to stored quoterequest ]] \
-  redis.call("hmset", "quoterequest:" .. KEYS[1], "quoteid", quoteid, "quotestatus", status) \
+  --[[ add status to stored quoterequest ]] \
+  redis.call("hmset", "quoterequest:" .. KEYS[1], "quotestatus", status) \
   --[[ publish quote to operator type ]] \
   publishquote(quoteid, vals[8]) \
   return errorcode \
