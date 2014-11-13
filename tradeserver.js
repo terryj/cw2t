@@ -240,12 +240,6 @@ function quoteRequest(quoterequest) {
   });
 }
 
-function quoteReceived(quote) {
-  console.log("quoteReceived");
-  console.log(quote);
-
-}
-
 /*
 // Convert dd-mmm-yyyy to FIX date format 'yyyymmdd'
 */
@@ -574,6 +568,15 @@ function loadHolidays() {
 function newQuote(quote) {
   console.log("newquote");
 
+  if (!('bidpx' in quote)) {
+    quote.bidpx = "";
+    quote.bidsize = "";
+  }
+  if (!('offerpx' in quote)) {
+    quote.offerpx = "";
+    quote.offersize = "";
+  }
+
   if (!('bidquotedepth' in quote)) {
     quote.bidquotedepth = "";
   }
@@ -777,14 +780,14 @@ nbt.on("quote", function(quote, header) {
   }
 
   // a two-way quote arrives in two bits, so fill in 'missing' price/size/quote id (note: separate external quote id for bid & offer)
-  if (!('bidpx' in quote)) {
+  /*if (!('bidpx' in quote)) {
     quote.bidpx = '';
     quote.bidsize = '';
   }
   if (!('offerpx' in quote)) {
     quote.offerpx = '';
     quote.offersize = '';
-  }
+  }*/
 
   newQuote(quote);
 });
