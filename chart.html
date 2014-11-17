@@ -518,14 +518,6 @@
             // add a body
             var tbody = tblmenu.append("tbody");
 
-            // append the header row
-            /*thead.append("tr")
-                .selectAll("th")
-                .data(columns)
-                .enter()
-                .append("th")
-                    .text(function(column) { return column; });*/
-
             // create a row for each field
             var rows = tbody.selectAll("tr")
                 .data(data)
@@ -546,7 +538,8 @@
                         .attr("href", "#")
                         .html(function (d) { return d; })
                         .on("click", function(d) {
-                            console.log(d);
+                            clearScreen();
+
                             if (d == cols[0]) {
                                 requestPosition(symbol);
                             } else if (d == cols[1]) {
@@ -555,6 +548,11 @@
                                 requestAccount();
                             }
                         });
+        }
+
+        function clearScreen() {
+            d3.select("#divposition").remove();
+            d3.select("#tblrfq").remove();
         }
 
         function createTradeTable() {
@@ -979,6 +977,7 @@
             // create a table
             var tblrfq = d3.select("#divcontainer")
                 .append("table")
+                .attr("id", "tblrfq")
                 .attr("class", "tblrfq");
 
             // add header & body
@@ -2529,18 +2528,48 @@
             var positions = [];
             positions.push(position);
 
-            positionTable(positions);
+            updatePositionTable(positions);
         }
 
-        function positionTable(positions) {
+        function updatePositionTable(positions) {
             var columns = ["quantity", "cost", "currency", "margin", "averagecostpershare", "realisedpandl", "unrealisedpandl"];
 
             // create a div
-            var divposition = d3.select("#divcontainer")
+            var divposition = d3.select("#divposition");
+            if (divposition.empty()) {
+                createPositionTable(columns);
+            }
+
+            // create a row for a position
+            var rows = d3.select("#tblposition").select("tbody").selectAll("tr")
+                .data(positions);
+
+            // enter
+            rows.enter()
+                .append("tr");
+
+            // exit
+            rows.exit().remove();
+
+            // create a cell in each row for each column
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return columns.map(function(column) {
+                        return {column: column, value: row[column]};
+                    });
+                 })
+                .enter()
+                .append("td")
+                    .text(function(d) { console.log(d); return d.value; });
+        }
+
+        function createPositionTable(columns) {
+            // create position div
+            divposition = d3.select("#divcontainer")
                 .append("div")
                 .attr("id", "divposition");
 
-            // create a table
+            // create table
             var tblposition = divposition.append("table")
                 .attr("id", "tblposition");
 
@@ -2554,24 +2583,7 @@
                 .data(columns)
                 .enter()
                 .append("th")
-                    .text(function(column) { return column; });
-
-            // create a row for a position
-            var rows = tbody.selectAll("tr")
-                .data(positions)
-                .enter()
-                .append("tr");
-
-            // create a cell in each row for each column
-            var cells = rows.selectAll("td")
-                .data(function(row) {
-                    return columns.map(function(column) {
-                        return {column: column, value: row[column]};
-                    });
-                 })
-                .enter()
-                .append("td")
-                    .text(function(d) { console.log(d); return d.value; });
+                    .text(function(d) { return d; });
         }
 
      </script>
