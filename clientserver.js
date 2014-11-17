@@ -1316,11 +1316,21 @@ function cashHistory(req, clientid, conn) {
 
 function positionRequest(posreq, clientid, conn) {
   console.log("positionRequest");
-  db.eval(common.scriptgetpositions, 1, clientid, function(err, ret) {
-    if (err) throw err;
-    console.log(ret);
-    conn.write("{\"positions\":" + ret + "}");
-  });
+  console.log(posreq);
+
+  if ('symbol' in posreq) {
+    db.eval(common.scriptgetposition, 2, clientid, posreq.symbol, function(err, ret) {
+      if (err) throw err;
+      console.log(ret);
+      conn.write("{\"position\":" + ret + "}");
+    });    
+  } else {
+    db.eval(common.scriptgetpositions, 1, clientid, function(err, ret) {
+      if (err) throw err;
+      console.log(ret);
+      conn.write("{\"positions\":" + ret + "}");
+    });
+  }
 }
 
 function cashRequest(cashreq, clientid, conn) {

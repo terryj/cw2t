@@ -183,7 +183,7 @@ function quoteRequest(quoterequest) {
 
   //todo - remove
   //hour = hour + 4;
-  day = 0;
+  //day = 0;
   //
 
   // get settlement date from T+n no. of days
@@ -1018,6 +1018,7 @@ function registerScripts() {
     local positionid = redis.call("incr", "positionid") \
     redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "side", side, "quantity", quantity, "cost", cost, "currency", currency, "margin", margin, "positionid", positionid, "averagecostpershare", avgcostpershare, "realisedpandl", 0) \
     redis.call("sadd", positionskey, symbol) \
+    redis.call("sadd", "position:" + symbol + ":clients", clientid) \
     redis.call("sadd", postradeskey, tradeid) \
     return positionid \
   end \
@@ -1030,6 +1031,7 @@ function registerScripts() {
   local closeposition = function(positionkey, positionskey, postradeskey, symbol, tradeid, realisedpandl) \
     redis.call("hdel", positionkey, "clientid", "symbol", "side", "quantity", "cost", "currency", "margin", "positionid", "averagecostpershare", "realisedpandl") \
     redis.call("srem", positionskey, symbol) \
+    redis.call("srem", "position:" + symbol + ":clients", clientid) \
     local postrades = redis.call("smembers", postradeskey) \
     for index = 1, #postrades do \
       redis.call("srem", postradeskey, postrades[index]) \

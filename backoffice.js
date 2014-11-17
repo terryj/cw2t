@@ -77,7 +77,9 @@ db.on("error", function(err) {
 });
 
 function initialise() {
-  initDb();
+  //initDb();
+  common.registerCommonScripts();
+  registerScripts();
   pubsub();
 }
 
@@ -115,7 +117,23 @@ function priceReceived(price) {
   console.log("priceReceived");
   console.log(price);
 
-  db.eval(scriptupdatepandl, 3, price.symbol, price.bid, price.ask, function(err, ret) {
+  db.eval(scriptcheckaccount, 1, price.symbol, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
   });
+}
+
+function registerScripts() {
+  //
+  // check account for each client with a position in this symbol
+  // params: symbol
+  //
+  scriptcheckaccount = common.scriptgetaccount + '\
+  local clients = redis.call("smembers", "position:" + KEYS[1] + ":clients") \
+  local ret \
+  for index = 1, #clients do \
+    ret = scriptgetaccount(clients[index]) \
+  end \
+  return ret \
+  ';
 }

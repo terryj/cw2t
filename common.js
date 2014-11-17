@@ -1305,6 +1305,18 @@ exports.registerCommonScripts = function () {
   ';
 
   //
+  // params: client id, symbol
+  //
+  exports.scriptgetposition = getunrealisedpandl + '\
+  local fields = {"clientid","symbol","side","quantity","cost","currency","margin","positionid","averagecostpershare","realisedpandl"} \
+  local vals = redis.call("hmget", KEYS[1] .. ":position:" .. KEYS[2], unpack(fields)) \
+  --[[ value the position ]] \
+  local unrealisedpandl = getunrealisedpandl(vals[2], vals[4], vals[3], vals[9]) \
+  local pos = {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],margin=vals[7],positionid=vals[8],averagecostpershare=vals[9],realisedpandl=vals[10],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
+  return cjson.encode(pos) \
+  ';
+
+  //
   // params: client id
   //
   exports.scriptgetcash = '\
@@ -1318,7 +1330,9 @@ exports.registerCommonScripts = function () {
   ';
 
   //
+  // calculates account p&l, margin & equity for a client
   // assumes there is cash for any currency with positions
+  // params: client id
   //
   exports.scriptgetaccount = gettotalpositions + '\
   local tblresults = {} \
