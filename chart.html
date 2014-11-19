@@ -223,7 +223,10 @@
     }
     .tblrfq {
         margin : 0 auto;
-            border: 1px solid black;
+            /*border: 1px solid black;*/
+    }
+    .tblquote {
+        margin : 0 auto;        
     }
     </style>
 </head>
@@ -302,8 +305,8 @@
                 console.log("connection open");
 
                 // we are ready
-                displayFormSignin();
-                //cheat();
+                //displayFormSignin();
+                cheat();
             };
 
             sockjs.onmessage = function(e) {
@@ -974,9 +977,14 @@
             var cashorshares = ["Number of shares", "Cash amount"];
             var qtycashorshares = ["Quantity", "Cash"];
 
-            // create a table
-            var tblrfq = d3.select("#divcontainer")
-                .append("table")
+            // create a div
+            var divrfq = d3.select("#divcontainer")
+                .append("div")
+                .attr("id", "divrfq")
+                .attr("class", "divrfq");
+
+            // add a table
+            var tblrfq = divrfq.append("table")
                 .attr("id", "tblrfq")
                 .attr("class", "tblrfq");
 
@@ -1380,33 +1388,24 @@
             }
         }
 
-        function countdownQuotes(quoteobj) {
-            if (quoteobj.noseconds > 0) {
-                quoteobj.noseconds--;
+        function countdownQuotes(quote) {
+            if (quote.noseconds > 0) {
+                quote.noseconds--;
+
+                // update colours
+                if (quote.bidpx != "") {
+                    // shade of red
+                    quote.bkcolor.g = quote.bkcolor.b = parseInt((quote.startnoseconds - quote.noseconds) / quote.startnoseconds * 255);
+                } else {
+                    // shade of blue
+                    quote.bkcolor.r = quote.bkcolor.g = parseInt((quote.startnoseconds - quote.noseconds) / quote.startnoseconds * 255);
+                }
+                // shade of grey
+                quote.color.r = quote.color.g = quote.color.b = parseInt(quote.noseconds / quote.startnoseconds * 255);
             } else {
-                clearInterval(quoteobj.interval);
+                clearInterval(quote.interval);
             }
         }
-
-        /*function countdownQuotes(bidoffer, index) {
-            //console.log(bidoffer);
-            //console.log(index);
-            if (bidoffer == "bid") {
-                if (quotes[index].bidnoseconds > 0) {
-                    quotes[index].bidnoseconds--;
-                } else {
-                    //console.log("clear bid interval");
-                    clearInterval(quotes[index].bidinterval);
-                }
-            } else {
-                if (quotes[index].offernoseconds > 0) {
-                    quotes[index].offernoseconds--;
-                } else {
-                    //console.log("clear offer interval");
-                    clearInterval(quotes[index].offerinterval);                    
-                }
-            }
-        }*/
 
         function quoteReceived(quote) {
             console.log("quoteReceived");
@@ -1433,121 +1432,49 @@
             var updated = false;
 
             // calculate the duration of the quote
-            quote.noseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+            var noseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+            quote.noseconds = noseconds;
+            quote.startnoseconds = noseconds;
+
+            // button colours
+            if (quote.bidpx != "") {
+                quote.bkcolor = d3.rgb(255, 0, 0);
+            } else {
+                quote.bkcolor = d3.rgb(0, 0, 255);
+            }
+            quote.color = d3.rgb(255, 255, 255);                
 
             // see if we can add the quote to an existing quote level
             for (var i = 0; i < quotes.length; i++) {
                 if (quote.bidpx != "") {
                     if (!(cols[0] in quotes[i])) {
                         quotes[i].bidquote = quote;
-                        startQuoteInterval(quotes[i].bidquote);
                         updated = true;
                         break;
                     }
                 } else {
                     if (!(cols[1] in quotes[i])) {
                         quotes[i].offerquote = quote;
-                        startQuoteInterval(quotes[i].offerquote);
                         updated = true;
                         break;
                     }           
                 }
             }
 
-            // create a new level, if necessary
+            // if not, create a new level
             if (!updated) {
                 quotes.push([]);
 
                 if (quote.bidpx != "") {
                     quotes[quotes.length - 1].bidquote = quote;
-                    startQuoteInterval(quotes[i].bidquote);
                 } else {
                     quotes[quotes.length - 1].offerquote = quote;
-                    startQuoteInterval(quotes[i].offerquote);
                 }
             }
+
+            // start a timer
+            startQuoteInterval(quote);
         }
-
-        //
-        // update quotes array in a 'ladder' format
-        //
-        /*function updateQuoteLadder(quote) {
-            var bidupdated = false;
-            var offerupdated = false;
-            var indexupdated;
-
-            if (quote.bidpx == "") { bidupdated = true };
-            if (quote.offerpx == "") { offerupdated = true };
-
-            // may have a one or two-way quote
-            for (var i = 0; i < quotes.length; i++) {
-                // add bid quote to existing 'highest level' quote, if there is one
-                if (quote.bidpx != "" && quotes[i].bidpx == "") {
-                    quotes[i].bidpx = quote.bidpx;
-                    quotes[i].bidsize = quote.bidsize;
-                    quotes[i].bidquantity = quote.bidquantity;
-                    quotes[i].bidnoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
-                    quotes[i].bidquoteid = quote.quoteid;
-                    bidupdated = true;
-                    startQuoteInterval("bid", i);
-                }
-
-                // add offer quote to existing 'highest level' quote, if there is one
-                if (quote.offerpx != "" && quotes[i].offerpx == "") {
-                    quotes[i].offerpx = quote.offerpx;
-                    quotes[i].offersize = quote.offersize;
-                    quotes[i].offerquantity = quote.offerquantity;
-                    quotes[i].offernoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
-                    quotes[i].offerquoteid = quote.quoteid;
-                    offerupdated = true;
-                    startQuoteInterval("offer", i);
-                }
-            }
-
-            // create a new quote & add to array
-            if (!bidupdated || !offerupdated) {
-                var newquote = {};
-
-                newquote.symbol = quote.symbol;
-                newquote.settlcurrency = quote.settlcurrency;
-                newquote.nosettdays = quote.nosettdays;
-                newquote.futsettdate = quote.futsettdate;
-                //newquote.quoteid = quote.quoteid;
-                newquote.bidpx = "";
-                newquote.bidsize = "";
-                newquote.bidquantity = "";
-                newquote.offerpx = "";
-                newquote.offersize = "";
-                newquote.offerquantity = "";
-
-                if (!bidupdated) {
-                    newquote.bidpx = quote.bidpx;
-                    newquote.bidsize = quote.bidsize;
-                    newquote.bidquantity = quote.bidquantity;
-                    newquote.bidnoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
-                    newquote.bidquoteid = quote.quoteid;
-                }
-
-                if (!offerupdated) {
-                    newquote.offerpx = quote.offerpx;
-                    newquote.offersize = quote.offersize;
-                    newquote.offerquantity = quote.offerquantity;
-                    newquote.offernoseconds = getSeconds(quote.transacttime, quote.validuntiltime);
-                    newquote.offerquoteid = quote.quoteid;
-                }
-
-                // add to array
-                quotes.push(newquote);
-
-                // start interval
-                if (!bidupdated) {
-                    startQuoteInterval("bid", quotes.length - 1);
-                }
-                if (!offerupdated) {
-                    startQuoteInterval("offer", quotes.length - 1);
-                }
-            }
-        }*/
 
         function updateQuoteTable() {
             var cols = ["bidquote", "offerquote"];
@@ -1580,47 +1507,32 @@
                     } else {
                             return [{col: cols[1], value: row[cols[1]]}];
                     }
-                    //return cols.map(function(col) {
-                        /*var ret = "";
-                        if (col == "bid") {
-                            if (row.bidpx != "") {
-                                ret = "Sell " + row.bidquantity + " @ " + row.bidpx + " - " + row.bidnoseconds + " Seconds";
-                            }
-                        } else {
-                            if (row.offerpx != "") {
-                                ret = "Buy " + row.offerquantity + " @ " + row.offerpx + " - " + row.offernoseconds + " Seconds";
-                            }
-                        }*/
-                        //return {col: col, value: row[col]};
-                        //var ret = null;
-                        //if (col in row) {
-                            //ret = row[col];
-                            //return {col: col, value: row[col]};
-                        //}
-                        //return {col: col, value: ret};
-                    //});
                  });
-//console.log(cells);
 
             cells.enter()
                 .append("td")
                 .append("input")
                     .attr("type", "button");
 
-            cells.each(function(d, i, j) { // i=column, j=row
-                console.log("each");
-                console.log(d);
-                console.log(i);
-                console.log(j);
+            cells.each(function(d) {
                 var txt;
+
                 if (d.col == cols[0]) {
-                    txt = "Sell " + d.value.bidquantity + " @ " + d.value.bidpx + " - " + d.value.noseconds + " Seconds";
+                    txt = "Sell " + d.value.bidquantity + " @ " + d.value.bidpx;
                 } else {
-                    txt = "Buy " + d.value.offerquantity + " @ " + d.value.offerpx + " - " + d.value.noseconds + " Seconds";                    
+                    txt = "Buy " + d.value.offerquantity + " @ " + d.value.offerpx;
+                }
+
+                if (d.value.noseconds == 0) {
+                    txt += " - Expired";
+                } else {
+                    txt += " - " + d.value.noseconds + " Seconds";
                 }
 
                 d3.select(this).select("input")
-                    .attr("value", txt);
+                    .attr("value", txt)
+                    .style("background-color", function(d) { return d3.rgb(d.value.bkcolor); })
+                    .style("color", function(d) { return d3.rgb(d.value.color); });
             });
         }
 
@@ -1721,14 +1633,13 @@
             console.log("createQuoteTable");
             var hdr = ["Quotes"];
 
-            // quote div
-            var divquote = d3.select("#divcontainer")
-                .append("div")
-                .attr("id", "divquote");
+            // use the rfq div
+            var divrfq = d3.select("#divrfq");
 
             // create a table
-            var tblquote = divquote.append("table")
-                .attr("id", "tblquote");
+            var tblquote = divrfq.append("table")
+                .attr("id", "tblquote")
+                .attr("class", "tblquote");
 
             // add header & body
             var thead = tblquote.append("thead");
@@ -1744,14 +1655,14 @@
                     .text(function(d) { return d; });
         }
 
-        function startQuoteInterval(quoteobj) {
+        function startQuoteInterval(quote) {
             var interval = setInterval(function() {
-                countdownQuotes(quoteobj);
+                countdownQuotes(quote);
                 updateQuoteTable();
             }, 1000);
 
             // keep track of timer
-            quoteobj.interval = interval;
+            quote.interval = interval;
         }
 
         // function to count down seconds remaining per quote
@@ -2585,7 +2496,6 @@
                 .append("th")
                     .text(function(d) { return d; });
         }
-
      </script>
 </body>
 </html>
