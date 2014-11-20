@@ -1278,6 +1278,21 @@
         }
 
         function tradeReceived(trade) {
+            console.log("tradereceived");
+            console.log(trade);
+
+            for (var i in quotes) {
+                if (trade.side == "1") {
+                    quotes[i].offerquote.tradeid = trade.tradeid;
+                } else {
+                    quotes[i].bidquote.tradeid = trade.tradeid;
+                }
+            }
+
+            updateQuoteTable();
+        }
+
+        /*function tradeReceived(trade) {
             console.log(trade);
 
             var tbldata = [];
@@ -1295,7 +1310,7 @@
             }
 
             displayTable(tbldata);
-        }
+        }*/
 
         function selectSymbol() {
             var symboldata = [];
@@ -1489,13 +1504,11 @@
             var rows = d3.select("#tblquote").select("tbody").selectAll("tr")
                 .data(quotes);
 
-            // create a new row for each quote level (my be bid/offer/both)
+            // create a new row for each quote level (may be bid/offer/both)
             rows.enter()
-                .append("tr")
-                .attr("class", "tblquote");
+                .append("tr");
 
-                console.log(cols);
-
+            // update
             var cells = rows.selectAll("td")
                 .data(function(row) {
                     if (cols[0] in row) {
@@ -1505,34 +1518,84 @@
                             return [{col: cols[0], value: row[cols[0]]}];
                         }
                     } else {
-                            return [{col: cols[1], value: row[cols[1]]}];
+                        return [{col: cols[1], value: row[cols[1]]}];
                     }
                  });
 
+            // enter
             cells.enter()
                 .append("td")
                 .append("input")
-                    .attr("type", "button");
+                    .attr("type", "button")
+                    .on("click", function(d, i, j) { // i=col, j=row
+                        //var order = {};
+                        console.log("clicked");
+                        console.log(d);
+                        console.log(i);
+                        console.log(j);
+                        if (d.col == "bidquote") {
+                            // we are selling
+                            sendOrder(d.value.symbol, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
 
+                            // stop timer
+                            //clearInterval(d.value.bidinterval);
+                        } else {
+                            // we are buying
+                            sendOrder(d.value.symbol, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+
+                            // stop timer
+                            //clearInterval(quotes[j].offerinterval);
+                        }
+
+                        // stop timer
+                        clearInterval(d.value.interval);
+
+                        // remove the event listener
+                        d3.select(this)
+                            .on('click', null);
+
+                        // disable button
+                        d3.select(this)
+                            .style("cursor", "default")
+                            .attr("disabled", null);
+                    });
+
+            // enter & update
             cells.each(function(d) {
                 var txt;
 
+                // button text
                 if (d.col == cols[0]) {
-                    txt = "Sell " + d.value.bidquantity + " @ " + d.value.bidpx;
+                    if ("tradeid" in d.value) {
+                        txt = "Sold " + d.value.bidquantity + " @ " + d.value.bidpx;
+                    } else {
+                        txt = "Sell " + d.value.bidquantity + " @ " + d.value.bidpx;
+                    }
                 } else {
-                    txt = "Buy " + d.value.offerquantity + " @ " + d.value.offerpx;
+                    if ("tradeid" in d.value) {
+                        txt = "Bought " + d.value.offerquantity + " @ " + d.value.offerpx;
+                    } else {
+                        txt = "Buy " + d.value.offerquantity + " @ " + d.value.offerpx;                        
+                    }
                 }
 
+                // add timer text
                 if (d.value.noseconds == 0) {
                     txt += " - Expired";
                 } else {
                     txt += " - " + d.value.noseconds + " Seconds";
                 }
 
+                // button colour
                 d3.select(this).select("input")
                     .attr("value", txt)
                     .style("background-color", function(d) { return d3.rgb(d.value.bkcolor); })
                     .style("color", function(d) { return d3.rgb(d.value.color); });
+
+                // stop timer if traded
+                if ("tradeid" in d.value) {
+                    clearInterval(d.value.interval);
+                }
             });
         }
 
