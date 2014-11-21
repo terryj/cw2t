@@ -21,11 +21,12 @@
         color: yellow;
     }
     header {
-        font: 24px courier;
+        font-size: 27px;
         text-align: center;
         color: grey;
     }
     body {
+        color: grey;
         /*font: 12px Arial;*/
         /*font: 12px sans-serif;*/
     }
@@ -33,9 +34,10 @@
         background-color: #ccc;
     }
     a {
-        font-size: 24px;
-        color: green;
+        font-size: 21px;
+        color: grey;
         text-decoration: underline;
+        margin-left: 50px;
     }
     a:hover {
         cursor: pointer;
@@ -70,20 +72,42 @@
         stroke: #ccc;
         stroke-width: 1.5px;
     }
+    .selcashorshares {
+        font-size: 21px;
+        border-style: none;
+        color: grey;
+    }
+    .optcashorshares {
+        /*font-size: 21px;*/
+        color: grey;        
+    }
+    .rfqqty {
+        font-size: 21px;
+        color: grey;
+        margin-left: 20px;
+    }
     .rfqbutton {
         /*width: 100px;
         height: 30px;*/
 
         /*font: courier;*/
-        font-size: 24px;
+        font-size: 21px;
+        color: grey;
         border-style: none;
-        /*background-color: rgb(28, 184, 65);*/
-        background-color: green;
-        color: white;
-        cursor: pointer;
-        border-radius: 4px;
-        text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+        background-color: #ddd;
+        margin-left: 20px;
+        /*background-color: green;*/
+        /*color: white;*/
+        /*cursor: pointer;*/
+        /*border-radius: 4px;*/
+        /*text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);*/
         /*margin: 3px;*/
+    }
+    .quotebutton {
+        font-size: 21px;
+        background-color: #ddd;
+        color: grey;
+        border-style: none;        
     }
     .tradebutton {
         font-size: 21px;
@@ -101,10 +125,10 @@
         color: white;        
     }
     .stockboxtitle {
-        font: courier;
-        font-size: 27px;
+        /*font: courier;*/
+        font-size: 21px;
         text-align: center;
-        color: steelblue;
+        /*color: steelblue;*/
     }
     .stockboxdiv {
         width: 50%;
@@ -124,30 +148,32 @@
     .stockboxinput {
         display: block;
              margin : 0 auto;
-             margin-top: 10px;
+             margin-top: 15px;
         /*position: relative;*/
         /*width: 300px;*/
         width: 30%;
         height: 27px;
         /*line-height: 27px;*/
         text-indent: 3px;
-        font-family: courier, arial, sans-serif; 
+        /*font-family: courier, arial, sans-serif;*/
         font-size: 1em;
-        /*color: #333;*/
+        color: grey;
         /*background: #fff;*/
         border: solid 1px #c0c0c0;
         /*border:solid 1px #d9d9d9;*/
         /*border-top:solid 1px #c0c0c0;*/
     }
     .stockboxinput:focus { 
-        border: solid 1px steelblue;
+        /*border: solid 1px steelblue;*/
+        border: solid 1px;
         outline: none;
     }
     .stocklist {
         position: absolute;
         list-style-type: none;
         /*border: 1px solid gray;*/
-        border: 1px solid steelblue;
+        /*border: 1px solid steelblue;*/
+        border: 1px solid;
         padding: 3px;
         background-color: white;
         /*margin: 0px;*/
@@ -161,18 +187,19 @@
     }
     .tblprice {
         margin : 0 auto;
+        margin-top: 15px;
     }
-    .tblpricehdr {
+    /*.tblpricehdr {
         font: courier;
-        font-size: 18px;
+        font-size: 21px;
         color: lightgrey;        
-    }
+    }*/
     .tblpricerow {
         /*text-align: center;*/
         /*font: courier;*/
-        font-size: 36px;
-        background-color: yellow;
-        color: grey;
+        font-size: 33px;
+        /*background-color: yellow;*/
+        /*color: grey;*/
     }
     .signindiv {
         position: absolute;
@@ -198,9 +225,9 @@
         text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);        
     }
     .signintitle {
-        font: courier;
+        /*font: courier;*/
         font-size: 36px;
-        color: steelblue;
+        /*color: steelblue;*/
     }
     .divprice {
         /*width: 50%;*/
@@ -220,13 +247,26 @@
     }
     .tblmenu {
         margin : 0 auto;
+        margin-top: 10px;
     }
     .tblrfq {
         margin : 0 auto;
             /*border: 1px solid black;*/
     }
+    .tblrfq tr td {
+        margin-left: 100px;
+    }
+
     .tblquote {
-        margin : 0 auto;        
+        margin-top: 20px;
+        margin : 0 auto;  
+        font-size: 21px;
+    }
+    .divrfq {
+        margin-top: 20px;
+    }
+    .divrfqhdr {
+        margin-top: 20px;
     }
     </style>
 </head>
@@ -426,7 +466,7 @@
             console.log("priceReceived");
             console.log(price);
 
-            var cols = ["bid","ask"];
+            var cols = ["bid", "", "ask"];
 
             // create a price table if one does not exist
             if (d3.select("#tblprice").empty()) {
@@ -449,7 +489,13 @@
             tblpricerow.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(column) {
-                        return {column: column, value: row[column]};
+                        var ret;
+                        if (column == "") {
+                            ret = "-";
+                        } else {
+                            ret = row[column];
+                        }
+                        return {column: column, value: ret};
                     });
                  })
                 .text(function(d, i) { return d.value; });
@@ -465,11 +511,11 @@
                 .attr("id", "divprice");
 
             divprice.append("header")
-                .text(instruments[price.symbol].description)
-                .style("margin-top", "10px");
+                .text(instruments[price.symbol].description + " - " + price.symbol)
+                .style("margin-top", "20px");
 
-            divprice.append("header")
-                .text(price.symbol + " - " + price.timestamp);
+            /*divprice.append("header")
+                .text(price.symbol + " - " + price.timestamp);*/
 
             // create a table
             var tblprice = divprice.append("table")
@@ -1002,6 +1048,7 @@
             var selcashorshares = rows.append("td")
                 .append("select")
                     .attr("id", "selcashorshares")
+                    .attr("class", "selcashorshares")
                     .on("change", function() {
                         var rfqqty = d3.select("#rfqqty");
                         if (this.value == cashorshares[0]) {
@@ -1013,15 +1060,18 @@
                     });
 
             selcashorshares.append("option")
-                        .text(cashorshares[0]);
+                .attr("class", "optcashorshares")
+                .text(cashorshares[0]);
 
             selcashorshares.append("option")
-                        .text(cashorshares[1]);
+                .attr("class", "optcashorshares")
+                .text(cashorshares[1]);
 
             // quantity
             rows.append("td")
                 .append("input")
                     .attr("id", "rfqqty")
+                    .attr("class", "rfqqty")
                     .attr("placeholder", qtycashorshares[0]);
 
             // add a button, with associated function to send rfq
@@ -1278,17 +1328,28 @@
         }
 
         function tradeReceived(trade) {
-            console.log("tradereceived");
+            console.log("tradeReceived");
             console.log(trade);
-
+            // indicate the quote has been traded
             for (var i in quotes) {
                 if (trade.side == "1") {
-                    quotes[i].offerquote.tradeid = trade.tradeid;
+                    if (trade.quoteid == quotes[i].offerquote.quoteid) {
+                        console.log("updating buy");
+                        quotes[i].offerquote.tradeid = trade.tradeid;
+                        clearInterval(quotes[i].interval);
+                        break;
+                    }
                 } else {
-                    quotes[i].bidquote.tradeid = trade.tradeid;
+                    if (trade.quoteid == quotes[i].bidquote.quoteid) {
+                        console.log("updating sell");
+                        quotes[i].bidquote.tradeid = trade.tradeid;
+                        clearInterval(quotes[i].interval);
+                        break;
+                    }
                 }
             }
 
+            // update display
             updateQuoteTable();
         }
 
@@ -1527,24 +1588,14 @@
                 .append("td")
                 .append("input")
                     .attr("type", "button")
-                    .on("click", function(d, i, j) { // i=col, j=row
-                        //var order = {};
-                        console.log("clicked");
-                        console.log(d);
-                        console.log(i);
-                        console.log(j);
+                    .attr("class", "quotebutton")
+                    .on("click", function(d, i, j) { // d=data, i=col, j=row
                         if (d.col == "bidquote") {
                             // we are selling
                             sendOrder(d.value.symbol, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
-
-                            // stop timer
-                            //clearInterval(d.value.bidinterval);
                         } else {
                             // we are buying
                             sendOrder(d.value.symbol, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
-
-                            // stop timer
-                            //clearInterval(quotes[j].offerinterval);
                         }
 
                         // stop timer
@@ -1570,32 +1621,44 @@
                         txt = "Sold " + d.value.bidquantity + " @ " + d.value.bidpx;
                     } else {
                         txt = "Sell " + d.value.bidquantity + " @ " + d.value.bidpx;
+
+                        if (d.value.noseconds == 0) {
+                            txt += " - Expired";
+                        } else {
+                            txt += " - " + (d.value.noseconds < 10 ? " " : "") + d.value.noseconds + " Seconds";
+                        }
                     }
                 } else {
                     if ("tradeid" in d.value) {
                         txt = "Bought " + d.value.offerquantity + " @ " + d.value.offerpx;
                     } else {
-                        txt = "Buy " + d.value.offerquantity + " @ " + d.value.offerpx;                        
+                        txt = "Buy " + d.value.offerquantity + " @ " + d.value.offerpx;
+
+                        if (d.value.noseconds == 0) {
+                            txt += " - Expired";
+                        } else {
+                            txt += " - " + (d.value.noseconds < 10 ? " " : "") + d.value.noseconds + " Seconds";
+                        }
                     }
                 }
 
                 // add timer text
-                if (d.value.noseconds == 0) {
+                /*if (d.value.noseconds == 0) {
                     txt += " - Expired";
                 } else {
                     txt += " - " + d.value.noseconds + " Seconds";
-                }
+                }*/
 
-                // button colour
+                // display on button
                 d3.select(this).select("input")
-                    .attr("value", txt)
-                    .style("background-color", function(d) { return d3.rgb(d.value.bkcolor); })
-                    .style("color", function(d) { return d3.rgb(d.value.color); });
+                    .attr("value", txt);
+                    //.style("background-color", function(d) { return d3.rgb(d.value.bkcolor); })
+                    //.style("color", function(d) { return d3.rgb(d.value.color); });
 
                 // stop timer if traded
-                if ("tradeid" in d.value) {
+                /*if ("tradeid" in d.value) {
                     clearInterval(d.value.interval);
-                }
+                }*/
             });
         }
 
@@ -1694,10 +1757,14 @@
 
         function createQuoteTable() {
             console.log("createQuoteTable");
-            var hdr = ["Quotes"];
+            //var hdr = ["Quotes"];
 
             // use the rfq div
             var divrfq = d3.select("#divrfq");
+
+            divrfq.append("header")
+                .attr("class", "divrfqhdr")
+                .text("Quotes");
 
             // create a table
             var tblquote = divrfq.append("table")
@@ -1705,17 +1772,17 @@
                 .attr("class", "tblquote");
 
             // add header & body
-            var thead = tblquote.append("thead");
+            //var thead = tblquote.append("thead");
             var tbody = tblquote.append("tbody");
 
             // add header
-            thead.append("tr")
+            /*thead.append("tr")
                 .selectAll("th")
                 .data(hdr)
                 .enter()
                 .append("th")
-                    .attr("class", "tblquotehdr")
-                    .text(function(d) { return d; });
+                .attr("colspan", 2)
+                    .text(function(d) { return d; });*/
         }
 
         function startQuoteInterval(quote) {
