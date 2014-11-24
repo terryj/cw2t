@@ -85,6 +85,11 @@
         font-size: 21px;
         color: grey;
         margin-left: 20px;
+        border: solid 1px #c0c0c0;
+    }
+    .rfqqty:focus {
+        border: solid 1px;
+        outline: none;
     }
     .rfqbutton {
         /*width: 100px;
@@ -221,8 +226,8 @@
         font-size: 21px;
         border-style: none;
         cursor: pointer;
-        border-radius: 4px;
-        text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);        
+        /*border-radius: 4px;
+        text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);*/
     }
     .signintitle {
         /*font: courier;*/
@@ -251,22 +256,37 @@
     }
     .tblrfq {
         margin : 0 auto;
-            /*border: 1px solid black;*/
     }
     .tblrfq tr td {
         margin-left: 100px;
     }
-
     .tblquote {
         margin-top: 20px;
         margin : 0 auto;  
         font-size: 21px;
+    }
+    .tblquoterequest {
+        margin : 0 auto;
+        margin-top: 15px;        
+        font-size: 21px;
+    }
+    .tblquoterequest tr td {
+        margin-left: 30px;
+    }
+    .tblmyquote {
+        margin : 0 auto;        
     }
     .divrfq {
         margin-top: 20px;
     }
     .divrfqhdr {
         margin-top: 20px;
+    }
+    .divquoterequest {
+        margin-top: 20px;        
+    }
+    .myquoteinp {
+        font-size: 21px;
     }
     </style>
 </head>
@@ -345,8 +365,8 @@
                 console.log("connection open");
 
                 // we are ready
-                //displayFormSignin();
-                cheat();
+                displayFormSignin();
+                //cheat();
             };
 
             sockjs.onmessage = function(e) {
@@ -592,6 +612,7 @@
                             if (d == cols[0]) {
                                 requestPosition(symbol);
                             } else if (d == cols[1]) {
+                                //cols[1] = "Clear Quote Request";
                                 requestQuote(symbol);
                             } else if (d == cols[2]) {
                                 requestAccount();
@@ -601,7 +622,8 @@
 
         function clearScreen() {
             d3.select("#divposition").remove();
-            d3.select("#tblrfq").remove();
+            d3.select("#divrfq").remove();
+            d3.select("#divquote").remove();
         }
 
         function createTradeTable() {
@@ -1334,14 +1356,12 @@
             for (var i in quotes) {
                 if (trade.side == "1") {
                     if (trade.quoteid == quotes[i].offerquote.quoteid) {
-                        console.log("updating buy");
                         quotes[i].offerquote.tradeid = trade.tradeid;
                         clearInterval(quotes[i].interval);
                         break;
                     }
                 } else {
                     if (trade.quoteid == quotes[i].bidquote.quoteid) {
-                        console.log("updating sell");
                         quotes[i].bidquote.tradeid = trade.tradeid;
                         clearInterval(quotes[i].interval);
                         break;
@@ -1832,13 +1852,11 @@
 
         // display one table per quote request, allowing for a table of any related quotes in between
         function updateQuoterequestTables() {
-            var cols = ["timestamp", "quantity", "quote"];
+            var cols = ["timestamp", "symbol", "quantity", "quote"];
 
             var divquoterequest = d3.select("#divquoterequest");
             if (divquoterequest.empty()) {
-                divquoterequest = d3.select("#divcontainer")
-                    .append("div")
-                    .attr("id", "divquoterequest");
+                divquoterequest = createQuoterequestTables();
             }
 
             // create a table per quote request
@@ -1886,6 +1904,7 @@
                     d3.select(this)
                         .append("input")
                         .attr("type", "button")
+                        .attr("class", "quotebutton")
                         .attr("value", "Place a Quote")
                         .on("click", function() {
                             /*var myquote = {};
@@ -1918,6 +1937,9 @@
 
                             updateQuoterequestTables();
                         });*/
+                } else {
+                    d3.select(this)
+                        .html(function(d) { return d.value; });
                 }
             });
 
@@ -1928,6 +1950,20 @@
 
             // exit
             tblquoterequests.exit().remove();
+        }
+
+        function createQuoterequestTables() {
+            divquoterequest = d3.select("#divcontainer")
+                .append("div")
+                .attr("id", "divquoterequest")
+                .attr("class", "divquoterequest");
+
+            // add a header
+            divquoterequest.append("header")
+                .attr("class", "divrfqhdr")
+                .text("Quote Requests");
+
+            return divquoterequest;
         }
 
         function createQuote(quoterequest) {
@@ -2176,16 +2212,21 @@
             // create a myquote table if one does not exist
             var tblmyquote = d3.select("#tblmyquote" + quotereqid);
             if (tblmyquote.empty()) {
-                createMyQuoteTable(quotereqid, tblquoterequest);
+                tblmyquote = createMyQuoteTable(quotereqid, tblquoterequest);
             }
 
             // create a row for each quote
-            var rows = d3.select("#tblmyquote" + quotereqid).select("tbody").selectAll("tr")
+            var rows = tblmyquote.select("tbody").selectAll("tr")
                 .data(myquotes[quotereqid]);
 
             // enter
-            rows.enter()
+            var rowsenter = rows.enter()
                 .append("tr");
+
+            // create a header row
+            rowsenter.each(function(d) {
+                createMyQuoteTableHdr(tblmyquote, quotereqid);
+            });
 
             // columns
             var cells = rows.selectAll("td")
@@ -2214,6 +2255,7 @@
                         .attr("id", "inpquantity")
                         .attr("type", "number")
                         .attr("step", "10")
+                        .attr("class", "myquoteinp")
                         .attr("value", function(d) { return d.value; });
                 } else if (d.col == "price") {
                     d3.select(this)
@@ -2221,12 +2263,14 @@
                         .attr("id", "inpprice")
                         .attr("type", "number")
                         .attr("step", "0.01")
+                        .attr("class", "myquoteinp")
                         .attr("value", function(d) { return d.value; });
                 } else if (d.col == "buy") {
                     d3.select(this)
                         .append("input")
                         .attr("type", "button")
                         .attr("value", "Place Buy Quote")
+                        .attr("class", "quotebutton")
                         .on("click", function() {
                             sendQuote(1, d.value);
                         });
@@ -2235,6 +2279,7 @@
                         .append("input")
                         .attr("type", "button")
                         .attr("value", "Place Sell Quote")
+                        .attr("class", "quotebutton")
                         .on("click", function() {
                             sendQuote(2, d.value);
                         });
@@ -2246,6 +2291,45 @@
                 console.log("cells");
                 console.log(d);
             });*/
+        }
+
+        function createMyQuoteTable(quotereqid, tblquoterequest) {
+            var divquoterequest = d3.select("#divquoterequest");
+
+                                    /*var t = document.createElement('table');
+                    tblquoterequest.parentNode.insertBefore(t, tblquoterequest.nextSibling);
+                                t.id = "tblmyquote" + quotereqid;*/
+
+            // create a table
+            var tblmyquote = divquoterequest.append("table")
+                .attr("id", "tblmyquote" + quotereqid)
+                .attr("class", "tblmyquote");
+
+            // add a body
+            var tbody = tblmyquote.append("tbody");
+
+            return tblmyquote;
+        }
+
+        function createMyQuoteTableHdr(tblmyquote, quotereqid) {
+            var hdr = ["", "Quantity", "Price"];
+
+            // we only want one header
+            var thead = d3.select("#tblmyquotehdr" + quotereqid);
+            if (!(thead.empty())) { return; };
+
+            // create the header
+            thead = tblmyquote.append("thead")
+                .attr("id", "tblmyquotehdr" + quotereqid)
+                .append("tr");
+
+            // add the column headins
+            thead.selectAll("th")
+                .data(hdr)
+                .enter()
+                .append("th")
+                    //.attr("class", "tblquoterequesthdr")
+                    .text(function(d) { return d; });
         }
 
         function sendQuote(side, quote) {
@@ -2273,41 +2357,6 @@
             console.log(quote);
 
             sockjs.send("{\"quote\":" + JSON.stringify(quote) + "}");
-        }
-
-        function createMyQuoteTable(quotereqid, tblquoterequest) {
-            console.log("createMyQuoteTable");
-
-            var hdr = ["Quantity", "price"];
-
-            //var divquoterequest = d3.select("#divquoterequest");
-                //.append("div")
-                //.attr("id", "divmyquote");
-
-                                    var t = document.createElement('table');
-                    tblquoterequest.parentNode.insertBefore(t, tblquoterequest.nextSibling);
-                                t.id = "tblmyquote" + quotereqid;
-
-
-
-            // create a table
-            /*var tblmyquote = divquoterequest.append("table")
-                .attr("id", "tblmyquote" + quotereqid);*/
-
-            var tblmyquote = d3.select("#tblmyquote" + quotereqid);
-
-            // add header & body
-            var thead = tblmyquote.append("thead");
-            var tbody = tblmyquote.append("tbody");
-
-            // append the header row
-            thead.append("tr")
-                .selectAll("th")
-                .data(hdr)
-                .enter()
-                .append("th")
-                    //.attr("class", "tblquoterequesthdr")
-                    .text(function(d) { return d; });
         }
 
         //

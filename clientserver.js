@@ -1434,13 +1434,13 @@ function forwardQuote(quote, msg) {
     connections[quote.clientid].write(msg);
   }
 
-  // forward to quoting client
-  if ('qclientid' in quote) {
+  // forward to quoting client - todo: review
+  /*if ('qclientid' in quote) {
     if (quote.qclientid in connections) {
       console.log("sending to " + quote.qclientid);
       connections[quote.qclientid].write(msg);
     }
-  }
+  }*/
 }
 
 // forward order to relevant client
