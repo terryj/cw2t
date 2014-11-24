@@ -113,6 +113,7 @@
         background-color: #ddd;
         color: grey;
         border-style: none;        
+        cursor: pointer;
     }
     .tradebutton {
         font-size: 21px;
@@ -577,7 +578,7 @@
 
         function createMenu(symbol) {
             var data = [""];
-            var cols = ["Position", "Request A Quote", "Account Summary"];
+            var cols = ["Position", "Request A Quote", "Account Summary", "Quote Requests"];
 
             // create a table
             var tblmenu = d3.select("#divcontainer")
@@ -612,10 +613,11 @@
                             if (d == cols[0]) {
                                 requestPosition(symbol);
                             } else if (d == cols[1]) {
-                                //cols[1] = "Clear Quote Request";
                                 requestQuote(symbol);
                             } else if (d == cols[2]) {
                                 requestAccount();
+                            } else if (d == cols[3]) {
+                                requestQuoteRequests();
                             }
                         });
         }
@@ -624,6 +626,7 @@
             d3.select("#divposition").remove();
             d3.select("#divrfq").remove();
             d3.select("#divquote").remove();
+            d3.select("#divquoterequest").remove();
         }
 
         function createTradeTable() {
@@ -1875,8 +1878,6 @@
             var cells = tblquoterequestsnew.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(col) {
-                        console.log(row);
-                        console.log(col);
                         var ret;
                         if (col == "quote") {
                             ret = row;
@@ -1891,9 +1892,6 @@
 
             // enter - add variable inputs such as text/buttons
             cells.each(function(d, i, j) { // d=data, i=col, j=row
-                console.log("enter");
-                console.log(d);
-                console.log(j);
                 if (d.col == "timestamp") {
                     d3.select(this)
                         .html(function(d) { return d.value; });
@@ -2207,7 +2205,7 @@
             console.log("updateMyQuoteTable");
             console.log(quotereqid);
 
-            var cols = ["buy", "quantity", "price", "sell"];
+            var cols = ["buy", "quantity", "price", "valid", "sell"];
 
             // create a myquote table if one does not exist
             var tblmyquote = d3.select("#tblmyquote" + quotereqid);
@@ -2232,13 +2230,13 @@
             var cells = rows.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(col) {
-                        var ret;
+                        /*var ret;
                         if (col == "buy") {
                             ret = row;
                         } else {
                             ret = row[col];
-                        }
-                        return {col: col, value: ret};
+                        }*/
+                        return {col: col, value: row};
                     });
                 });
 
@@ -2247,50 +2245,86 @@
 
             // add text/buttons
             cellsenter.each(function(d, i, j) {
-                console.log("cellsenter");
                 console.log(d);
                 if (d.col == "quantity") {
                     d3.select(this)
                         .append("input")
-                        .attr("id", "inpquantity")
+                        .attr("id", "inpquantity" + d.value.externalquoteid)
                         .attr("type", "number")
                         .attr("step", "10")
                         .attr("class", "myquoteinp")
-                        .attr("value", function(d) { return d.value; });
+                        .attr("value", function(d) { console.log(d);return d.value.quantity; });
                 } else if (d.col == "price") {
                     d3.select(this)
                         .append("input")
-                        .attr("id", "inpprice")
+                        .attr("id", "inpprice" + d.value.externalquoteid)
                         .attr("type", "number")
                         .attr("step", "0.01")
                         .attr("class", "myquoteinp")
-                        .attr("value", function(d) { return d.value; });
+                        .attr("value", function(d) { console.log(d);return d.value.price; });
                 } else if (d.col == "buy") {
                     d3.select(this)
                         .append("input")
                         .attr("type", "button")
+                        .attr("id", function(d) { return "buybutton" + d.value.externalquoteid; })
                         .attr("value", "Place Buy Quote")
                         .attr("class", "quotebutton")
                         .on("click", function() {
                             sendQuote(1, d.value);
+                            console.log(this.id);
+
+                            d3.select(this)
+                                .attr("disabled", null)
+                                .attr("value", "Buy Quote Placed")
+                                .style("cursor", "default");
+
+                            document.getElementById("selvaliduntil" + d.externalquoteid).disabled = true;
+
+                            d3.select("#sellbutton" + d.externalquoteid)
+                                .attr("value", "Cancel");
                         });
+                } else if (d.col == "valid") {
+                    validUntilOptions(this, d.externalquoteid);
                 } else if (d.col == "sell") {
                     d3.select(this)
                         .append("input")
                         .attr("type", "button")
+                        .attr("id", function(d) { return "sellbutton" + d.value.externalquoteid; })
                         .attr("value", "Place Sell Quote")
                         .attr("class", "quotebutton")
                         .on("click", function() {
                             sendQuote(2, d.value);
+                            console.log(this.id);
+
+                            d3.select(this)
+                                .attr("disabled", null)
+                                .attr("value", "Sell Quote Placed")
+                                .style("cursor", "default");
+
+                            document.getElementById("selvaliduntil" + d.externalquoteid).disabled = true;
+
+                            d3.select("#buybutton" + d.externalquoteid)
+                                .attr("value", "Cancel");
                         });
                 }
             });
+        }
 
-            // enter & update
-            /*cells.each(function(d,i,j) {
-                console.log("cells");
-                console.log(d);
-            });*/
+        function validUntilOptions(col, externalquoteid) {
+            var data = ["Good until cancelled", "30 Seconds"];
+
+            // create select box
+            var selvalid = d3.select(col)
+                .append("select")
+                .attr("id", "selvaliduntil" + externalquoteid)
+                .attr("class", "selcashorshares");
+
+            // add options
+            selvalid.selectAll("option")
+                .data(data)
+                .enter()
+                .append("option")
+                .text(function(d) { return d; });
         }
 
         function createMyQuoteTable(quotereqid, tblquoterequest) {
@@ -2312,7 +2346,7 @@
         }
 
         function createMyQuoteTableHdr(tblmyquote, quotereqid) {
-            var hdr = ["", "Quantity", "Price"];
+            var hdr = ["", "Quantity", "Price", "Valid Until"];
 
             // we only want one header
             var thead = d3.select("#tblmyquotehdr" + quotereqid);
@@ -2337,11 +2371,11 @@
 
             // set-up bid or offer price/size
             if (side == 1) {
-                quote.bidpx = d3.select("#inpprice").node().value;
-                quote.bidsize = d3.select("#inpquantity").node().value;
+                quote.bidpx = d3.select("#inpprice" + quote.externalquoteid).node().value;
+                quote.bidsize = d3.select("#inpquantity" + quote.externalquoteid).node().value;
             } else {
-                quote.offerpx = d3.select("#inpprice").node().value;
-                quote.offersize = d3.select("#inpquantity").node().value;
+                quote.offerpx = d3.select("#inpprice" + quote.externalquoteid).node().value;
+                quote.offersize = d3.select("#inpquantity" + quote.externalquoteid).node().value;
             }
 
             // remove starting values
@@ -2674,6 +2708,10 @@
                 .enter()
                 .append("th")
                     .text(function(d) { return d; });
+        }
+
+        function requestQuoteRequests() {
+
         }
      </script>
 </body>
