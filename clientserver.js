@@ -237,6 +237,8 @@ function listen() {
             accountRequest(obj.accountrequest, clientid, conn);
           } else if ("quoterequesthistoryrequest" in obj) {
             quoteRequestHistory(obj.quoterequesthistoryrequest, clientid, conn);
+          } else if ("quoterequestopenrequest" in obj) {
+            quoteRequestOpen(obj.quoterequestopenrequest, clientid, conn);            
           } else if ("quotehistoryrequest" in obj) {
             quoteHistory(obj.quotehistoryrequest, clientid, conn);
           } else if ("tradehistoryrequest" in obj) {
@@ -1271,10 +1273,20 @@ function orderBookRemoveRequestDL(clientid, symbol, conn) {
   //bo.getPositionHistory(clientid, symbol);
 }*/
 
+function quoteRequestOpen(req, clientid, conn) {
+  console.log("quoteRequestOpen");
+  db.eval(common.scriptgetopenquoterequests, 2, req.symbol, clientid, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+    conn.write("{\"quoterequests\":" + ret[0] + "}");
+    conn.write("{\"myquotes\":" + ret[1] + "}");
+  });
+}
+
 function quoteRequestHistory(req, clientid, conn) {
   db.eval(common.scriptgetquoterequests, 1, clientid, function(err, ret) {
     if (err) throw err;
-    conn.write("{\"quoterequests\":" + ret + "}");
+    conn.write("{\"quoterequesthistory\":" + ret + "}");
   });
 }
 

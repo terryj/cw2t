@@ -952,14 +952,20 @@ exports.registerCommonScripts = function () {
 
   exports.gettrades = gettrades;
 
+  //
+  // params: array of quotereqid's, symbol ("" = any symbol)
+  // returns array of quote requests
+  //
   getquoterequests = '\
-  local getquoterequests = function(quoterequests) \
+  local getquoterequests = function(quoterequests, symbol) \
     local tblresults = {} \
     local fields = {"clientid","symbol","quantity","cashorderqty","currency","settlcurrency","nosettdays","futsettdate","quotestatus","timestamp","quoteid","quoterejectreason","quotereqid","operatortype","operatorid"} \
     local vals \
     for index = 1, #quoterequests do \
       vals = redis.call("hmget", "quoterequest:" .. quoterequests[index], unpack(fields)) \
-      table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cashorderqty=vals[4],currency=vals[5],settlcurrency=vals[6],nosettdays=vals[7],futsettdate=vals[8],quotestatus=vals[9],timestamp=vals[10],quoteid=vals[11],quoterejectreason=vals[12],quotereqid=vals[13],operatortype=vals[14],operatorid=vals[15]}) \
+      if symbol == "" or symbol == vals[2] then \
+        table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cashorderqty=vals[4],currency=vals[5],settlcurrency=vals[6],nosettdays=vals[7],futsettdate=vals[8],quotestatus=vals[9],timestamp=vals[10],quoteid=vals[11],quoterejectreason=vals[12],quotereqid=vals[13],operatortype=vals[14],operatorid=vals[15]}) \
+      end \
     end \
     return tblresults \
   end \
@@ -1206,11 +1212,48 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id
+  // get open quote requests & related quotes
+  // params: symbol, client id
+  //
+  exports.scriptgetopenquoterequests = getquoterequests + '\
+  local tblquotes = {} \
+  local fields = {"quotereqid","clientid","quoteid","bidquoteid","offerquoteid","symbol","bestbid","bestoffer","bidpx","offerpx","bidquantity","offerquantity","bidsize","offersize","validuntiltime","transacttime","currency","settlcurrency","bidqbroker","offerqbroker","nosettdays","futsettdate","bidfinance","offerfinance","orderid","qclientid"} \
+  local vals \
+  local quoterequests = redis.call("smembers", "openquoterequests") \
+  local tblresults = getquoterequests(quoterequests, KEYS[1]) \
+  for i = 1, #quoterequests do \
+    --[[ get any related quotes ]] \
+    local quotes = redis.call("smembers", "quoterequest:" .. quoterequests[i] .. ":quotes") \
+    for j = 1, #quotes do \
+      vals = redis.call("hmget", "quote:" .. quotes[j], unpack(fields)) \
+      --[[ only include if quote was by this client ]] \
+      if vals[26] == KEYS[2] then \
+        table.insert(tblquotes, {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],bidquoteid=vals[4],offerquoteid=vals[5],symbol=vals[6],bestbid=vals[7],bestoffer=vals[8],bidpx=vals[9],offerpx=vals[10],bidquantity=vals[11],offerquantity=vals[12],bidsize=vals[13],offersize=vals[14],validuntiltime=vals[15],transacttime=vals[16],currency=vals[17],settlcurrency=vals[18],bidqbroker=vals[19],offerqbroker=vals[20],nosettdays=vals[21],futsettdate=vals[22],bidfinance=vals[23],offerfinance=vals[24],orderid=vals[25]}) \
+      end \
+    end \
+  end \
+  return {cjson.encode(tblresults), cjson.encode(tblquotes)} \
+  ';
+/*
+    --[[ get any related quotes ]] \
+    local quotes = redis.call("smembers", "quoterequest:" .. tblresults[i] .. ":quotes") \
+    for j = 1, #quotes do \
+      vals = redis.call("hmget", "quote:" .. quotes[j], unpack(fields)) \
+      --[[ only include if quote was by this client ]] \
+      if vals[26] == KEYS[2] then \
+        table.insert(tblquotes, {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],bidquoteid=vals[4],offerquoteid=vals[5],symbol=vals[6],bestbid=vals[7],bestoffer=vals[8],bidpx=vals[9],offerpx=vals[10],bidquantity=vals[11],offerquantity=vals[12],bidsize=vals[13],offersize=vals[14],validuntiltime=vals[15],transacttime=vals[16],currency=vals[17],settlcurrency=vals[18],bidqbroker=vals[19],offerqbroker=vals[20],nosettdays=vals[21],futsettdate=vals[22],bidfinance=vals[23],offerfinance=vals[24],orderid=vals[25]}) \
+      end \
+    end \
+*/
+/*
+  .. tblresults[i] .. ":quotes") \
+*/
+  //
+  // pass client id - todo: add symbol as an option
   //
   exports.scriptgetquoterequests = getquoterequests + '\
   local quoterequests = redis.call("smembers", KEYS[1] .. ":quoterequests") \
-  local tblresults = getquoterequests(quoterequests) \
+  local tblresults = getquoterequests(quoterequests, "") \
   return cjson.encode(tblresults) \
   ';
 

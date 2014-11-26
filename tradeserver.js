@@ -1780,8 +1780,9 @@ function registerScripts() {
   if not quotereqid then return 1005 end \
   --[[ store the quote request ]] \
   redis.call("hmset", "quoterequest:" .. quotereqid, "clientid", KEYS[1], "symbol", KEYS[2], "quantity", KEYS[3], "cashorderqty", KEYS[4], "currency", KEYS[5], "settlcurrency", KEYS[6], "nosettdays", KEYS[7], "futsettdate", KEYS[8], "quotestatus", "", "timestamp", KEYS[9], "quoterejectreason", "", "quotereqid", quotereqid, "operatortype", KEYS[10], "operatorid", KEYS[11]) \
-  --[[ add to set of quoterequests for this client ]] \
+  --[[ add to set of quoterequests for this client & open ]] \
   redis.call("sadd", KEYS[1] .. ":quoterequests", quotereqid) \
+  redis.call("sadd", "openquoterequests", quotereqid) \
   --[[ get required instrument values for proquote ]] \
   local proquotesymbol = getproquotesymbol(KEYS[2]) \
   local markettype = getmarkettype(KEYS[2], KEYS[12], KEYS[13], KEYS[14]) \
