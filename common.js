@@ -1212,42 +1212,33 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // get open quote requests & related quotes
-  // params: symbol, client id
+  // get open quote requests for a symbol
+  // params: symbol
   //
   exports.scriptgetopenquoterequests = getquoterequests + '\
-  local tblquotes = {} \
-  local fields = {"quotereqid","clientid","quoteid","bidquoteid","offerquoteid","symbol","bestbid","bestoffer","bidpx","offerpx","bidquantity","offerquantity","bidsize","offersize","validuntiltime","transacttime","currency","settlcurrency","bidqbroker","offerqbroker","nosettdays","futsettdate","bidfinance","offerfinance","orderid","qclientid"} \
-  local vals \
   local quoterequests = redis.call("smembers", "openquoterequests") \
   local tblresults = getquoterequests(quoterequests, KEYS[1]) \
-  for i = 1, #quoterequests do \
-    --[[ get any related quotes ]] \
-    local quotes = redis.call("smembers", "quoterequest:" .. quoterequests[i] .. ":quotes") \
-    for j = 1, #quotes do \
-      vals = redis.call("hmget", "quote:" .. quotes[j], unpack(fields)) \
-      --[[ only include if quote was by this client ]] \
-      if vals[26] == KEYS[2] then \
-        table.insert(tblquotes, {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],bidquoteid=vals[4],offerquoteid=vals[5],symbol=vals[6],bestbid=vals[7],bestoffer=vals[8],bidpx=vals[9],offerpx=vals[10],bidquantity=vals[11],offerquantity=vals[12],bidsize=vals[13],offersize=vals[14],validuntiltime=vals[15],transacttime=vals[16],currency=vals[17],settlcurrency=vals[18],bidqbroker=vals[19],offerqbroker=vals[20],nosettdays=vals[21],futsettdate=vals[22],bidfinance=vals[23],offerfinance=vals[24],orderid=vals[25]}) \
-      end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // get quotes made by a client for a quote request
+  //
+  exports.scriptgetmyquotes = '\
+  local fields = {"quotereqid","clientid","quoteid","bidquoteid","offerquoteid","symbol","bestbid","bestoffer","bidpx","offerpx","bidquantity","offerquantity","bidsize","offersize","validuntiltime","transacttime","currency","settlcurrency","bidqbroker","offerqbroker","nosettdays","futsettdate","bidfinance","offerfinance","orderid","qclientid"} \
+  local vals \
+  local tblresults = {} \
+  local quotes = redis.call("smembers", "quoterequest:" .. KEYS[1] .. ":quotes") \
+  for index = 1, #quotes do \
+    vals = redis.call("hmget", "quote:" .. quotes[index], unpack(fields)) \
+    --[[ only include if quote was by this client ]] \
+    if vals[26] == KEYS[2] then \
+      table.insert(tblresults, {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],bidquoteid=vals[4],offerquoteid=vals[5],symbol=vals[6],bestbid=vals[7],bestoffer=vals[8],bidpx=vals[9],offerpx=vals[10],bidquantity=vals[11],offerquantity=vals[12],bidsize=vals[13],offersize=vals[14],validuntiltime=vals[15],transacttime=vals[16],currency=vals[17],settlcurrency=vals[18],bidqbroker=vals[19],offerqbroker=vals[20],nosettdays=vals[21],futsettdate=vals[22],bidfinance=vals[23],offerfinance=vals[24],orderid=vals[25]}) \
     end \
   end \
-  return {cjson.encode(tblresults), cjson.encode(tblquotes)} \
+  return cjson.encode(tblresults) \
   ';
-/*
-    --[[ get any related quotes ]] \
-    local quotes = redis.call("smembers", "quoterequest:" .. tblresults[i] .. ":quotes") \
-    for j = 1, #quotes do \
-      vals = redis.call("hmget", "quote:" .. quotes[j], unpack(fields)) \
-      --[[ only include if quote was by this client ]] \
-      if vals[26] == KEYS[2] then \
-        table.insert(tblquotes, {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],bidquoteid=vals[4],offerquoteid=vals[5],symbol=vals[6],bestbid=vals[7],bestoffer=vals[8],bidpx=vals[9],offerpx=vals[10],bidquantity=vals[11],offerquantity=vals[12],bidsize=vals[13],offersize=vals[14],validuntiltime=vals[15],transacttime=vals[16],currency=vals[17],settlcurrency=vals[18],bidqbroker=vals[19],offerqbroker=vals[20],nosettdays=vals[21],futsettdate=vals[22],bidfinance=vals[23],offerfinance=vals[24],orderid=vals[25]}) \
-      end \
-    end \
-*/
-/*
-  .. tblresults[i] .. ":quotes") \
-*/
+
   //
   // pass client id - todo: add symbol as an option
   //
