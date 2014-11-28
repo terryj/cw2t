@@ -338,7 +338,6 @@ function listen() {
 
             // send the data
             start(clientid, conn);
-            console.log("after start");
           });
         });
       });

@@ -290,13 +290,14 @@ conn.on('error', function(error) {
 });
 
 function subscribe(instcode) {
+  console.log("subscribe");
   var instcodelen = instcode.length;
-  var buf = new Buffer(21+instcodelen);
+  var buf = new Buffer(25+instcodelen);
 
   buf[0] = 0;
   buf[1] = 0;
   buf[2] = 0;
-  buf[3] = 17+instcodelen;
+  buf[3] = 21+instcodelen;
   buf[4] = 28;
   buf.write("332", 5);
   buf[8] = 31;
@@ -307,7 +308,11 @@ function subscribe(instcode) {
   buf.write("22", 15+instcodelen); // bid
   buf[17+instcodelen] = 30;
   buf.write("25", 18+instcodelen); // offer
-  buf[20+instcodelen] = 28;
+  buf[20+instcodelen] = 30;
+  //buf.write("100", 21+instcodelen); // turnover
+  //buf.write("114", 21+instcodelen); // bid net change
+  buf.write("115", 21+instcodelen); // bid tick
+  buf[24+instcodelen] = 28;
   
   conn.write(buf);
 }
