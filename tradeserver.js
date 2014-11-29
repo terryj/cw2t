@@ -183,7 +183,7 @@ function quoteRequest(quoterequest) {
 
   //todo - remove
   //hour = hour + 4;
-  day = 0;
+  //day = 0;
   //
 
   // get settlement date from T+n no. of days

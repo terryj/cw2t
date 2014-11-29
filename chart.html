@@ -1492,12 +1492,12 @@
             }
         }
 
-        function countdownQuotes(quote) {
+        function countdownQuote(quote) {
             if (quote.noseconds > 0) {
                 quote.noseconds--;
 
                 // update colours
-                if (quote.bidpx != "") {
+                /*if (quote.bidpx != "") {
                     // shade of red
                     quote.bkcolor.g = quote.bkcolor.b = parseInt((quote.startnoseconds - quote.noseconds) / quote.startnoseconds * 255);
                 } else {
@@ -1505,7 +1505,7 @@
                     quote.bkcolor.r = quote.bkcolor.g = parseInt((quote.startnoseconds - quote.noseconds) / quote.startnoseconds * 255);
                 }
                 // shade of grey
-                quote.color.r = quote.color.g = quote.color.b = parseInt(quote.noseconds / quote.startnoseconds * 255);
+                quote.color.r = quote.color.g = quote.color.b = parseInt(quote.noseconds / quote.startnoseconds * 255);*/
             } else {
                 clearInterval(quote.interval);
             }
@@ -1517,17 +1517,28 @@
 
             // see if it is my quote
             if (quote.qclientid == clientid) {
+                // calculate the duration of the quote - todo: on the server?
+                var noseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+                quote.noseconds = noseconds;
+                quote.startnoseconds = noseconds;
+
                 // update the quote
                 updateMyQuote(quote);
 
                 // update the display
-                updateMyQuoteForm(quote.quotereqid)
+                updateMyQuoteForm(quote.quotereqid);
+
+                // start a timer
+                startMyQuoteInterval(quote);
             } else {
                 // update quote array
                 updateQuoteLadder(quote);
 
                 // update display
                 updateQuoteTable();
+
+                // start a timer
+                startQuoteInterval(quote);
             }
         }
 
@@ -1580,7 +1591,7 @@
             }
 
             // start a timer
-            startQuoteInterval(quote);
+            //startQuoteInterval(quote);
         }
 
         function updateQuoteTable() {
@@ -1818,7 +1829,7 @@
 
         function startQuoteInterval(quote) {
             var interval = setInterval(function() {
-                countdownQuotes(quote);
+                countdownQuote(quote);
                 updateQuoteTable();
             }, 1000);
 
@@ -1826,21 +1837,15 @@
             quote.interval = interval;
         }
 
-        // function to count down seconds remaining per quote
-        /*function startQuoteInterval(bidoffer, index) {
-            var quoteinterval = setInterval(function() {
-                countdownQuotes(bidoffer, index);
-                updateQuoteTable();
+        function startMyQuoteInterval(quote) {
+            var interval = setInterval(function() {
+                countdownQuote(quote);
+                updateMyQuoteForm(quote.quotereqid);
             }, 1000);
 
-            // keep track of timers as there may be more than one
-            if (bidoffer == "bid") {
-                quotes[index].bidinterval = quoteinterval;
-            }
-            if (bidoffer == "offer") {
-                quotes[index].offerinterval = quoteinterval;
-            }
-        }*/
+            // keep track of timer
+            quote.interval = interval;            
+        }
 
         // open quote requests
         function quoterequestsReceived(quoterequestarr) {
@@ -2006,7 +2011,6 @@
         function updateMyQuote(quote) {
             // initialise array of quotes for this quote request, if necessary
             if (!(quote.quotereqid in myquotes)) {
-                console.log("not in");
                 myquotes[quote.quotereqid] = [];
             }
 
@@ -2436,24 +2440,40 @@
             var cells = rows.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(col) {
-                        /*var ret;
-                        if (col == "buy" || col == "sell") {
-                            ret = row.quotereqid;
-                        } else if (col == "price") {
-                            ret = row; // todo
-                        } else {
-                            ret = row[col];
-                        }*/
                         return {col: col, value: row};
                     });
                 });
 
+            // update - triggered when quote received from server
+            cells.each(function(d) {
+                if (d.col == "buy") {
+                    if (d.value.offerpx != "") {
+                        // remove the button
+                        var buybutton = d3.select("#buybutton" + d.value.quotereqid);
+                        if (!(buybutton.empty())) {
+                            buybutton.remove();
+                        }
+
+                        displayTimer(this, d.value.quotereqid, d.value.noseconds);
+                    }
+                } else if (d.col == "sell") {
+                    if (d.value.bidpx != "") {
+                        // remove the button
+                        var buybutton = d3.select("#sellbutton" + d.value.quotereqid);
+                        if (!(buybutton.empty())) {
+                            buybutton.remove();
+                        }
+
+                        displayTimer(this, d.value.quotereqid, d.value.noseconds);
+                    }
+                }
+            });
+
             // add columns
             var cellsenter = cells.enter().append("td");
 
-            // add text/buttons
+            // enter - add text/buttons
             cellsenter.each(function(d, i, j) {
-                console.log(d);
                 if (d.col == "quantity") {
                     d3.select(this)
                         .append("input")
@@ -2482,21 +2502,16 @@
                         .on("click", function() {
                             sendQuote(1, d.value);
 
+                            // disable buttons immediately
                             d3.select(this)
                                 .attr("disabled", null)
                                 .attr("value", "Buy Quote Placed")
                                 .style("cursor", "default");
 
-                            //d3.select("#selvaliduntil" + d.value.externalquoteid).remove();
-
-                            /*d3.select("#colvaliduntil").append("label")
-                                .text("30 Seconds");*/
-
-                            /*d3.select("#sellbutton" + d.value.externalquoteid)
-                                .attr("value", "Cancel Quote");*/
+                            d3.select("#sellbutton" + d.value.quotereqid)
+                                .attr("disabled", null)
+                                .style("cursor", "default");
                         });
-                /*} else if (d.col == "validuntiltime") {
-                    validUntilOptions(this, d.value.quotereqid);*/
                 } else if (d.col == "sell") {
                     d3.select(this)
                         .append("input")
@@ -2507,31 +2522,35 @@
                         .on("click", function() {
                             sendQuote(2, d.value);
 
+                            // disable buttons immediately
                             d3.select(this)
                                 .attr("disabled", null)
                                 .attr("value", "Sell Quote Placed")
                                 .style("cursor", "default");
 
-                            /*d3.select("#inpprice" + d.value.externalquoteid).remove();
-                            d3.select("#colinpprice" + d.value.externalquoteid)
-                                .append("label")
-                                .text("qty");
-
-                            d3.select("#inpprice" + d.value.externalquoteid).remove();
-                            d3.select("#colinpprice" + d.value.externalquoteid)
-                                .append("label")
-                                .text("qty");
-
-                            d3.select("#selvaliduntil" + d.value.externalquoteid).remove();
-
-                            d3.select("#colvaliduntil").append("label")
-                                .text("30 Seconds");
-
-                            d3.select("#buybutton" + d.value.externalquoteid)
-                                .attr("value", "Cancel Quote");*/
-                        });
+                            d3.select("#buybutton" + d.value.quotereqid)
+                                .attr("disabled", null)
+                                .style("cursor", "default");
+                         });
                 }
             });
+
+            function displayTimer(col, quotereqid, noseconds) {
+                var lbltimer = d3.select("#lbltimer" + quotereqid);
+                if (lbltimer.empty()) {
+                    lbltimer = d3.select(col)
+                        .append("label")
+                        .attr("id", "lbltimer" + quotereqid);
+                }
+
+                lbltimer.text(function(d) {
+                    if (noseconds == 0) {
+                        return "Expired";
+                    } else {
+                        return noseconds + " Seconds";
+                    }
+                });
+            }
         }
 
         function createMyQuoteForm(quotereqid) {
