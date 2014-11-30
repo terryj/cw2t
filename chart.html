@@ -1905,6 +1905,7 @@
             // add table, body, row
             var tblquoterequestsnew = tblquoterequests.enter()
                 .append("table")
+                    .attr("id", function(d) { return "tblquoterequest" + d.quotereqid; })
                     .attr("class", "tblquoterequest")
                 .append("tbody")
                 .append("tr");
@@ -2409,10 +2410,6 @@
             });
         }
 
-                                    /*var t = document.createElement('table');
-                    tblquoterequest.parentNode.insertBefore(t, tblquoterequest.nextSibling);
-                                t.id = "tblmyquote" + quotereqid;*/
-
         // enter a quote
         function updateMyQuoteForm(quotereqid) {
             console.log("updateMyQuoteForm");
@@ -2422,7 +2419,7 @@
 
             var cols = ["buy", "quantity", "price", "sell"];
 
-            // create the table, if necessary
+            // create a table for this quote, if necessary
             var tblquoteform = d3.select("#tblquoteform" + quotereqid);
             if (tblquoteform.empty()) {
                 tblquoteform = createMyQuoteForm(quotereqid);
@@ -2553,15 +2550,17 @@
             }
         }
 
+        // create a quote entry table for a quote request
         function createMyQuoteForm(quotereqid) {
-            var divquoterequest = d3.select("#divquoterequest");
+            // insert the new quote table immediately after the associated quote request table
+            var tblquoterequest = document.getElementById("tblquoterequest" + quotereqid);
+            var t = document.createElement('table');
+            tblquoterequest.parentNode.insertBefore(t, tblquoterequest.nextSibling);
+            t.id = "tblmyquote" + quotereqid;
 
-            // create a table
-            var tblquoteform = divquoterequest.append("table")
-                .attr("id", "tblquoteform" + quotereqid)
-                .attr("class", "tblquoteform");
+            // get a d3 selection
+            var tblquoteform = d3.select("#tblmyquote" + quotereqid);
 
-            // add a body
             tblquoteform.append("tbody");
 
             return tblquoteform;
