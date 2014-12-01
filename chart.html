@@ -21,26 +21,33 @@
         color: yellow;
     }
     header {
-        font-size: 27px;
+        font-size: 24px;
         text-align: center;
-        color: grey;
+        color: gray;
     }
     body {
-        color: grey;
+        color: gray;
         /*font: 12px Arial;*/
         /*font: 12px sans-serif;*/
     }
     li:hover { 
         background-color: #ccc;
     }
-    a {
+    a:link {
         font-size: 21px;
-        color: grey;
         text-decoration: underline;
-        margin-left: 50px;
+        color: gray;
+    }
+    a:visited {
+        text-decoration: none;
+        color: darkgray;
     }
     a:hover {
         cursor: pointer;
+        color: dimgray;
+    }
+    a:active {
+        color: gray;
     }
     .x.axis path {
         /*stroke: blue;*/
@@ -75,15 +82,15 @@
     .selcashorshares {
         font-size: 21px;
         border-style: none;
-        color: grey;
+        color: gray;
     }
     .optcashorshares {
         /*font-size: 21px;*/
-        color: grey;        
+        color: gray;        
     }
     .rfqqty {
         font-size: 21px;
-        color: grey;
+        color: gray;
         margin-left: 20px;
         border: solid 1px #c0c0c0;
     }
@@ -97,7 +104,7 @@
 
         /*font: courier;*/
         font-size: 21px;
-        color: grey;
+        color: gray;
         border-style: none;
         background-color: #ddd;
         margin-left: 20px;
@@ -111,7 +118,7 @@
     .quotebutton {
         font-size: 21px;
         background-color: #ddd;
-        color: grey;
+        color: gray;
         border-style: none;        
         cursor: pointer;
     }
@@ -163,7 +170,7 @@
         text-indent: 3px;
         /*font-family: courier, arial, sans-serif;*/
         font-size: 1em;
-        color: grey;
+        color: gray;
         /*background: #fff;*/
         border: solid 1px #c0c0c0;
         /*border:solid 1px #d9d9d9;*/
@@ -198,14 +205,14 @@
     /*.tblpricehdr {
         font: courier;
         font-size: 21px;
-        color: lightgrey;        
+        color: lightgray;        
     }*/
     .tblpricerow {
         /*text-align: center;*/
         /*font: courier;*/
         font-size: 33px;
         /*background-color: yellow;*/
-        /*color: grey;*/
+        /*color: gray;*/
     }
     .signindiv {
         position: absolute;
@@ -222,8 +229,8 @@
         margin-bottom: 20px;
     }
     .signinbutton {
-        background-color: lightgrey;
-        color: grey;
+        background-color: lightgray;
+        color: gray;
         font-size: 21px;
         border-style: none;
         cursor: pointer;
@@ -255,6 +262,10 @@
         margin : 0 auto;
         margin-top: 10px;
     }
+    .tblmenu tr td {
+        text-align: center;
+        padding: 15px;
+    }
     .tblrfq {
         margin : 0 auto;
     }
@@ -276,6 +287,10 @@
     }
     .tblmyquote {
         margin : 0 auto;        
+    }
+    .tblquoteform {
+        margin : 0 auto;        
+        margin-top: 15px;
     }
     .divrfq {
         margin-top: 20px;
@@ -308,7 +323,6 @@
         var quoteresponses = [];
         var email = "";
         var myquotes = [];
-        //var nextquoteid = 1;
 
         var datain = function(msg) {
             //console.log(msg);
@@ -370,8 +384,8 @@
                 console.log("connection open");
 
                 // we are ready
-                displayFormSignin();
-                ///cheat();
+                //displayFormSignin();
+                cheat();
             };
 
             sockjs.onmessage = function(e) {
@@ -409,6 +423,9 @@
             divcontainer.append("header")
                 .attr("id", "stockboxtitle")
                 .text("Cantwaittotrade - " + email);
+
+            // display main menu
+            createMenu();
 
             // single symbol select
             selectSymbol();
@@ -496,7 +513,7 @@
             // create a price table if one does not exist
             if (d3.select("#tblprice").empty()) {
                 createPriceTable(price, cols);
-                createMenu(price.symbol);
+                createPriceMenu(price.symbol);
             }
 
             // update price array
@@ -580,9 +597,9 @@
                     .text(function(d, i) { return d.value; });
         }
 
-        function createMenu(symbol) {
+        function createMenu() {
             var data = [""];
-            var cols = ["Position", "Account Summary", "Request A Quote", "Live Quote Requests"];
+            var cols = ["Single Product", "Portfolio", "Account Summary", "Live Quote Requests"];
 
             // create a table
             var tblmenu = d3.select("#divcontainer")
@@ -602,7 +619,62 @@
             var cells = rows.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(col) {
-                        //return {column: column, value: column};
+                        return col;
+                    });
+                 })
+                .enter()
+                .append("td")
+                    .append("a")
+                        .attr("href", "#")
+                        .html(function (d) { return d; })
+                        // adding a style to treat first menu item as default
+                        .style("color", function(d) { if (d==cols[0]) return "gray"; })
+                        .on("click", function(d) {
+                            clearScreen();
+
+                            // switch off styles
+                            d3.selectAll("a")
+                                .style("color", "");
+
+                            // highlight selected
+                            d3.select(this)
+                                .style("color", "gray");
+
+                            if (d == cols[0]) {
+                                selectSymbol();
+                            } else if (d == cols[1]) {
+                                requestPosition("");
+                            } else if (d == cols[2]) {
+                                requestAccount();
+                            } else if (d == cols[3]) {
+                                requestOpenQuoteRequests("");
+                            }
+                        });
+        }
+
+        function createPriceMenu(symbol) {
+            var data = [""];
+            var cols = ["Request A Quote"];
+
+            // create a table
+            var tblmenu = d3.select("#divcontainer")
+                .append("table")
+                .attr("id", "tblmenuprice")
+                .attr("class", "tblmenu");
+
+            // add a body
+            var tbody = tblmenu.append("tbody");
+
+            // create a row for each field
+            var rows = tbody.selectAll("tr")
+                .data(data)
+                .enter()
+                .append("tr");
+
+            // create a cell in each row for each column
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(col) {
                         return col;
                     });
                  })
@@ -614,16 +686,8 @@
                         .on("click", function(d) {
                             clearScreen();
 
-                            if (d == cols[0]) {
-                                requestPosition(symbol);
-                            } else if (d == cols[1]) {
-                                requestAccount();
-                            } else if (d == cols[2]) {
-                                requestQuote(symbol);
-                            } else if (d == cols[3]) {
-                                requestOpenQuoteRequests(symbol);
-                            }
-                        });
+                            requestQuote(symbol);
+                        });            
         }
 
         function clearScreen() {
@@ -631,6 +695,9 @@
             d3.select("#divrfq").remove();
             d3.select("#divquote").remove();
             d3.select("#divquoterequest").remove();
+            d3.select("#divprice").remove();
+            d3.select("#tblmenuprice").remove();
+            d3.select("#stockboxdiv").remove();
         }
 
         function createTradeTable() {
@@ -1360,25 +1427,58 @@
         function tradeReceived(trade) {
             console.log("tradeReceived");
             console.log(trade);
+            var inquotes = false;
+
             // indicate the quote has been traded
+            // quote may be in rfq quotes
             for (var i in quotes) {
                 if (trade.side == "1") {
                     if (trade.quoteid == quotes[i].offerquote.quoteid) {
                         quotes[i].offerquote.tradeid = trade.tradeid;
+
+                        // update display
+                        updateQuoteTable();
+
+                        // clear timer
                         clearInterval(quotes[i].interval);
+
+                        inquotes = true;
                         break;
                     }
                 } else {
                     if (trade.quoteid == quotes[i].bidquote.quoteid) {
                         quotes[i].bidquote.tradeid = trade.tradeid;
+
+                        // update display
+                        updateQuoteTable();
+
+                        // clear timer
                         clearInterval(quotes[i].interval);
+
+                        inquotes = true;
                         break;
                     }
                 }
             }
 
             // update display
-            updateQuoteTable();
+            //updateQuoteTable();
+
+            // or quote may be in myquotes, responding to an rfq
+            if (!inquotes) {
+                for (var i in myquotes) {
+                    if (trade.quoteid == myquotes[i][0].quoteid) {
+                        myquotes[i][0].tradeid = trade.tradeid;
+
+                        // update display
+                        updateMyQuoteForm(i);
+
+                        // clear timer
+                        clearInterval(myquotes[i][0].interval);
+                        break;
+                    }
+                }
+            }
         }
 
         /*function tradeReceived(trade) {
@@ -1475,10 +1575,12 @@
                         .text(function(d) { return d.name; })
                         .on("click", function(d, i) {
                             var lastspace = this.innerHTML.lastIndexOf(' ');
-                            var symbol = this.innerHTML.substr(lastspace+1);
+                            selectedsymbol = this.innerHTML.substr(lastspace+1);
+
+                            clearScreen();
 
                             // request a symbol
-                            requestOrderbook(symbol);
+                            requestOrderbook(selectedsymbol);
 
                             // clear array
                             symboldata = [];
@@ -1850,7 +1952,6 @@
         // open quote requests
         function quoterequestsReceived(quoterequestarr) {
             console.log("quoterequestsReceived");
-            console.log(quoterequestarr);
 
             // we have requested all open quote requests, so we need to clear our global array
             quoterequests = [];
@@ -1858,9 +1959,6 @@
             for (var i = 0; i < quoterequestarr.length; i++) {
                 // add quote request to global array
                 quoterequests.push(quoterequestarr[i]);
-
-                // initialise array of quotes i may make for this request
-                //myquotes[quoterequestarr[i].quotereqid] = [];
             }
 
             // update display
@@ -2451,7 +2549,7 @@
                             buybutton.remove();
                         }
 
-                        displayTimer(this, d.value.quotereqid, d.value.noseconds);
+                        displayTimer(this, d.value);
                     }
                 } else if (d.col == "sell") {
                     if (d.value.bidpx != "") {
@@ -2461,7 +2559,7 @@
                             buybutton.remove();
                         }
 
-                        displayTimer(this, d.value.quotereqid, d.value.noseconds);
+                        displayTimer(this, d.value);
                     }
                 }
             });
@@ -2532,19 +2630,22 @@
                 }
             });
 
-            function displayTimer(col, quotereqid, noseconds) {
-                var lbltimer = d3.select("#lbltimer" + quotereqid);
+            function displayTimer(col, quote) {
+                console.log("displayTimer");
+                var lbltimer = d3.select("#lbltimer" + quote.quotereqid);
                 if (lbltimer.empty()) {
                     lbltimer = d3.select(col)
                         .append("label")
-                        .attr("id", "lbltimer" + quotereqid);
+                        .attr("id", "lbltimer" + quote.quotereqid);
                 }
 
                 lbltimer.text(function(d) {
-                    if (noseconds == 0) {
+                    if ('tradeid' in quote) {
+                        return "Trade Done";
+                    } else if (quote.noseconds == 0) {
                         return "Expired";
                     } else {
-                        return noseconds + " Seconds";
+                        return quote.noseconds + " Seconds";
                     }
                 });
             }
@@ -2556,10 +2657,11 @@
             var tblquoterequest = document.getElementById("tblquoterequest" + quotereqid);
             var t = document.createElement('table');
             tblquoterequest.parentNode.insertBefore(t, tblquoterequest.nextSibling);
-            t.id = "tblmyquote" + quotereqid;
+            t.id = "tblquoteform" + quotereqid;
 
-            // get a d3 selection
-            var tblquoteform = d3.select("#tblmyquote" + quotereqid);
+            // get d3 selection
+            var tblquoteform = d3.select("#tblquoteform" + quotereqid)
+                .attr("class", "tblquoteform");
 
             tblquoteform.append("tbody");
 
