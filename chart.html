@@ -292,6 +292,14 @@
         margin : 0 auto;        
         margin-top: 15px;
     }
+    .tblposition {
+        margin : 0 auto;        
+        margin-top: 15px;
+    }
+    .tblposition tr td {
+        padding: 15px;
+        text-align: center;
+    }
     .divrfq {
         margin-top: 20px;
     }
@@ -323,6 +331,7 @@
         var quoteresponses = [];
         var email = "";
         var myquotes = [];
+        var positions = [];
 
         var datain = function(msg) {
             //console.log(msg);
@@ -504,6 +513,13 @@
             }
         }
 
+        function initPrice() {
+            var price = {};
+            price.bid = "0.00";
+            price.ask = "0.00";
+            pricedata[0] = price;
+        }
+
         function priceReceived(price) {
             console.log("priceReceived");
             console.log(price);
@@ -528,7 +544,7 @@
             var tblpricerow = d3.select("#tblpricerow");
 
             // update
-            tblpricerow.selectAll("td")
+            var cells = tblpricerow.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(column) {
                         var ret;
@@ -540,24 +556,26 @@
                         return {column: column, value: ret};
                     });
                  })
-                .text(function(d, i) { return d.value; });
+                .text(function(d) { console.log("update");return d.value; });
+
+            // enter
+            cells.enter()
+                .append("td")
+                    .text(function(d) { console.log("enter");return d.value; });
         }
 
         function createPriceTable(price, cols) {
+            console.log("createPriceTable");
             var hdr = ["bid","ask"];
 
-            pricedata.push(price);
-
             // create a price div
-            var divprice = d3.select("#divcontainer").append("div")
+            var divprice = d3.select("#divcontainer")
+                .append("div")
                 .attr("id", "divprice");
 
             divprice.append("header")
                 .text(instruments[price.symbol].description + " - " + price.symbol)
                 .style("margin-top", "20px");
-
-            /*divprice.append("header")
-                .text(price.symbol + " - " + price.timestamp);*/
 
             // create a table
             var tblprice = divprice.append("table")
@@ -577,7 +595,7 @@
                     .attr("class", "tblpricehdr")
                     .text(function(d) { return d; });*/
 
-            // create a row for each field
+            // create a row
             var rows = tbody.selectAll("tr")
                 .data(pricedata)
                 .enter()
@@ -586,7 +604,7 @@
                 .attr("class", "tblpricerow");
 
             // create a cell in each row for each column
-            var cells = rows.selectAll("td")
+            /*var cells = rows.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(column) {
                         return {column: column, value: row[column]};
@@ -594,7 +612,7 @@
                  })
                 .enter()
                 .append("td")
-                    .text(function(d, i) { return d.value; });
+                    .text(function(d) { return d.value; });*/
         }
 
         function createMenu() {
@@ -604,6 +622,7 @@
             // create a table
             var tblmenu = d3.select("#divcontainer")
                 .append("table")
+                .attr("id", "tblmenu")
                 .attr("class", "tblmenu");
 
             // add a body
@@ -626,14 +645,15 @@
                 .append("td")
                     .append("a")
                         .attr("href", "#")
+                        .attr("id", function(d) { return d == cols[0] ? "mnusingleproduct" : null; })
                         .html(function (d) { return d; })
-                        // adding a style to treat first menu item as default
-                        .style("color", function(d) { if (d==cols[0]) return "gray"; })
+                        // add a style to treat first menu item as default
+                        .style("color", function(d) { return d == cols[0] ? "gray" : null; })
                         .on("click", function(d) {
                             clearScreen();
 
                             // switch off styles
-                            d3.selectAll("a")
+                            d3.select("#tblmenu").selectAll("a")
                                 .style("color", "");
 
                             // highlight selected
@@ -684,8 +704,6 @@
                         .attr("href", "#")
                         .html(function (d) { return d; })
                         .on("click", function(d) {
-                            clearScreen();
-
                             requestQuote(symbol);
                         });            
         }
@@ -748,7 +766,7 @@
         }
 
         function requestOrderbook(symbol) {
-            console.log("requestOrderbook:"+symbol);
+            initPrice();
             sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
         }
 
@@ -1461,9 +1479,6 @@
                 }
             }
 
-            // update display
-            //updateQuoteTable();
-
             // or quote may be in myquotes, responding to an rfq
             if (!inquotes) {
                 for (var i in myquotes) {
@@ -1481,36 +1496,14 @@
             }
         }
 
-        /*function tradeReceived(trade) {
-            console.log(trade);
-
-            var tbldata = [];
-
-            d3.select("#lblseconds")
-                .text("Order filled");
-
-            for (var key in trade) {
-                if (trade.hasOwnProperty(key)) {
-                    var elem = {};
-                    elem.key = key;
-                    elem.value = trade[key];
-                    tbldata.push(elem);
-                }
-            }
-
-            displayTable(tbldata);
-        }*/
-
         function selectSymbol() {
             var symboldata = [];
 
             var stockboxdiv = d3.select("#divcontainer")
-            //var stockboxdiv = d3.select("body")
                 .append("div")
                 .attr("id", "stockboxdiv")
                 .attr("class", "stockboxdiv");
 
-            //var stockboxinput = stockboxdiv.append("input")
             var stockboxinput = stockboxdiv
                 .append("input")
                 .attr("id", "stockboxinput")
@@ -1521,11 +1514,7 @@
                     displayList();
                 });
 
-            /*var stocklist = stockboxdiv.append("ul")
-                .attr("id", "stocklist")
-                .attr("class", "stocklist");*/
-
-            d3.select("#stockboxinput").node().focus();      
+            stockboxinput.node().focus();      
 
             function buildList(searchtext) {
                 // clear array
@@ -1577,7 +1566,8 @@
                             var lastspace = this.innerHTML.lastIndexOf(' ');
                             selectedsymbol = this.innerHTML.substr(lastspace+1);
 
-                            clearScreen();
+                            d3.select("#divprice").remove();
+                            d3.select("#tblmenuprice").remove();
 
                             // request a symbol
                             requestOrderbook(selectedsymbol);
@@ -1702,11 +1692,11 @@
             // create a quote table if one does not exist
             var tblquote = d3.select("#tblquote");
             if (tblquote.empty()) {
-                createQuoteTable();
+                tblquote = createQuoteTable();
             }
 
             // base the table on the quotes array
-            var rows = d3.select("#tblquote").select("tbody").selectAll("tr")
+            var rows = tblquote.select("tbody").selectAll("tr")
                 .data(quotes);
 
             // create a new row for each quote level (may be bid/offer/both)
@@ -1927,6 +1917,8 @@
                 .append("th")
                 .attr("colspan", 2)
                     .text(function(d) { return d; });*/
+
+            return tblquote;
         }
 
         function startQuoteInterval(quote) {
@@ -2999,33 +2991,41 @@
             sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
         }
 
-        function positionsReceived(positions) {
+        function positionsReceived(positionsarr) {
             console.log("positionsReceived");
-            console.log(positions);
+
+            // empty array
+            positions = [];
+
+            for (var i = 0; i < positionsarr.length; i++) {
+                positions.push(positionsarr[i]);
+            }
+
+            updatePositionTable();
         }
 
         function positionReceived(position) {
             console.log("positionReceived");
             console.log(position);
 
-            // we need an array
-            var positions = [];
+            // add to array
             positions.push(position);
 
-            updatePositionTable(positions);
+            updatePositionTable();
         }
 
-        function updatePositionTable(positions) {
-            var columns = ["quantity", "cost", "currency", "margin", "averagecostpershare", "realisedpandl", "unrealisedpandl"];
+        function updatePositionTable() {
+            console.log(positions);
+            var cols = ["symbol", "quantity", "cost", "currency", "margin", "averagecostpershare", "unrealisedpandl"];
 
             // create a div
-            var divposition = d3.select("#divposition");
-            if (divposition.empty()) {
-                createPositionTable(columns);
+            var tblposition = d3.select("#tblposition");
+            if (tblposition.empty()) {
+                tblposition = createPositionTable(cols);
             }
 
             // create a row for a position
-            var rows = d3.select("#tblposition").select("tbody").selectAll("tr")
+            var rows = tblposition.select("tbody").selectAll("tr")
                 .data(positions);
 
             // enter
@@ -3038,23 +3038,48 @@
             // create a cell in each row for each column
             var cells = rows.selectAll("td")
                 .data(function(row) {
-                    return columns.map(function(column) {
-                        return {column: column, value: row[column]};
+                    return cols.map(function(col) {
+                        return {col: col, value: row[col]};
                     });
                  })
                 .enter()
                 .append("td")
-                    .text(function(d) { console.log(d); return d.value; });
+                .each(function(d) {
+                    if (d.col == "symbol") {
+                        // display a link for this symbol
+                        d3.select(this)
+                            .append("a")
+                                .attr("href", "#")
+                                .html(function (d) { return d.value; })
+                                .on("click", function(d) {
+                                    clearScreen();
+                                    selectSymbol();
+                                    requestOrderbook(d.value);
+
+                                    // switch off styles
+                                    d3.select("#tblmenu").selectAll("a")
+                                        .style("color", "");
+
+                                    // highlight selected
+                                    d3.select("#mnusingleproduct")
+                                        .style("color", "gray");
+                                });
+                    } else {
+                        d3.select(this)
+                            .text(function(d) { return d.value; });
+                    }
+                });
         }
 
-        function createPositionTable(columns) {
+        function createPositionTable(cols) {
             // create position div
-            divposition = d3.select("#divcontainer")
+            var divposition = d3.select("#divcontainer")
                 .append("div")
                 .attr("id", "divposition");
 
             // create table
             var tblposition = divposition.append("table")
+                .attr("class", "tblposition")
                 .attr("id", "tblposition");
 
             // add header & body
@@ -3064,10 +3089,12 @@
             // append the header row
             thead.append("tr")
                 .selectAll("th")
-                .data(columns)
+                .data(cols)
                 .enter()
                 .append("th")
                     .text(function(d) { return d; });
+
+            return tblposition;
         }
 
         function requestOpenQuoteRequests(symbol) {

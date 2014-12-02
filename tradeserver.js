@@ -183,7 +183,7 @@ function quoteRequest(quoterequest) {
 
   //todo - remove
   //hour = hour + 4;
-  day = 0;
+  //day = 0;
   //
 
   // get settlement date from T+n no. of days
@@ -316,6 +316,7 @@ function newOrder(order) {
   if (order.futsettdate == "") {
     order.futsettdate = common.getUTCDateString(common.getSettDate(today, order.nosettdays, holidays));
   }
+  console.log("about to script");
 
   // store the order, get an id & credit check it
   // note: param #7 not used
@@ -1018,7 +1019,7 @@ function registerScripts() {
     local positionid = redis.call("incr", "positionid") \
     redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "side", side, "quantity", quantity, "cost", cost, "currency", currency, "margin", margin, "positionid", positionid, "averagecostpershare", avgcostpershare, "realisedpandl", 0) \
     redis.call("sadd", positionskey, symbol) \
-    redis.call("sadd", "position:" + symbol + ":clients", clientid) \
+    redis.call("sadd", "position:" .. symbol .. ":clients", clientid) \
     redis.call("sadd", postradeskey, tradeid) \
     return positionid \
   end \
@@ -1028,10 +1029,10 @@ function registerScripts() {
   // todo: do something with realisedpandl
   //
   closeposition = '\
-  local closeposition = function(positionkey, positionskey, postradeskey, symbol, tradeid, realisedpandl) \
+  local closeposition = function(positionkey, positionskey, postradeskey, clientid, symbol, tradeid, realisedpandl) \
     redis.call("hdel", positionkey, "clientid", "symbol", "side", "quantity", "cost", "currency", "margin", "positionid", "averagecostpershare", "realisedpandl") \
     redis.call("srem", positionskey, symbol) \
-    redis.call("srem", "position:" + symbol + ":clients", clientid) \
+    redis.call("srem", "position:" .. symbol .. ":clients", clientid) \
     local postrades = redis.call("smembers", postradeskey) \
     for index = 1, #postrades do \
       redis.call("srem", postradeskey, postrades[index]) \
@@ -1040,8 +1041,8 @@ function registerScripts() {
   ';
 
   //
-  // positions are keyed on clientid + symbol + currency
-  // they are linked to a list of trade ids to provide further information, such as stellement date, if required
+  // positions are keyed on clientid + symbol
+  // they are linked to a list of trade ids to provide further information, such as settlement date, if required
   // a position id is allocated against a position and stored against the trade
   //
   updateposition = getrealisedpandl + closeposition + createposition + '\
@@ -1074,10 +1075,10 @@ function registerScripts() {
       elseif tonumber(tradequantity) == tonumber(vals[1]) then \
         --[[ just close position ]] \
         realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
-        closeposition(positionkey, positionskey, postradeskey, symbol, tradeid, realisedpandl) \
+        closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid, realisedpandl) \
       elseif tonumber(tradequantity) > tonumber(vals[1]) then \
         --[[ close position ]] \
-        closeposition(positionkey, positionskey, postradeskey, symbol, tradeid, realisedpandl) \
+        closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid, realisedpandl) \
         --[[ & open new ]] \
         posqty = tonumber(tradequantity) - tonumber(vals[1]) \
         poscost = posqty * tonumber(tradeprice) \
@@ -1086,7 +1087,7 @@ function registerScripts() {
         posmargin = round(posmargin, 5) \
         avgcostpershare = tradeprice \
         realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
-        createposition(positionkey, positionskey, postradeskey, clientid, symbol, side, posqty, avgcostpershare, poscost, currency, posmargin, tradeid) \
+        positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, side, posqty, avgcostpershare, poscost, currency, posmargin, tradeid) \
       else \
         --[[ part-fill ]] \
         posqty = tonumber(vals[1]) - tonumber(tradequantity) \
@@ -1101,7 +1102,7 @@ function registerScripts() {
       end \
     else \
       --[[ new position ]] \
-      createposition(positionkey, positionskey, postradeskey, clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, trademargin, tradeid) \
+      positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, trademargin, tradeid) \
     end \
     return positionid \
   end \
