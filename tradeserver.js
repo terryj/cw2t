@@ -316,7 +316,7 @@ function newOrder(order) {
   if (order.futsettdate == "") {
     order.futsettdate = common.getUTCDateString(common.getSettDate(today, order.nosettdays, holidays));
   }
-  
+
   // store the order, get an id & credit check it
   // note: param #7 not used
   db.eval(scriptneworder, 26, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, 0, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, hour, minute, day, function(err, ret) {
@@ -1014,9 +1014,9 @@ function registerScripts() {
   ';
 
   createposition = '\
-  local createposition = function(positionkey, positionskey, postradeskey, clientid, symbol, side, quantity, avgcostpershare, cost, currency, margin, tradeid) \
+  local createposition = function(positionkey, positionskey, postradeskey, clientid, symbol, quantity, avgcostpershare, cost, currency, margin, tradeid) \
     local positionid = redis.call("incr", "positionid") \
-    redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "side", side, "quantity", quantity, "cost", cost, "currency", currency, "margin", margin, "positionid", positionid, "averagecostpershare", avgcostpershare) \
+    redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "quantity", quantity, "cost", cost, "currency", currency, "margin", margin, "positionid", positionid, "averagecostpershare", avgcostpershare) \
     redis.call("sadd", positionskey, symbol) \
     redis.call("sadd", "position:" .. symbol .. ":clients", clientid) \
     redis.call("sadd", postradeskey, tradeid) \
@@ -1040,7 +1040,7 @@ function registerScripts() {
   ';
 
   //
-  // positions are keyed on clientid + symbol
+  // positions are keyed on clientid + symbol - quantity is stored as a +ve/-ve value
   // they are linked to a list of trade ids to provide further information, such as settlement date, if required
   // a position id is allocated against a position and stored against the trade
   //
@@ -1055,52 +1055,100 @@ function registerScripts() {
     local posmargin = 0 \
     local avgcostpershare = 0 \
     local positionid = "" \
-    local fields = {"quantity", "cost", "margin", "side", "averagecostpershare", "positionid"} \
+    local fields = {"quantity", "cost", "margin", "averagecostpershare", "positionid"} \
     local vals = redis.call("hmget", positionkey, unpack(fields)) \
     --[[ do we already have a position? ]] \
     if vals[1] then \
-      positionid = vals[7] \
-      if tonumber(side) == tonumber(vals[4]) then \
-        --[[ we are adding to the existing quantity ]] \
-        posqty = tonumber(vals[1]) + tonumber(tradequantity) \
-        poscost = tonumber(vals[2]) + tonumber(tradecost) \
-        posmargin = tonumber(vals[3]) + tonumber(trademargin) \
-        avgcostpershare = poscost / posqty \
-        avgcostpershare = round(avgcostpershare, 5) \
-        --[[ update the position & add the trade to the set ]] \
-        redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare) \
-        redis.call("sadd", postradeskey, tradeid) \
-      elseif tonumber(tradequantity) == tonumber(vals[1]) then \
-        --[[ just close position ]] \
-        realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
-        closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
-      elseif tonumber(tradequantity) > tonumber(vals[1]) then \
-        --[[ close position ]] \
-        closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
-        --[[ & open new ]] \
-        posqty = tonumber(tradequantity) - tonumber(vals[1]) \
-        poscost = posqty * tonumber(tradeprice) \
-        poscost = round(poscost, 5) \
-        posmargin = posqty / tonumber(tradequantity) * tonumber(trademargin) \
-        posmargin = round(posmargin, 5) \
-        avgcostpershare = tradeprice \
-        realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
-        positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, side, posqty, avgcostpershare, poscost, currency, posmargin, tradeid) \
+      positionid = vals[5] \
+      posqty = tonumber(vals[1]) \
+      tradequantity = tonumber(tradequantity) \
+      if tonumber(side) == 1 then \
+        if posqty >= 0 then \
+          --[[ we are adding to an existing long position ]] \
+          posqty = posqty + tradequantity \
+          poscost = tonumber(vals[2]) + tonumber(tradecost) \
+          posmargin = tonumber(vals[3]) + tonumber(trademargin) \
+          avgcostpershare = poscost / posqty \
+          avgcostpershare = round(avgcostpershare, 5) \
+          --[[ update the position & add the trade to the set ]] \
+          redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare) \
+          redis.call("sadd", postradeskey, tradeid) \
+        elseif tradequantity == math.abs(posqty) then \
+          --[[ just close position ]] \
+          --[[realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[4]) ]]\
+          closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
+        elseif tradequantity > math.abs(posqty) then \
+          --[[ close position ]] \
+          closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
+          --[[ & open new ]] \
+          posqty = tradequantity + posqty \
+          poscost = posqty * tonumber(tradeprice) \
+          poscost = round(poscost, 5) \
+          posmargin = posqty / tradequantity * tonumber(trademargin) \
+          posmargin = round(posmargin, 5) \
+          avgcostpershare = tradeprice \
+          --[[realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[4]) ]]\
+          positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, avgcostpershare, poscost, currency, posmargin, tradeid) \
+        else \
+          --[[ part-fill ]] \
+          posqty = posqty + tradequantity \
+          poscost = posqty * tonumber(vals[4]) \
+          poscost = round(poscost, 5) \
+          posmargin = posqty / tonumber(vals[1]) * tonumber(vals[3]) \
+          posmargin = round(posmargin, 5) \
+          avgcostpershare = vals[4] \
+          --[[realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[4]) ]]\
+          redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare) \
+          redis.call("sadd", postradeskey, tradeid) \
+        end \
       else \
-        --[[ part-fill ]] \
-        posqty = tonumber(vals[1]) - tonumber(tradequantity) \
-        poscost = posqty * tonumber(vals[5]) \
-        poscost = round(poscost, 5) \
-        posmargin = posqty / tonumber(vals[1]) * tonumber(vals[3]) \
-        posmargin = round(posmargin, 5) \
-        avgcostpershare = vals[5] \
-        realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
-        redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare) \
-        redis.call("sadd", postradeskey, tradeid) \
+        if posqty <= 0 then \
+          --[[ we are adding to an existing short quantity ]] \
+          posqty = posqty - tradequantity \
+          poscost = tonumber(vals[2]) + tonumber(tradecost) \
+          posmargin = tonumber(vals[3]) + tonumber(trademargin) \
+          avgcostpershare = poscost / posqty \
+          avgcostpershare = round(avgcostpershare, 5) \
+          --[[ update the position & add the trade to the set ]] \
+          redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare) \
+          redis.call("sadd", postradeskey, tradeid) \
+        elseif tradequantity == posqty then \
+          --[[ just close position ]] \
+          --[[realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[4]) ]]\
+          closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
+        elseif tradequantity > posqty then \
+          --[[ close position ]] \
+          closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
+          --[[ & open new ]] \
+          posqty = tradequantity - posqty \
+          poscost = posqty * tonumber(tradeprice) \
+          poscost = round(poscost, 5) \
+          posmargin = posqty / tonumber(tradequantity) * tonumber(trademargin) \
+          posmargin = round(posmargin, 5) \
+          avgcostpershare = tradeprice \
+          --[[realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[4]) ]]\
+          positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, avgcostpershare, poscost, currency, posmargin, tradeid) \
+        else \
+          --[[ part-fill ]] \
+          posqty = posqty - tradequantity \
+          poscost = posqty * tonumber(vals[4]) \
+          poscost = round(poscost, 5) \
+          posmargin = posqty / tonumber(vals[1]) * tonumber(vals[3]) \
+          posmargin = round(posmargin, 5) \
+          avgcostpershare = vals[4] \
+          --[[realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[4]) ]]\
+          redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare) \
+          redis.call("sadd", postradeskey, tradeid) \
+        end \
       end \
     else \
       --[[ new position ]] \
-      positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, trademargin, tradeid) \
+      if side == 1 then \
+        posqty = tradequantity \
+      else \
+        posqty = -tradequantity \
+      end \
+      positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, tradeprice, tradecost, currency, trademargin, tradeid) \
     end \
     return positionid \
   end \
