@@ -316,8 +316,7 @@ function newOrder(order) {
   if (order.futsettdate == "") {
     order.futsettdate = common.getUTCDateString(common.getSettDate(today, order.nosettdays, holidays));
   }
-  console.log("about to script");
-
+  
   // store the order, get an id & credit check it
   // note: param #7 not used
   db.eval(scriptneworder, 26, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, 0, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, hour, minute, day, function(err, ret) {
@@ -1017,7 +1016,7 @@ function registerScripts() {
   createposition = '\
   local createposition = function(positionkey, positionskey, postradeskey, clientid, symbol, side, quantity, avgcostpershare, cost, currency, margin, tradeid) \
     local positionid = redis.call("incr", "positionid") \
-    redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "side", side, "quantity", quantity, "cost", cost, "currency", currency, "margin", margin, "positionid", positionid, "averagecostpershare", avgcostpershare, "realisedpandl", 0) \
+    redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "side", side, "quantity", quantity, "cost", cost, "currency", currency, "margin", margin, "positionid", positionid, "averagecostpershare", avgcostpershare) \
     redis.call("sadd", positionskey, symbol) \
     redis.call("sadd", "position:" .. symbol .. ":clients", clientid) \
     redis.call("sadd", postradeskey, tradeid) \
@@ -1029,8 +1028,8 @@ function registerScripts() {
   // todo: do something with realisedpandl
   //
   closeposition = '\
-  local closeposition = function(positionkey, positionskey, postradeskey, clientid, symbol, tradeid, realisedpandl) \
-    redis.call("hdel", positionkey, "clientid", "symbol", "side", "quantity", "cost", "currency", "margin", "positionid", "averagecostpershare", "realisedpandl") \
+  local closeposition = function(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
+    redis.call("hdel", positionkey, "clientid", "symbol", "side", "quantity", "cost", "currency", "margin", "positionid", "averagecostpershare") \
     redis.call("srem", positionskey, symbol) \
     redis.call("srem", "position:" .. symbol .. ":clients", clientid) \
     local postrades = redis.call("smembers", postradeskey) \
@@ -1056,7 +1055,7 @@ function registerScripts() {
     local posmargin = 0 \
     local avgcostpershare = 0 \
     local positionid = "" \
-    local fields = {"quantity", "cost", "margin", "side", "averagecostpershare", "realisedpandl", "positionid"} \
+    local fields = {"quantity", "cost", "margin", "side", "averagecostpershare", "positionid"} \
     local vals = redis.call("hmget", positionkey, unpack(fields)) \
     --[[ do we already have a position? ]] \
     if vals[1] then \
@@ -1068,17 +1067,16 @@ function registerScripts() {
         posmargin = tonumber(vals[3]) + tonumber(trademargin) \
         avgcostpershare = poscost / posqty \
         avgcostpershare = round(avgcostpershare, 5) \
-        realisedpandl = vals[6] \
         --[[ update the position & add the trade to the set ]] \
-        redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare, "realisedpandl", realisedpandl) \
+        redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare) \
         redis.call("sadd", postradeskey, tradeid) \
       elseif tonumber(tradequantity) == tonumber(vals[1]) then \
         --[[ just close position ]] \
         realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
-        closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid, realisedpandl) \
+        closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
       elseif tonumber(tradequantity) > tonumber(vals[1]) then \
         --[[ close position ]] \
-        closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid, realisedpandl) \
+        closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
         --[[ & open new ]] \
         posqty = tonumber(tradequantity) - tonumber(vals[1]) \
         poscost = posqty * tonumber(tradeprice) \
@@ -1097,7 +1095,7 @@ function registerScripts() {
         posmargin = round(posmargin, 5) \
         avgcostpershare = vals[5] \
         realisedpandl = tonumber(vals[6]) + getrealisedpandl(side, tradequantity, tradeprice, vals[5]) \
-        redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare, "realisedpandl", realisedpandl) \
+        redis.call("hmset", positionkey, "quantity", posqty, "cost", poscost, "margin", posmargin, "averagecostpershare", avgcostpershare) \
         redis.call("sadd", postradeskey, tradeid) \
       end \
     else \
