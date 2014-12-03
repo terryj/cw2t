@@ -17,12 +17,6 @@ var common = require('./common.js');
 
 // globals
 var markettype; // comes from database, 0=normal market, 1=out of hours
-var clientserverchannel = 1;
-var userserverchannel = 2;
-var tradeserverchannel = 3;
-var ifaserverchannel = 4;
-var webserverchannel = 5;
-var tradechannel = 6;
 var host = "pushfeed.digitallook.com";
 var messageport = 49002;
 var username = "cant_wait_to_trade";

@@ -15,17 +15,6 @@ var redis = require('redis');
 // cw2t libraries
 var common = require('./common.js');
 
-// publish & subscribe channels
-var clientserverchannel = 1;
-var userserverchannel = 2;
-var tradeserverchannel = 3;
-var ifaserverchannel = 4;
-var webserverchannel = 5;
-var tradechannel = 6;
-var priceserverchannel = 7;
-var pricehistorychannel = 8;
-var pricechannel = 9;
-
 // redis
 var redishost;
 var redisport;
@@ -106,7 +95,7 @@ function pubsub() {
     requestData(message);
   });
 
-  dbsub.subscribe(priceserverchannel);
+  dbsub.subscribe(common.priceserverchannel);
 }
 
 //

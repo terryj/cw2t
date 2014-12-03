@@ -38,17 +38,6 @@ if (redislocal) {
   redispassword = "4dfeb4b84dbb9ce73f4dd0102cc7707a";
 }
 
-// publish & subscribe channels
-var clientserverchannel = 1;
-var userserverchannel = 2;
-var tradeserverchannel = 3;
-var ifaserverchannel = 4;
-var webserverchannel = 5;
-var tradechannel = 6;
-var priceserverchannel = 7;
-var pricehistorychannel = 8;
-var pricechannel = 9;
-
 // globals
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
@@ -171,10 +160,10 @@ function pubsub() {
   });
 
   // listen for user related messages
-  dbsub.subscribe(userserverchannel);
+  dbsub.subscribe(common.userserverchannel);
 
   // listen for trading messages
-  dbsub.subscribe(tradechannel);
+  dbsub.subscribe(common.tradechannel);
 }
 
 // sockjs server
@@ -210,13 +199,13 @@ function listen() {
 
       // may be able to just forward to trade server
       if (msg.substr(2, 13) == "quoterequest\"") {
-        db.publish(tradeserverchannel, msg);
+        db.publish(common.tradeserverchannel, msg);
       } else if (msg.substr(2, 18) == "ordercancelrequest") {
-        db.publish(tradeserverchannel, msg);
+        db.publish(common.tradeserverchannel, msg);
       } else if (msg.substr(2, 16) == "orderfillrequest") {
-        db.publish(tradeserverchannel, msg);
+        db.publish(common.tradeserverchannel, msg);
       } else if (msg.substr(2, 6) == "order\"") {
-        db.publish(tradeserverchannel, msg);
+        db.publish(common.tradeserverchannel, msg);
       //} else if (msg.substr(0, 4) == "ping") {
         //conn.write("pong");
       } else {
@@ -1678,7 +1667,7 @@ function newChat(chat, userid) {
     chat.chatid = ret[0];
 
     // send it to the client server to forward to client
-    db.publish(clientserverchannel, "{\"chat\":" + JSON.stringify(chat) + "}");
+    db.publish(common.clientserverchannel, "{\"chat\":" + JSON.stringify(chat) + "}");
   });      
 }
 

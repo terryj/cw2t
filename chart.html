@@ -292,13 +292,20 @@
         margin : 0 auto;        
         margin-top: 15px;
     }
+    .divposition {
+        margin-top: 15px;
+        font-size: 21px;
+        text-align: center;        
+    }
     .tblposition {
         margin : 0 auto;        
-        margin-top: 15px;
     }
     .tblposition tr td {
         padding: 15px;
         text-align: center;
+    }
+    .tblpositionhdr {
+        font-size: 15px;
     }
     .divrfq {
         margin-top: 20px;
@@ -3007,17 +3014,31 @@
         function positionReceived(position) {
             console.log("positionReceived");
             console.log(position);
+            var posupdated = false;
+
+            // update or remove position
+            for (var i = 0; i < positions.length; i++) {
+                if (positions[i].symbol == position.symbol) {
+                    if (position.quantity == 0) {
+                        delete positions[i];
+                    } else {
+                        positions[i] = position;
+                    }
+                    posupdated = true;
+                }
+            }
 
             // add to array
-            positions.push(position);
+            if (!posupdated) {
+                positions.push(position);
+            }
 
             updatePositionTable();
         }
 
         function updatePositionTable() {
-            console.log(positions);
-            var cols = ["symbol", "quantity", "cost", "currency", "margin", "averagecostpershare", "unrealisedpandl"];
-
+            var cols = ["symbol", "quantity", "cost", "currency", "margin", "costpershare", "mktprice", "unrealisedpandl"];
+console.log("updatePositionTable");
             // create a div
             var tblposition = d3.select("#tblposition");
             if (tblposition.empty()) {
@@ -3042,9 +3063,12 @@
                         return {col: col, value: row[col]};
                     });
                  })
-                .enter()
+                .text(function(d) { return d.value; });
+
+            cells.enter()
                 .append("td")
                 .each(function(d) {
+                    console.log("got'ere");
                     if (d.col == "symbol") {
                         // display a link for this symbol
                         d3.select(this)
@@ -3069,15 +3093,50 @@
                             .text(function(d) { return d.value; });
                     }
                 });
+
+            /*cells.each(function(d) {
+                if (d.col != "symbol") {
+                        // display a link for this symbol
+                        d3.select(this)
+                            .append("a")
+                                .attr("href", "#")
+                                .html(function (d) { return d.value; })
+                                .on("click", function(d) {
+                                    clearScreen();
+                                    selectSymbol();
+                                    requestOrderbook(d.value);
+
+                                    // switch off styles
+                                    d3.select("#tblmenu").selectAll("a")
+                                        .style("color", "");
+
+                                    // highlight selected
+                                    d3.select("#mnusingleproduct")
+                                        .style("color", "gray");
+                                });
+                    } else {
+                        d3.select(this)
+                            .text(function(d) { return d.value; });
+                    }
+
+            });*/
         }
 
         function createPositionTable(cols) {
             // create position div
             var divposition = d3.select("#divcontainer")
                 .append("div")
+                .attr("class", "divposition")
                 .attr("id", "divposition");
 
-            // create table
+            // check for no positions
+            /*if (positions.length == 0) {
+                divposition
+                    .text("No Positions");
+                return;
+            }*/
+
+            // create the table
             var tblposition = divposition.append("table")
                 .attr("class", "tblposition")
                 .attr("id", "tblposition");
@@ -3088,6 +3147,7 @@
 
             // append the header row
             thead.append("tr")
+                .attr("class", "tblpositionhdr")
                 .selectAll("th")
                 .data(cols)
                 .enter()

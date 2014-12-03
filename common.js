@@ -716,8 +716,6 @@ exports.getPTPOrderCancelRejectReason = getPTPOrderCancelRejectReason;
 
 
 exports.registerCommonScripts = function () {
-	//var subscribeinstrument;
-	//var unsubscribeinstrument;
   var updatecash;
   var gettotalpositions;
   var getcash;
@@ -728,8 +726,18 @@ exports.registerCommonScripts = function () {
   var gettrades;
   var getquoterequests;
   var stringsplit;
-  //var subscribeinstrumentdl;
-  //var unsubscribeinstrumentdl;
+
+  // publish & subscribe channels
+  exports.clientserverchannel = 1;
+  exports.userserverchannel = 2;
+  exports.tradeserverchannel = 3;
+  exports.ifaserverchannel = 4;
+  exports.webserverchannel = 5;
+  exports.tradechannel = 6;
+  exports.priceserverchannel = 7;
+  exports.pricehistorychannel = 8;
+  exports.pricechannel = 9;
+  exports.positionchannel = 10;
 
   round = '\
   local round = function(num, dp) \
@@ -868,14 +876,14 @@ exports.registerCommonScripts = function () {
   end \
   ';
 
-  getunrealisedpandl = '\
-  local getunrealisedpandl = function(symbol, quantity, side, avgcost) \
+  getunrealisedpandl = round + '\
+  local getunrealisedpandl = function(symbol, quantity, cost) \
     local bidprice = redis.call("hget", "price:" .. symbol, "bid") \
     local askprice = redis.call("hget", "price:" .. symbol, "ask") \
     local unrealisedpandl = 0 \
     local price = 0 \
     local qty = tonumber(quantity) \
-    if tonumber(side) == 1 then \
+    if qty > 0 then \
       if bidprice and tonumber(bidprice) ~= 0 then \
         price = tonumber(bidprice) / 100 \
       end \
@@ -883,11 +891,9 @@ exports.registerCommonScripts = function () {
       if askprice and tonumber(askprice) ~= 0 then \
         price = tonumber(askprice) / 100 \
       end \
-      --[[ take account of short position ]] \
-      qty = -qty \
     end \
     if price ~= 0 then \
-      unrealisedpandl = qty * (price - tonumber(avgcost)) \
+      unrealisedpandl = round(qty * price - cost, 2) \
     end \
     return {unrealisedpandl, price} \
   end \
@@ -899,21 +905,19 @@ exports.registerCommonScripts = function () {
   gettotalpositions = getunrealisedpandl + '\
   local gettotalpositions = function(clientid, currency) \
     local positions = redis.call("smembers", clientid .. ":positions") \
-    local fields = {"symbol", "currency", "quantity", "margin", "averagecostpershare", "realisedpandl", "side"} \
+    local fields = {"symbol", "currency", "quantity", "margin", "cost"} \
     local vals \
     local totalmargin = 0 \
-    local totalrealisedpandl = 0 \
     local totalunrealisedpandl = 0 \
     for index = 1, #positions do \
       vals = redis.call("hmget", clientid .. ":position:" .. positions[index], unpack(fields)) \
       if vals[2] == currency then \
         totalmargin = totalmargin + tonumber(vals[4]) \
-        totalrealisedpandl = totalrealisedpandl + tonumber(vals[6]) \
-        local unrealisedpandl = getunrealisedpandl(vals[1], vals[3], vals[7], vals[5]) \
+        local unrealisedpandl = getunrealisedpandl(vals[1], vals[3], vals[5]) \
         totalunrealisedpandl = totalunrealisedpandl + unrealisedpandl[1] \
       end \
     end \
-    return {totalmargin, totalrealisedpandl, totalunrealisedpandl} \
+    return {totalmargin, totalunrealisedpandl} \
   end \
   ';
 
@@ -923,9 +927,9 @@ exports.registerCommonScripts = function () {
   local getfreemargin = function(clientid, currency) \
     local cash = getcash(clientid, currency) \
     local totalpositions = gettotalpositions(clientid, currency) \
-    --[[ totalpositions[1] = margin, [2] = realised p&l, [3] = unrealised p&l ]] \
-    local balance = tonumber(cash) + totalpositions[2] \
-    local equity = balance + totalpositions[3] \
+    --[[ totalpositions[1] = margin, [2] = unrealised p&l ]] \
+    local balance = tonumber(cash) \
+    local equity = balance + totalpositions[2] \
     local freemargin = equity - totalpositions[1] \
     return freemargin \
   end \
@@ -1327,13 +1331,13 @@ exports.registerCommonScripts = function () {
   exports.scriptgetpositions = getunrealisedpandl + '\
   local tblresults = {} \
   local positions = redis.call("smembers", KEYS[1] .. ":positions") \
-  local fields = {"clientid","symbol","side","quantity","cost","currency","margin","positionid","averagecostpershare","realisedpandl"} \
+  local fields = {"clientid","symbol","quantity","cost","currency","margin","positionid","costpershare"} \
   local vals \
   for index = 1, #positions do \
     vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
     --[[ value the position ]] \
-    local unrealisedpandl = getunrealisedpandl(vals[2], vals[4], vals[3], vals[9]) \
-    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],margin=vals[7],positionid=vals[8],averagecostpershare=vals[9],realisedpandl=vals[10],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+    local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=vals[6],positionid=vals[7],costpershare=vals[8],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
   end \
   return cjson.encode(tblresults) \
   ';
@@ -1342,13 +1346,13 @@ exports.registerCommonScripts = function () {
   // params: client id, symbol
   //
   exports.scriptgetposition = getunrealisedpandl + '\
-  local fields = {"clientid","symbol","side","quantity","cost","currency","margin","positionid","averagecostpershare","realisedpandl"} \
+  local fields = {"clientid","symbol","quantity","cost","currency","margin","positionid","costpershare"} \
   local vals = redis.call("hmget", KEYS[1] .. ":position:" .. KEYS[2], unpack(fields)) \
   local pos = {} \
   if vals[0] ~= nil then \
     --[[ value the position ]] \
-    local unrealisedpandl = getunrealisedpandl(vals[2], vals[4], vals[3], vals[9]) \
-    pos = {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],cost=vals[5],currency=vals[6],margin=vals[7],positionid=vals[8],averagecostpershare=vals[9],realisedpandl=vals[10],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
+    local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
+    pos = {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=vals[6],positionid=vals[7],costpershare=vals[8],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
   end \
   return cjson.encode(pos) \
   ';
@@ -1377,10 +1381,10 @@ exports.registerCommonScripts = function () {
   for index = 1, #cash do \
     local amount = redis.call("get", KEYS[1] .. ":cash:" .. cash[index]) \
     local totalpositions = gettotalpositions(KEYS[1], cash[index]) \
-    local balance = tonumber(amount) + totalpositions[2] \
-    local equity = balance + totalpositions[3] \
+    local balance = tonumber(amount) \
+    local equity = balance + totalpositions[2] \
     local freemargin = equity - totalpositions[1] \
-    table.insert(tblresults, {currency=cash[index],cash=amount,realisedpandl=totalpositions[2],balance=balance,unrealisedpandl=totalpositions[3],equity=equity,margin=totalpositions[1],freemargin=freemargin}) \
+    table.insert(tblresults, {currency=cash[index],cash=amount,balance=balance,unrealisedpandl=totalpositions[2],equity=equity,margin=totalpositions[1],freemargin=freemargin}) \
   end \
   return cjson.encode(tblresults) \
   ';

@@ -18,17 +18,6 @@ var redis = require('redis');
 // cw2t libraries
 var common = require('./common.js');
 
-// publish & subscribe channels
-var clientserverchannel = 1;
-var userserverchannel = 2;
-var tradeserverchannel = 3;
-var ifaserverchannel = 4;
-var webserverchannel = 5;
-var tradechannel = 6;
-var priceserverchannel = 7;
-var pricehistorychannel = 8;
-var pricechannel = 9;
-
 // globals
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
@@ -93,6 +82,7 @@ db.on("error", function(err) {
 
 function initialise() {
   common.registerCommonScripts();
+  console.log(common.test);
   registerScripts();
   initDb();
   clearSubscriptions();
@@ -131,6 +121,8 @@ function pubsub() {
           forwardQuoterequest(obj.quoterequest, message);
         } else if ("quoteack" in obj) {
           forwardQuoteAck(obj.quoteack, message);
+        } else if ("position" in obj) {
+          forwardPosition(obj.position, message);
         }
       } catch (e) {
         console.log(e);
@@ -159,13 +151,16 @@ function pubsub() {
   });
 
   // listen for client related messages
-  dbsub.subscribe(clientserverchannel);
+  dbsub.subscribe(common.clientserverchannel);
 
   // listen for trading messages
-  dbsub.subscribe(tradechannel);
+  dbsub.subscribe(common.tradechannel);
 
   // listen for ooh quoterequests
   dbsub.subscribe("quoterequest");
+
+  // listen for position updates
+  dbsub.subscribe(common.positionchannel);
 }
 
 // sockjs server
@@ -212,15 +207,15 @@ function listen() {
       console.log('recd:' + msg);
 
       if (msg.substr(2, 18) == "ordercancelrequest") {
-        db.publish(tradeserverchannel, msg);
+        db.publish(common.tradeserverchannel, msg);
       } else if (msg.substr(2, 6) == "order\"") {
-        db.publish(tradeserverchannel, msg);
+        db.publish(common.tradeserverchannel, msg);
       } else if (msg.substr(2, 6) == "quote\"") {
-        db.publish(tradeserverchannel, msg);
+        db.publish(common.tradeserverchannel, msg);
       } else if (msg.substr(2, 13) == "quoterequest\"") {
-        db.publish(tradeserverchannel, msg);
+        db.publish(common.tradeserverchannel, msg);
       } else if (msg.substr(2, 4) == "chat") {
-        db.publish(userserverchannel, msg);
+        db.publish(common.userserverchannel, msg);
       } else {
         try {
           var obj = JSON.parse(msg);
@@ -1348,14 +1343,12 @@ function positionRequest(posreq, clientid, conn) {
     // single position
     db.eval(common.scriptgetposition, 2, clientid, posreq.symbol, function(err, ret) {
       if (err) throw err;
-      console.log(ret);
       conn.write("{\"position\":" + ret + "}");
     });    
   } else {
     // all positions
     db.eval(common.scriptgetpositions, 1, clientid, function(err, ret) {
       if (err) throw err;
-      console.log(ret);
       conn.write("{\"positions\":" + ret + "}");
     });
   }
@@ -1501,6 +1494,15 @@ function forwardQuoterequest(quoterequest, msg) {
     if (i != quoterequest.clientid) {
       connections[i].write(msg);
     }
+  }
+}
+
+function forwardPosition(position, msg) {
+  console.log("forwardPosition");
+  console.log(position);
+
+  if (position.clientid in connections) {
+    connections[position.clientid].write(msg);
   }
 }
 

@@ -12,17 +12,6 @@ var redis = require('redis');
 // cw2t libraries
 var common = require('./common.js');
 
-// publish & subscribe channels
-var clientserverchannel = 1;
-var userserverchannel = 2;
-var tradeserverchannel = 3;
-var ifaserverchannel = 4;
-var webserverchannel = 5;
-var tradechannel = 6;
-var priceserverchannel = 7;
-var pricehistorychannel = 8;
-var pricechannel = 9;
-
 // redis
 var redishost;
 var redisport;
@@ -105,7 +94,7 @@ function pubsub() {
     }
   });
 
-  dbsub.subscribe(pricehistorychannel);
+  dbsub.subscribe(common.pricehistorychannel);
 }
 
 function initDb() {
@@ -121,7 +110,7 @@ function pricehistoryRequest(phr) {
   var interval = 10;
 
   // get price history
-  db.eval(scriptgetpricehistinterval, 6, phr.symbol, phr.startperiod, phr.endperiod, phr.clientid, webserverchannel, interval, function(err, ret) {
+  db.eval(scriptgetpricehistinterval, 6, phr.symbol, phr.startperiod, phr.endperiod, phr.clientid, common.webserverchannel, interval, function(err, ret) {
     if (err) throw err;
     console.log("got pricehist:" + phr.symbol);
   });
