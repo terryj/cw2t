@@ -3018,10 +3018,15 @@
 
             // update or remove position
             for (var i = 0; i < positions.length; i++) {
+                console.log(positions[i].symbol);
+                console.log(position.symbol);
                 if (positions[i].symbol == position.symbol) {
+                console.log(position.quantity);
                     if (position.quantity == 0) {
-                        delete positions[i];
+                        console.log("deleting");
+                        positions.splice(i);
                     } else {
+                        console.log("updating");
                         positions[i] = position;
                     }
                     posupdated = true;
@@ -3038,7 +3043,11 @@
 
         function updatePositionTable() {
             var cols = ["symbol", "quantity", "cost", "currency", "margin", "costpershare", "mktprice", "unrealisedpandl"];
-console.log("updatePositionTable");
+
+            if (positions.length == 0) {
+                cols = [];
+            }
+
             // create a div
             var tblposition = d3.select("#tblposition");
             if (tblposition.empty()) {
@@ -3056,7 +3065,7 @@ console.log("updatePositionTable");
             // exit
             rows.exit().remove();
 
-            // create a cell in each row for each column
+            // update
             var cells = rows.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(col) {
@@ -3065,10 +3074,10 @@ console.log("updatePositionTable");
                  })
                 .text(function(d) { return d.value; });
 
+            // enter
             cells.enter()
                 .append("td")
                 .each(function(d) {
-                    console.log("got'ere");
                     if (d.col == "symbol") {
                         // display a link for this symbol
                         d3.select(this)
@@ -3142,17 +3151,21 @@ console.log("updatePositionTable");
                 .attr("id", "tblposition");
 
             // add header & body
-            var thead = tblposition.append("thead");
+            var thead = tblposition.append("thead")
+                .attr("class", "tblpositionhdr")
+                .append("tr");
+
             var tbody = tblposition.append("tbody");
 
             // append the header row
-            thead.append("tr")
-                .attr("class", "tblpositionhdr")
-                .selectAll("th")
-                .data(cols)
-                .enter()
+            var theadcells = thead.selectAll("th")
+                .data(cols);
+
+            theadcells.enter()
                 .append("th")
                     .text(function(d) { return d; });
+
+            theadcells.exit().remove();
 
             return tblposition;
         }
