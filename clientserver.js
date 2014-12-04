@@ -157,7 +157,7 @@ function pubsub() {
   dbsub.subscribe(common.tradechannel);
 
   // listen for ooh quoterequests
-  dbsub.subscribe("quoterequest");
+  dbsub.subscribe(common.quoterequestchannel);
 
   // listen for position updates
   dbsub.subscribe(common.positionchannel);

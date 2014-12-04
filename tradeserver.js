@@ -223,7 +223,7 @@ function quoteRequest(quoterequest) {
       nbt.quoteRequest(quoterequest);
     } else {
       // publish it
-      db.publish("quoterequest", "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
+      db.publish(common.quoterequestchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
       //db.publish("quoterequest", "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
     }
   });

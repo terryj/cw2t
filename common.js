@@ -738,6 +738,7 @@ exports.registerCommonScripts = function () {
   exports.pricehistorychannel = 8;
   exports.pricechannel = 9;
   exports.positionchannel = 10;
+  exports.quoterequestchannel = 11;
 
   round = '\
   local round = function(num, dp) \
