@@ -178,6 +178,8 @@ function quoteRequest(quoterequest) {
   // get settlement date from T+n no. of days
   quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, quoterequest.nosettdays, holidays));
 
+  console.log(quoterequest.futsettdate);
+
   // store the quote request & get an id
   db.eval(scriptquoterequest, 14, quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, day, function(err, ret) {
     if (err) throw err;
@@ -1662,7 +1664,7 @@ function registerScripts() {
   redis.call("hmset", "order:" .. orderid, "remquantity", KEYS[15], "status", KEYS[13]) \
   --[[ todo: adjust trade related margin ]] \
   --[[updatetrademargin(tradeid, vals[1], KEYS[17], initialmargin[1])]] \
-  publishorder(orderid, vals[9]) \
+  --[[publishorder(orderid, vals[9]) ]]\
   return {tradeid, vals[9], vals[10]} \
   ';
 

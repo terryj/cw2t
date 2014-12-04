@@ -80,18 +80,15 @@
         stroke-width: 1.5px;
     }
     .selcashorshares {
-        font-size: 21px;
+        background-color: #ddd;
         border-style: none;
+        font-size: 21px;
         color: gray;
-    }
-    .optcashorshares {
-        /*font-size: 21px;*/
-        color: gray;        
+        outline: none;
     }
     .rfqqty {
         font-size: 21px;
         color: gray;
-        margin-left: 20px;
         border: solid 1px #c0c0c0;
     }
     .rfqqty:focus {
@@ -99,21 +96,18 @@
         outline: none;
     }
     .rfqbutton {
-        /*width: 100px;
-        height: 30px;*/
-
-        /*font: courier;*/
         font-size: 21px;
         color: gray;
         border-style: none;
         background-color: #ddd;
-        margin-left: 20px;
-        /*background-color: green;*/
-        /*color: white;*/
+        outline: none;
+    }
+    .rfqbutton:hover {
+        background-color: #ccc;
         cursor: pointer;
-        /*border-radius: 4px;*/
-        /*text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);*/
-        /*margin: 3px;*/
+    }
+    .rfqbutton:active {
+        background: #bbb;
     }
     .quotebutton {
         font-size: 21px;
@@ -243,20 +237,13 @@
         /*color: steelblue;*/
     }
     .divprice {
-        /*width: 50%;*/
-        /*float: left;*/
-                     margin : 0 auto;
-        /*position: absolute;*/
-        /*left: 50%;
-        width: 300px;
-        height: 100px;
-        margin-left: -150px;*/
+        margin : 0 auto;
     }
     .divcontainer {
         width: 70%;
-        /*background-color: #b0e0e6;*/
-        margin-left: auto;
-        margin-right: auto;
+        margin : 0 auto;
+        /*margin-left: auto;
+        margin-right: auto;*/
     }
     .tblmenu {
         margin : 0 auto;
@@ -270,7 +257,8 @@
         margin : 0 auto;
     }
     .tblrfq tr td {
-        margin-left: 100px;
+        padding: 10px;
+        font-size: 21px;
     }
     .tblquote {
         margin-top: 20px;
@@ -308,7 +296,8 @@
         font-size: 15px;
     }
     .divrfq {
-        margin-top: 20px;
+        margin-top: 10px;
+        text-align: center;
     }
     .divrfqhdr {
         margin-top: 20px;
@@ -318,6 +307,15 @@
     }
     .myquoteinp {
         font-size: 21px;
+    }
+    .tickup {
+        color: blue;
+    }
+    .tickdn {
+        color: red;
+    }
+    .ticknc {
+        color: green;
     }
     </style>
 </head>
@@ -339,6 +337,7 @@
         var email = "";
         var myquotes = [];
         var positions = [];
+        var selectedsymbol = "";
 
         var datain = function(msg) {
             //console.log(msg);
@@ -400,8 +399,8 @@
                 console.log("connection open");
 
                 // we are ready
-                displayFormSignin();
-                //cheat();
+                //displayFormSignin();
+                cheat();
             };
 
             sockjs.onmessage = function(e) {
@@ -527,6 +526,11 @@
             pricedata[0] = price;
         }
 
+        function formatCurrency(num) {
+            num = isNaN(num) || num === '' || num === null ? 0.00 : num;
+            return parseFloat(num).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+        }
+
         function priceReceived(price) {
             console.log("priceReceived");
             console.log(price);
@@ -541,10 +545,34 @@
 
             // update price array
             if ("bid" in price) {
+                price.bid = formatCurrency(price.bid);
+
+                if (parseFloat(price.bid) > parseFloat(pricedata[0].bid)) {
+                    pricedata[0].bidtick = '+';
+                } else if (parseFloat(price.bid) < parseFloat(pricedata[0].bid)) {
+                    pricedata[0].bidtick = '-';
+                } else {
+                    pricedata[0].bidtick = '0';                    
+                }
+
                 pricedata[0].bid = price.bid;
+            } else {
+                pricedata[0].bidtick = '';
             }
             if ("ask" in price) {
+                price.ask = formatCurrency(price.ask);
+
+                if (parseFloat(price.ask) > parseFloat(pricedata[0].ask)) {
+                    pricedata[0].asktick = '+';
+                } else if (parseFloat(price.ask) < parseFloat(pricedata[0].ask)) {
+                    pricedata[0].asktick = '-';
+                } else {
+                    pricedata[0].asktick = '0';
+                }
+
                 pricedata[0].ask = price.ask;
+            } else {
+                pricedata[0].asktick = "";
             }
 
             // get the table price row
@@ -554,21 +582,39 @@
             var cells = tblpricerow.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(column) {
-                        var ret;
-                        if (column == "") {
-                            ret = "-";
-                        } else {
-                            ret = row[column];
+                        var ret = null;
+                        if (column == "bid") {
+                            ret = {price: row[column], tick: pricedata[0].bidtick};
+                        } else if (column == "ask") {
+                            ret = {price: row[column], tick: pricedata[0].asktick};                            
                         }
                         return {column: column, value: ret};
                     });
-                 })
-                .text(function(d) { console.log("update");return d.value; });
+                 });
+
+            // update display
+            cells.each(function(d) {
+                if (d.column != "") {
+                    if (d.value.tick != "") {
+                        d3.select(this)
+                            .text(function(d) { return d.value.price; })
+                            .attr("class", function(d) {
+                                if (d.value.tick == '+') {
+                                    return "tickup";
+                                } else if (d.value.tick == '-') {
+                                    return "tickdn";
+                                } else {
+                                    return "ticknc";
+                                }
+                            });
+                    }
+                }
+            });
 
             // enter
             cells.enter()
                 .append("td")
-                    .text(function(d) { console.log("enter");return d.value; });
+                    .text(function(d) { return d.value == null ? '-' : d.value.price; });
         }
 
         function createPriceTable(price, cols) {
@@ -624,7 +670,7 @@
 
         function createMenu() {
             var data = [""];
-            var cols = ["Single Product", "Portfolio", "Account Summary", "Live Quote Requests"];
+            var cols = ["Select A Symbol", "Portfolio", "Account Summary", "Live Quote Requests"];
 
             // create a table
             var tblmenu = d3.select("#divcontainer")
@@ -657,6 +703,11 @@
                         // add a style to treat first menu item as default
                         .style("color", function(d) { return d == cols[0] ? "gray" : null; })
                         .on("click", function(d) {
+                            // unsubscribe current symbol
+                            if (selectedsymbol != "") {
+                                requestRemoveOrderbook(selectedsymbol);
+                            }
+
                             clearScreen();
 
                             // switch off styles
@@ -711,6 +762,9 @@
                         .attr("href", "#")
                         .html(function (d) { return d; })
                         .on("click", function(d) {
+                            // clear any previous request
+                            d3.select("#divrfq").remove();
+
                             requestQuote(symbol);
                         });            
         }
@@ -1181,11 +1235,9 @@
                     });
 
             selcashorshares.append("option")
-                .attr("class", "optcashorshares")
                 .text(cashorshares[0]);
 
             selcashorshares.append("option")
-                .attr("class", "optcashorshares")
                 .text(cashorshares[1]);
 
             // quantity
@@ -1197,9 +1249,10 @@
 
             // add a button, with associated function to send rfq
             rows.append("td")
+                .attr("id", "tdrfq")
                 .append("input")
                     .attr("type", "button")
-                    .attr("value", "Send")
+                    .attr("value", "Send Quote Request")
                     .attr("class", "rfqbutton")
                     .on("click", function() {
                         if (!validateRfq()) {
@@ -1207,10 +1260,12 @@
                         } else {
                             sendRfq();
 
-                            d3.select(this)
-                                .style("cursor", "default")
-                                .attr("disabled", null)
-                                .on("click", null);
+                            // remove button
+                            d3.select(this).remove();
+
+                            // add text
+                            d3.select("#tdrfq")
+                                .text("Quote Request Sent");
                         }
                     });
 
@@ -1571,8 +1626,15 @@
                         .text(function(d) { return d.name; })
                         .on("click", function(d, i) {
                             var lastspace = this.innerHTML.lastIndexOf(' ');
+
+                            // unsubscribe current symbol
+                            if (selectedsymbol != "") {
+                                requestRemoveOrderbook(selectedsymbol);
+                            }
+
                             selectedsymbol = this.innerHTML.substr(lastspace+1);
 
+                            // clear price display in case of a previously selected symbol
                             d3.select("#divprice").remove();
                             d3.select("#tblmenuprice").remove();
 
@@ -2987,7 +3049,7 @@
             console.log("quoteackReceived");
             console.log(quoteack);
 
-            d3.select("body")
+            d3.select("#divrfq")
                 .append("p")
                 .html("Quote request rejected: " + quoteack.text);
         }
@@ -3085,6 +3147,7 @@
                                 .attr("href", "#")
                                 .html(function (d) { return d.value; })
                                 .on("click", function(d) {
+                                    selectedsymbol = d.value;
                                     clearScreen();
                                     selectSymbol();
                                     requestOrderbook(d.value);
