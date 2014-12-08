@@ -1183,9 +1183,8 @@ function orderbookRequest(clientid, symbol, conn) {
   var minute = today.getMinutes();
   var day = today.getDay();
 
-  db.eval(common.scriptsubscribeinstrument, 7, symbol, clientid, serverid, feedtype, hour, minute, day, function(err, ret) {
+  db.eval(common.scriptsubscribesymbol, 7, symbol, clientid, serverid, feedtype, hour, minute, day, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
 
     var subscribe = ret[0];
     var markettype = ret[4];
@@ -1212,7 +1211,7 @@ function orderbookRequest(clientid, symbol, conn) {
 }
 
 function orderbookRemoveRequest(clientid, symbol, conn) {
-  db.eval(common.scriptunsubscribeinstrument, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
+  db.eval(common.scriptunsubscribesymbol, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
@@ -1225,7 +1224,7 @@ function orderbookRemoveRequest(clientid, symbol, conn) {
 
 /*function orderBookRequestDL(clientid, symbol, conn) {
   console.log("orderBookRequest");
-  db.eval(common.scriptsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
+  db.eval(common.scriptsubscribesymbol, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
 
     console.log(ret);
@@ -1246,7 +1245,7 @@ function orderbookRemoveRequest(clientid, symbol, conn) {
 }
 
 function orderBookRemoveRequestDL(clientid, symbol, conn) {
-  db.eval(common.scriptunsubscribeinstrument, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
+  db.eval(common.scriptunsubscribesymbol, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
@@ -1347,9 +1346,17 @@ function positionRequest(posreq, clientid, conn) {
     });    
   } else {
     // all positions
-    db.eval(common.scriptgetpositions, 1, clientid, function(err, ret) {
+    db.eval(common.scriptgetpositions, 2, clientid, serverid, function(err, ret) {
       if (err) throw err;
-      conn.write("{\"positions\":" + ret + "}");
+      console.log(ret);
+
+      // send positions
+      conn.write("{\"positions\":" + ret[0] + "}");
+
+      // subscribe to prices, so p&l can be calculated in the front-end
+      for (var i = 0; i < ret[1].length; i++) {
+        db.subscribe("price:" + ret[1][i]);
+      }
     });
   }
 }
@@ -1560,7 +1567,7 @@ function registerScripts() {
     return retval \
   ';
 
-  scriptgetorderbooks = common.subscribeinstrument + common.subscribeinstrumentdl + '\
+  scriptgetorderbooks = common.subscribesymbol + common.subscribesymboldl + '\
     local needtosubscribe = {} \
     local tblresults = {} \
     local vals \
@@ -1569,9 +1576,9 @@ function registerScripts() {
     local orderbooks = redis.call("smembers", "client:" .. KEYS[1] .. ":orderbooks") \
     for index = 1, #orderbooks do \
       if KEYS[2] == "proquote" then \
-        ret = subscribeinstrument(orderbooks[index], KEYS[1], "client") \
+        ret = subscribesymbol(orderbooks[index], KEYS[1], "client") \
       elseif KEYS[2] == "digitallook" then \
-        ret = subscribeinstrumentdl(orderbooks[index], KEYS[1], "client") \
+        ret = subscribesymboldl(orderbooks[index], KEYS[1], "client") \
       end \
       if ret[1] == 1 then \
         --[[ keep a list of topics/tickers we need to subscribe to as has to be done separately as on separate connection ]] \

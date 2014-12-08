@@ -534,17 +534,16 @@
 
         function priceReceived(price) {
             console.log("priceReceived");
-            console.log(price);
 
-            var cols = ["bid", "", "ask"];
+            // update data
+            updatePriceData(price);
 
-            // create a price table if one does not exist
-            if (d3.select("#tblprice").empty()) {
-                createPriceTable(price, cols);
-                createPriceMenu(price.symbol);
-            }
+            // update display
+            updatepricetable(price);
+        }
 
-            // update price array
+        // update price array
+        function updatePriceData(price) {
             if ("bid" in price) {
                 price.bid = formatCurrency(price.bid);
 
@@ -574,10 +573,22 @@
                 pricedata[0].ask = price.ask;
             } else {
                 pricedata[0].asktick = "";
+            }            
+        }
+
+        function updatepricetable(price) {
+            console.log(price);
+            var cols = ["bid", "", "ask"];
+
+            // create a price table if one does not exist
+            var tblpricerow = d3.select("#tblpricerow");
+            if (tblpricerow.empty()) {
+                tblpricerow = createPriceTable(price, cols);
+                createPriceMenu(price.symbol);
             }
 
             // get the table price row
-            var tblpricerow = d3.select("#tblpricerow");
+            //var tblpricerow = d3.select("#tblpricerow");
 
             // update
             var cells = tblpricerow.selectAll("td")
@@ -650,7 +661,7 @@
                     .text(function(d) { return d; });*/
 
             // create a row
-            var rows = tbody.selectAll("tr")
+            var tblpricerow = tbody.selectAll("tr")
                 .data(pricedata)
                 .enter()
                 .append("tr")
@@ -667,6 +678,7 @@
                 .enter()
                 .append("td")
                     .text(function(d) { return d.value; });*/
+            return tblpricerow;
         }
 
         function createMenu() {
@@ -828,7 +840,10 @@
         }
 
         function requestOrderbook(symbol) {
+            // reset price
             initPrice();
+
+            // request
             sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
         }
 
@@ -837,7 +852,6 @@
         }
 
         function requestIndex(index) {
-            console.log("requestIndex:" + index);
             sockjs.send("{\"index\":" + JSON.stringify(index) + "}");
         }
 
