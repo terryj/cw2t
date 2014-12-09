@@ -1,0 +1,434 @@
+<!doctype html>
+<html>
+<head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <title>cantwaittotrade Market Making Administration</title>
+    <script src="http://cdn.jsdelivr.net/sockjs/0.3.4/sockjs.min.js"></script>
+    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <link href="mmtadmin.css" rel="stylesheet" type="text/css" />
+ </head>
+
+<body lang="en" class="body">
+    <script>
+
+        var sockjs_url = '/echo'
+        var sockjs
+
+        /* parse incoming messages */
+        var datain = function (msg) {
+            console.log(msg)
+            try {
+                var obj = JSON.parse(msg)
+                if ("mmdata" in obj) {
+                    mmdataReceived(obj.mmdata)
+                } else if ("savedatareply" in obj) {
+                    savedatareply(obj.mmparamsreply)
+                } else if ("mmadmindata" in obj) {
+                    readadmindatareply(obj.mmadmindata)
+                } else if ("rfqreply" in obj) {
+                    rfqreply(obj.rfqreply)
+                }
+            } catch (e) {
+                console.log(e)
+                console.log(msg)
+            }
+        }
+
+        /* set-up connection */
+        var newconn = function () {
+            sockjs = new SockJS(sockjs_url);
+            sockjs.onopen = function () {
+                console.log("connection open");
+                /* we are ready */
+                start();
+            };
+            /* data from the server arrives here */
+            sockjs.onmessage = function (e) {
+                datain(e.data);
+            };
+            sockjs.onclose = function () {
+                console.log("connection closed");
+            };
+            sockjs.onheartbeat = function () {
+            };
+        };
+
+        /* get a connection */
+        newconn()
+
+        /* things start here */
+        function start() {
+            console.log("start")
+            savedata()
+            mmgetparams()
+            mmemergencystop()
+            mmgetnewquote()
+        }
+
+        function mmgetparams() {
+            var divmmgetparams = d3.select("#btnrefresh")
+            divmmgetparams.append("input")
+                .attr("type", "button")
+                .attr("class", "button")
+                .attr("value", "Refresh")
+                .attr("class", "normalbutton")
+                .on('click', function () {
+                    readadmindataclicked()
+                })
+            function readadmindataclicked() {
+                console.log("readadmindataclicked")
+                var mmadmindata = {}
+                /* send it */
+                sockjs.send("{\"readadmindata\":" + JSON.stringify(mmadmindata) + "}")
+            }
+        }
+
+        function readadmindatareply(mmadmindata) {
+            console.log("mmadmindata")
+            myform.txtGlobalPL.value = mmadmindata.mmGlobalPL
+            myform.txtGlobalPositionCost.value = mmadmindata.mmGlobalPositionCost
+            myform.txtGlobalPLAlgoR.value = mmadmindata.mmGlobalPLAlgoR
+            myform.txtGlobalPLLimitLoss.value = mmadmindata.mmGlobalPLLimitLoss
+            myform.txtGlobalPLLimitProfit.value = mmadmindata.mmGlobalPLLimitProfit
+            myform.txtPLAlgoR.value = mmadmindata.mmPLAlgoR
+            myform.txtPLLimitLoss.value = mmadmindata.mmPLLimitLoss
+            myform.txtPLLimitProfit.value = mmadmindata.mmPLLimitProfit
+            myform.txtPosition.value = mmadmindata.mmPosition
+            myform.txtPositionAlgoR.value = mmadmindata.mmPositionAlgoR
+            myform.txtPositionCost.value = mmadmindata.mmPositionCost
+            myform.txtPositionLimitLong.value = mmadmindata.mmPositionLimitLong
+            myform.txtPositionLimitShort.value = mmadmindata.mmPositionLimitShort
+            myform.txtPriceAlgoR.value = mmadmindata.mmPriceAlgoR
+            myform.txtPriceAskClose.value = mmadmindata.mmPriceAskClose
+            myform.txtPriceAskCurrent.value = mmadmindata.mmPriceAskCurrent
+            myform.txtPriceBidClose.value = mmadmindata.mmPriceBidClose
+            myform.txtPriceBidCurrent.value = mmadmindata.mmPriceBidCurrent
+            myform.txtPriceGapOvernight.value = mmadmindata.mmPriceGapOvernight
+            myform.txtPriceGapWeekend.value = mmadmindata.mmPriceGapWeekend
+            myform.txtSize.value = mmadmindata.mmSize
+            myform.txtSizeAlgoR.value = mmadmindata.mmSizeAlgoR
+            myform.txtSizeMax.value = mmadmindata.mmSizeMax
+            myform.txtSizeMin.value = mmadmindata.mmSizeMin
+            myform.txtSpread.value = mmadmindata.mmSpread
+            myform.txtSpreadAlgoR.value = mmadmindata.mmSpreadAlgoR
+            myform.txtSpreadMax.value = mmadmindata.mmSpreadMax
+            myform.txtSpreadMin.value = mmadmindata.mmSpreadMin
+        }
+
+        function savedata() {
+            var divmmparams = d3.select("#btnsave")
+            divmmparams.append("input")
+                .attr("type", "button")
+                .attr("class", "button")
+                .attr("value", "Save")
+                .attr("class", "normalbutton")
+                .on('click', function () {
+                    savedataclicked()
+                })
+        }
+
+        function savedataclicked() {
+            console.log("savedataclicked")
+            var mmparams = {}
+
+            mmparams.mmGlobalAlgoR = myform.txtGlobalAlgoR.value
+            mmparams.mmGlobalPL = myform.txtGlobalPL.value
+            mmparams.mmGlobalPLLimitLoss = myform.txtGlobalPLLimitLoss.value
+            mmparams.mmGlobalPLLimitProfit = myform.txtGlobalPLLimitProfit.value
+            mmparams.mmGlobalPositionCost = myform.txtGlobalPositionCost.value
+
+            mmparams.mmPLAlgoR = myform.txtPLAlgoR.value
+            mmparams.mmPLLimitLoss = myform.txtPLLimitLoss.value
+            mmparams.mmPLLimitProfit = myform.txtPLLimitProfit.value
+            mmparams.mmPosition = myform.txtPosition.value
+            mmparams.mmPositionAlgoR = myform.txtPositionAlgoR.value
+            mmparams.mmPositionCost = myform.txtPositionCost.value
+            mmparams.mmPositionLimitLong = myform.txtPositionLimitLong.value
+            mmparams.mmPositionLimitShort = myform.txtPositionLimitShort.value
+            mmparams.mmPriceAlgoR = myform.txtPriceAlgoR.value
+            mmparams.mmPriceAskClose = myform.txtPriceAskClose.value
+            mmparams.mmPriceAskCurrent = myform.txtPriceAskCurrent.value
+            mmparams.mmPriceBidClose = myform.txtPriceBidClose.value
+            mmparams.mmPriceBidCurrent = myform.txtPriceBidCurrent.value
+            mmparams.mmPriceGapOvernight = myform.txtPriceGapOvernight.value
+            mmparams.mmPriceGapWeekend = myform.txtPriceGapWeekend.value
+            mmparams.mmSize = myform.txtSize.value
+            mmparams.mmSizeAlgoR = myform.txtSizeAlgoR.value
+            mmparams.mmSizeMax = myform.txtSizeMax.value
+            mmparams.mmSizeMin = myform.txtSizeMin.value
+            mmparams.mmSpread = myform.txtSpread.value
+            mmparams.mmSpreadAlgoR = myform.txtSpreadAlgoR.value
+            mmparams.mmSpreadMax = myform.txtSpreadMax.value
+            mmparams.mmSpreadMin = myform.txtSpreadMin.value
+            /*send it*/
+            sockjs.send("{\"mmparams\":" + JSON.stringify(mmparams) + "}")
+        }
+
+        function savedatareply(mmparamsreply) {
+            console.log("savedatareply")
+        }
+
+        function mmemergencystop() {
+            var divmmemergencystop = d3.select("#btnstop")
+            divmmemergencystop.append("input")
+                .attr("type", "button")
+                .attr("class", "button")
+                .attr("value", "EMERGENCY STOP")
+                .attr("class", "redbutton")
+                .on('click', function () {
+                    mmemergencystop()
+                })
+            function mmemergencystop() {
+                console.log("mmemergencystop")
+            }
+        }
+
+        function mmgetnewquote() {
+            var divmmgetnewquote = d3.select("#btnrfq")
+            divmmgetnewquote.append("input")
+                .attr("type", "button")
+                .attr("class", "button")
+                .attr("value", "Test A Quote")
+                .attr("class", "normalbutton")
+                .on('click', function () {
+                    savedataclicked()
+                    mmgetnewquoteclicked()
+                })
+        }
+
+        function mmgetnewquoteclicked() {
+            console.log("mmgetnewquoteclicked")
+            var mmnewquoteparams = {}
+            mmnewquoteparams.rfqid = 1234567890
+            mmnewquoteparams.productid = "VOD.L"
+            mmnewquoteparams.size = myform.txtSize.value
+            /* what sort of test rfq? */
+            if (myform.rbTestTypePosition.checked) {
+                mmnewquoteparams.testtype = "position"
+            }
+            else if (myform.rbTestTypeSize.checked) {
+                mmnewquoteparams.testtype = "Size"
+            }
+            else if (myform.rbTestTypePL.checked) {
+                mmnewquoteparams.testtype = "pl"
+            }
+            else if (myform.rbTestTypeCombined.checked) {
+                mmnewquoteparams.testtype = "combined"
+            }
+            else {
+                mmnewquoteparams.testtype = "error"
+            }
+            /* send it */
+            sockjs.send("{\"mmgetnewquote\":" + JSON.stringify(mmnewquoteparams) + "}")
+        }
+
+        function rfqreply(rfqreply) {
+            console.log("rfqreply")
+            myform.txtPriceNewAsk.value =   rfqreply.ask.toFixed(6)
+            myform.txtPriceNewBid.value =   rfqreply.bid.toFixed(6)
+            myform.txtLimitRatio.value =    rfqreply.limitratio.toFixed(6)
+        }
+
+     </script>
+
+<FORM NAME="myform" METHOD="GET" autocomplete="off" draggable="false" spellcheck="false">
+
+    <table class="tablestyle">
+        <caption>
+            cantwaittotrade - market making administrator</caption>
+        <tr>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+        </tr>
+        
+        <tr>
+            <td class="normalcenter" id="btnstop" colspan="4">&nbsp;</td>
+        </tr>
+        
+        <tr>
+            <td class="normalheadingright">P/L</td>
+            <td class="normalheading"></td>
+            <td class="normalheadingright">Position</td>
+            <td class="normalheading"></td>
+        </tr>
+        <tr>
+            <td class="normalright">Maximum profit target</td>
+            <td> <INPUT TYPE="text" NAME="txtPLLimitProfit" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright"> Maximum limit long</td>
+            <td> <INPUT TYPE="text" NAME="txtPositionLimitLong" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td class="normalright">Maximum loss target</td>
+            <td> <INPUT TYPE="text" NAME="txtPLLimitLoss" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright"> Maximum limit short</td>
+            <td> <INPUT TYPE="text" NAME="txtPositionLimitShort" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td class="normalright">Risk aversion value</td>
+            <td> <INPUT TYPE="text" NAME="txtPLAlgoR" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright"> Risk aversion value</td>
+            <td> <INPUT TYPE="text" NAME="txtPositionAlgoR" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+        </tr>
+
+        <tr>
+            <td class="normalheadingright">Price</td>
+            <td class="normalheading">&nbsp;</td>
+            <td class="normalheadingright">Spread</td>
+            <td class="normalheading">&nbsp;</td>
+        </tr>
+        <tr>
+            <td class="normalright">Estimated overnight mid-price gap</td>
+            <td class="normal"> <INPUT TYPE="text" NAME="txtPriceGapOvernight" VALUE="0" class="normaltextbox" required="required"> %</td>
+            <td class="normalright"> Spread</td>
+            <td class="normal"> <INPUT TYPE="text" NAME="txtSpread" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td class="normalright">Estimated weekend mid-price gap</td>
+            <td class="normal"> <INPUT TYPE="text" NAME="txtPriceGapWeekend" VALUE="0" class="normaltextbox" required="required"> %</td>
+            <td class="normalright"> Minimum</td>
+            <td class="normal"> <INPUT TYPE="text" NAME="txtSpreadMin" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td class="normalright">Risk aversion value</td>
+            <td class="normal"> <INPUT TYPE="text" NAME="txtPriceAlgoR" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright"> Maximum</td>
+            <td class="normal"> <INPUT TYPE="text" NAME="txtSpreadMax" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td class="normalright">Risk aversion value</td>
+            <td> <INPUT TYPE="text" NAME="txtSpreadAlgoR" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+
+        <tr>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+        </tr>
+
+        <tr>
+            <td class="normalheadingright">RFQ</td>
+            <td class="normalheading">&nbsp;</td>
+            <td class="normalheadingright">Test an RFQ</td>
+            <td class="normalheading">&nbsp;</td>
+        </tr>
+        <tr>
+            <td class="normalright">Minimum</td>
+            <td> <INPUT TYPE="text" NAME="txtSizeMin" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">RFQ size</td>
+            <td> <INPUT TYPE="text" NAME="txtSize" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td class="normalright">Maximum</td>
+            <td> <INPUT TYPE="text" NAME="txtSizeMax" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">Current position</td>
+            <td><INPUT TYPE="text" NAME="txtPosition" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td class="normalright">Risk aversion value</td>
+            <td> <INPUT TYPE="text" NAME="txtSizeAlgoR" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">Current position cost</td>
+            <td><INPUT TYPE="text" NAME="txtPositionCost" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td class="normalright">&nbsp;</td>
+            <td> &nbsp;</td>
+            <td class="normalright">Last in-hours close Ask</td>
+            <td><INPUT TYPE="text" NAME="txtPriceAskClose" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td class="normalright">&nbsp;</td>
+            <td> &nbsp;</td>
+            <td class="normalright">Last in-hours close Bid</td>
+            <td><INPUT TYPE="text" NAME="txtPriceBidClose" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td class="normalright">&nbsp;</td>
+            <td> &nbsp;</td>
+            <td class="normalright">Current Ask</td>
+            <td><INPUT TYPE="text" NAME="txtPriceAskCurrent" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td class="normalheadingright">GLOBAL</td>
+            <td class="normalheading"> </td>
+            <td class="normalright">Current Bid</td>
+            <td><INPUT TYPE="text" NAME="txtPriceBidCurrent" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+                
+        <tr>
+            <td class="normalright">&nbsp;</td>
+            <td> &nbsp;</td>
+            <td class="normalright">New Quoted Ask</td>
+            <td><INPUT TYPE="text" NAME="txtPriceNewAsk" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+                
+        <tr>
+            <td class="normalright">Profit Limit </td>
+            <td> <INPUT TYPE="text" NAME="txtGlobalPLLimitProfit" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">New Quoted Bid</td>
+            <td><INPUT TYPE="text" NAME="txtPriceNewBid" VALUE="0" class="normaltextbox" required="required"></td>
+        </tr>
+                
+        <tr>
+            <td class="normalright">Loss Limit</td>
+            <td> <INPUT TYPE="text" NAME="txtGlobalPLLimitLoss" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">Limit Ratio</td>
+            <td><INPUT TYPE="text" NAME="txtLimitRatio" VALUE="0" class="normaltextbox"></td>
+        </tr>
+
+        <tr>
+            <td class="normalright">Risk aversion value</td>
+            <td> <INPUT TYPE="text" NAME="txtGlobalPLAlgoR" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">&nbsp;</td>
+            <td>&nbsp;</td>
+        </tr>
+
+        <tr>
+            <td class="normalright">Global position cost</td>
+            <td> <INPUT TYPE="text" NAME="txtGlobalPositionCost" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">&nbsp;</td>
+            <td>&nbsp;</td>
+        </tr>
+
+        <tr>
+            <td class="normalright">Current PL</td>
+            <td> <INPUT TYPE="text" NAME="txtGlobalPL" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">&nbsp;</td>
+            <td>&nbsp;</td>
+        </tr>
+
+        <tr>
+            <td class="normalright">&nbsp;</td>
+            <td> &nbsp;</td>
+            <td class="normalright">Test type</td>
+            <td>
+                <input id="rbTestTypePosition" class="normal" type="radio" name ="testtype" checked="checked" />Position<br>
+                <input id="rbTestTypeSize" class="normal" type="radio" name ="testtype" />Size<br>
+                <input id="rbTestTypePL" class="normal" type="radio" name ="testtype" />P/L<br>
+                <input id="rbTestTypeCombined" class="normal" type="radio" name ="testtype" />Combined<br>
+            </td>
+        </tr>
+                
+        <tr>
+            <td class="normal" id="btnrefresh"></td>
+            <td class="normal" id="btnsave"></td>
+            <td class="normal"></td>
+            <td class="normalright" id="btnrfq">&nbsp;</td>
+        </tr>
+                
+</table>
+
+</FORM>
+</body>
+</html>
+
