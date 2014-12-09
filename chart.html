@@ -448,7 +448,7 @@
         }
 
         //
-        // request single position or all positions
+        // request single position or all positions - symbol = ""
         //
         function requestPosition(symbol) {
             var positionrequest = {};
@@ -535,15 +535,23 @@
         function priceReceived(price) {
             console.log("priceReceived");
 
-            // update data
+            // update price data
             updatePriceData(price);
 
-            // update display
-            updatepricetable(price);
+            // update price display
+            updatePriceTable(price);
+
+            // update position data
+            updatePositionData(price);
         }
 
         // update price array
         function updatePriceData(price) {
+            if (price.symbol != selectedsymbol) {
+                console.log("does not match");
+                return;
+            }
+
             if ("bid" in price) {
                 price.bid = formatCurrency(price.bid);
 
@@ -576,7 +584,7 @@
             }            
         }
 
-        function updatepricetable(price) {
+        function updatePriceTable(price) {
             console.log(price);
             var cols = ["bid", "", "ask"];
 
@@ -627,6 +635,8 @@
             cells.enter()
                 .append("td")
                     .text(function(d) { return d.value == null ? '-' : d.value.price; });
+
+            cells.exit().remove();
         }
 
         function createPriceTable(price, cols) {
@@ -659,11 +669,13 @@
                 .append("th")
                     .attr("class", "tblpricehdr")
                     .text(function(d) { return d; });*/
-
+console.log("pricedata");
+console.log(pricedata);
             // create a row
             var tblpricerow = tbody.selectAll("tr")
-                .data(pricedata)
-                .enter()
+                .data(pricedata);
+
+            tblpricerow.enter()
                 .append("tr")
                 .attr("id", "tblpricerow")
                 .attr("class", "tblpricerow");
@@ -678,6 +690,8 @@
                 .enter()
                 .append("td")
                     .text(function(d) { return d.value; });*/
+
+            tblpricerow.exit().remove();
             return tblpricerow;
         }
 
@@ -719,8 +733,10 @@
                             // unsubscribe current symbol
                             if (selectedsymbol != "") {
                                 requestRemoveOrderbook(selectedsymbol);
+                                selectedsymbol = "";
                             }
 
+                            clearData();
                             clearScreen();
 
                             // switch off styles
@@ -790,6 +806,11 @@
             d3.select("#divprice").remove();
             d3.select("#tblmenuprice").remove();
             d3.select("#stockboxdiv").remove();
+        }
+
+        function clearData() {
+            //pricedata = [];
+            positions = [];
         }
 
         function createTradeTable() {
@@ -1649,12 +1670,15 @@
 
                             selectedsymbol = this.innerHTML.substr(lastspace+1);
 
+                            clearData();
+
                             // clear price display in case of a previously selected symbol
                             d3.select("#divprice").remove();
                             d3.select("#tblmenuprice").remove();
 
                             // request a symbol
                             requestOrderbook(selectedsymbol);
+                            requestPosition(selectedsymbol);
 
                             // clear array
                             symboldata = [];
@@ -3069,12 +3093,6 @@
                 .html("Quote request rejected: " + quoteack.text);
         }
 
-        function positionRequest() {
-            var positionrequest = {};
-
-            sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
-        }
-
         function positionsReceived(positionsarr) {
             console.log("positionsReceived");
 
@@ -3092,6 +3110,10 @@
             console.log("positionReceived");
             console.log(position);
             var posupdated = false;
+
+            if (!('symbol' in position)) {
+                return;
+            }
 
             // update or remove position
             for (var i = 0; i < positions.length; i++) {
@@ -3116,6 +3138,21 @@
             }
 
             updatePositionTable();
+        }
+
+        function updatePositionData(price) {
+            console.log("updatePositionData");
+
+            for (var i = 0; i < positions.length; i++) {
+                console.log("a");
+                console.log(positions[i]);
+                console.log("b");
+                console.log(price.symbol);
+                if (positions[i].symbol == price.symbol) {
+                    console.log(positions[i].cost);
+                    //positions[i].cost - positions[i]
+                }
+            }
         }
 
         function updatePositionTable() {
@@ -3163,9 +3200,11 @@
                                 .html(function (d) { return d.value; })
                                 .on("click", function(d) {
                                     selectedsymbol = d.value;
+                                    clearData();
                                     clearScreen();
                                     selectSymbol();
                                     requestOrderbook(d.value);
+                                    requestPosition(d.value);
 
                                     // switch off styles
                                     d3.select("#tblmenu").selectAll("a")
@@ -3210,18 +3249,19 @@
         }
 
         function createPositionTable(cols) {
-            // create position div
-            var divposition = d3.select("#divcontainer")
-                .append("div")
-                .attr("class", "divposition")
-                .attr("id", "divposition");
+            var divposition;
 
-            // check for no positions
-            /*if (positions.length == 0) {
-                divposition
-                    .text("No Positions");
-                return;
-            }*/
+            // may be a single position or array of positions
+            var divprice = d3.select("#divprice");
+            if (!divprice.empty()) {
+                divposition = divprice.append("div")
+                    .attr("class", "divposition")
+                    .attr("id", "divposition");
+            } else {
+                divposition = d3.select("#divcontainer").append("div")
+                    .attr("class", "divposition")
+                    .attr("id", "divposition");
+            }
 
             // create the table
             var tblposition = divposition.append("table")
@@ -3241,7 +3281,17 @@
 
             theadcells.enter()
                 .append("th")
-                    .text(function(d) { return d; });
+                    .text(function(d) {
+                        if (d == "costpershare") {
+                            return "cost per share";
+                        } else if (d == "mktprice") {
+                            return "mkt. price";
+                        } else if (d == "unrealisedpandl") {
+                            return "unrealised p&l";
+                        } else {
+                            return d;
+                        }
+                    });
 
             theadcells.exit().remove();
 

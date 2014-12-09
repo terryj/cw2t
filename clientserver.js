@@ -1173,40 +1173,30 @@ function registerClient(reg, conn) {
   });
 }
 
+//
+// request for a new symbol subscription
+//
 function orderbookRequest(clientid, symbol, conn) {
   console.log("orderbookRequest:" + symbol);
 
-  // get hour & minute for comparison with timezone to determine in/out of hours
-  var today = new Date();
-
-  var hour = today.getHours();
-  var minute = today.getMinutes();
-  var day = today.getDay();
-
-  db.eval(common.scriptsubscribesymbol, 7, symbol, clientid, serverid, feedtype, hour, minute, day, function(err, ret) {
+  db.eval(common.scriptsubscribesymbol, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
 
-    var subscribe = ret[0];
-    var markettype = ret[4];
+    console.log(ret);
 
     // see if we need to subscribe
-    if (subscribe == 1) {
+    if (ret[0] == 1) {
       dbsub.subscribe("price:" + symbol);
     }
 
-    //send latest price if ooh or already subscribed
-    //if (markettype == 1 || subscribe == 0) {
-      var price = {};
-      price.symbol = symbol;
-      price.bid = ret[1];
-      price.ask = ret[2];
-      price.timestamp = ret[3];
-
-      conn.write("{\"price\":" + JSON.stringify(price) + "}");
-    //}
-
     // send the current stored price
-    //common.sendCurrentOrderbook(symbol, ret[1], conn, feedtype);
+    var price = {};
+    price.symbol = symbol;
+    price.bid = ret[1];
+    price.ask = ret[2];
+    price.timestamp = ret[3];
+
+    conn.write("{\"price\":" + JSON.stringify(price) + "}");
   });
 }
 
@@ -1342,7 +1332,9 @@ function positionRequest(posreq, clientid, conn) {
     // single position
     db.eval(common.scriptgetposition, 2, clientid, posreq.symbol, function(err, ret) {
       if (err) throw err;
+      console.log(ret);
       conn.write("{\"position\":" + ret + "}");
+      console.log("scriptgetposition");
     });    
   } else {
     // all positions
@@ -1355,7 +1347,7 @@ function positionRequest(posreq, clientid, conn) {
 
       // subscribe to prices, so p&l can be calculated in the front-end
       for (var i = 0; i < ret[1].length; i++) {
-        db.subscribe("price:" + ret[1][i]);
+        dbsub.subscribe("price:" + ret[1][i]);
       }
     });
   }

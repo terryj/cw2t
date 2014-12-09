@@ -1041,7 +1041,7 @@ exports.registerCommonScripts = function () {
   // subscribe to an instrument with nbtrader
   // any number of symbols can subscribe to a nbtsymbol to support derivatives
   //
-  subscribesymbolnbt = getmarkettype + '\
+  subscribesymbolnbt = '\
   local subscribesymbolnbt = function(symbol, id, serverid, hour, minute, day) \
     local nbtsymbol = redis.call("hget", "symbol:" .. symbol, "nbtsymbol") \
     if not nbtsymbol then \
@@ -1058,14 +1058,12 @@ exports.registerCommonScripts = function () {
       --[[ subscribing from db will be done on separate connection ]] \
       subscribe = 1 \
     end \
+    redis.call("sadd", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
+    redis.call("sadd", "serverid:" .. serverid .. ":ids", id) \
     --[[ get latest price ]] \
     local fields = {"bid", "ask", "timestamp"} \
     local vals = redis.call("hmget", "price:" .. symbol, unpack(fields)) \
-    --[[ get in/out of hours ]] \
-    local markettype = getmarkettype(symbol, hour, minute, day) \
-    redis.call("sadd", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
-    redis.call("sadd", "serverid:" .. serverid .. ":ids", id) \
-    return {subscribe, vals[1], vals[2], vals[3], markettype} \
+    return {subscribe, vals[1], vals[2], vals[3]} \
   end \
   ';
 
@@ -1341,7 +1339,7 @@ exports.registerCommonScripts = function () {
     local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
     table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=vals[6],positionid=vals[7],costpershare=vals[8],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
     --[[ subscribe to this symbol, so as to get prices to the f/e for p&l calc ]] \
-    local subscribe = subscribesymbolnbt(vals[2], KEYS[1], KEYS[2], 8, 0, 0) \
+    local subscribe = subscribesymbolnbt(vals[2], KEYS[1], KEYS[2]) \
     if subscribe[1] then \
       table.insert(tblsubscribe, vals[2]) \
     end \
@@ -1356,7 +1354,7 @@ exports.registerCommonScripts = function () {
   local fields = {"clientid","symbol","quantity","cost","currency","margin","positionid","costpershare"} \
   local vals = redis.call("hmget", KEYS[1] .. ":position:" .. KEYS[2], unpack(fields)) \
   local pos = {} \
-  if vals[0] ~= nil then \
+  if vals[1] then \
     --[[ value the position ]] \
     local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
     pos = {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=vals[6],positionid=vals[7],costpershare=vals[8],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
@@ -1398,8 +1396,8 @@ exports.registerCommonScripts = function () {
 
   //
   // subscribe to a new instrument
-  // params: symbol, client/user/ifa id, serverid, feedtype, hour, minute, day
-  // i.e. "BARC.L", 1, 1, "digitallook", "08", "00", "00"
+  // params: symbol, client/user/ifa id, serverid, feedtype
+  // i.e. "BARC.L", 1, 1, "digitallook"
   //
   exports.scriptsubscribesymbol = subscribesymbolpq + subscribesymboldl + subscribesymbolnbt + '\
   local ret = {0, ""} \
@@ -1408,7 +1406,7 @@ exports.registerCommonScripts = function () {
   elseif KEYS[4] == "digitallook" then \
     ret = subscribesymboldl(KEYS[1], KEYS[2], KEYS[3]) \
   elseif KEYS[4] == "nbtrader" then \
-    ret = subscribesymbolnbt(KEYS[1], KEYS[2], KEYS[3], KEYS[5], KEYS[6], KEYS[7]) \
+    ret = subscribesymbolnbt(KEYS[1], KEYS[2], KEYS[3]) \
   end \
   return ret \
   ';
