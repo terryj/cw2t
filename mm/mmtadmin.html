@@ -85,11 +85,13 @@
 
         function readadmindatareply(mmadmindata) {
             console.log("mmadmindata")
+
             myform.txtGlobalPL.value = mmadmindata.mmGlobalPL
-            myform.txtGlobalPositionCost.value = mmadmindata.mmGlobalPositionCost
             myform.txtGlobalPLAlgoR.value = mmadmindata.mmGlobalPLAlgoR
             myform.txtGlobalPLLimitLoss.value = mmadmindata.mmGlobalPLLimitLoss
             myform.txtGlobalPLLimitProfit.value = mmadmindata.mmGlobalPLLimitProfit
+            myform.txtGlobalPositionCost.value = mmadmindata.mmGlobalPositionCost
+
             myform.txtPLAlgoR.value = mmadmindata.mmPLAlgoR
             myform.txtPLLimitLoss.value = mmadmindata.mmPLLimitLoss
             myform.txtPLLimitProfit.value = mmadmindata.mmPLLimitProfit
@@ -131,8 +133,8 @@
             console.log("savedataclicked")
             var mmparams = {}
 
-            mmparams.mmGlobalAlgoR = myform.txtGlobalAlgoR.value
             mmparams.mmGlobalPL = myform.txtGlobalPL.value
+            mmparams.mmGlobalPLAlgoR = myform.txtGlobalPLAlgoR.value
             mmparams.mmGlobalPLLimitLoss = myform.txtGlobalPLLimitLoss.value
             mmparams.mmGlobalPLLimitProfit = myform.txtGlobalPLLimitProfit.value
             mmparams.mmGlobalPositionCost = myform.txtGlobalPositionCost.value
