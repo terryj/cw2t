@@ -2681,7 +2681,6 @@ console.log(pricedata);
                         .attr("class", "myquoteinp")
                         .attr("value", function(d) { return d.value.quantity; });
                 } else if (d.col == "price") {
-                    console.log(quotereqid);
                     d3.select(this)
                         .attr("id", "colinpprice" + d.value.quotereqid)
                         .append("input")
@@ -3176,11 +3175,8 @@ console.log(pricedata);
                 cols = [];
             }
 
-            // create a div
-            var tblposition = d3.select("#tblposition");
-            if (tblposition.empty()) {
-                tblposition = createPositionTable(cols);
-            }
+            // always call create routine as controls addition & removal of headers
+            var tblposition = createPositionTable(cols);
 
             // create a row for a position
             var rows = tblposition.select("tbody").selectAll("tr")
@@ -3253,36 +3249,38 @@ console.log(pricedata);
         }
 
         function createPositionTable(cols) {
-            var divposition;
+            var tblposition = d3.select("#tblposition");
+            if (tblposition.empty()) {
+                // may be a single position or array of positions
+                var divprice = d3.select("#divprice");
+                if (!divprice.empty()) {
+                    divposition = divprice.append("div")
+                        .attr("class", "divposition")
+                        .attr("id", "divposition");
+                } else {
+                    divposition = d3.select("#divcontainer").append("div")
+                        .attr("class", "divposition")
+                        .attr("id", "divposition");
+                }
 
-            // may be a single position or array of positions
-            var divprice = d3.select("#divprice");
-            if (!divprice.empty()) {
-                divposition = divprice.append("div")
-                    .attr("class", "divposition")
-                    .attr("id", "divposition");
-            } else {
-                divposition = d3.select("#divcontainer").append("div")
-                    .attr("class", "divposition")
-                    .attr("id", "divposition");
+                // create the table
+                tblposition = divposition.append("table")
+                    .attr("class", "tblposition")
+                    .attr("id", "tblposition");
+
+                // add header & body
+                var thead = tblposition.append("thead")
+                    .attr("class", "tblpositionhdr")
+                    .append("tr");
+
+                var tbody = tblposition.append("tbody");
             }
 
-            // create the table
-            var tblposition = divposition.append("table")
-                .attr("class", "tblposition")
-                .attr("id", "tblposition");
-
-            // add header & body
-            var thead = tblposition.append("thead")
-                .attr("class", "tblpositionhdr")
-                .append("tr");
-
-            var tbody = tblposition.append("tbody");
-
-            // append the header row
-            var theadcells = thead.selectAll("th")
+            // update
+            var theadcells = tblposition.select("thead").selectAll("th")
                 .data(cols);
 
+            // enter
             theadcells.enter()
                 .append("th")
                     .text(function(d) {
@@ -3297,6 +3295,7 @@ console.log(pricedata);
                         }
                     });
 
+            // exit
             theadcells.exit().remove();
 
             return tblposition;
