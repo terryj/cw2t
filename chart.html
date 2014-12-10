@@ -339,6 +339,7 @@
         var myquotes = [];
         var positions = [];
         var selectedsymbol = "";
+        var selectedmenu = 0;
 
         var datain = function(msg) {
             //console.log(msg);
@@ -527,33 +528,33 @@
             pricedata[0] = price;
         }
 
-        function formatCurrency(num) {
+        function formatCurrency(num, dp) {
             num = isNaN(num) || num === '' || num === null ? 0.00 : num;
-            return parseFloat(num).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+            return parseFloat(num).toFixed(dp).replace(/\d(?=(\d{3})+\.)/g, '$&,');
         }
 
         function priceReceived(price) {
             console.log("priceReceived");
 
-            // update price data
-            updatePriceData(price);
+            // only update price stuff for single symbol view
+            if (selectedmenu == 0 && price.symbol == selectedsymbol) {
+                // update price data
+                updatePriceData(price);
 
-            // update price display
-            updatePriceTable(price);
+                // update price display
+                updatePriceTable(price);
+            }
 
             // update position data
             updatePositionData(price);
+
+            updatePositionTable();
         }
 
         // update price array
         function updatePriceData(price) {
-            if (price.symbol != selectedsymbol) {
-                console.log("does not match");
-                return;
-            }
-
             if ("bid" in price) {
-                price.bid = formatCurrency(price.bid);
+                price.bid = formatCurrency(price.bid, 2);
 
                 if (parseFloat(price.bid) > parseFloat(pricedata[0].bid)) {
                     pricedata[0].bidtick = '+';
@@ -568,7 +569,7 @@
                 pricedata[0].bidtick = '';
             }
             if ("ask" in price) {
-                price.ask = formatCurrency(price.ask);
+                price.ask = formatCurrency(price.ask, 2);
 
                 if (parseFloat(price.ask) > parseFloat(pricedata[0].ask)) {
                     pricedata[0].asktick = '+';
@@ -729,7 +730,9 @@ console.log(pricedata);
                         .html(function (d) { return d; })
                         // add a style to treat first menu item as default
                         .style("color", function(d) { return d == cols[0] ? "gray" : null; })
-                        .on("click", function(d) {
+                        .on("click", function(d, i) {
+                            selectedmenu = i;
+
                             // unsubscribe current symbol
                             if (selectedsymbol != "") {
                                 requestRemoveOrderbook(selectedsymbol);
@@ -809,7 +812,10 @@ console.log(pricedata);
         }
 
         function clearData() {
-            //pricedata = [];
+            // reset price
+            initPrice();
+
+            // clear positions
             positions = [];
         }
 
@@ -861,9 +867,6 @@ console.log(pricedata);
         }
 
         function requestOrderbook(symbol) {
-            // reset price
-            initPrice();
-
             // request
             sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
         }
@@ -3108,7 +3111,6 @@ console.log(pricedata);
 
         function positionReceived(position) {
             console.log("positionReceived");
-            console.log(position);
             var posupdated = false;
 
             if (!('symbol' in position)) {
@@ -3117,15 +3119,10 @@ console.log(pricedata);
 
             // update or remove position
             for (var i = 0; i < positions.length; i++) {
-                console.log(positions[i].symbol);
-                console.log(position.symbol);
                 if (positions[i].symbol == position.symbol) {
-                console.log(position.quantity);
                     if (position.quantity == 0) {
-                        console.log("deleting");
                         positions.splice(i);
                     } else {
-                        console.log("updating");
                         positions[i] = position;
                     }
                     posupdated = true;
@@ -3141,18 +3138,35 @@ console.log(pricedata);
         }
 
         function updatePositionData(price) {
-            console.log("updatePositionData");
-
+            // see if a position for this product exists &, if so, update p&l
             for (var i = 0; i < positions.length; i++) {
-                console.log("a");
-                console.log(positions[i]);
-                console.log("b");
-                console.log(price.symbol);
                 if (positions[i].symbol == price.symbol) {
-                    console.log(positions[i].cost);
-                    //positions[i].cost - positions[i]
+                    if (positions[i].quantity < 0) {
+                        if ('ask' in price) {
+                            positions[i].mktprice = formatCurrency(price.ask / 100, 4); // todo: ok?
+                            updatePandL(i);
+                        }
+                    } else {
+                        if ('bid' in price) {
+                            positions[i].mktprice = formatCurrency(price.bid / 100, 4); // todo: ok?
+                            updatePandL(i);
+                        }                        
+                    }
                 }
             }
+        }
+
+        function updatePandL(i) {
+            var newpandl = formatCurrency(positions[i].quantity * positions[i].mktprice - positions[i].cost, 2);
+
+            if (newpandl > positions[i].unrealisedpandl) {
+                positions[i].unrealisedpandltick = '+';
+            } else if (newpandl < positions[i].unrealisedpandl) {
+                positions[i].unrealisedpandltick = '-';                                
+            } else {
+                positions[i].unrealisedpandltick = '0';                                
+            }
+            positions[i].unrealisedpandl = newpandl;
         }
 
         function updatePositionTable() {
@@ -3186,7 +3200,23 @@ console.log(pricedata);
                         return {col: col, value: row[col]};
                     });
                  })
-                .text(function(d) { return d.value; });
+                .each(function(d) {
+                    if (d.col != "symbol") {
+                        d3.select(this)
+                            .text(function(d) { return d.value; })
+                            .attr("class", function(d, i, j) {
+                                if (d.col == "unrealisedpandl") {
+                                    if (positions[j].unrealisedpandltick == '+') {
+                                        return "tickup";
+                                    } else if (positions[j].unrealisedpandltick == '-') {
+                                        return "tickdn";
+                                    } else if (positions[j].unrealisedpandltick == '0') {
+                                        return "ticknc";
+                                    }
+                                }
+                            });
+                    }
+                });
 
             // enter
             cells.enter()
@@ -3199,6 +3229,7 @@ console.log(pricedata);
                                 .attr("href", "#")
                                 .html(function (d) { return d.value; })
                                 .on("click", function(d) {
+                                    selectedmenu = 0;
                                     selectedsymbol = d.value;
                                     clearData();
                                     clearScreen();
@@ -3219,33 +3250,6 @@ console.log(pricedata);
                             .text(function(d) { return d.value; });
                     }
                 });
-
-            /*cells.each(function(d) {
-                if (d.col != "symbol") {
-                        // display a link for this symbol
-                        d3.select(this)
-                            .append("a")
-                                .attr("href", "#")
-                                .html(function (d) { return d.value; })
-                                .on("click", function(d) {
-                                    clearScreen();
-                                    selectSymbol();
-                                    requestOrderbook(d.value);
-
-                                    // switch off styles
-                                    d3.select("#tblmenu").selectAll("a")
-                                        .style("color", "");
-
-                                    // highlight selected
-                                    d3.select("#mnusingleproduct")
-                                        .style("color", "gray");
-                                });
-                    } else {
-                        d3.select(this)
-                            .text(function(d) { return d.value; });
-                    }
-
-            });*/
         }
 
         function createPositionTable(cols) {
