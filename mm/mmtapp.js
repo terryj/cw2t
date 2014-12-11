@@ -43,7 +43,9 @@ function initialise() {
     var d = new Date()
     console.log("Market maker automation: " + d.toISOString() + " Registering common scripts.")
     common.registerCommonScripts()
-    starttime()
+    /*
+ *     starttime()
+ *         */
     pubsub()
 }
 
@@ -100,7 +102,11 @@ function rfqreceived(rfq) {
     var symbol = {}
     db.hgetall("symbol:" + rfq.symbol, function (err, obj) {
         symbol = obj
-        makequote(rfq, symbol)
+        var position = {}
+        db.hgetall("999999:position:" + rfq.symbol + ":" + rfq.currency, function (err, obj) {
+            position = obj
+        makequote(rfq, symbol, position)
+        })
     })
 }
 
@@ -108,7 +114,7 @@ function rfqreceived(rfq) {
 /*
  * ""quotereqid"":""857"",""clientid"":""1"",""quoteid"":""755"",""symbol"":""LLOYL.CFD"",""bestbid"":""75.97"",""bestoffer"":""76"",""bidpx"":""0.7251"",""offerpx"":"""",""bidquantity"":""100"",""offerquantity"":"""",""bidsize"":""15000"",""offersize"":"""",""validuntiltime"":""20141202-13:50:44"",""transacttime"":""20141202-13:50:14"",""currency"":""GBP"",""settlcurrency"":""GBP"",""qbroker"":""WNTSGB2LBIC"",""nosettdays"":""2"",""futsettdate"":""20141204"",""bidfinance"":""0"",""offerfinance"":""0"",""orderid"":"""",""bidquotedepth"":""1"",""offerquotedepth"":"""",""externalquoteid"":""02ACZL02N501103D"",""qclientid"":"""",""cashorderqty"":""72.510000""
  * */
-function makequote(rfq, symbol) {
+function makequote(rfq, symbol, position) {
 /*
  *     Dim rfqmessage As String = "{""quoterequest"":""1"",""clientid"":""1"",""symbol"":""LLOY.L.CFD"",""quantity"":""100"",""cashorderqty"":""coq"",""currency"":""GBP"",""settlcurrency"":""GBP"",""nosettdays"":""2"",""futsettdate"":""20141204"",""quotestatus"":""0"",""timestamp"":""20141202-13:50:11"",""quoterejectreason"":""qrr"",""quotereqid"":""857"",""operatortype"":""1"",""operatorid"":""1""}"
  *     */
@@ -123,7 +129,8 @@ function makequote(rfq, symbol) {
     db.get("mmquotesequencenumber", function (err, obj) {
         var mmquotesequencenumber = Number(obj) + 1
 
-    /*    console.log("Market maker automation: " + d2.toISOString() + " symbol data: " + JSON.stringify(symbol)) */
+        var dsd = new Date()
+        console.log("Market maker automation: " + dsd.toISOString() + " symbol data: " + JSON.stringify(symbol))
 
         var ask = 123.21
         var bid = 123.12
@@ -182,10 +189,10 @@ function makequote(rfq, symbol) {
         /* update database*/
         db.set("mmquotesequencenumber", mmquotesequencenumber)
 
-        console.log("Market maker automation: " + d.toISOString() + " Quote returned: " + JSON.stringify(quote))
-
+        var dqr = new Date()
+        console.log("Market maker automation: " + dqr.toISOString() + " Position returned: " + JSON.stringify(position))
     })
-    }
+}
 
 function addZero(i) {
     if (i < 10) {
@@ -193,5 +200,4 @@ function addZero(i) {
     }
     return i;
 }
-
 

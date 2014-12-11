@@ -60,7 +60,6 @@ function initialise() {
     var dd = new Date()
     console.log("Market maker automation: " + dd.toISOString() + " Checking database keys...")
     checkrediskeys()
-
     listen()
 }
 
@@ -104,13 +103,21 @@ function checkrediskeys() {
     db.set("mmSizeMin", "100")
     db.set("mmSizeMax", "100")
     db.set("mmSizeAlgoR", "0.05")
+    
+    /*
+ *     db.hmset("999999:position:LLOY.L:GBP", "position", "100", "positioncost", "12345.67")
+ *         */
 
     /*
  *     db.hmset("mmProducts:TEST.L", "symbol", "TEST.L", "position", "50", "positioncost", "100", "positionlimitlong", "100", "positionlimitshort", "100", "pricealgor", "0.05", "priceask", "99", "pricebid", "101", "spreadalgor", "0.05", "spreadmax", "10", "spreadmin", "1", "pllimitmin", "-2500", "pllimitmax", "10000")
  *         */
     
     /*
- *     db.hgetall("mmProducts:TEST.L", function (err, obj) {
+ *     smembers position:LLOY.L:clients    should show clients with a position in LLOY.L
+ *         */
+
+    /*
+ *     db.hgetall("999999:TEST.L", function (err, obj) {
  *             console.dir(obj)
  *                     })
  *                         */
