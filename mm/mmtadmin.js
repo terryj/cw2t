@@ -67,6 +67,8 @@ function initialise() {
 /* make sure redis has keys we need*/
 function checkrediskeys() {
 
+    db.set("mmquotesequencenumber", "0")
+
     db.set("mmGlobalPL", "123.45")
     db.set("mmGlobalPLLimitProfit", "1000")
     db.set("mmGlobalPLLimitLoss", "1000")
