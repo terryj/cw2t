@@ -103,10 +103,14 @@ function checkrediskeys() {
     db.set("mmSizeMin", "100")
     db.set("mmSizeMax", "100")
     db.set("mmSizeAlgoR", "0.05")
-    
+
     /*
- *     db.hmset("999999:position:LLOY.L:GBP", "position", "100", "positioncost", "12345.67")
+ *     db.hmset("price:LLOY.L", "bid", "240.1", "ask", "240.2", "timestamp", "1418210741604")
  *         */
+
+    /*
+ *     db.hmset("999999:position:LLOY.L:GBP", "position", "50", "positioncost", "12345.67")
+ *         */    
 
     /*
  *     db.hmset("mmProducts:TEST.L", "symbol", "TEST.L", "position", "50", "positioncost", "100", "positionlimitlong", "100", "positionlimitshort", "100", "pricealgor", "0.05", "priceask", "99", "pricebid", "101", "spreadalgor", "0.05", "spreadmax", "10", "spreadmin", "1", "pllimitmin", "-2500", "pllimitmax", "10000")
