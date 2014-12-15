@@ -131,10 +131,10 @@ function rfqreceived(rfq) {
                     return
                     }
                 else {
-                    /* read position record*/
+                    /* read position record */
                     position = obj
 
-                    /* get price record*/
+                    /* get price record */
                     var price = {}
                     db.hgetall("price:" + rfq.symbol, function (err, obj) {
                         if (err) {
@@ -143,37 +143,37 @@ function rfqreceived(rfq) {
                             return
                             }
                         else {
-                            /* read price record*/
+                            /* read price record */
                             price = obj
 
-                            /* get mm limits etc*/
+                            /* get mm limits etc */
                             var mm = {}
-                            db.get("mmSizeMax", function (err, obj) {
-                                mm.sizemax = Number(obj)
+                            db.get("mmRFQSizeMax", function (err, obj) {
+                            mm.rfqsizemax = Number(obj)
                                 db.get("mmSizeAlgoR", function (err, obj) {
-                                    mm.sizealgor = 1 + Number(obj)
+                                mm.sizealgor = 1 + Number(obj)
                                     db.get("mmSpreadMin", function (err, obj) {
-                                        mm.spreadmin = Number(obj)
+                                    mm.spreadmin = Number(obj)
                                         db.get("mmSpreadMax", function (err, obj) {
-                                            mm.spreadmax = Number(obj)
-                                            /* go make and publish quote */
-                                            makequote(rfq, symbol, position, price, mm)
-                                            })
+                                        mm.spreadmax = Number(obj)
+                                        /* go make and publish quote */
+                                        makequote(rfq, symbol, position, price, mm.rfqsizemax, mm.sizealgor, mm.spreadmin, mm.spreadmax)
                                         })
                                     })
                                 })
-                            }
-                        })
-                    }
-                })
-            }
-        })
-    }
+                            })
+                        }
+                    })
+                }
+            })
+        }
+    })
+}
 
 /*
  *     make quote
  *     */
-function makequote(rfq, symbol, position, price, mm) {
+function makequote(rfq, symbol, position, price, rfqsizemax, sizealgor, spreadmin, spreadmax) {
     /*
  *     var dsd = new Date()
  *         console.log("Market maker automation: " + dsd.toISOString() + " Price record: " + JSON.stringify(price))
@@ -209,14 +209,15 @@ function makequote(rfq, symbol, position, price, mm) {
  *             calculate new prices
  *                         */
             var spread = price.ask - price.bid
-            var mypercentageoflimit = getpercentage(Number(rfq.quantity), Number(mm.sizemax))
-            spread = Number(spread) + (Number(spread) * mypercentageoflimit * Math.pow(mm.sizealgor, mypercentageoflimit) / Math.pow(mm.sizealgor, 100) / 100)
+            var mypercentageoflimit = getpercentage(Number(rfq.quantity), Number(rfqsizemax))
+            spread = Number(spread) + (Number(spread) * mypercentageoflimit * Math.pow(sizealgor, mypercentageoflimit) / Math.pow(sizealgor, 100) / 100)
+
             /* check spread limits */
-            if (spread < Number(mm.spreadmin)) {
-                spread = Number(mm.spreadmin)
+            if (spread < Number(spreadmin)) {
+                spread = Number(spreadmin)
                 }
-            else if (spread > Number(mm.spreadmax)) {
-                spread = Number(mm.spreadmax)
+            else if (spread > Number(spreadmax)) {
+                spread = Number(spreadmax)
                 }
             /* apply new spread */
             var mid = (Number(price.ask) + Number(price.bid)) / 2
