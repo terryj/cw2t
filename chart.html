@@ -894,26 +894,7 @@ console.log(pricedata);
             var thead = tbltrade.append("thead");
             var tbody = tbltrade.append("tbody");
 
-            // add header
-            /*thead.append("tr")
-                .selectAll("th")
-                .data(hdr)
-                .enter()
-                .append("th")
-                .attr("colspan", 2)
-                    .text(function(d) { return d; });*/
-
-
-            // we only want one header
-            //var thead = d3.select("#tblmyquotehdr" + quotereqid);
-            //if (!(thead.empty())) { return; };
-
-            // create the header
-            //thead = tblmyquote.append("thead")
-                //.attr("id", "tblmyquotehdr" + quotereqid)
-              //  .append("tr");
-
-            // add the column headins
+            // add the column headings
             thead.selectAll("th")
                 .data(cols)
                 .enter()
@@ -2878,7 +2859,7 @@ console.log(pricedata);
                 //.attr("id", "tblmyquotehdr" + quotereqid)
                 .append("tr");
 
-            // add the column headins
+            // add the column headings
             thead.selectAll("th")
                 .data(hdr)
                 .enter()
