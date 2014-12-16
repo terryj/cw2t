@@ -1657,7 +1657,11 @@ function registerScripts() {
   local initialmargin = getinitialmargin(vals[2], consid) \
   local costs = getcosts(vals[1], vals[2], instrumenttype, vals[3], consid, KEYS[17]) \
   local finance = calcfinance(instrumenttype, consid, KEYS[17], vals[3], vals[8]) \
-  local tradeid = newtrade(vals[1], orderid, vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, KEYS[9], "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
+  --[[ treat the excuting broker as a client ]] \
+  local cptyid = redis.call("hget", "broker:" .. KEYS[9], "clientid") \
+  local rside = reverseside(KEYS[3]) \
+  local tradeid = newtrade(vals[1], orderid, vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, cptyid, "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
+  local cptytradeid = newtrade(cptyid, orderid, vals[2], rside, quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, vals[1], "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
   --[[ adjust order related margin/reserve ]] \
   adjustmarginreserve(orderid, vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[17], vals[7], KEYS[15], KEYS[11], vals[8]) \
   --[[ adjust order ]] \
@@ -1665,7 +1669,7 @@ function registerScripts() {
   --[[ todo: adjust trade related margin ]] \
   --[[updatetrademargin(tradeid, vals[1], KEYS[17], initialmargin[1])]] \
   --[[publishorder(orderid, vals[9]) ]]\
-  return {tradeid, vals[9], vals[10]} \
+  return \
   ';
 
   scriptordercancelrequest = removefromorderbook + cancelorder + getproquotesymbol + '\

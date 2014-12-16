@@ -244,6 +244,8 @@ function listen() {
             orderHistory(obj.orderhistoryrequest, clientid, conn);
           } else if ("cashhistoryrequest" in obj) {
             cashHistory(obj.cashhistoryrequest, clientid, conn);
+          } else if ("unsubscribepositionsrequest" in obj) {
+            unsubscribePositionsRequest(obj.unsubscribepositionsrequest, clientid, conn);
           } else if ("index" in obj) {
             common.sendIndex(obj.index, conn);
           } else if ("pwdrequest" in obj) {
@@ -1311,6 +1313,7 @@ function tradeHistory(req, clientid, conn) {
   } else {
     db.eval(common.scriptgettrades, 1, clientid, function(err, ret) {
       if (err) throw err;
+      console.log(ret);
       conn.write("{\"trades\":" + ret + "}");
     });
   }
@@ -1338,7 +1341,7 @@ function positionRequest(posreq, clientid, conn) {
     });    
   } else {
     // all positions
-    db.eval(common.scriptgetpositions, 2, clientid, serverid, function(err, ret) {
+    db.eval(common.scriptsubscribepositions, 2, clientid, serverid, function(err, ret) {
       if (err) throw err;
       console.log(ret);
 
@@ -1351,6 +1354,22 @@ function positionRequest(posreq, clientid, conn) {
       }
     });
   }
+}
+
+function unsubscribePositionsRequest(unsubposreq, clientid, conn) {
+  console.log("unsubscribePositionsRequest");
+  console.log(unsubposreq);
+
+  // all positions
+  db.eval(common.scriptunsubscribepositions, 2, clientid, serverid, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    // unsubscribe to prices
+    for (var i = 0; i < ret[0].length; i++) {
+      dbsub.unsubscribe("price:" + ret[0][i]);
+    }
+  });
 }
 
 function cashRequest(cashreq, clientid, conn) {

@@ -1325,9 +1325,44 @@ exports.registerCommonScripts = function () {
   ';
 
   //
+  // get positions for a client
+  // params: client id
+  // returns an array of positions
+  //
+  exports.scriptgetpositions = getunrealisedpandl + '\
+  local tblresults = {} \
+  local positions = redis.call("smembers", KEYS[1] .. ":positions") \
+  local fields = {"clientid","symbol","quantity","cost","currency","margin","positionid","costpershare"} \
+  local vals \
+  for index = 1, #positions do \
+    vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
+    --[[ value the position ]] \
+    local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=vals[6],positionid=vals[7],costpershare=vals[8],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+  end \
+  return tblresults \
+  ';
+
+  //
+  // params: client id, symbol
+  //
+  exports.scriptgetposition = getunrealisedpandl + '\
+  local fields = {"clientid","symbol","quantity","cost","currency","margin","positionid","costpershare"} \
+  local vals = redis.call("hmget", KEYS[1] .. ":position:" .. KEYS[2], unpack(fields)) \
+  local pos = {} \
+  if vals[1] then \
+    --[[ value the position ]] \
+    local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
+    pos = {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=vals[6],positionid=vals[7],costpershare=vals[8],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
+  end \
+  return cjson.encode(pos) \
+  ';
+
+  //
+  // get positions for a client & subscribe client & server to the position symbols
   // params: client id, server id
   //
-  exports.scriptgetpositions = getunrealisedpandl + subscribesymbolnbt + '\
+  exports.scriptsubscribepositions = getunrealisedpandl + subscribesymbolnbt + '\
   local tblresults = {} \
   local tblsubscribe = {} \
   local positions = redis.call("smembers", KEYS[1] .. ":positions") \
@@ -1348,18 +1383,19 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // params: client id, symbol
-  //
-  exports.scriptgetposition = getunrealisedpandl + '\
-  local fields = {"clientid","symbol","quantity","cost","currency","margin","positionid","costpershare"} \
-  local vals = redis.call("hmget", KEYS[1] .. ":position:" .. KEYS[2], unpack(fields)) \
-  local pos = {} \
-  if vals[1] then \
-    --[[ value the position ]] \
-    local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-    pos = {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=vals[6],positionid=vals[7],costpershare=vals[8],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
+  // get positions for a client and unsubscribe client & server to the position symbols
+  // params: client id, server id
+  // 
+  exports.scriptunsubscribepositions = unsubscribesymbolnbt + '\
+  local tblunsubscribe = {} \
+  local positions = redis.call("smembers", KEYS[1] .. ":positions") \
+  for index = 1, #positions do \
+    local unsubscribe = unsubscribesymbolnbt(positions[index], KEYS[1], KEYS[2]) \
+    if unsubscribe[1] then \
+      table.insert(tblunsubscribe, positions[index]) \
+    end \
   end \
-  return cjson.encode(pos) \
+  return tblunsubscribe \
   ';
 
   //

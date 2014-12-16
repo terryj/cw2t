@@ -327,17 +327,18 @@
         var orderbooks = {};
         var ukx = [];
         var pricehist = [];
-        var operatortype = 1; // client
-        var clientid;
         var instruments = {};
         var pricedata = [];
         var quotes = [];
         var quoterequests = [];
-        var qbroker = "TGRANT";
         var quoteresponses = [];
-        var email = "";
         var myquotes = [];
         var positions = [];
+        var trades = [];
+        var qbroker = "TGRANT";
+        var email = "";
+        var operatortype = 1; // client
+        var clientid;
         var selectedsymbol = "";
         var selectedmenu = 0;
 
@@ -365,6 +366,8 @@
                     myquotesReceived(obj.myquotes);*/
                 } else if ("order" in obj) {
                     orderReceived(obj.order);
+                } else if ("trades" in obj) {
+                    tradesReceived(obj.trades);
                 } else if ("trade" in obj) {
                     tradeReceived(obj.trade);
                 } else if ("pricehistory" in obj) {
@@ -457,6 +460,13 @@
 
             // request position
             sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
+        }
+
+        function requestUnsubscribePositions() {
+            var unsubscribepositionsrequest = {};
+
+            // request position
+            sockjs.send("{\"unsubscribepositionsrequest\":" + JSON.stringify(unsubscribepositionsrequest) + "}");            
         }
 
         function requestAccount() {
@@ -698,7 +708,7 @@ console.log(pricedata);
 
         function createMenu() {
             var data = [""];
-            var cols = ["Select A Symbol", "Portfolio", "Account Summary", "Live Quote Requests"];
+            var cols = ["Select A Symbol", "Portfolio", "Account Summary", "Trades", "Live Quote Requests"];
 
             // create a table
             var tblmenu = d3.select("#divcontainer")
@@ -731,6 +741,10 @@ console.log(pricedata);
                         // add a style to treat first menu item as default
                         .style("color", function(d) { return d == cols[0] ? "gray" : null; })
                         .on("click", function(d, i) {
+                            if (selectedmenu == 1) {
+                                // we have subscribed to positions, so need to unsubscribe
+                                requestUnsubscribePositions();
+                            }
                             selectedmenu = i;
 
                             // unsubscribe current symbol
@@ -757,6 +771,8 @@ console.log(pricedata);
                             } else if (d == cols[2]) {
                                 requestAccount();
                             } else if (d == cols[3]) {
+                                requestTrades();
+                            } else if (d == cols[4]) {
                                 requestOpenQuoteRequests("");
                             }
                         });
@@ -809,6 +825,7 @@ console.log(pricedata);
             d3.select("#divprice").remove();
             d3.select("#tblmenuprice").remove();
             d3.select("#stockboxdiv").remove();
+            d3.select("#tbltrade").remove();
         }
 
         function clearData() {
@@ -819,51 +836,92 @@ console.log(pricedata);
             positions = [];
         }
 
-        function createTradeTable() {
-            var hdr = [];
-            var cols = ["bid","ask"];
+        function tradesReceived(tradearr) {
+            console.log("tradesReceived");
 
-            // update data arrays
-            hdr.push(price.symbol);
-            pricedata.push(price);
+            // clear global array
+            trades = [];
 
-            // create a table
-            var tbltrade = d3.select("body")
+            for (var i = 0; i < tradearr.length; i++) {
+                // add quote request to global array
+                trades.push(tradearr[i]);
+            }
+
+            // update display
+            updateTradeTable();
+        }
+
+        function updateTradeTable() {
+            var cols = ["timestamp","symbol","tradeid","orderid","side","quantity","price","currency","commission","ptmlevy","stampduty","contractcharge","externaltradeid"];
+
+            // create a trade table if one does not exist
+            var tbltrade = d3.select("#tbltrade");
+            if (tbltrade.empty()) {
+                tbltrade = createTradeTable(cols);
+            }
+
+            // base the table on the trades array
+            var rows = tbltrade.select("tbody").selectAll("tr")
+                .data(trades);
+
+            // create a new row for each quote level (may be bid/offer/both)
+            rows.enter()
+                .append("tr");
+
+            // update
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(col) {
+                        return {col: col, value: row[col]};
+                    });
+                 })
+                .enter()
+                .append("td")
+                    //.attr("class", "tblquoterequesthdr")
+                    .text(function(d) { return d.value; });
+        }
+
+        function createTradeTable(cols) {
+            console.log("createTradeTable");
+
+            // use the rfq div
+            var tbltrade = d3.select("#divcontainer")
                 .append("table")
-                .attr("id", "tbltrades");
+                .attr("id", "tbltrade")
+                .attr("class", "tbltrade");
 
             // add header & body
             var thead = tbltrade.append("thead");
             var tbody = tbltrade.append("tbody");
 
-            // append the header row
-            thead.append("tr")
+            // add header
+            /*thead.append("tr")
                 .selectAll("th")
                 .data(hdr)
                 .enter()
                 .append("th")
-                    .attr("colspan", 2)
-                    .attr("class", "tbltradehdr")
-                    .text(function(d) { return d + " - " + instruments[d].description; });
+                .attr("colspan", 2)
+                    .text(function(d) { return d; });*/
 
-            // create a row for each field
-            var rows = tbody.selectAll("tr")
-                .data(pricedata)
-                .enter()
-                .append("tr")
-                .attr("class", "tbltraderow")
-                .attr("id", "tbltraderow");
 
-            // create a cell in each row for each column
-            var cells = rows.selectAll("td")
-                .data(function(row) {
-                    return cols.map(function(column) {
-                        return {column: column, value: row[column]};
-                    });
-                 })
+            // we only want one header
+            //var thead = d3.select("#tblmyquotehdr" + quotereqid);
+            //if (!(thead.empty())) { return; };
+
+            // create the header
+            //thead = tblmyquote.append("thead")
+                //.attr("id", "tblmyquotehdr" + quotereqid)
+              //  .append("tr");
+
+            // add the column headins
+            thead.selectAll("th")
+                .data(cols)
                 .enter()
-                .append("td")
-                    .text(function(d, i) { return d.value; });
+                .append("th")
+                    //.attr("class", "tblquoterequesthdr")
+                    .text(function(d) { return d; });
+
+            return tbltrade;
         }
 
         function requestOrderbook(symbol) {
@@ -3225,6 +3283,7 @@ console.log(pricedata);
                                 .attr("href", "#")
                                 .html(function (d) { return d.value; })
                                 .on("click", function(d) {
+                                    requestUnsubscribePositions();
                                     selectedmenu = 0;
                                     selectedsymbol = d.value;
                                     clearData();
@@ -3315,6 +3374,12 @@ console.log(pricedata);
             myquotesrequest.quotereqid = quotereqid;
 
             sockjs.send("{\"myquotesrequest\":" + JSON.stringify(myquotesrequest) + "}");            
+        }
+
+        function requestTrades() {
+            var historyrequest = {};
+
+            sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
         }
      </script>
 </body>
