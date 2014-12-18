@@ -30,13 +30,13 @@ db.on("connect", function (err) {
         var d = new Date()
         console.log("Market maker automation: " + d.toISOString() + " Error: Cannot connect to Redis on host: " + redishost + ", port: " + redisport + ": " + err)
         return
-    }
+        }
     else {
         var d = new Date()
         console.log("Market maker automation: " + d.toISOString() + " Connected to Redis on host: " + redishost + ", port: " + redisport)
         initialise()
-    }
-})
+        }
+    })
 
 db.on("error", function (err) {
     var d = new Date()
@@ -72,12 +72,12 @@ function pubsub() {
     dbsub.on("subscribe", function (channel, count) {
         var d1 = new Date()
         console.log("Market maker automation: " + d1.toISOString() + " Redis subscribed to channel: " + channel + ", number of channels: " + count)
-    })
+        })
 
     dbsub.on("unsubscribe", function (channel, count) {
         var d2 = new Date()
         console.log("Market maker automation: " + d2.toISOString() + " Redis unsubscribed from channel: " + channel + ", number of channels: " + count)
-    })
+        })
 
     /* messages any subscribed channels arrive here */
     dbsub.on("message", function (channel, message) {
@@ -93,7 +93,7 @@ function pubsub() {
         } catch (e) {
             var d4 = new Date()
             console.log("Market maker automation: " + d4.toISOString() + " mmtapp.dbsub.on: Error: " + e)
-        }
+            }
     })
 
     /* listen for RFQs */
@@ -117,7 +117,7 @@ function rfqreceived(rfq) {
             var f = new Date()
             console.log("Market maker automation: " + f.toISOString() + " rfqreceived: Error. Failed to get symbol record: " + err)
             return
-        }
+            }
         else {
             /* read symbol record*/
             symbol = obj
@@ -129,7 +129,7 @@ function rfqreceived(rfq) {
                     var f1 = new Date()
                     console.log("Market maker automation: " + f1.toISOString() + " rfqreceived: Error. Failed to get position record: " + err)
                     return
-                }
+                    }
                 else {
                     /* read position record */
                     position = obj
@@ -141,39 +141,38 @@ function rfqreceived(rfq) {
                             var f2 = new Date()
                             console.log("Market maker automation: " + f2.toISOString() + " rfqreceived: Error. Failed to get price record: " + err)
                             return
-                        }
+                            }
                         else {
                             /* read price record */
                             price = obj
 
                             /* get mm limits etc */
                             var mm = {}
-                            db.get("mmRFQSizeMax", function (err, obj) {
-                                mm.rfqsizemax = Number(obj)
-                                db.get("mmSizeAlgoR", function (err, obj) {
-                                    mm.sizealgor = 1 + Number(obj)
-                                    db.get("mmSpreadMin", function (err, obj) {
-                                        mm.spreadmin = Number(obj)
-                                        db.get("mmSpreadMax", function (err, obj) {
-                                            mm.spreadmax = Number(obj)
-                                            /* go make and publish quote */
-                                            makequote(rfq, symbol, position, price, mm.rfqsizemax, mm.sizealgor, mm.spreadmin, mm.spreadmax)
-                                        })
-                                    })
+                            db.hgetall("mm:1", function (err, obj) {
+                                if (err) {
+                                    var f3 = new Date()
+                                    console.log("Market maker automation: " + f3.toISOString() + " rfqreceived: Error. Failed to get mm record: " + err)
+                                    return
+                                    }
+                                else {
+                                    /* read mm record */
+                                    mm = obj
+                                    /* make and publish quote */
+                                    makequote(rfq, symbol, position, price, mm)
+                                    }
                                 })
-                            })
-                        }
-                    })
-                }
-            })
-        }
-    })
-}
+                             }
+                        })
+                    }
+                })
+            }
+        })
+    }
 
 /*
  *     make quote
  *     */
-function makequote(rfq, symbol, position, price, rfqsizemax, sizealgor, spreadmin, spreadmax) {
+function makequote(rfq, symbol, position, price, mm) {
     /*
  *     var dsd = new Date()
  *         console.log("Market maker automation: " + dsd.toISOString() + " Price record: " + JSON.stringify(price))
@@ -191,136 +190,121 @@ function makequote(rfq, symbol, position, price, rfqsizemax, sizealgor, spreadmi
  *             */
 
     /*
- *         get previous quote sequence number
- *             */
-    db.get("mmquotesequencenumber", function (err, obj) {
-        if (err) {
-            var f = new Date()
-            console.log("Market maker automation: " + f.toISOString() + " makequote: Error. Failed to get mmquotesequencenumber: " + err)
-            return
+ *     calculate new prices
+ *         */
+
+    /* is there a qty or must we make one? */
+    var mid = (Number(price.ask) + Number(price.bid)) / 2
+    var myqty = 0
+    if (Number(rfq.quantity) != 0) {
+        myqty = Number(rfq.quantity)
+    }
+    else if (Number(rfq.quantity) == 0 && Number(rfq.cashorderqty) != 0) {
+        myqty = truncate(Number(rfq.cashorderqty) / Number(mid))
+    }
+    else {
+        var f0 = new Date()
+        console.log("Market maker automation: " + f0.toISOString() + " makequote: Error. Unable to create quantity.")
+        return
+    }
+
+    var spread = Number(price.ask) - Number(price.bid)
+    var mypercentageoflimit = getpercentage(Number(myqty), Number(mm.mmrfqsizemax))
+    var mmrfqsizealgor = 1 + Number(mm.mmrfqsizealgor)
+    spread = Number(spread) + (Number(spread) * mypercentageoflimit * Math.pow(Number(mmrfqsizealgor), mypercentageoflimit) / Math.pow(Number(mmrfqsizealgor), 100) / 100)
+
+    /* check spread limits */
+    if (Number(spread) < Number(mm.mmspreadmin)) {
+        spread = Number(mm.mmspreadmin)
+        }
+    else if (Number(spread) > Number(mm.mmspreadmax)) {
+        spread = Number(mm.mmspreadmax)
+        }
+    /* apply new spread */
+    var bid = Number(mid) - Number(spread) / 2
+    var ask = Number(bid) + Number(spread)
+
+    /*
+ *     compile quote
+ *         */
+    var quote = {}
+    quote.bestbid = bid
+    quote.bestoffer = ask
+    quote.bidfinance = "0"
+    quote.bidpx = bid
+    quote.bidquantity = myqty
+    quote.bidquotedepth = "1"
+    quote.bidsize = myqty
+    quote.cashorderqty = rfq.cashorderqty
+    quote.clientid = rfq.clientid
+    quote.currency = rfq.currency
+    quote.externalquoteid = Number(mm.mmquotesequencenumber) + 1
+    quote.futsettdate = rfq.futsettdate
+    quote.nosettdays = rfq.nosettdays
+    quote.offerfinance = "0"
+    quote.offerpx = ask
+    quote.offerquantity = myqty
+    quote.offerquotedepth = "1"
+    quote.offersize = myqty
+    quote.orderid = ""
+    quote.qbroker = "TGRANT"
+    quote.qclientid = "999999"
+    quote.quoteid = Number(mm.mmquotesequencenumber) + 1
+    quote.quotereqid = rfq.quoterequest
+    quote.settlcurrency = rfq.settlcurrency
+    quote.symbol = rfq.symbol
+
+    var d = new Date()
+    var MM = addZero(Number(d.getMonth()) + 1) /* add 1 as 0-11 */
+    var dd = addZero(d.getDate())
+    var hh = addZero(d.getHours())
+    var mm = addZero(d.getMinutes())
+    var ss = addZero(d.getSeconds())
+    /* 20141202-13:50:14 */
+    quote.transacttime = d.getFullYear().toString() + MM + dd + "-" + hh + ":" + mm + ":" + ss
+
+    var dv = new Date()
+    dv.setSeconds(dv.getSeconds() + 30) /* add 30 seconds as valid quote time */
+    var MMv = addZero(Number(dv.getMonth()) + 1) /* add 1 as 0-11 */
+    var ddv = addZero(dv.getDate())
+    var hhv = addZero(dv.getHours())
+    var mmv = addZero(dv.getMinutes())
+    var ssv = addZero(dv.getSeconds())
+    /* 20141202-13:50:14 */
+    quote.validuntiltime = dv.getFullYear().toString() + MMv + ddv + "-" + hhv + ":" + mmv + ":" + ssv
+
+    /* update database*/
+    var myreturn = db.set("mm:1:mmquotesequencenumber", Number(mm.mmquotesequencenumber) + 1)
+    if (myreturn == true) {
+        /* publish quote */
+        var myreturn1 = db.publish(common.tradechannel, JSON.stringify(quote))
+        if (myreturn1 == true) {
+            /*
+ *             var f = new Date()
+ *                         console.log("Market maker automation: " + f.toISOString() + " Published quote #" + mmquotesequencenumber)
+ *                                     */
         }
         else {
-            /*
- *             inc quote sequence number
- *                         */
-            var mmquotesequencenumber = Number(obj) + 1
-
-            /*
- *             calculate new prices
- *                         */
-
-            /* is there a qty or must we make one? */
-            var mid = (Number(price.ask) + Number(price.bid)) / 2
-            var myqty = 0
-            if (Number(rfq.quantity) != 0) {
-                myqty = Number(rfq.quantity)
-            }
-            else if (Number(rfq.quantity) == 0 && Number(rfq.cashorderqty) != 0) {
-                myqty = truncate(Number(rfq.cashorderqty) / Number(mid))
-            }
-            else {
-                var f0 = new Date()
-                console.log("Market maker automation: " + f0.toISOString() + " makequote: Error. Unable to create quantity.")
-                return
-            }
-
             var f1 = new Date()
-            console.log("Market maker automation: " + f1.toISOString() + " makequote: " + myqty)
-
-            var spread = price.ask - price.bid
-            var mypercentageoflimit = getpercentage(Number(myqty), Number(rfqsizemax))
-            spread = Number(spread) + (Number(spread) * mypercentageoflimit * Math.pow(sizealgor, mypercentageoflimit) / Math.pow(sizealgor, 100) / 100)
-
-            /* check spread limits */
-            if (spread < Number(spreadmin)) {
-                spread = Number(spreadmin)
-            }
-            else if (spread > Number(spreadmax)) {
-                spread = Number(spreadmax)
-            }
-            /* apply new spread */
-            var bid = mid - spread / 2
-            var ask = bid + spread
-
-            /*
- *             compile quote
- *                         */
-            var quote = {}
-            quote.bestbid = bid
-            quote.bestoffer = ask
-            quote.bidfinance = "0"
-            quote.bidpx = bid
-            quote.bidquantity = rfq.quantity
-            quote.bidquotedepth = "1"
-            quote.bidsize = rfq.quantity
-            quote.cashorderqty = rfq.cashorderqty
-            quote.clientid = rfq.clientid
-            quote.currency = rfq.currency
-            quote.externalquoteid = mmquotesequencenumber
-            quote.futsettdate = rfq.futsettdate
-            quote.nosettdays = rfq.nosettdays
-            quote.offerfinance = "0"
-            quote.offerpx = ask
-            quote.offerquantity = rfq.quantity
-            quote.offerquotedepth = "1"
-            quote.offersize = rfq.quantity
-            quote.orderid = ""
-            quote.qbroker = "TGRANT"
-            quote.qclientid = "999999"
-            quote.quoteid = mmquotesequencenumber
-            quote.quotereqid = rfq.quoterequest
-            quote.settlcurrency = rfq.settlcurrency
-            quote.symbol = rfq.symbol
-
-            var d = new Date()
-            var MM = addZero(Number(d.getMonth()) + 1) /* add 1 as 0-11 */
-            var dd = addZero(d.getDate())
-            var hh = addZero(d.getHours())
-            var mm = addZero(d.getMinutes())
-            var ss = addZero(d.getSeconds())
-            /* 20141202-13:50:14 */
-            quote.transacttime = d.getFullYear().toString() + MM + dd + "-" + hh + ":" + mm + ":" + ss
-
-            var dv = new Date()
-            dv.setSeconds(dv.getSeconds() + 30) /* add 30 seconds as valid quote time */
-            var MMv = addZero(Number(dv.getMonth()) + 1) /* add 1 as 0-11 */
-            var ddv = addZero(dv.getDate())
-            var hhv = addZero(dv.getHours())
-            var mmv = addZero(dv.getMinutes())
-            var ssv = addZero(dv.getSeconds())
-            /* 20141202-13:50:14 */
-            quote.validuntiltime = dv.getFullYear().toString() + MMv + ddv + "-" + hhv + ":" + mmv + ":" + ssv
-
-            /* update database*/
-            var myreturn = db.set("mmquotesequencenumber", mmquotesequencenumber)
-            if (myreturn == true) {
-                /* publish quote */
-                var myreturn1 = db.publish(common.tradechannel, JSON.stringify(quote))
-                if (myreturn1 == true) {
-                    var f = new Date()
-                    console.log("Market maker automation: " + f.toISOString() + " Published quote #" + mmquotesequencenumber)
-                }
-                else {
-                    var f1 = new Date()
-                    console.log("Market maker automation: " + f1.toISOString() + " makequote: Error. Failed to publish quote.")
-                }
-            }
-            else {
-                var f2 = new Date()
-                console.log("Market maker automation: " + f2.toISOString() + " makequote: Error: No quote published. Update mmquotesequencenumber in database: " + myreturn)
-            }
-
-            /*
- *             var d = new Date()
- *                         console.log("Market maker automation: " + d.toISOString() + " Database result: " + myreturn)
- *                                     var dq = new Date()
- *                                                 console.log("Market maker automation: " + dq.toISOString() + " Quotation: " + JSON.stringify(quote))
- *                                                             */
+            console.log("Market maker automation: " + f1.toISOString() + " makequote: Error. Failed to publish quote.")
         }
-    })
+    }
+    else {
+        var f2 = new Date()
+        console.log("Market maker automation: " + f2.toISOString() + " makequote: Error: No quote published. Update mmquotesequencenumber in database: " + myreturn)
+    }
+
+    /*
+ *     var d = new Date()
+ *         console.log("Market maker automation: " + d.toISOString() + " Database result: " + myreturn)
+ *             var dq = new Date()
+ *                 console.log("Market maker automation: " + dq.toISOString() + " Quotation: " + JSON.stringify(quote))
+ *                     */
 }
 
-/* add leading 0 to turn 9 into 09 etc. */
+/*
+ * add leading 0 to turn 9 into 09 etc.
+ * */
 function addZero(i) {
     if (i < 10) {
         i = "0" + i
@@ -335,8 +319,31 @@ function getpercentage(p1, p2) {
     return Math.abs(100 * Number(p1) / Number(p2))
 }
 
-function truncate(_value) {
+/*
+ * truncate to smallest integer.
+ * */
+function truncate(_value)
+{
     if (_value < 0) return Math.ceil(_value)
     else return Math.floor(_value)
+}
+
+/*
+ * calls itself at a random interval
+ * */
+function starttime() {
+    var d = new Date()
+    console.log("Market maker automation: " + d.toISOString() + " timer...")
+    var t = setTimeout(function () { starttime() }, Math.floor((Math.random() * 5000) + 1000))
+}
+
+/*
+ * make sure redis has keys we need
+ * */
+function checkrediskeys() {
+    db.hmset("mm:1", "mmglobalpl", "1", "mmglobalplalgor", "2", "mmglobalpllimitloss", "3", "mmglobalpllimitprofit", "4", "mmglobalpositioncost", "5", "mmplalgor", "6", "mmpllimitloss", "7", "mmpllimitprofit", "8", "mmposition", "9", "mmpositionalgor", "10", "mmpositioncost", "11", "mmpositionlimitlong", "12", "mmpositionlimitshort", "13", "mmpricealgor", "14", "mmpriceask", "15", "mmpriceaskclose", "16", "mmpriceaskcurrent", "17", "mmpricebid", "18", "mmpricebidclose", "19", "mmpricebidcurrent", "20", "mmpricegapovernight", "21", "mmpricegapweekend", "22", "mmquotesequencenumber", "23", "mmrfqsize", "24", "mmrfqsizealgor", "25", "mmrfqsizemax", "26", "mmrfqsizemin", "27", "mmrfqsizemin", "28", "mmspread", "29", "mmspreadalgor", "30", "mmspreadmax", "31", "mmspreadmin", "32")
+    db.hgetall("mm:1", function (err, obj) {
+        console.dir(obj);
+    })
 }
 

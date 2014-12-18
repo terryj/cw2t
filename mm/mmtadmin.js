@@ -59,72 +59,10 @@ function initialise() {
 
     var dd = new Date()
     console.log("Market maker automation: " + dd.toISOString() + " Checking database keys...")
-    checkrediskeys()
+    /*
+ *     checkrediskeys()
+ *         */
     listen()
-}
-
-/* make sure redis has keys we need*/
-function checkrediskeys() {
-
-    db.set("mmquotesequencenumber", "0")
-
-    db.set("mmGlobalPL", "123.45")
-    db.set("mmGlobalPLLimitProfit", "1000")
-    db.set("mmGlobalPLLimitLoss", "1000")
-    db.set("mmGlobalPLAlgoR", "0.05")
-    db.set("mmGlobalPositionCost", "100")
-
-    db.set("mmPLLimitProfit", "100")
-    db.set("mmPLLimitLoss", "100")
-    db.set("mmPLAlgoR", "0.05")
-
-    db.set("mmPosition", "20")
-    db.set("mmPositionCost", "100")
-    db.set("mmPositionLimitLong", "100")
-    db.set("mmPositionLimitShort", "100")
-    db.set("mmPositionAlgoR", "0.05")
-
-    db.set("mmPriceAsk", "101")
-    db.set("mmPriceBid", "99")
-    db.set("mmPriceAskCurrent", "101")
-    db.set("mmPriceBidCurrent", "99")
-    db.set("mmPriceAskClose", "101")
-    db.set("mmPriceBidClose", "99")
-    db.set("mmPriceAlgoR", "0.05")
-
-    db.set("mmProduct", "TEST.L")
-
-    db.set("mmSpread", "2")
-    db.set("mmSpreadAlgoR", "0.05")
-    db.set("mmSpreadMax", "10")
-    db.set("mmSpreadMin", "1")
-
-    db.set("mmSize", "20")
-    db.set("mmSizeMin", "100")
-    db.set("mmSizeMax", "100")
-    db.set("mmSizeAlgoR", "0.05")
-
-    /*
- *     db.hmset("price:LLOY.L", "bid", "240.1", "ask", "240.2", "timestamp", "1418210741604")
- *         */
-
-    /*
- *     db.hmset("999999:position:LLOY.L:GBP", "position", "50", "positioncost", "12345.67")
- *         */    
-
-    /*
- *     db.hmset("mmProducts:TEST.L", "symbol", "TEST.L", "position", "50", "positioncost", "100", "positionlimitlong", "100", "positionlimitshort", "100", "pricealgor", "0.05", "priceask", "99", "pricebid", "101", "spreadalgor", "0.05", "spreadmax", "10", "spreadmin", "1", "pllimitmin", "-2500", "pllimitmax", "10000")
- *         */
-    
-    /*
- *     smembers position:LLOY.L:clients    should show clients with a position in LLOY.L
- *         */
-
-    /*
- *     db.hgetall("999999:TEST.L", function (err, obj) {
- *             console.dir(obj)
- *                     })
- *                         */
 }
 
 /* http server */
@@ -167,117 +105,76 @@ function listen() {
                 } else if ("mmgetnewquote" in obj) {
                     var dddd = new Date()
                     console.log("Market maker automation: " + dddd.toISOString() + " RFQ received: " + msg)
+
+                    /* augment rfq */
+
                     var rfq = {}
                     rfq.id = obj.mmgetnewquote.rfqid
                     rfq.product = obj.mmgetnewquote.product
                     rfq.size = obj.mmgetnewquote.size
                     rfq.testtype = obj.mmgetnewquote.testtype
-                    rfq.limitratio = "error"
-                        db.get("mmGlobalPLAlgoR", function (err, obj) {
-                            rfq.globalplalgor = 1 + Number(obj)
-                            db.get("mmGlobalPLLimitProfit", function (err, obj) {
-                                rfq.globalpllimitprofit = Number(obj)
-                                db.get("mmGlobalPLLimitLoss", function (err, obj) {
-                                    rfq.globalpllimitloss = Number(obj)
-                                    db.get("mmGlobalPositionCost", function (err, obj) {
-                                      rfq.globalpositioncost = Number(obj)
-                                      db.get("mmGlobalPL", function (err, obj) {
-                                          rfq.mmglobalpl= Number(obj)
-                                            db.get("mmPriceAskCurrent", function (err, obj) {
-                                                rfq.currentask = Number(obj)
-                                                db.get("mmPriceBidCurrent", function (err, obj) {
-                                                    rfq.currentbid = Number(obj)
-                                                    db.get("mmPosition", function (err, obj) {
-                                                        rfq.position = Number(obj)
-                                                        db.get("mmPositionAlgoR", function (err, obj) {
-                                                            rfq.positionalgor = 1 + Number(obj)
-                                                            db.get("mmPositionLimitLong", function (err, obj) {
-                                                                rfq.positionlimitlong = Number(obj)
-                                                                db.get("mmPositionLimitShort", function (err, obj) {
-                                                                    rfq.positionlimitshort = Number(obj)
-                                                                    db.get("mmPositionCost", function (err, obj) {
-                                                                        rfq.positioncost = Number(obj)
-                                                                        db.get("mmSizeAlgoR", function (err, obj) {
-                                                                            rfq.sizealgor = 1 + Number(obj)
-                                                                            db.get("mmSizeMin", function (err, obj) {
-                                                                                rfq.sizemin = Number(obj)
-                                                                                db.get("mmSizeMax", function (err, obj) {
-                                                                                    rfq.sizemax = Number(obj)
-                                                                                    db.get("mmPLAlgoR", function (err, obj) {
-                                                                                        rfq.plalgor = 1 + Number(obj)
-                                                                                        db.get("mmPLLimitProfit", function (err, obj) {
-                                                                                            rfq.pllimitprofit = Number(obj)
-                                                                                            db.get("mmPLLimitLoss", function (err, obj) {
-                                                                                                rfq.pllimitloss = Number(obj)
-                                                                                                db.get("mmSpread", function (err, obj) {
-                                                                                                    rfq.spread = Number(obj)
-                                                                                                    db.get("mmSpreadMin", function (err, obj) {
-                                                                                                        rfq.spreadmin = Number(obj)
-                                                                                                        db.get("mmSpreadMax", function (err, obj) {
-                                                                                                            rfq.spreadmax = Number(obj)
-                                                                                                            db.get("mmSpreadAlgoR", function (err, obj) {
-                                                                                                                rfq.spreadalgor = 1 + Number(obj)
-
-                                                                                                            /* what sort of test rfq? do correct test */
-                                                                                                            var result={}
-                                                                                                            switch (rfq.testtype) {
-                                                                                                                case "position":
-                                                                                                                    result = getquotevposition(rfq)
-                                                                                                                    break
-                                                                                                                case "Size":
-                                                                                                                    result = getquotevsize(rfq)
-                                                                                                                    break
-                                                                                                                case "pl":
-                                                                                                                    result = getquotevpl(rfq)
-                                                                                                                    break
-                                                                                                                case "combined":
-                                                                                                                    result = getquotevcombined(rfq)
-                                                                                                                    break
-                                                                                                                default:
-                                                                                                                    var e = new Date()
-                                                                                                                    console.log("Market maker automation: " + e.toISOString() + " RFQ data error in testtype: " + rfq.testtype)
-                                                                                                                    break
-                                                                                                            }
-                                                                                                            /* do return to rfq */
-                                                                                                            var quote = {}
-                                                                                                            quote.rfqid = rfq.id
-                                                                                                            quote.size = rfq.size
-                                                                                                            quote.ask = result.ask
-                                                                                                            quote.bid = result.bid
-                                                                                                            quote.limitratio = result.limitratio
-                                                                                                            connections[mmid].write("{\"rfqreply\":" + JSON.stringify(quote) + "}")
-                                                                                                            var dddd = new Date()
-                                                                                                            console.log("Market maker automation: " + dddd.toISOString() + " RFQ quoted: " + JSON.stringify(quote))
-                                                                                                            })
-                                                                                                        })
-                                                                                                    })
-                                                                                                })
-                                                                                            })
-                                                                                        })
-                                                                                    })
-                                                                                })
-                                                                            })
-                                                                        })
-                                                                    })
-                                                                })
-                                                            })
-                                                        })
-                                                    })
-                                                })
-                                            })
-                                })
-                            })
-                        })
+                    db.hgetall("mm:1", function (err, obj) {
+                        console.dir(obj)
+                        rfq.currentask = Number(obj.mmpriceaskcurrent)
+                        rfq.currentbid = Number(obj.mmpricebidcurrent)
+                        rfq.globalpl = Number(obj.mmglobalpl)
+                        rfq.globalplalgor = 1 + Number(obj.mmglobalplalgor)
+                        rfq.globalpllimitloss = Number(obj.mmglobalpllimitloss)
+                        rfq.globalpllimitprofit = Number(obj.mmglobalpllimitprofit)
+                        rfq.globalpositioncost = Number(obj.mmglobalpositioncost)
+                        rfq.plalgor = 1 + Number(obj.mmplalgor)
+                        rfq.pllimitloss = Number(obj.mmpllimitloss)
+                        rfq.pllimitprofit = Number(obj.mmpllimitprofit)
+                        rfq.position = Number(obj.mmposition)
+                        rfq.positionalgor = 1 + Number(obj.mmpositionalgor)
+                        rfq.positioncost = Number(obj.mmpositioncost)
+                        rfq.positionlimitlong = Number(obj.mmpositionlimitlong)
+                        rfq.positionlimitshort = Number(obj.mmpositionlimitshort)
+                        rfq.sizealgor = 1 + Number(obj.mmsizealgor)
+                        rfq.sizemax = Number(obj.mmsizemax)
+                        rfq.sizemin = Number(obj.mmsizemin)
+                        rfq.spread = Number(obj.mmspread)
+                        rfq.spreadalgor = 1 + Number(obj.mmspreadalgor)
+                        rfq.spreadmax = Number(obj.mmspreadmax)
+                        rfq.spreadmin = Number(obj.mmspreadmin)
+                        /* what sort of test rfq? do correct test */
+                        var result = {}
+                        switch (rfq.testtype) {
+                            case "position":
+                                result = getquotevposition(rfq)
+                                break
+                            case "size":
+                                result = getquotevsize(rfq)
+                                break
+                            case "pl":
+                                result = getquotevpl(rfq)
+                                break
+                            case "combined":
+                                result = getquotevcombined(rfq)
+                                break
+                            default:
+                                var e = new Date()
+                                console.log("Market maker automation: " + e.toISOString() + " RFQ data error in testtype: " + rfq.testtype)
+                                break
+                            }
+                        /* do quote return from rfq */
+                        var quote = {}
+                        quote.rfqid = rfq.id
+                        quote.size = rfq.size
+                        quote.ask = result.ask
+                        quote.bid = result.bid
+                        connections[mmid].write("{\"rfqreply\":" + JSON.stringify(quote) + "}")
+                        var dddd = new Date()
+                        console.log("Market maker automation: " + dddd.toISOString() + " RFQ quoted: " + JSON.stringify(quote))
                     })
-                })
                 } else {
-                        var dddddd = new Date()
-                        console.log("Market maker automation: " + dddddd.toISOString() + " Unknown message received: " + msg)
-                        }
+                    var dddddd = new Date()
+                    console.log("Market maker automation: " + dddddd.toISOString() + " Unknown message received: " + msg)
+                    }
             } catch (e) {
                 console.log(e)
                 return
-            }
+                }
         })
         conn.on('close', function () {
             var dd = new Date()
@@ -288,91 +185,7 @@ function listen() {
 
 /* form parameters received */
 function putmmparams(mmparams) {
-
-    /* global */
-    var mmGlobalPL = mmparams.mmGlobalPL
-    db.set("mmGlobalPL", mmGlobalPL)
-    var mmGlobalPLLimitProfit = mmparams.mmGlobalPLLimitProfit
-    db.set("mmGlobalPLLimitProfit", mmGlobalPLLimitProfit)
-    var mmGlobalPLLimitLoss = mmparams.mmGlobalPLLimitLoss
-    db.set("mmGlobalPLLimitLoss", mmGlobalPLLimitLoss)
-    var mmGlobalPLAlgoR = mmparams.mmGlobalPLAlgoR
-    db.set("mmGlobalPLAlgoR", mmGlobalPLAlgoR)
-    var mmGlobalPositionCost = mmparams.mmGlobalPositionCost
-    db.set("mmGlobalPositionCost", mmGlobalPositionCost)
-
-    /* PL */
-    var mmPLLimitProfit = mmparams.mmPLLimitProfit
-    db.set("mmPLLimitProfit", mmPLLimitProfit)
-    var mmPLLimitLoss = mmparams.mmPLLimitLoss
-    db.set("mmPLLimitLoss", mmPLLimitLoss)
-    var mmPLAlgoR = mmparams.mmPLAlgoR
-    db.set("mmPLAlgoR", mmPLAlgoR)
-
-    /* position */
-    var mmPosition = mmparams.mmPosition
-    db.set("mmPosition", mmPosition)
-    /* positionCost */
-    var mmPositionCost = mmparams.mmPositionCost
-    db.set("mmPositionCost", mmPositionCost)
-    /* PositionLimitLong */
-    var mmPositionLimitLong = mmparams.mmPositionLimitLong
-    db.set("mmPositionLimitLong", mmPositionLimitLong)
-    /* PositionLimitShort */
-    var mmPositionLimitShort = mmparams.mmPositionLimitShort
-    db.set("mmPositionLimitShort", mmPositionLimitShort)
-    /* PositionAlgoR */
-    var mmPositionAlgoR= mmparams.mmPositionAlgoR
-    db.set("mmPositionAlgoR", mmPositionAlgoR)
-
-    /* Last in hours close Ask */
-    var mmPriceAskClose = mmparams.mmPriceAskClose
-    db.set("mmPriceAskClose", mmPriceAskClose)
-    /* Last in hours close bid */
-    var mmPriceBidClose = mmparams.mmPriceBidClose
-    db.set("mmPriceBidClose", mmPriceBidClose)
-    /* Estimated overnight mid-price gap */
-    var mmPriceGapOvernight = mmparams.mmPriceGapOvernight
-    db.set("mmPriceGapOvernight", mmPriceGapOvernight)
-    /* Estimated Weekend mid-price gap */
-    var mmPriceGapWeekend = mmparams.mmPriceGapWeekend
-    db.set("mmPriceGapWeekend", mmPriceGapWeekend)
-    /* Current Ask */
-    var mmPriceAskCurrent = mmparams.mmPriceAskCurrent
-    db.set("mmPriceAskCurrent", mmPriceAskCurrent)
-    /* Current Bid */
-    var mmPriceBidCurrent = mmparams.mmPriceBidCurrent
-    db.set("mmPriceBidCurrent", mmPriceBidCurrent)
-    /* PriceAlgoR */
-    var mmPriceAlgoR = mmparams.mmPriceAlgoR
-    db.set("mmPriceAlgoR", mmPriceAlgoR)
-
-    /* spread */
-    var mmSpread = mmparams.mmSpread
-    db.set("mmSpread", mmSpread)
-    /* SpreadMin */
-    var mmSpreadMin= mmparams.mmSpreadMin
-    db.set("mmSpreadMin", mmSpreadMin)
-    /* SpreadMax */
-    var mmSpreadMax = mmparams.mmSpreadMax
-    db.set("mmSpreadMax", mmSpreadMax)
-    /* SpreadAlgoR */
-    var mmSpreadAlgoR = mmparams.mmSpreadAlgoR
-    db.set("mmSpreadAlgoR", mmSpreadAlgoR)
-
-    /* size */
-    var mmSize = mmparams.mmSize
-    db.set("mmSize", mmSize)
-    /* size Min */
-    var mmSizeMin = mmparams.mmSizeMin
-    db.set("mmSizeMin", mmSizeMin)
-    /* size Max */
-    var mmSizeMax = mmparams.mmSizeMax
-    db.set("mmSizeMax", mmSizeMax)
-    /* size AlgoR */
-    var mmSizeAlgoR = mmparams.mmSizeAlgoR
-    db.set("mmSizeAlgoR", mmSizeAlgoR)
-
+    db.hmset("mm:1", "mmglobalpl", mmparams.mmglobalpl, "mmglobalplalgor", mmparams.mmglobalplalgor, "mmglobalpllimitloss", mmparams.mmglobalpllimitloss, "mmglobalpllimitprofit", mmparams.mmglobalpllimitprofit, "mmglobalpositioncost", mmparams.mmglobalpositioncost, "mmplalgor", mmparams.mmplalgor, "mmpllimitloss", mmparams.mmpllimitloss, "mmpllimitprofit", mmparams.mmpllimitprofit, "mmposition", mmparams.mmposition, "mmpositionalgor", mmparams.mmpositionalgor, "mmpositioncost", mmparams.mmpositioncost, "mmpositionlimitlong", mmparams.mmpositionlimitlong, "mmpositionlimitshort", mmparams.mmpositionlimitshort, "mmpricealgor", mmparams.mmpricealgor, "mmpriceask", "0", "mmpriceaskclose",  mmparams.mmpriceaskclose, "mmpriceaskcurrent", mmparams.mmpriceaskcurrent, "mmpricebid", "0", "mmpricebidclose", mmparams.mmpricebidclose, "mmpricebidcurrent", mmparams.mmpricebidcurrent, "mmpricegapovernight", mmparams.mmpricegapovernight, "mmpricegapweekend", mmparams.mmpricegapweekend, "mmquotesequencenumber", "0", "mmrfqsize", mmparams.mmrfqsize, "mmrfqsizealgor", mmparams.mmrfqsizealgor, "mmrfqsizemax", mmparams.mmrfqsizemax, "mmrfqsizemin", mmparams.mmrfqsizemin, "mmspread", mmparams.mmspread, "mmspreadalgor", mmparams.mmspreadalgor, "mmspreadmax", mmparams.mmspreadmax, "mmspreadmin", mmparams.mmspreadmin)
     /* build a reply */
     var mmparamsreply = {}
     mmparamsreply.updated = true
@@ -384,92 +197,38 @@ function putmmparams(mmparams) {
 /* form get parameters received */
 function readadmindata(getmmadmindata) {
     var mmadmindata = {};
-    db.get("mmGlobalPL", function (err, obj) {
-        mmadmindata.mmGlobalPL = obj;
-        db.get("mmGlobalPLLimitLoss", function (err, obj) {
-            mmadmindata.mmGlobalPLLimitLoss = obj;                              
-            db.get("mmGlobalPLLimitProfit", function (err, obj) {
-                mmadmindata.mmGlobalPLLimitProfit = obj;  
-                db.get("mmGlobalPLAlgoR", function (err, obj) {
-                    mmadmindata.mmGlobalPLAlgoR = obj;
-                    db.get("mmGlobalPositionCost", function (err, obj) {
-                        mmadmindata.mmGlobalPositionCost = obj;
-                          db.get("mmPosition", function (err, obj) {
-                            mmadmindata.mmPosition = obj;
-                            db.get("mmPositionCost", function (err, obj) {
-                                mmadmindata.mmPositionCost = obj;
-                                db.get("mmPositionLimitLong", function (err, obj) {
-                                    mmadmindata.mmPositionLimitLong = obj;
-                                    db.get("mmPositionLimitShort", function (err, obj) {
-                                        mmadmindata.mmPositionLimitShort = obj;
-                                        db.get("mmPositionAlgoR", function (err, obj) {
-                                            mmadmindata.mmPositionAlgoR = obj;
-                                            db.get("mmPriceAskClose", function (err, obj) {
-                                                mmadmindata.mmPriceAskClose = obj;
-                                                db.get("mmPriceBidClose", function (err, obj) {
-                                                    mmadmindata.mmPriceBidClose = obj;
-                                                    db.get("mmPriceGapOvernight", function (err, obj) {
-                                                        mmadmindata.mmPriceGapOvernight = obj;
-                                                        db.get("mmPriceGapWeekend", function (err, obj) {
-                                                            mmadmindata.mmPriceGapWeekend = obj;                              
-                                                            db.get("mmPriceAskCurrent", function (err, obj) {
-                                                                mmadmindata.mmPriceAskCurrent = obj;                              
-                                                                db.get("mmPriceBidCurrent", function (err, obj) {
-                                                                    mmadmindata.mmPriceBidCurrent = obj;                              
-                                                                    db.get("mmPriceAlgoR", function (err, obj) {
-                                                                        mmadmindata.mmPriceAlgoR = obj;                              
-                                                                        db.get("mmSpread", function (err, obj) {
-                                                                            mmadmindata.mmSpread = obj;                              
-                                                                            db.get("mmSpreadMin", function (err, obj) {
-                                                                                mmadmindata.mmSpreadMin = obj;                              
-                                                                                db.get("mmSpreadMax", function (err, obj) {
-                                                                                    mmadmindata.mmSpreadMax = obj;                              
-                                                                                    db.get("mmSpreadAlgoR", function (err, obj) {
-                                                                                        mmadmindata.mmSpreadAlgoR = obj;                              
-                                                                                        db.get("mmSize", function (err, obj) {
-                                                                                            mmadmindata.mmSize = obj;                              
-                                                                                            db.get("mmSizeMin", function (err, obj) {
-                                                                                                mmadmindata.mmSizeMin = obj;                              
-                                                                                                db.get("mmSizeMax", function (err, obj) {
-                                                                                                    mmadmindata.mmSizeMax = obj;                              
-                                                                                                    db.get("mmSizeAlgoR", function (err, obj) {
-                                                                                                        mmadmindata.mmSizeAlgoR = obj;
-                                                                                                        db.get("mmPLLimitLoss", function (err, obj) {
-                                                                                                            mmadmindata.mmPLLimitLoss = obj;                              
-                                                                                                            db.get("mmPLLimitProfit", function (err, obj) {
-                                                                                                                mmadmindata.mmPLLimitProfit = obj;  
-                                                                                                                db.get("mmPLAlgoR", function (err, obj) {
-                                                                                                                    mmadmindata.mmPLAlgoR = obj;
-                                                                                                                    connections[mmid].write("{\"mmadmindata\":" + JSON.stringify(mmadmindata) + "}");
-                                                                                                                    var d = new Date()
-                                                                                                                    console.log("Market maker automation: " + d.toISOString() + " Manager updated from database.")
-                                                                                                                })
-                                                                                                            })
-                                                                                                        })
-                                                                                                    })
-                                                                                               })
-                                                                                           })
-                                                                                        })
-                                                                                    })
-                                                                                })
-                                                                            })
-                                                                        })
-                                                                    })
-                                                                })
-                                                            })
-                                                        })
-                                                    })
-                                                })
-                                            })
-                                        })
-                                    })
-                                })
-                            })
-                        })
-                    })
-                })
-            })
-        })
+    db.hgetall("mm:1", function (err, obj) {
+        mmadmindata.mmglobalpl = obj.mmglobalpl
+        mmadmindata.mmglobalplalgor = obj.mmglobalplalgor
+        mmadmindata.mmglobalpllimitloss = obj.mmglobalpllimitloss
+        mmadmindata.mmglobalpllimitprofit = obj.mmglobalpllimitprofit
+        mmadmindata.mmglobalpositioncost = obj.mmglobalpositioncost
+        mmadmindata.mmplalgor = obj.mmplalgor
+        mmadmindata.mmpllimitloss = obj.mmpllimitloss
+        mmadmindata.mmpllimitprofit = obj.mmpllimitprofit
+        mmadmindata.mmposition = obj.mmposition
+        mmadmindata.mmpositionalgor = obj.mmpositionalgor
+        mmadmindata.mmpositioncost = obj.mmpositioncost
+        mmadmindata.mmpositionlimitlong = obj.mmpositionlimitlong
+        mmadmindata.mmpositionlimitshort = obj.mmpositionlimitshort
+        mmadmindata.mmpricealgor = obj.mmpricealgor
+        mmadmindata.mmpriceaskclose = obj.mmpriceaskclose
+        mmadmindata.mmpriceaskcurrent = obj.mmpriceaskcurrent
+        mmadmindata.mmpricebidclose = obj.mmpricebidclose
+        mmadmindata.mmpricebidcurrent = obj.mmpricebidcurrent
+        mmadmindata.mmpricegapovernight = obj.mmpricegapovernight
+        mmadmindata.mmpricegapweekend = obj.mmpricegapweekend
+        mmadmindata.mmrfqsize = obj.mmrfqsize
+        mmadmindata.mmrfqsizealgor = obj.mmrfqsizealgor
+        mmadmindata.mmrfqsizemax = obj.mmrfqsizemax
+        mmadmindata.mmrfqsizemin = obj.mmrfqsizemin
+        mmadmindata.mmspread = obj.mmspread
+        mmadmindata.mmspreadalgor = obj.mmspreadalgor
+        mmadmindata.mmspreadmax = obj.mmspreadmax
+        mmadmindata.mmspreadmin = obj.mmspreadmin
+        connections[mmid].write("{\"mmadmindata\":" + JSON.stringify(mmadmindata) + "}");
+        var d = new Date()
+        console.log("Market maker automation: " + d.toISOString() + " Manager updated from database.")
     })
 }
 
@@ -489,8 +248,7 @@ function getquotevposition(rfq) {
     var newpositionhi = Number(rfq.position) + Number(rfq.size)
     var newpositionlo = Number(rfq.position) - Number(rfq.size)
 
-    if (Math.abs(newpositionhi) > Math.abs(newpositionlo))
-        {
+    if (Math.abs(newpositionhi) > Math.abs(newpositionlo)) {
         /*Calculate new price based on newpositionhi*/
         /* are we long or short at the moment? */
         if (Number(rfq.position) < 0) {
@@ -499,19 +257,19 @@ function getquotevposition(rfq) {
             limitratio = mypercentageoflimit
             bid = Number(rfq.currentbid) + (Number(rfq.currentbid) * mypercentageoflimit * Math.pow(rfq.positionalgor, mypercentageoflimit) / Math.pow(rfq.positionalgor, 100) / 100)
             ask = bid + Number(rfq.spread)
-            }
+        }
         else if (Number(rfq.position) > 0) {
             /*long*/
             var mypercentageoflimit = getpercentage(newpositionhi, rfq.positionlimitlong)
             limitratio = mypercentageoflimit
             bid = Number(rfq.currentbid) - (Number(rfq.currentbid) * mypercentageoflimit * Math.pow(rfq.positionalgor, mypercentageoflimit) / Math.pow(rfq.positionalgor, 100) / 100)
             ask = bid + Number(rfq.spread)
-            }
+        }
         else {
             /*square*/
             console.log("Market maker automation: " + d.toISOString() + " Position square.")
-            }
         }
+    }
     else if (Math.abs(newpositionhi) < Math.abs(newpositionlo)) {
         /*Calculate new price based on newpositionlo*/
         /* are we long or short at the moment? */
@@ -549,14 +307,14 @@ function getquotevsize(rfq) {
     var limitratio = mypercentageoflimit
     var spread = Number(rfq.spread) + (Number(rfq.spread) * mypercentageoflimit * Math.pow(rfq.sizealgor, mypercentageoflimit) / Math.pow(rfq.sizealgor, 100) / 100)
     /* check spread limits */
-    if (spread < Number(rfq.spreadmin)){
+    if (spread < Number(rfq.spreadmin)) {
         spread = Number(rfq.spreadmin)
-    } 
-    else if (spread > Number(rfq.spreadmax)){
+    }
+    else if (spread > Number(rfq.spreadmax)) {
         spread = Number(rfq.spreadmax)
-    } 
+    }
     /* apply new spread */
-    var mid = (Number(rfq.currentask) + Number(rfq.currentbid))/2
+    var mid = (Number(rfq.currentask) + Number(rfq.currentbid)) / 2
     var bid = mid - spread / 2
     var ask = bid + spread
     return { ask: ask, bid: bid, limitratio: limitratio }
@@ -580,14 +338,14 @@ function getquotevpl(rfq) {
     var newvalueshort = newpositionshort * Number(rfq.currentbid)
     var newpllong = newvaluelong - newcostlong
     var newplshort = newvalueshort - newcostshort
- 
+
     if (newpllong == newplshort) {
         /*square*/
         ask = rfq.currentask
         bid = rfq.currentbid
         console.log("Market maker automation: " + d.toISOString() + " square, new pl if long: " + newpllong + ", new pl if short: " + newplshort)
-        }
-    else if ((newpllong < 0 && newplshort < 0 && Math.abs(newplshort) < Math.abs(newpllong)) 
+    }
+    else if ((newpllong < 0 && newplshort < 0 && Math.abs(newplshort) < Math.abs(newpllong))
         || (newpllong > 0 && newplshort > 0 && Math.abs(newplshort) > Math.abs(newpllong))
         || (newpllong < 0 && newplshort > 0)) {
         /*discourage cwtt long/client short, encourage cwtt short/client long - raise prices*/
@@ -596,8 +354,8 @@ function getquotevpl(rfq) {
         bid = Number(rfq.currentbid) + (Number(rfq.currentbid) * mypercentageoflimit * Math.pow(rfq.plalgor, mypercentageoflimit) / Math.pow(rfq.plalgor, 100) / 100)
         ask = bid + Number(rfq.spread)
         console.log("Market maker automation: " + d.toISOString() + ", new pl if long: " + newpllong + ", new pl if short: " + newplshort + " discourage cwtt long/client short, encourage cwtt short/client long - raise prices.")
-        }
-    else if ((newpllong < 0 && newplshort < 0 && Math.abs(newpllong) < Math.abs(newplshort)) 
+    }
+    else if ((newpllong < 0 && newplshort < 0 && Math.abs(newpllong) < Math.abs(newplshort))
         || (newpllong > 0 && newplshort > 0 && Math.abs(newpllong) > Math.abs(newplshort))
         || (newpllong > 0 && newplshort < 0)) {
         /*discourage cwtt short/client long, encourage cwtt longt/client short - lower prices*/
@@ -606,11 +364,10 @@ function getquotevpl(rfq) {
         bid = Number(rfq.currentbid) - (Number(rfq.currentbid) * mypercentageoflimit * Math.pow(rfq.plalgor, mypercentageoflimit) / Math.pow(rfq.plalgor, 100) / 100)
         ask = bid + Number(rfq.spread)
         console.log("Market maker automation: " + d.toISOString() + ", new pl if long: " + newpllong + ", new pl if short: " + newplshort + " discourage cwtt short/client long, encourage cwtt long/client short - lower prices.")
-        }
-    else
-        {
+    }
+    else {
         console.log("Market maker automation: " + d.toISOString() + " getquotevpl error: " + JSON.stringify(rfq))
-        }
+    }
     return { ask: ask, bid: bid, limitratio: limitratio }
 }
 
@@ -630,24 +387,31 @@ function getquotevcombined(rfq) {
     resultc = getquotevsize(rfq)
 
     /* choose prices from largest limit ratio ??? */
-    if (Number(resulta.limitratio) >= Number(resultb.limitratio) && Number(resulta.limitratio) >= Number(resultc.limitratio))
-    {
+    if (Number(resulta.limitratio) >= Number(resultb.limitratio) && Number(resulta.limitratio) >= Number(resultc.limitratio)) {
         ask = resulta.ask
         bid = resulta.bid
         limitratio = resulta.limitratio
     }
-    else if (Number(resultb.limitratio) >= Number(resulta.limitratio) && Number(resultb.limitratio) >= Number(resultc.limitratio))
-    {
+    else if (Number(resultb.limitratio) >= Number(resulta.limitratio) && Number(resultb.limitratio) >= Number(resultc.limitratio)) {
         ask = resultb.ask
         bid = resultb.bid
         limitratio = resultb.limitratio
     }
-    else if (Number(resultc.limitratio) >= Number(resulta.limitratio) && Number(resultc.limitratio) >= Number(resultb.limitratio))
-    {
+    else if (Number(resultc.limitratio) >= Number(resulta.limitratio) && Number(resultc.limitratio) >= Number(resultb.limitratio)) {
         ask = resultc.ask
         bid = resultc.bid
         limitratio = resultc.limitratio
     }
     return { ask: ask, bid: bid, limitratio: limitratio }
+}
+
+/*
+ * make sure redis has keys we need
+ * */
+function checkrediskeys() {
+    db.hmset("mm:1", "mmglobalpl", "1", "mmglobalplalgor", "2", "mmglobalpllimitloss", "3", "mmglobalpllimitprofit", "4", "mmglobalpositioncost", "5", "mmplalgor", "6", "mmpllimitloss", "7", "mmpllimitprofit", "8", "mmposition", "9", "mmpositionalgor", "10", "mmpositioncost", "11", "mmpositionlimitlong", "12", "mmpositionlimitshort", "13", "mmpricealgor", "14", "mmpriceask", "15", "mmpriceaskclose", "16", "mmpriceaskcurrent", "17", "mmpricebid", "18", "mmpricebidclose", "19", "mmpricebidcurrent", "20", "mmpricegapovernight", "21", "mmpricegapweekend", "22", "mmquotesequencenumber", "23", "mmrfqsize", "24", "mmrfqsizealgor", "25", "mmrfqsizemax", "26", "mmrfqsizemin", "27", "mmrfqsizemin", "28", "mmspread", "29", "mmspreadalgor", "30", "mmspreadmax", "31", "mmspreadmin", "32")
+    db.hgetall("mm:1", function (err, obj) {
+        console.dir(obj);
+        })
 }
 
