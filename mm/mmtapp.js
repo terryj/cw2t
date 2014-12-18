@@ -147,7 +147,7 @@ function rfqreceived(rfq) {
                             price = obj
 
                             /* get mm limits etc */
-                            var mm = {}
+                            var marketmaker = {}
                             db.hgetall("mm:1", function (err, obj) {
                                 if (err) {
                                     var f3 = new Date()
@@ -156,9 +156,9 @@ function rfqreceived(rfq) {
                                     }
                                 else {
                                     /* read mm record */
-                                    mm = obj
+                                    marketmaker = obj
                                     /* make and publish quote */
-                                    makequote(rfq, symbol, position, price, mm)
+                                    makequote(rfq, symbol, position, price, marketmaker)
                                     }
                                 })
                              }
@@ -172,7 +172,7 @@ function rfqreceived(rfq) {
 /*
  *     make quote
  *     */
-function makequote(rfq, symbol, position, price, mm) {
+function makequote(rfq, symbol, position, price, marketmaker) {
     /*
  *     var dsd = new Date()
  *         console.log("Market maker automation: " + dsd.toISOString() + " Price record: " + JSON.stringify(price))
@@ -209,16 +209,16 @@ function makequote(rfq, symbol, position, price, mm) {
     }
 
     var spread = Number(price.ask) - Number(price.bid)
-    var mypercentageoflimit = getpercentage(Number(myqty), Number(mm.mmrfqsizemax))
-    var mmrfqsizealgor = 1 + Number(mm.mmrfqsizealgor)
+    var mypercentageoflimit = getpercentage(Number(myqty), Number(marketmaker.mmrfqsizemax))
+    var mmrfqsizealgor = 1 + Number(marketmaker.mmrfqsizealgor)
     spread = Number(spread) + (Number(spread) * mypercentageoflimit * Math.pow(Number(mmrfqsizealgor), mypercentageoflimit) / Math.pow(Number(mmrfqsizealgor), 100) / 100)
 
     /* check spread limits */
-    if (Number(spread) < Number(mm.mmspreadmin)) {
-        spread = Number(mm.mmspreadmin)
+    if (Number(spread) < Number(marketmaker.mmspreadmin)) {
+        spread = Number(marketmaker.mmspreadmin)
         }
-    else if (Number(spread) > Number(mm.mmspreadmax)) {
-        spread = Number(mm.mmspreadmax)
+    else if (Number(spread) > Number(marketmaker.mmspreadmax)) {
+        spread = Number(marketmaker.mmspreadmax)
         }
     /* apply new spread */
     var bid = Number(mid) - Number(spread) / 2
@@ -238,7 +238,7 @@ function makequote(rfq, symbol, position, price, mm) {
     quote.cashorderqty = rfq.cashorderqty
     quote.clientid = rfq.clientid
     quote.currency = rfq.currency
-    quote.externalquoteid = Number(mm.mmquotesequencenumber) + 1
+    quote.externalquoteid = Number(marketmaker.mmquotesequencenumber) + 1
     quote.futsettdate = rfq.futsettdate
     quote.nosettdays = rfq.nosettdays
     quote.offerfinance = "0"
@@ -249,7 +249,7 @@ function makequote(rfq, symbol, position, price, mm) {
     quote.orderid = ""
     quote.qbroker = "TGRANT"
     quote.qclientid = "999999"
-    quote.quoteid = Number(mm.mmquotesequencenumber) + 1
+    quote.quoteid = Number(marketmaker.mmquotesequencenumber) + 1
     quote.quotereqid = rfq.quoterequest
     quote.settlcurrency = rfq.settlcurrency
     quote.symbol = rfq.symbol
@@ -274,7 +274,7 @@ function makequote(rfq, symbol, position, price, mm) {
     quote.validuntiltime = dv.getFullYear().toString() + MMv + ddv + "-" + hhv + ":" + mmv + ":" + ssv
 
     /* update database*/
-    var myreturn = db.set("mm:1:mmquotesequencenumber", Number(mm.mmquotesequencenumber) + 1)
+    var myreturn = db.hset("mm:1", "mmquotesequencenumber", Number(marketmaker.mmquotesequencenumber) + 1)
     if (myreturn == true) {
         /* publish quote */
         var myreturn1 = db.publish(common.tradechannel, JSON.stringify(quote))
