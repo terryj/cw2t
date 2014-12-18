@@ -335,6 +335,7 @@
         var myquotes = [];
         var positions = [];
         var trades = [];
+        var account = {};
         var qbroker = "TGRANT";
         var email = "";
         var operatortype = 1; // client
@@ -389,6 +390,8 @@
                     replySignin(obj.signinreply);
                 } else if ("status" in obj) {
                     statusReceived(obj.status);
+                } else if ("account" in obj) {
+                    accountReceived(obj.account);                    
                 }
             } catch(e) {
                 console.log(e);
@@ -864,7 +867,7 @@ console.log(pricedata);
             var rows = tbltrade.select("tbody").selectAll("tr")
                 .data(trades);
 
-            // create a new row for each quote level (may be bid/offer/both)
+            // enter
             rows.enter()
                 .append("tr");
 
@@ -1586,6 +1589,13 @@ console.log(pricedata);
             console.log("tradeReceived");
             console.log(trade);
             var inquotes = false;
+
+            // add to trades, if that is what we are looking at
+            if (selectedmenu == 3) {
+                trades.push(trade); // todo: add to start of array
+                updateTradeTable();
+                return;
+            }
 
             // indicate the quote has been traded
             // quote may be in rfq quotes
@@ -3361,6 +3371,68 @@ console.log(pricedata);
             var historyrequest = {};
 
             sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+        }
+
+        function accountReceived(acctarr) {
+            console.log("accountReceived");
+            account = [];
+
+            // an account per currency
+            for (var i = 0; i < acctarr.length; ++i) {
+                account[acctarr[i].currency] = acctarr[i];
+            }
+
+            updateAccountTable();
+        }
+
+        function updateAccountTable() {
+            var cols = ["cash","balance","unrealisedpandl","margin","freemargin"];
+
+            var tblaccount = d3.select("#tblaccount");
+            if (tblaccount.empty()) {
+                tblaccount = createAccountTable(cols);
+            }
+
+            // base the table on the trades array
+            var rows = tblaccount.select("tbody").selectAll("tr")
+                .data(account);
+
+            // enter
+            rows.enter()
+                .append("tr");
+
+            // update
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(col) {
+                        return {col: col, value: row[col]};
+                    });
+                 })
+                .enter()
+                .append("td")
+                    .text(function(d) { return d.value; });
+        }
+
+        function createAccountTable(cols) {
+            // use the rfq div
+            var tblaccount = d3.select("#divcontainer")
+                .append("table")
+                .attr("id", "tblaccount")
+                .attr("class", "tblaccount");
+
+            // add header & body
+            var thead = tblaccount.append("thead");
+            var tbody = tblaccount.append("tbody");
+
+            // add the column headings
+            thead.selectAll("th")
+                .data(cols)
+                .enter()
+                .append("th")
+                    //.attr("class", "tblquoterequesthdr")
+                    .text(function(d) { return d; });
+
+            return tblaccount;
         }
      </script>
 </body>

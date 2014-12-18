@@ -466,11 +466,12 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
   // now, either forward or attempt to match the order, depending on the type of instrument & whether the market is open
   //
 
-  if (order.markettype == 1) {
+  // not matching, for now at least
+
+  /*if (order.markettype == 1) {
     console.log("matching");
     matchOrder(order);
-  } else {
-    console.log("not matching");
+  } else {*/
     // equity orders
     if (order.instrumenttype == "DE" || order.instrumenttype == "IE") {
       if (tradeid != "") {
@@ -483,6 +484,7 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
         // publish the hedge
         //db.publish(common.tradechannel, "trade:" + hedgetradeid);
       } else {
+        console.log("forwarding to nbt");
         // forward order to the market
         nbt.newOrder(order);
       }
@@ -506,7 +508,7 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
         nbt.newOrder(order);
       }
     }
-  }
+  //}
 }
 
 function displayOrderBook(symbol, lowerbound, upperbound) {
@@ -701,10 +703,12 @@ nbt.on("orderExpired", function(exereport) {
   });
 });
 
+// fill received from market
 nbt.on("orderFill", function(exereport) {
   var currencyratetoorg = 1; // product currency rate back to org 
   var currencyindtoorg = 1;
 
+  console.log("fill received");
   console.log(exereport);
 
   if (!('settlcurrfxrate' in exereport)) {
@@ -1646,7 +1650,7 @@ function registerScripts() {
   //
   // fill from the market
   //
-  scriptnewtrade = newtrade + getinitialmargin + getcosts + calcfinance + adjustmarginreserve + publishorder + '\
+  scriptnewtrade = newtrade + getinitialmargin + getcosts + calcfinance + adjustmarginreserve + publishorder + reverseside + '\
   local orderid = KEYS[1] \
   local fields = {"clientid", "symbol", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "operatortype", "hedgeorderid", "futsettdate", "operatorid"} \
   local vals = redis.call("hmget", "order:" .. orderid, unpack(fields)) \
@@ -1659,6 +1663,9 @@ function registerScripts() {
   local finance = calcfinance(instrumenttype, consid, KEYS[17], vals[3], vals[8]) \
   --[[ treat the excuting broker as a client ]] \
   local cptyid = redis.call("hget", "broker:" .. KEYS[9], "clientid") \
+  if not cptyid then \
+    cptyid = 999998 \
+  end \
   local rside = reverseside(KEYS[3]) \
   local tradeid = newtrade(vals[1], orderid, vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, cptyid, "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
   local cptytradeid = newtrade(cptyid, orderid, vals[2], rside, quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, vals[1], "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
