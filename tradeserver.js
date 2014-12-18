@@ -1409,7 +1409,7 @@ function registerScripts() {
   reverseside = '\
   local reverseside = function(side) \
     local rside \
-    if side == 1 then \
+    if tonumber(side) == 1 then \
       rside = 2 \
     else \
       rside = 1 \

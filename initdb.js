@@ -272,6 +272,7 @@ function initdb() {
   db.sadd("instrumenttypes", "SPB");
   db.sadd("instrumenttypes", "CCFD");
 
+  // instrument descriptions
   db.set("instrumenttype:DE", "UK Equities");
   db.set("instrumenttype:IE", "International Equities");
   db.set("instrumenttype:CFD", "CFD");
@@ -334,11 +335,11 @@ function initdb() {
 );
 
   // logon
-  db.set("trading:ipaddress", "195.26.26.67");
-  db.set("trading:port", "50143");
-  db.set("sendercompid", "CWTTUAT1");
-  db.set("targetcompid", "PTPUAT1");
-  db.set("onbehalfofcompid", "PTPTEST57");
+  db.set("trading:ipaddress", "82.211.104.37");
+  db.set("trading:port", "60144");
+  db.set("sendercompid", "CWTT_UAT");
+  db.set("targetcompid", "NBT_UAT");
+  db.set("onbehalfofcompid", "TGRANT");
 
   db.set("markettype", 0);
 

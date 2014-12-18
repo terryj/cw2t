@@ -324,7 +324,6 @@
     <script>
         var sockjs_url = '/echo';
         var sockjs;
-        var orderbooks = {};
         var ukx = [];
         var pricehist = [];
         var instruments = {};
@@ -335,7 +334,7 @@
         var myquotes = [];
         var positions = [];
         var trades = [];
-        var account = {};
+        var account = [];
         var qbroker = "TGRANT";
         var email = "";
         var operatortype = 1; // client
@@ -352,8 +351,6 @@
                     priceReceived(obj.price);
                 } else if ("prices" in obj) {
                     updateChart(obj.prices);
-                } else if ("orderbooks" in obj) {
-                    loadOrderBooks(obj.orderbooks);
                 } else if ("orderbook" in obj) {
                     updateOrderBook(obj.orderbook);
                 } else if ("index" in obj) {
@@ -486,35 +483,14 @@
             sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");
         }
 
-        function loadOrderBooks(orderbookarr) {
-            for (var i = 0; i < orderbookarr.length; ++i) {
-                updateOrderBook(orderbookarr[i]);
-            }
-        }
-
         function loadInstruments(instrumentarr) {
-            console.log("loadInstruments");
             for (var i = 0; i < instrumentarr.length; ++i) {
                 instruments[instrumentarr[i].symbol] = instrumentarr[i];
             }
         }
 
-        function updateOrderBook(orderbook) {
-            var level;
-
-            // create an entry in the orderbooks array for this symbol
-            if (!(orderbook.symbol in orderbooks)) {
-                // 6 levels
-                orderbooks[orderbook.symbol] = [{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0}];
-            }
-        }
-
         function updatePricehistory(pricehist) {
             console.log("pricehist");
-        }
-
-        function removeOrderBook(symbol) {
-            delete orderbooks[symbol];
         }
 
         function updateIndex(index) {
@@ -829,6 +805,7 @@ console.log(pricedata);
             d3.select("#tblmenuprice").remove();
             d3.select("#stockboxdiv").remove();
             d3.select("#tbltrade").remove();
+            d3.select("#tblaccount").remove();
         }
 
         function clearData() {
@@ -3375,18 +3352,19 @@ console.log(pricedata);
 
         function accountReceived(acctarr) {
             console.log("accountReceived");
+            console.log(acctarr);
             account = [];
 
-            // an account per currency
+            // account per currency
             for (var i = 0; i < acctarr.length; ++i) {
-                account[acctarr[i].currency] = acctarr[i];
+                account.push(acctarr[i]);
             }
 
             updateAccountTable();
         }
 
         function updateAccountTable() {
-            var cols = ["cash","balance","unrealisedpandl","margin","freemargin"];
+            var cols = ["currency", "cash", "balance", "unrealisedpandl", "margin", "freemargin"];
 
             var tblaccount = d3.select("#tblaccount");
             if (tblaccount.empty()) {

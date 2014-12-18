@@ -1313,7 +1313,6 @@ function tradeHistory(req, clientid, conn) {
   } else {
     db.eval(common.scriptgettrades, 1, clientid, function(err, ret) {
       if (err) throw err;
-      console.log(ret);
       conn.write("{\"trades\":" + ret + "}");
     });
   }

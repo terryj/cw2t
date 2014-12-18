@@ -1243,7 +1243,7 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id - todo: add symbol as an option
+  // params: client id - todo: add symbol as an option
   //
   exports.scriptgetquoterequests = getquoterequests + '\
   local quoterequests = redis.call("smembers", KEYS[1] .. ":quoterequests") \
@@ -1252,7 +1252,7 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id
+  // params: client id
   //
   exports.scriptgetquotes = '\
   local tblresults = {} \
@@ -1267,7 +1267,7 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id
+  // params: client id
   //
   exports.scriptgetorders = '\
   local tblresults = {} \
@@ -1282,16 +1282,17 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id
+  // get trades, most recent first
+  // params: client id
   //
   exports.scriptgettrades = gettrades + '\
-  local trades = redis.call("smembers", KEYS[1] .. ":trades") \
+  local trades = redis.call("sort", KEYS[1] .. ":trades", "DESC") \
   local tblresults = gettrades(trades) \
   return cjson.encode(tblresults) \
   ';
 
   //
-  // pass client id, positionkey
+  // params: client id, positionkey
   //
   exports.scriptgetpostrades = gettrades + '\
   local postrades = redis.call("smembers", KEYS[1] .. ":trades:" .. KEYS[2]) \
@@ -1300,7 +1301,7 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id
+  // params: client id
   // todo: need to guarantee order
   exports.scriptgetcashhistory = '\
   local tblresults = {} \
