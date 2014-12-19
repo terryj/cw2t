@@ -296,6 +296,31 @@
         font-size: 15px;
         color: darkgray;
     }
+    .tblaccount {
+        margin : 0 auto;        
+        margin-top: 15px;
+    }
+    .tblaccount tr td {
+        padding: 15px;
+        text-align: center;
+        font-size: 21px;
+    }
+    .tblaccounthdr {
+        color: darkgray;
+    }
+    .tbltrade {
+        margin : 0 auto;
+        margin-top: 15px;        
+    }
+    .tbltrade tr td {
+        padding: 10px;
+        text-align: center;
+        /*font-size: 21px;*/
+        white-space: nowrap;
+    }
+    .tbltradehdr {
+        color: darkgray;
+    }
     .divrfq {
         margin-top: 10px;
         text-align: center;
@@ -857,15 +882,21 @@ console.log(pricedata);
                  })
                 .enter()
                 .append("td")
-                    //.attr("class", "tblquoterequesthdr")
-                    .text(function(d) { return d.value; });
+                    .attr("class", "tbltrade")
+                    .text(function(d) {
+                        if (d.col == "timestamp") {
+                            return getDateString(d.value);
+                        } else {
+                            return d.value;
+                        }
+                    });
         }
 
         function createTradeTable(cols) {
             console.log("createTradeTable");
 
-            // use the rfq div
-            var tbltrade = d3.select("#divcontainer")
+            // using full screen width
+            var tbltrade = d3.select("body")
                 .append("table")
                 .attr("id", "tbltrade")
                 .attr("class", "tbltrade");
@@ -879,7 +910,7 @@ console.log(pricedata);
                 .data(cols)
                 .enter()
                 .append("th")
-                    //.attr("class", "tblquoterequesthdr")
+                    .attr("class", "tbltradehdr")
                     .text(function(d) { return d; });
 
             return tbltrade;
@@ -3383,7 +3414,13 @@ console.log(pricedata);
             var cells = rows.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(col) {
-                        return {col: col, value: row[col]};
+                        var ret;
+                        if (col == "currency") {
+                            ret = row[col];
+                        } else {
+                            ret = formatCurrency(row[col], 2);
+                        }
+                        return {col: col, value: ret};
                     });
                  })
                 .enter()
@@ -3407,8 +3444,16 @@ console.log(pricedata);
                 .data(cols)
                 .enter()
                 .append("th")
-                    //.attr("class", "tblquoterequesthdr")
-                    .text(function(d) { return d; });
+                    .attr("class", "tblaccounthdr")
+                    .text(function(d) {
+                        if (d == "unrealisedpandl") {
+                            return "unrealised p&l";
+                        } else if (d == "freemargin") {
+                            return "free margin";
+                        } else {
+                            return d;
+                        }
+                    });
 
             return tblaccount;
         }
