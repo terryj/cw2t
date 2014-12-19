@@ -571,8 +571,6 @@
         // update price array
         function updatePriceData(price) {
             if ("bid" in price) {
-                price.bid = formatCurrency(price.bid, 2);
-
                 if (parseFloat(price.bid) > parseFloat(pricedata[0].bid)) {
                     pricedata[0].bidtick = '+';
                 } else if (parseFloat(price.bid) < parseFloat(pricedata[0].bid)) {
@@ -586,8 +584,6 @@
                 pricedata[0].bidtick = '';
             }
             if ("ask" in price) {
-                price.ask = formatCurrency(price.ask, 2);
-
                 if (parseFloat(price.ask) > parseFloat(pricedata[0].ask)) {
                     pricedata[0].asktick = '+';
                 } else if (parseFloat(price.ask) < parseFloat(pricedata[0].ask)) {
@@ -635,7 +631,7 @@
                 if (d.column != "") {
                     if (d.value.tick != "") {
                         d3.select(this)
-                            .text(function(d) { return d.value.price; })
+                            .text(function(d) { return formatCurrency(d.value.price, 2); })
                             .attr("class", function(d) {
                                 if (d.value.tick == '+') {
                                     return "tickup";
@@ -3212,12 +3208,12 @@ console.log(pricedata);
                 if (positions[i].symbol == price.symbol) {
                     if (positions[i].quantity < 0) {
                         if ('ask' in price) {
-                            positions[i].mktprice = formatCurrency(price.ask / 100, 4); // todo: ok?
+                            positions[i].mktprice = price.ask / 100; // todo: ok?
                             updatePandL(i);
                         }
                     } else {
                         if ('bid' in price) {
-                            positions[i].mktprice = formatCurrency(price.bid / 100, 4); // todo: ok?
+                            positions[i].mktprice = price.bid / 100; // todo: ok?
                             updatePandL(i);
                         }                        
                     }
@@ -3226,7 +3222,7 @@ console.log(pricedata);
         }
 
         function updatePandL(i) {
-            var newpandl = formatCurrency(positions[i].quantity * positions[i].mktprice - positions[i].cost, 2);
+            var newpandl = positions[i].quantity * positions[i].mktprice - positions[i].cost;
 
             if (newpandl > positions[i].unrealisedpandl) {
                 positions[i].unrealisedpandltick = '+';
@@ -3269,7 +3265,7 @@ console.log(pricedata);
                 .each(function(d) {
                     if (d.col != "symbol") {
                         d3.select(this)
-                            .text(function(d) { return d.value; })
+                            .text(display(d))
                             .attr("class", function(d, i, j) {
                                 if (d.col == "unrealisedpandl") {
                                     if (positions[j].unrealisedpandltick == '+') {
@@ -3314,9 +3310,19 @@ console.log(pricedata);
                                 });
                     } else {
                         d3.select(this)
-                            .text(function(d) { return d.value; });
+                            .text(display(d));
                     }
                 });
+
+            function display(d) {
+                if (d.col == "cost" || d.col == "margin" || d.col == "unrealisedpandl") {
+                    return formatCurrency(d.value, 2);
+                } else if (d.col == "costpershare" || d.col == "mktprice") {
+                    return formatCurrency(d.value, 4);
+                } else {
+                    return d.value;
+                }
+            }
         }
 
         function createPositionTable(cols) {
@@ -3427,18 +3433,18 @@ console.log(pricedata);
             var cells = rows.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(col) {
-                        var ret;
-                        if (col == "currency") {
-                            ret = row[col];
-                        } else {
-                            ret = formatCurrency(row[col], 2);
-                        }
-                        return {col: col, value: ret};
+                        return {col: col, value: row[col]};
                     });
                  })
                 .enter()
                 .append("td")
-                    .text(function(d) { return d.value; });
+                    .text(function(d) {
+                        if (d.col == "currency") {
+                            return d.value;
+                        } else {
+                            return formatCurrency(d.value, 2);
+                        }
+                    });
         }
 
         function createAccountTable(cols) {
