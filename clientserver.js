@@ -276,7 +276,8 @@ function listen() {
       var reply = {};
       reply.success = false;
 
-      db.get(servertype + ":" + signin.email, function(err, cid) {
+      // add servertype i.e. email:client:emailaddr?
+      db.get("email" + ":" + signin.email, function(err, cid) {
         if (err) {
           console.log("Error in signIn:" + err);
           return;
@@ -646,11 +647,11 @@ function getValue(trade) {
         instrument.symbol = symbol;
         instrument.currency = inst.currency;
 
-        if ("description" in inst) {
-          instrument.description = inst.description;
+        if ("shortname" in inst) {
+          instrument.shortname = inst.shortname;
         } else {
-          console.log("no desc for "+symbol);
-          instrument.description = "";
+          console.log("no shortname for "+symbol);
+          instrument.shortname = "";
         }
 
         conn.write("{\"instrument\":" + JSON.stringify(instrument) + "}");
@@ -660,12 +661,14 @@ function getValue(trade) {
 }*/
 
 function sendInstruments(clientid, conn) {
+  console.log("sendInstruments");
   // get sorted subset of instruments for this client
   db.eval(scriptgetinst, 1, clientid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
     }
+    console.log(ret);
 
     conn.write("{\"instruments\":" + ret + "}");
   });
@@ -1334,15 +1337,12 @@ function positionRequest(posreq, clientid, conn) {
     // single position
     db.eval(common.scriptgetposition, 2, clientid, posreq.symbol, function(err, ret) {
       if (err) throw err;
-      console.log(ret);
       conn.write("{\"position\":" + ret + "}");
-      console.log("scriptgetposition");
     });    
   } else {
     // all positions
     db.eval(common.scriptsubscribepositions, 2, clientid, serverid, function(err, ret) {
       if (err) throw err;
-      console.log(ret);
 
       // send positions
       conn.write("{\"positions\":" + ret[0] + "}");
@@ -1362,11 +1362,10 @@ function unsubscribePositionsRequest(unsubposreq, clientid, conn) {
   // all positions
   db.eval(common.scriptunsubscribepositions, 2, clientid, serverid, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
 
     // unsubscribe to prices
-    for (var i = 0; i < ret[0].length; i++) {
-      dbsub.unsubscribe("price:" + ret[0][i]);
+    for (var i = 0; i < ret.length; i++) {
+      dbsub.unsubscribe("price:" + ret[i]);
     }
   });
 }
@@ -1547,13 +1546,13 @@ function registerScripts() {
   //
   scriptgetinst = '\
   local instruments = redis.call("sort", "instruments", "ALPHA") \
-  local fields = {"instrumenttype", "description"} \
+  local fields = {"instrumenttype", "shortname"} \
   local vals \
   local inst = {} \
   for index = 1, #instruments do \
     vals = redis.call("hmget", "symbol:" .. instruments[index], unpack(fields)) \
     if redis.call("sismember", KEYS[1] .. ":instrumenttypes", vals[1]) == 1 then \
-      table.insert(inst, {symbol = instruments[index], description = vals[2]}) \
+      table.insert(inst, {symbol = instruments[index], shortname = vals[2]}) \
     end \
   end \
   return cjson.encode(inst) \

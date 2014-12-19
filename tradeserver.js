@@ -1922,7 +1922,7 @@ function registerScripts() {
   //
   scriptgetinst = '\
   local instruments = redis.call("sort", "instruments", "ALPHA") \
-  local fields = {"instrumenttype", "description", "currency", "marginpercent"} \
+  local fields = {"instrumenttype", "shortname", "currency", "marginpercent"} \
   local vals \
   local inst = {} \
   local marginpc \
@@ -1934,7 +1934,7 @@ function registerScripts() {
       else \
         marginpc = 100 \
       end \
-      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc}) \
+      table.insert(inst, {symbol = instruments[index], shortname = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc}) \
     end \
   end \
   return cjson.encode(inst) \

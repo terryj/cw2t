@@ -428,8 +428,8 @@
                 console.log("connection open");
 
                 // we are ready
-                //displayFormSignin();
-                cheat();
+                displayFormSignin();
+                //cheat();
             };
 
             sockjs.onmessage = function(e) {
@@ -663,7 +663,7 @@
                 .attr("id", "divprice");
 
             divprice.append("header")
-                .text(instruments[price.symbol].description + " - " + price.symbol)
+                .text(instruments[price.symbol].shortname + " - " + price.symbol)
                 .style("margin-top", "20px");
 
             // create a table
@@ -1691,9 +1691,9 @@ console.log(pricedata);
 
                 // match with instruments
                 for (var i in instruments) {
-                    if (instruments[i].description.toLowerCase().substr(0, searchtextlen) == searchtext) {
+                    if (instruments[i].shortname.toLowerCase().substr(0, searchtextlen) == searchtext) {
                         var elem = {};
-                        elem.name = instruments[i].description + " - " + instruments[i].symbol;
+                        elem.name = instruments[i].shortname + " - " + instruments[i].symbol;
                         symboldata.push(elem);
                     }
                 }

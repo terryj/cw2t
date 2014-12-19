@@ -1628,7 +1628,7 @@ exports.registerCommonScripts = function () {
     --[[ redis.call("zadd", "pricehistory:" .. symbols[index], KEYS[2], pricehistoryid) ]] \
     --[[ redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbol", symbols[index], "bid", bid, "ask", ask, "id", pricehistoryid) ]] \
   end \
-  return {pricehistoryid, nbtsymbol, bid, ask} \
+  return {nbtsymbol, bid, ask} \
   ';
 
   exports.scriptpriceupdate = scriptpriceupdate;
