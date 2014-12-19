@@ -315,7 +315,6 @@
     .tbltrade tr td {
         padding: 10px;
         text-align: center;
-        /*font-size: 21px;*/
         white-space: nowrap;
     }
     .tbltradehdr {
@@ -474,6 +473,10 @@
 
             // single symbol select
             selectSymbol();
+
+            /*function click(d) { 
+                console.log(d); 
+            }*/
         }
 
         //
@@ -1660,7 +1663,13 @@ console.log(pricedata);
             var stockboxdiv = d3.select("#divcontainer")
                 .append("div")
                 .attr("id", "stockboxdiv")
-                .attr("class", "stockboxdiv");
+                .attr("class", "stockboxdiv")
+                .on("click", function () {
+                    if (d3.event.target.id == "stockboxdiv") {
+                        buildList("");
+                        displayList();
+                    }
+                });
 
             var stockboxinput = stockboxdiv
                 .append("input")
@@ -1701,6 +1710,10 @@ console.log(pricedata);
                     // clear the list if no data
                     if (!stocklist.empty()) {
                         stocklist.remove();
+
+                        // remove listener
+                        d3.select("#stockboxdiv")
+                            .on('click', null);
                     }
                 } else {
                     // create the list if necessary
