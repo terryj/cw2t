@@ -1748,6 +1748,7 @@ console.log(pricedata);
                             // clear price display in case of a previously selected symbol
                             d3.select("#divprice").remove();
                             d3.select("#tblmenuprice").remove();
+                            d3.select("#divrfq").remove();
 
                             // request a symbol
                             requestOrderbook(selectedsymbol);
@@ -3158,7 +3159,6 @@ console.log(pricedata);
 
         function quoteackReceived(quoteack) {
             console.log("quoteackReceived");
-            console.log(quoteack);
 
             d3.select("#divrfq")
                 .append("p")
