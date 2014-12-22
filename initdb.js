@@ -13,6 +13,8 @@ db = redis.createClient();
 db.on("connect", function (err) {
   console.log("Connected to redis");
   initdb();
+  ensureredismarketmakingkeys();
+  console.log("done");
 });
 
 /*db = redis.createClient(9282, "cod.redistogo.com");
@@ -334,6 +336,9 @@ function initdb() {
   db.hmset("cost:DE:GBP:2","defaultnosettdays",3,"costkey","DE:GBP:2","commissionpercent","","commissionmin","","ptmlevylimit","","ptmlevy","","stampdutylimit","","stampdutypercent","","contractcharge","","finance",""
 );
 
+  // timezone
+  db.hmset("timezone:310", "openhour", 8, "openminute" , 0, "closehour", 4 ,"closeminute", 30} \
+
   // logon
   db.set("trading:ipaddress", "82.211.104.37");
   db.set("trading:port", "60144");
@@ -343,5 +348,21 @@ function initdb() {
 
   db.set("markettype", 0);
 
-  console.log("done");
+/*
+make sure redis has market making keys
+*/
+function ensureredismarketmakingkeys() {
+db.hmset("mm:1", "mmglobalpl", "1", "mmglobalplalgor", "2",
+"mmglobalpllimitloss", "3", "mmglobalpllimitprofit", "4",
+"mmglobalpositioncost", "5", "mmplalgor", "6", "mmpllimitloss", "7",
+"mmpllimitprofit", "8", "mmposition", "9", "mmpositionalgor", "10",
+"mmpositioncost", "11", "mmpositionlimitlong", "12", "mmpositionlimitshort",
+"13", "mmpricealgor", "14", "mmpriceask", "15", "mmpriceaskclose", "16",
+"mmpriceaskcurrent", "17", "mmpricebid", "18", "mmpricebidclose", "19",
+"mmpricebidcurrent", "20", "mmpricegapovernight", "21", "mmpricegapweekend",
+"22", "mmquotesequencenumber", "23", "mmrfqsize", "24", "mmrfqsizealgor",
+"25", "mmrfqsizemax", "26", "mmrfqsizemin", "27", "mmrfqsizemin", "28",
+"mmspread", "29", "mmspreadalgor", "30", "mmspreadmax", "31", "mmspreadmin",
+"32")
+}
 }

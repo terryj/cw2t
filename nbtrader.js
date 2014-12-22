@@ -38,7 +38,7 @@ var resendrequestrequired = false; // indicates we need to do our own resend onc
 var settlmnttyp = '6'; // indicates a settlement date is being used, rather than a number of days
 var norelatedsym = '1'; // number of related symbols in a request, always 1
 var idsource = '4'; // indicates ISIN is to be used to identify a security
-var securitytype = 'CS'; // common stock
+//var securitytype = 'CS'; // common stock
 var handinst = '1'; // i.e. no intervention
 var connectstatus = 2; // status of connection, 1=connected, 2=disconnected
 var connectstatusint = 30;
@@ -331,7 +331,7 @@ function setStatus(status) {
 Nbt.prototype.quoteRequest = function(quoterequest) {
 	var msg = '131=' + quoterequest.quotereqid + SOH
 		+ '146=' + norelatedsym + SOH
-		+ '55=' + quoterequest.proquotesymbol + SOH
+		+ '55=' + quoterequest.mnemonic + SOH
 		+ '48=' + quoterequest.isin + SOH
 		+ '22=' + idsource + SOH
 		//+ '167=' + securitytype + SOH
@@ -372,10 +372,10 @@ Nbt.prototype.newOrder = function(order) {
 
 	var msg = '11=' + order.orderid + SOH
 		+ '21=' + handinst + SOH
-		+ '55=' + order.proquotesymbol + SOH
+		+ '55=' + order.mnemonic + SOH
 		+ '48=' + order.isin + SOH
 		+ '22=' + idsource + SOH
-		+ '167=' + securitytype + SOH
+		//+ '167=' + securitytype + SOH
 		+ '207=' + order.exchange + SOH
 		+ '54=' + order.side + SOH
 		+ '60=' + order.timestamp + SOH
@@ -419,7 +419,7 @@ Nbt.prototype.newOrder = function(order) {
 Nbt.prototype.orderCancelRequest = function(ocr) {
 	var msg = '11=' + ocr.ordercancelreqid + SOH
 			+ '41=' + ocr.orderid + SOH
-			+ '55=' + ocr.proquotesymbol + SOH
+			+ '55=' + ocr.mnemonic + SOH
 			+ '48=' + ocr.isin + SOH
 			+ '22=' + idsource + SOH
 			+ '54=' + ocr.side + SOH

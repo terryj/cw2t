@@ -336,7 +336,29 @@ function updateDb(functioncode, instrumentcode, instrec) {
 
   // store a complete record for a symbol
   if (functioncode == "340") {
+    // add nbtrader symbol code - same as symbol for equities
+    instrec.nbtsymbol = instrumentcode;
+
+    // add our own instrument type
+    if (instrec.insttype == 1) {
+      instrec.instrumenttype = "DE";
+      instrec.hedgesymbol = "";
+    } else if (instrec.insttype == 9) {
+      instrec.instrumenttype = "IE";
+      instrec.hedgesymbol = "";
+    } else {
+      console.log("unknown insttype");
+    }
+
+    // add an exchange - used in FIX messages
+    if (instrec.countryofissue == "GB") {
+      instrec.exchange = "L";
+    } else {
+      console.log("unknown countryofissue");
+    }
+
     db.hmset("symbol:" + instrumentcode, instrec);
+    db.sadd("instruments", instrumentcode);
   }
 
   // update price & history

@@ -978,8 +978,11 @@ exports.registerCommonScripts = function () {
 
   exports.getquoterequests = getquoterequests;
 
-  // compare hour & minute with timezone open/close times to determine in/out of hours - 0=in hours, 1=ooh
+  //
+  // compare hour & minute with timezone open/close times to determine in/out of hours
+  // returns: 0=in hours, 1=ooh
   // todo: review days
+  //
   getmarkettype = '\
   local getmarkettype = function(symbol, hour, minute, day) \
     local markettype = 0 \

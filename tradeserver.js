@@ -178,8 +178,6 @@ function quoteRequest(quoterequest) {
   // get settlement date from T+n no. of days
   quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, quoterequest.nosettdays, holidays));
 
-  console.log(quoterequest.futsettdate);
-
   // store the quote request & get an id
   db.eval(scriptquoterequest, 14, quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, day, function(err, ret) {
     if (err) throw err;
@@ -194,7 +192,7 @@ function quoteRequest(quoterequest) {
     // add the quote request id & symbol details required for fix connection
     quoterequest.quotereqid = ret[1];
     quoterequest.isin = ret[2];
-    quoterequest.proquotesymbol = ret[3];
+    quoterequest.mnemonic = ret[3];
     quoterequest.exchange = ret[4];
 
     // match the number of settlement days requested to the default number for this instrument type
@@ -317,7 +315,7 @@ function newOrder(order) {
     if (ret[0] == 0) {
       console.log("credit check failed, order #" + ret[1]);
 
-      // script will publish the order back to the operator type, with the error
+      // script will publish the order back to the operator type
       return;
     }
     console.log(ret);
@@ -335,7 +333,7 @@ function newOrder(order) {
     // use the returned instrument values required by fix connection
     if (order.markettype == 0) {
       order.isin = ret[2];
-      order.proquotesymbol = ret[3];
+      order.mnemonic = ret[3];
       order.exchange = ret[4];
     }
 
@@ -410,7 +408,7 @@ function orderCancelRequest(ocr) {
       ocr.ordercancelreqid = ret[2];
       ocr.symbol = ret[3];
       ocr.isin = ret[4];
-      ocr.proquotesymbol = ret[5];
+      ocr.mnemonic = ret[5];
       ocr.exchange = ret[6];
       ocr.side = ret[7];
       ocr.quantity = ret[8];
@@ -1285,12 +1283,12 @@ function registerScripts() {
 
   //
   // parameter: symbol
-  // returns: isin, proquote symbol, market, hedge symbol & market type
+  // returns: isin, mnemonic, exchange, hedge symbol, instrumenttype & market type
   //
   getproquotesymbol = '\
   local getproquotesymbol = function(symbol) \
     local symbolkey = "symbol:" .. symbol \
-    local fields = {"isin", "proquotesymbol", "market", "hedgesymbol", "instrumenttype", "timezone"} \
+    local fields = {"isin", "mnemonic", "exchange", "hedgesymbol", "instrumenttype", "timezone"} \
     local vals = redis.call("hmget", symbolkey, unpack(fields)) \
     return {vals[1], vals[2], vals[3], vals[4], vals[5], vals[6]} \
   end \
@@ -1350,9 +1348,9 @@ function registerScripts() {
 
   publishorder = '\
   local publishorder = function(orderid, channel) \
-    local fields = {"clientid","symbol","side","quantity","price","ordertype","remquantity","status","markettype","futsettdate","partfill","quoteid","currency","currencyratetoorg","currencyindtoorg","timestamp","margin","timeinforce","expiredate","expiretime","settlcurrency","settlcurrfxrate","settlcurrfxratecalc","orderid","externalorderid","execid","nosettdays","operatortype","operatorid","hedgeorderid","orderdivnum","text"} \
+    local fields = {"clientid","symbol","side","quantity","price","ordertype","remquantity","status","markettype","futsettdate","partfill","quoteid","currency","currencyratetoorg","currencyindtoorg","timestamp","margin","timeinforce","expiredate","expiretime","settlcurrency","settlcurrfxrate","settlcurrfxratecalc","orderid","externalorderid","execid","nosettdays","operatortype","operatorid","hedgeorderid","orderdivnum","text","reason"} \
     local vals = redis.call("hmget", "order:" .. orderid, unpack(fields)) \
-    local order = {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],price=vals[5],ordertype=vals[6],remquantity=vals[7],status=vals[8],markettype=vals[9],futsettdate=vals[10],partfill=vals[11],quoteid=vals[12],currency=vals[13],currencyratetoorg=vals[14],currencyindtoorg=vals[15],timestamp=vals[16],margin=vals[17],timeinforce=vals[18],expiredate=vals[19],expiretime=vals[20],settlcurrency=vals[21],settlcurrfxrate=vals[22],settlcurrfxratecalc=vals[23],orderid=vals[24],externalorderid=vals[25],execid=vals[26],nosettdays=vals[27],operatortype=vals[28],operatorid=vals[29],hedgeorderid=vals[30],orderdivnum=vals[31],text=vals[32]} \
+    local order = {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],price=vals[5],ordertype=vals[6],remquantity=vals[7],status=vals[8],markettype=vals[9],futsettdate=vals[10],partfill=vals[11],quoteid=vals[12],currency=vals[13],currencyratetoorg=vals[14],currencyindtoorg=vals[15],timestamp=vals[16],margin=vals[17],timeinforce=vals[18],expiredate=vals[19],expiretime=vals[20],settlcurrency=vals[21],settlcurrfxrate=vals[22],settlcurrfxratecalc=vals[23],orderid=vals[24],externalorderid=vals[25],execid=vals[26],nosettdays=vals[27],operatortype=vals[28],operatorid=vals[29],hedgeorderid=vals[30],orderdivnum=vals[31],text=vals[32],reason=vals[33]} \
     redis.call("publish", channel, "{" .. cjson.encode("order") .. ":" .. cjson.encode(order) .. "}") \
   end \
   ';
@@ -1824,11 +1822,12 @@ function registerScripts() {
   if not quotereqid then return 1005 end \
   --[[ store the quote request ]] \
   redis.call("hmset", "quoterequest:" .. quotereqid, "clientid", KEYS[1], "symbol", KEYS[2], "quantity", KEYS[3], "cashorderqty", KEYS[4], "currency", KEYS[5], "settlcurrency", KEYS[6], "nosettdays", KEYS[7], "futsettdate", KEYS[8], "quotestatus", "", "timestamp", KEYS[9], "quoterejectreason", "", "quotereqid", quotereqid, "operatortype", KEYS[10], "operatorid", KEYS[11]) \
-  --[[ add to set of quoterequests for this client & open ]] \
+  --[[ add to set of quoterequests for this client ]] \
   redis.call("sadd", KEYS[1] .. ":quoterequests", quotereqid) \
   redis.call("sadd", "openquoterequests", quotereqid) \
-  --[[ get required instrument values for proquote ]] \
+  --[[ get required instrument values for external feed ]] \
   local proquotesymbol = getproquotesymbol(KEYS[2]) \
+  --[[ get in/out of hours ]] \
   local markettype = getmarkettype(KEYS[2], KEYS[12], KEYS[13], KEYS[14]) \
   --[[ assuming equity buy to get default settlement days ]] \
   local defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. KEYS[6] .. ":" .. "1", "defaultnosettdays") \
