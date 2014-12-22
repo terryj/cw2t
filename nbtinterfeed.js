@@ -343,9 +343,11 @@ function updateDb(functioncode, instrumentcode, instrec) {
     if (instrec.insttype == 1) {
       instrec.instrumenttype = "DE";
       instrec.hedgesymbol = "";
+      instrec.marginpercent = 100;
     } else if (instrec.insttype == 9) {
       instrec.instrumenttype = "IE";
       instrec.hedgesymbol = "";
+      instrec.marginpercent = 100;
     } else {
       console.log("unknown insttype");
     }

@@ -813,7 +813,10 @@ console.log(pricedata);
                         .attr("href", "#")
                         .html(function (d) { return d; })
                         .on("click", function(d) {
-                            // clear any previous request
+                            // clear quote data
+                            quotes = [];
+
+                            // & clear any previous request
                             d3.select("#divrfq").remove();
 
                             requestQuote(symbol);
@@ -1863,9 +1866,6 @@ console.log(pricedata);
                     quotes[quotes.length - 1].offerquote = quote;
                 }
             }
-
-            // start a timer
-            //startQuoteInterval(quote);
         }
 
         function updateQuoteTable() {

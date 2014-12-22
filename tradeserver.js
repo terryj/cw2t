@@ -219,9 +219,11 @@ function quoteRequest(quoterequest) {
 
     // see if we are in-hours
     if (quoterequest.markettype == 0) {
+      console.log("forwarding");
       // forward the request
       nbt.quoteRequest(quoterequest);
     } else {
+      console.log("publishing");
       // publish it
       db.publish(common.quoterequestchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
       //db.publish("quoterequest", "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");

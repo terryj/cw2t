@@ -337,7 +337,7 @@ function initdb() {
 );
 
   // timezone
-  db.hmset("timezone:310", "openhour", 8, "openminute" , 0, "closehour", 4 ,"closeminute", 30} \
+  db.hmset("timezone:310", "openhour", 8, "openminute" , 0, "closehour", 16 ,"closeminute", 30);
 
   // logon
   db.set("trading:ipaddress", "82.211.104.37");
@@ -345,8 +345,7 @@ function initdb() {
   db.set("sendercompid", "CWTT_UAT");
   db.set("targetcompid", "NBT_UAT");
   db.set("onbehalfofcompid", "TGRANT");
-
-  db.set("markettype", 0);
+}
 
 /*
 make sure redis has market making keys
@@ -364,5 +363,4 @@ db.hmset("mm:1", "mmglobalpl", "1", "mmglobalplalgor", "2",
 "25", "mmrfqsizemax", "26", "mmrfqsizemin", "27", "mmrfqsizemin", "28",
 "mmspread", "29", "mmspreadalgor", "30", "mmspreadmax", "31", "mmspreadmin",
 "32")
-}
 }
