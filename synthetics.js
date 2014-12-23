@@ -1,6 +1,6 @@
 /****************
 * synthetics.js
-* Set-up synthetic instruments in database
+* Set-up synthetic instruments in redis
 * Cantwaittotrade Limited
 * Terry Johnston
 * October 2013
@@ -113,4 +113,3 @@ function createCfd() {
     });
   });
 }
-

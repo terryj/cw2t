@@ -774,7 +774,7 @@ console.log(pricedata);
                 .append("td")
                     .append("a")
                         .attr("href", "#")
-                        .attr("id", function(d) { return d == cols[0] ? "mnusingleproduct" : null; })
+                        .attr("id", function(d) { return d == cols[0] ? "mnusinglesymbol" : null; })
                         .html(function (d) { return d; })
                         // add a style to treat first menu item as default
                         .style("color", function(d) { return d == cols[0] ? "gray" : null; })
@@ -910,23 +910,64 @@ console.log(pricedata);
             rows.enter()
                 .append("tr");
 
-            // update
+            // columns data
             var cells = rows.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(col) {
                         return {col: col, value: row[col]};
                     });
-                 })
-                .enter()
-                .append("td")
-                    .attr("class", "tbltrade")
-                    .text(function(d) {
-                        if (d.col == "timestamp") {
-                            return getDateString(d.value);
-                        } else {
-                            return d.value;
-                        }
-                    });
+                 });
+
+            // columns enter
+            cells.enter()
+                .append("td");
+
+            // columns enter & update
+            cells.each(function(d) {
+                if (d.col == "symbol") {
+                    var lnk = d3.select(this).select("a");
+                    if (lnk.empty()) {
+                        // display a link for this symbol
+                        lnk = d3.select(this)
+                            .append("a")
+                                .attr("href", "#")
+                                .on("click", function(d) {
+                                    selectedmenu = 0;
+                                    selectedsymbol = d.value;
+                                    clearData();
+                                    clearScreen();
+                                    selectSymbol();
+                                    requestOrderbook(d.value);
+                                    requestPosition(d.value);
+
+                                    // switch off styles
+                                    d3.select("#tblmenu").selectAll("a")
+                                        .style("color", "");
+
+                                    // highlight selected
+                                    d3.select("#mnusinglesymbol")
+                                        .style("color", "gray");
+                                });
+
+                    }
+                    lnk.html(function(d) { return d.value; });
+                } else {
+                    d3.select(this)
+                        .text(function(d) {
+                            if (d.col == "timestamp") {
+                                return getDateString(d.value);
+                            } else if (d.col == "side") {
+                                if (d.value == "1") {
+                                    return "buy";
+                                } else {
+                                    return "sell";
+                                }
+                            } else {
+                                return d.value;
+                            }
+                        });
+                }
+            });
         }
 
         function createTradeTable(cols) {
@@ -1577,7 +1618,7 @@ console.log(pricedata);
 
             // add to trades, if that is what we are looking at
             if (selectedmenu == 3) {
-                trades.push(trade); // todo: add to start of array
+                trades.unshift(trade); // add to start of array
                 updateTradeTable();
                 return;
             }
@@ -1898,7 +1939,21 @@ console.log(pricedata);
             cells.each(function(d) {
                 // display on button
                 d3.select(this).select("input")
-                    .attr("class", function(d) { return d.col == cols[0] ? "quotebuttonsell" : "quotebuttonbuy"; })
+                    .attr("class", function(d) {
+                        if (d.col == cols[0]) {
+                            if ("tradeid" in d.value) {
+                                return "quotebuttonsellexpired";
+                            } else {
+                                return "quotebuttonsell";
+                            }
+                        } else {
+                            if ("tradeid" in d.value) {
+                                return "quotebuttonbuyexpired";
+                            } else {
+                                return "quotebuttonbuy";
+                            }                            
+                        }
+                    })
                     .attr("value", function(d) {
                         var txt;
 
@@ -3057,6 +3112,9 @@ console.log(pricedata);
                 return;
             }
 
+            // single symbol/portfolio only
+            if (selectedmenu != 0 && selectedmenu != 1) { return; }
+
             // update or remove position
             for (var i = 0; i < positions.length; i++) {
                 if (positions[i].symbol == position.symbol) {
@@ -3189,7 +3247,7 @@ console.log(pricedata);
                                         .style("color", "");
 
                                     // highlight selected
-                                    d3.select("#mnusingleproduct")
+                                    d3.select("#mnusinglesymbol")
                                         .style("color", "gray");
                                 });
                     } else {
