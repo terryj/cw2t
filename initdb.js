@@ -231,7 +231,6 @@ function initdb() {
   db.sadd("999999:instrumenttypes", "SPB");
   db.sadd("999999:instrumenttypes", "DE");
   db.sadd("999999:instrumenttypes", "IE");
-  db.sadd("999999:instrumenttypes", "CCFD");
 
   // GBP cash record for hedge book, required for summary
   db.sadd("999999:cash", "GBP");

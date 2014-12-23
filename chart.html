@@ -114,7 +114,42 @@
         background-color: #ddd;
         color: gray;
         border-style: none;        
+    }
+    .quotebutton:hover {
+        background-color: #ccc;
         cursor: pointer;
+    }
+    .quotebuttonbuy {
+        font-size: 21px;
+        background-color: #ddd;
+        color: blue;
+        border-style: none;        
+    }
+    .quotebuttonbuy:hover {
+        background-color: #ccc;
+        cursor: pointer;
+    }
+    .quotebuttonsell {
+        font-size: 21px;
+        background-color: #ddd;
+        color: red;
+        border-style: none;        
+    }
+    .quotebuttonsell:hover {
+        background-color: #ccc;
+        cursor: pointer;
+    }
+    .quotebuttonsellexpired {
+        font-size: 21px;
+        background-color: white;
+        color: red;
+        border-style: none;        
+    }
+    .quotebuttonbuyexpired {
+        font-size: 21px;
+        background-color: white;
+        color: blue;
+        border-style: none;        
     }
     .tradebutton {
         font-size: 21px;
@@ -551,7 +586,7 @@
         }
 
         function priceReceived(price) {
-            console.log("priceReceived");
+            //console.log("priceReceived");
 
             // only update price stuff for single symbol view
             if (selectedmenu == 0 && price.symbol == selectedsymbol) {
@@ -599,7 +634,7 @@
         }
 
         function updatePriceTable(price) {
-            console.log(price);
+            //console.log(price);
             var cols = ["bid", "", "ask"];
 
             // create a price table if one does not exist
@@ -1490,70 +1525,6 @@ console.log(pricedata);
             return ((finishdt - startdt) / 1000);
         }
 
-        /*function quoteReceived(quote) {
-            console.log("quote received");
-            console.log(quote);
-
-            quotes.push(quote);
-
-            // get the number of seconds the quote is valid for
-            var noseconds = getSeconds(quote.transacttime, quote.validuntiltime);
-
-            var tbody = d3.select("tbody");
-
-            var row = tbody.append("tr");
-
-            // add a buy button
-            row.append("td")
-                    .append("input")
-                        .attr("type", "button")
-                        .attr("value", "Buy " + quote.offerquantity + " @ " + quote.offerpx)
-                        .attr("class", "tradebutton buybutton")
-                        .on("click", function() {
-                            sendOrder(quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', "", quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
-                            disable();
-                            lblseconds.text("Order sent, please wait...");
-                        });
-
-            // add a label for time remaining
-            var lblseconds = row.append("td")
-                .attr("id", "lblseconds")
-                .text("Seconds remaining: " + noseconds);
-
-            // add a sell button
-            row.append("td")
-                .append("input")
-                    .attr("type", "button")
-                    .attr("value", "Sell " + quote.bidquantity + " @ " + quote.bidpx)
-                    .attr("class", "tradebutton sellbutton")
-                    .on("click", function() {
-                        sendOrder(quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', "", quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
-                        disable();
-                        lblseconds.text("Order sent, please wait...");
-                    });
-
-            // function to count down seconds remaining
-            var quotetimer = setInterval(function() {
-                noseconds -= 1;
-                if (noseconds == 0) {
-                    disable();
-                    lblseconds.text("Quote Expired");
-                } else {
-                    lblseconds.text("Seconds remaining: " + noseconds);
-                }
-            }, 1000);
-
-            // nothing done, so tidy
-            function disable() {
-                clearInterval(quotetimer);
-
-                // disable both buy & sell buttons
-                d3.selectAll(".tradebutton")
-                    .style("cursor", "default")
-                    .disabled = true;
-            }
-        }*/
-
         function sendOrder(symbol, side, quantity, price, ordertype, delivertocompid, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
             var order = {};
 
@@ -1904,7 +1875,6 @@ console.log(pricedata);
                 .append("td")
                 .append("input")
                     .attr("type", "button")
-                    .attr("class", "quotebutton")
                     .on("click", function(d, i, j) { // d=data, i=col, j=row
                         if (d.col == "bidquote") {
                             // we are selling
@@ -1917,159 +1887,60 @@ console.log(pricedata);
                         // stop timer
                         clearInterval(d.value.interval);
 
-                        // remove the event listener
-                        d3.select(this)
-                            .on('click', null);
-
-                        // disable button
+                        // disable button & remove the event listener
                         d3.select(this)
                             .style("cursor", "default")
-                            .attr("disabled", null);
+                            .attr("disabled", null)
+                            .on('click', null);
                     });
 
             // enter & update
             cells.each(function(d) {
-                var txt;
-
-                // button text
-                if (d.col == cols[0]) {
-                    if ("tradeid" in d.value) {
-                        txt = "Sold " + d.value.bidquantity + " @ " + d.value.bidpx;
-                    } else {
-                        txt = "Sell " + d.value.bidquantity + " @ " + d.value.bidpx;
-
-                        if (d.value.noseconds == 0) {
-                            txt += " - Expired";
-                        } else {
-                            txt += " - " + (d.value.noseconds < 10 ? " " : "") + d.value.noseconds + " Seconds";
-                        }
-                    }
-                } else {
-                    if ("tradeid" in d.value) {
-                        txt = "Bought " + d.value.offerquantity + " @ " + d.value.offerpx;
-                    } else {
-                        txt = "Buy " + d.value.offerquantity + " @ " + d.value.offerpx;
-
-                        if (d.value.noseconds == 0) {
-                            txt += " - Expired";
-                        } else {
-                            txt += " - " + (d.value.noseconds < 10 ? " " : "") + d.value.noseconds + " Seconds";
-                        }
-                    }
-                }
-
-                // add timer text
-                /*if (d.value.noseconds == 0) {
-                    txt += " - Expired";
-                } else {
-                    txt += " - " + d.value.noseconds + " Seconds";
-                }*/
-
                 // display on button
                 d3.select(this).select("input")
-                    .attr("value", txt);
-                    //.style("background-color", function(d) { return d3.rgb(d.value.bkcolor); })
-                    //.style("color", function(d) { return d3.rgb(d.value.color); });
+                    .attr("class", function(d) { return d.col == cols[0] ? "quotebuttonsell" : "quotebuttonbuy"; })
+                    .attr("value", function(d) {
+                        var txt;
 
-                // stop timer if traded
-                /*if ("tradeid" in d.value) {
-                    clearInterval(d.value.interval);
-                }*/
+                        // button text
+                        if (d.col == cols[0]) {
+                            if ("tradeid" in d.value) {
+                                txt = "Sold " + d.value.bidquantity + " @ " + d.value.bidpx;
+                            } else {
+                                txt = "Sell " + d.value.bidquantity + " @ " + d.value.bidpx;
+
+                                if (d.value.noseconds == 0) {
+                                    txt += " - Expired";
+                                } else {
+                                    txt += " - " + (d.value.noseconds < 10 ? " " : "") + d.value.noseconds + " Seconds";
+                                }
+                            }
+                        } else {
+                            if ("tradeid" in d.value) {
+                                txt = "Bought " + d.value.offerquantity + " @ " + d.value.offerpx;
+                            } else {
+                                txt = "Buy " + d.value.offerquantity + " @ " + d.value.offerpx;
+
+                                if (d.value.noseconds == 0) {
+                                    txt += " - Expired";
+                                } else {
+                                    txt += " - " + (d.value.noseconds < 10 ? " " : "") + d.value.noseconds + " Seconds";
+                                }
+                            }
+                        }
+                        return txt;
+                    });
+
+                // disable
+                if (d.value.noseconds == 0) {
+                    d3.select(this).select("input")
+                        .style("cursor", "default")
+                        .attr("disabled", null)
+                        .attr("class", function(d) { return d.col == cols[0] ? "quotebuttonsellexpired" : "quotebuttonbuyexpired"; })
+                        .on('click', null);                    
+                }
             });
         }
-
-        /*function updateQuoteTable() {
-            var cols = ["bid", "offer"];
-
-            // create a quote table if one does not exist
-            var tblquote = d3.select("#tblquote");
-            if (tblquote.empty()) {
-                createQuoteTable();
-            }
-
-            // base the table on the quotes array
-            var rows = d3.select("#tblquote").select("tbody").selectAll("tr")
-                .data(quotes);
-
-            // create a new row for each quote
-            rows.enter()
-                .append("tr")
-                .attr("class", "tblquote");
-
-            // update quote button text
-            var cells = rows.selectAll("td")
-                .data(function(row) {
-                    return cols.map(function(col) {
-                        var ret = "";
-                        if (col == "bid") {
-                            if (row.bidpx != "") {
-                                ret = "Sell " + row.bidquantity + " @ " + row.bidpx + " - " + row.bidnoseconds + " Seconds";
-                            }
-                        } else {
-                            if (row.offerpx != "") {
-                                ret = "Buy " + row.offerquantity + " @ " + row.offerpx + " - " + row.offernoseconds + " Seconds";
-                            }
-                        }
-                        //return {col: col, value: row[col]};
-                        return {col: col, value: ret};
-                    });
-                 })
-                .each(function(d, i, j) { // i=column, j=row
-                    console.log("update");
-                    console.log(d);
-                    //console.log(this.value);
-                    //console.log(d3.select(this).size());
-                    //console.log(d3.select(this).node());
-                    if (d.value != "") {
-                        console.log("vis");
-                        d3.select(this).select("input")
-                            .attr("visibility", "visible")
-                            .attr("value", function(d) { return d.value; });
-                    } else {
-                        console.log("hid");
-                        d3.select(this).select("input")
-                            .attr("visibility", "hidden");
-                    }
-                    //var t = d3.select(this).property("value");
-                    //console.log(t);
-                    //d3.select(this)//.property("value", "test")
-                        //.attr("value", "test");//function(d) { return d.value; });
-                });
-
-            // create quote buttons
-            cells.enter()
-                .append("td")
-                .append("input")
-                    .attr("type", "button")
-                    .attr("value", function(d) { return d.value; })
-                    .on("click", function(d, i, j) { // i=col, j=row
-                        //var order = {};
-                        console.log("clicked");
-                        console.log(d);
-                        console.log(i);
-                        console.log(j);
-                        if (d.col == "bid") {
-                            sendOrder(quotes[j].symbol, '2', quotes[j].bidquantity, quotes[j].bidpx, 'D', "", quotes[j].settlcurrency, quotes[j].nosettdays, quotes[j].futsettdate, quotes[j].bidquoteid, "4", "", "");
-
-                            // stop timer
-                            clearInterval(quotes[j].bidinterval);
-                        } else {
-                            sendOrder(quotes[j].symbol, '1', quotes[j].offerquantity, quotes[j].offerpx, 'D', "", quotes[j].settlcurrency, quotes[j].nosettdays, quotes[j].futsettdate, quotes[j].offerquoteid, "4", "", "");
-
-                            // stop timer
-                            clearInterval(quotes[j].offerinterval);
-                        }
-
-                        // remove the event listener
-                        d3.select(this)
-                            .on('click', null);
-
-                        // disable button
-                        d3.select(this)
-                            .style("cursor", "default")
-                            .attr("disabled", null);
-                    });
-        }*/
 
         function createQuoteTable() {
             console.log("createQuoteTable");
@@ -3214,11 +3085,13 @@ console.log(pricedata);
                         if ('ask' in price) {
                             positions[i].mktprice = price.ask / 100; // todo: ok?
                             updatePandL(i);
+                            updateMargin(i);
                         }
                     } else {
                         if ('bid' in price) {
                             positions[i].mktprice = price.bid / 100; // todo: ok?
                             updatePandL(i);
+                            updateMargin(i);
                         }                        
                     }
                 }
@@ -3238,6 +3111,13 @@ console.log(pricedata);
             positions[i].unrealisedpandl = newpandl;
         }
 
+        function updateMargin(i) {
+            // update margin for derivs
+            if (instruments[positions[i].symbol].instrumenttype != "DE" && instruments[positions[i].symbol].instrumenttype != "IE") {
+                positions[i].margin = positions[i].quantity * positions[i].mktprice * instruments[positions[i].symbol].marginpercent / 100;
+            }
+        }
+
         function updatePositionTable() {
             var cols = ["symbol", "quantity", "cost", "currency", "margin", "costpershare", "mktprice", "unrealisedpandl"];
 
@@ -3245,7 +3125,7 @@ console.log(pricedata);
                 cols = [];
             }
 
-            // always call create routine as controls addition & removal of headers
+            // always call create routine as this controls addition & removal of headers
             var tblposition = createPositionTable(cols);
 
             // create a row for a position

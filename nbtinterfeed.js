@@ -126,13 +126,14 @@ conn.on('data', function(data) {
   var msglen;
   var instrec = {};
 
+  console.log('data recd');
   console.log(data);
 
   instrec.bid = "";
   instrec.ask = "";
 
   var datalen = data.length;
-  console.log("---data.length="+data.length+"---");
+  console.log("data length="+data.length);
   console.log("bytestoread="+bytestoread);
 
   // copy this data to our global buffer, offset for any messages waiting to be read
@@ -359,8 +360,8 @@ function updateDb(functioncode, instrumentcode, instrec) {
       console.log("unknown countryofissue");
     }
 
-    db.hmset("symbol:" + instrumentcode, instrec);
-    db.sadd("instruments", instrumentcode);
+    //db.hmset("symbol:" + instrumentcode, instrec);
+    //db.sadd("instruments", instrumentcode);
   }
 
   // update price & history
