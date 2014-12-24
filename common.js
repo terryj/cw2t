@@ -1077,7 +1077,7 @@ exports.registerCommonScripts = function () {
   // any number of symbols can subscribe to a nbtsymbol to support derivatives
   //
   subscribesymbolnbt = '\
-  local subscribesymbolnbt = function(symbol, id, serverid, hour, minute, day) \
+  local subscribesymbolnbt = function(symbol, id, serverid) \
     local nbtsymbol = redis.call("hget", "symbol:" .. symbol, "nbtsymbol") \
     if not nbtsymbol then \
       return {0, ""} \
@@ -1090,11 +1090,13 @@ exports.registerCommonScripts = function () {
       redis.call("sadd", "nbtsymbols", nbtsymbol) \
       --[[ tell the price server to subscribe ]] \
        redis.call("publish", 7, "rp:" .. nbtsymbol) \
+    end \
+    if redis.call("sismember", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) == 0 then \
+      redis.call("sadd", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
+      redis.call("sadd", "serverid:" .. serverid .. ":ids", id) \
       --[[ subscribing from db will be done on separate connection ]] \
       subscribe = 1 \
     end \
-    redis.call("sadd", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
-    redis.call("sadd", "serverid:" .. serverid .. ":ids", id) \
     --[[ get latest price ]] \
     local fields = {"bid", "ask", "timestamp"} \
     local vals = redis.call("hmget", "price:" .. symbol, unpack(fields)) \
@@ -1113,7 +1115,7 @@ exports.registerCommonScripts = function () {
     if not nbtsymbol then \
       return {0, ""} \
     end \
-    --[[ deal with unsubscribing nbtsymbol ]] \
+    --[[ deal with unsubscribing symbol ]] \
     local unsubscribe = 0 \
     redis.call("srem", "symbol:" .. symbol .. ":serverid:" .. serverid .. ":ids", id) \
     if redis.call("scard", "symbol:" .. symbol .. ":serverid:" .. serverid .. ":ids") == 0 then \
@@ -1124,10 +1126,10 @@ exports.registerCommonScripts = function () {
           redis.call("srem", "nbtsymbols", nbtsymbol) \
           --[[ tell the price server to unsubscribe ]] \
           redis.call("publish", 7, "halt:" .. nbtsymbol) \
-          --[[ unsubscribing from db will be done on separate connection ]] \
-          unsubscribe = 1 \
         end \
       end \
+      --[[ unsubscribing from db will be done on separate connection ]] \
+      unsubscribe = 1 \
     end \
     --[[ deal with symbols/ids required by servers ]] \
     redis.call("srem", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
@@ -1628,12 +1630,46 @@ exports.registerCommonScripts = function () {
   return cjson.encode(clienttype) \
   ';
 
+  //
+  // update the latest price
+  // params: nbtsymbol, timestamp, bid, offer
+  // any symbols related to this nbtsymbol will be updated
+  //
+  scriptpriceupdate = '\
+  local nbtsymbol = KEYS[1] \
+  local bid = KEYS[3] \
+  local ask = KEYS[4] \
+  local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbols") \
+  for index = 1, #symbols do \
+    local pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbol") .. ":" .. cjson.encode(symbols[index]) .. "," \
+    --[[ may only get bid or ask ]] \
+    if bid ~= "" then \
+      if ask ~= "" then \
+        pricemsg = pricemsg .. cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("ask") .. ":" .. ask \
+        redis.call("hmset", "price:" .. symbols[index], "bid", bid, "ask", ask, "timestamp", KEYS[2]) \
+      else \
+        pricemsg = pricemsg .. cjson.encode("bid") .. ":" .. bid \
+        redis.call("hmset", "price:" .. symbols[index], "bid", bid, "timestamp", KEYS[2]) \
+      end \
+    else \
+      pricemsg = pricemsg .. cjson.encode("ask") .. ":" .. ask \
+      redis.call("hmset", "price:" .. symbols[index], "ask", ask, "timestamp", KEYS[2]) \
+    end \
+    pricemsg = pricemsg .. "}}" \
+    --[[ publish price ]] \
+    redis.call("publish", "price:" .. symbols[index], pricemsg) \
+  end \
+  return {nbtsymbol, bid, ask} \
+  ';
+
+  exports.scriptpriceupdate = scriptpriceupdate;
+
   // update the latest price & add a tick to price history
   // params: symbol, timestamp, bid, offer
-  // note: price history commented out as not doing now & likely to do separately
-  scriptpriceupdate = '\
+  // todo: needs updating for devivs
+  scriptpricehistoryupdate = '\
   --[[ get an id for this tick ]] \
-  --[[ local pricehistoryid = redis.call("incr", "pricehistoryid") ]] \
+  local pricehistoryid = redis.call("incr", "pricehistoryid") \
   --[[ may only get bid or ask, so make sure we have the latest of both ]] \
   local nbtsymbol = KEYS[1] \
   local bid = KEYS[3] \
@@ -1663,11 +1699,11 @@ exports.registerCommonScripts = function () {
     --[[ store latest price ]] \
     redis.call("hmset", "price:" .. symbols[index], "bid", bid, "ask", ask, "timestamp", KEYS[2]) \
     --[[ add id to sorted set, indexed on timestamp ]] \
-    --[[ redis.call("zadd", "pricehistory:" .. symbols[index], KEYS[2], pricehistoryid) ]] \
-    --[[ redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbol", symbols[index], "bid", bid, "ask", ask, "id", pricehistoryid) ]] \
+    redis.call("zadd", "pricehistory:" .. symbols[index], KEYS[2], pricehistoryid) \
+    redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbol", symbols[index], "bid", bid, "ask", ask, "id", pricehistoryid) \
   end \
   return {nbtsymbol, bid, ask} \
   ';
 
-  exports.scriptpriceupdate = scriptpriceupdate;
+  exports.scriptpricehistoryupdate = scriptpricehistoryupdate;
 };

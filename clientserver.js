@@ -103,7 +103,7 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    //console.log("channel: " + channel + ", message: " + message);
+    console.log("channel: " + channel + ", message: " + message);
 
     if (channel.substr(0, 6) == "price:") {
       common.newPrice(channel.substr(6), serverid, message, connections, feedtype);
@@ -1205,7 +1205,7 @@ function orderbookRemoveRequest(clientid, symbol, conn) {
     if (err) throw err;
     console.log(ret);
 
-    // the script will tell us if we need to unsubscribe from the topic
+    // the script will tell us if we need to unsubscribe from the symbol
     if (ret[0]) {
       dbsub.unsubscribe("price:" + ret[1]);
     }

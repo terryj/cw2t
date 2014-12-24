@@ -746,7 +746,7 @@ console.log(pricedata);
 
         function createMenu() {
             var data = [""];
-            var cols = ["Select A Symbol", "Portfolio", "Account Summary", "Trades", "Live Quote Requests"];
+            var cols = ["Single Symbol", "Portfolio", "Account Summary", "Trades", "Live Quote Requests"];
 
             // create a table
             var tblmenu = d3.select("#divcontainer")
@@ -811,7 +811,8 @@ console.log(pricedata);
                             } else if (d == cols[3]) {
                                 requestTrades();
                             } else if (d == cols[4]) {
-                                requestOpenQuoteRequests("");
+                                alert("Out of hours stuff - you need a passport to go here!");
+                                //requestOpenQuoteRequests("");
                             }
                         });
         }
@@ -878,6 +879,24 @@ console.log(pricedata);
             positions = [];
         }
 
+        function singleSymbol(symbol) {
+            selectedmenu = 0;
+            selectedsymbol = symbol;
+            clearData();
+            clearScreen();
+            selectSymbol();
+            requestOrderbook(symbol);
+            requestPosition(symbol);
+
+            // switch off styles
+            d3.select("#tblmenu").selectAll("a")
+                .style("color", "");
+
+            // highlight selected
+            d3.select("#mnusinglesymbol")
+                .style("color", "gray");
+        }
+
         function tradesReceived(tradearr) {
             console.log("tradesReceived");
 
@@ -927,26 +946,12 @@ console.log(pricedata);
                 if (d.col == "symbol") {
                     var lnk = d3.select(this).select("a");
                     if (lnk.empty()) {
-                        // display a link for this symbol
+                        // add a link for this symbol
                         lnk = d3.select(this)
                             .append("a")
                                 .attr("href", "#")
                                 .on("click", function(d) {
-                                    selectedmenu = 0;
-                                    selectedsymbol = d.value;
-                                    clearData();
-                                    clearScreen();
-                                    selectSymbol();
-                                    requestOrderbook(d.value);
-                                    requestPosition(d.value);
-
-                                    // switch off styles
-                                    d3.select("#tblmenu").selectAll("a")
-                                        .style("color", "");
-
-                                    // highlight selected
-                                    d3.select("#mnusinglesymbol")
-                                        .style("color", "gray");
+                                    singleSymbol(d.value);
                                 });
 
                     }
@@ -995,7 +1000,6 @@ console.log(pricedata);
         }
 
         function requestOrderbook(symbol) {
-            // request
             sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
         }
 
@@ -3130,6 +3134,11 @@ console.log(pricedata);
             // add to array
             if (!posupdated) {
                 positions.push(position);
+
+                // position has been created by someone else's actions, so request prices
+                if (selectedmenu == 1) {
+                    requestOrderbook(position.symbol);
+                }
             }
 
             updatePositionTable();
@@ -3234,21 +3243,7 @@ console.log(pricedata);
                                 .html(function (d) { return d.value; })
                                 .on("click", function(d) {
                                     requestUnsubscribePositions();
-                                    selectedmenu = 0;
-                                    selectedsymbol = d.value;
-                                    clearData();
-                                    clearScreen();
-                                    selectSymbol();
-                                    requestOrderbook(d.value);
-                                    requestPosition(d.value);
-
-                                    // switch off styles
-                                    d3.select("#tblmenu").selectAll("a")
-                                        .style("color", "");
-
-                                    // highlight selected
-                                    d3.select("#mnusinglesymbol")
-                                        .style("color", "gray");
+                                    singleSymbol(d.value);
                                 });
                     } else {
                         d3.select(this)
