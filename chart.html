@@ -683,7 +683,7 @@
             // enter
             cells.enter()
                 .append("td")
-                    .text(function(d) { return d.value == null ? '-' : d.value.price; });
+                    .text(function(d) { return d.value == null ? '-' : formatCurrency(d.value.price, 2); });
 
             cells.exit().remove();
         }
@@ -718,8 +718,7 @@
                 .append("th")
                     .attr("class", "tblpricehdr")
                     .text(function(d) { return d; });*/
-console.log("pricedata");
-console.log(pricedata);
+
             // create a row
             var tblpricerow = tbody.selectAll("tr")
                 .data(pricedata);
@@ -3179,6 +3178,10 @@ console.log(pricedata);
         }
 
         function updateMargin(i) {
+            console.log("updateMargin");
+            console.log(positions[i].quantity);
+            console.log(positions[i].mktprice);
+            console.log(instruments[positions[i].symbol].marginpercent);
             // update margin for derivs
             if (instruments[positions[i].symbol].instrumenttype != "DE" && instruments[positions[i].symbol].instrumenttype != "IE") {
                 positions[i].margin = positions[i].quantity * positions[i].mktprice * instruments[positions[i].symbol].marginpercent / 100;
