@@ -3101,6 +3101,8 @@
             positions = [];
 
             for (var i = 0; i < positionsarr.length; i++) {
+                positionsarr[i].costpershare = Math.abs(positionsarr[i].cost / positionsarr[i].quantity);
+
                 positions.push(positionsarr[i]);
             }
 
@@ -3117,6 +3119,8 @@
 
             // single symbol/portfolio only
             if (selectedmenu != 0 && selectedmenu != 1) { return; }
+
+            position.costpershare = Math.abs(position.cost / position.quantity);
 
             // update or remove position
             for (var i = 0; i < positions.length; i++) {
@@ -3184,7 +3188,7 @@
             console.log(instruments[positions[i].symbol].marginpercent);
             // update margin for derivs
             if (instruments[positions[i].symbol].instrumenttype != "DE" && instruments[positions[i].symbol].instrumenttype != "IE") {
-                positions[i].margin = positions[i].quantity * positions[i].mktprice * instruments[positions[i].symbol].marginpercent / 100;
+                positions[i].margin = Math.abs(positions[i].quantity) * positions[i].mktprice * instruments[positions[i].symbol].marginpercent / 100;
             }
         }
 

@@ -923,7 +923,7 @@ exports.registerCommonScripts = function () {
       if instrumenttype ~= "DE" and instrumenttype ~= "IE" then \
         local marginpercent = redis.call("hget", "symbol:" .. symbol, "marginpercent") \
         if marginpercent then \
-          margin = round(qty * price * tonumber(marginpercent) / 100, 2) \
+          margin = round(math.abs(qty) * price * tonumber(marginpercent) / 100, 2) \
         end \
       end \
     end \
@@ -1370,14 +1370,14 @@ exports.registerCommonScripts = function () {
   exports.scriptgetpositions = getunrealisedpandl + getmargin + '\
   local tblresults = {} \
   local positions = redis.call("smembers", KEYS[1] .. ":positions") \
-  local fields = {"clientid","symbol","quantity","cost","currency","positionid","costpershare"} \
+  local fields = {"clientid","symbol","quantity","cost","currency","positionid"} \
   local vals \
   for index = 1, #positions do \
     vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
-    --[[ value the position ]] \
     local margin = getmargin(vals[2], vals[3]) \
+    --[[ value the position ]] \
     local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],costpershare=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
   end \
   return tblresults \
   ';
@@ -1386,14 +1386,14 @@ exports.registerCommonScripts = function () {
   // params: client id, symbol
   //
   exports.scriptgetposition = getunrealisedpandl + getmargin + '\
-  local fields = {"clientid","symbol","quantity","cost","currency","positionid","costpershare"} \
+  local fields = {"clientid","symbol","quantity","cost","currency","positionid"} \
   local vals = redis.call("hmget", KEYS[1] .. ":position:" .. KEYS[2], unpack(fields)) \
   local pos = {} \
   if vals[1] then \
-    --[[ value the position ]] \
     local margin = getmargin(vals[2], vals[3]) \
+    --[[ value the position ]] \
     local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-    pos = {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],costpershare=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
+    pos = {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
   end \
   return cjson.encode(pos) \
   ';
@@ -1406,14 +1406,14 @@ exports.registerCommonScripts = function () {
   local tblresults = {} \
   local tblsubscribe = {} \
   local positions = redis.call("smembers", KEYS[1] .. ":positions") \
-  local fields = {"clientid","symbol","quantity","cost","currency","positionid","costpershare"} \
+  local fields = {"clientid","symbol","quantity","cost","currency","positionid"} \
   local vals \
   for index = 1, #positions do \
     vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
-    --[[ value the position ]] \
     local margin = getmargin(vals[2], vals[3]) \
+    --[[ value the position ]] \
     local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],costpershare=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
     --[[ subscribe to this symbol, so as to get prices to the f/e for p&l calc ]] \
     local subscribe = subscribesymbolnbt(vals[2], KEYS[1], KEYS[2]) \
     if subscribe[1] then \
