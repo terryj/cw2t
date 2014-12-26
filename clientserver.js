@@ -1186,6 +1186,7 @@ function orderbookRequest(clientid, symbol, conn) {
 
     // see if we need to subscribe
     if (ret[0] == 1) {
+      console.log("subscribing to " + symbol);
       dbsub.subscribe("price:" + symbol);
     }
 
@@ -1206,7 +1207,8 @@ function orderbookRemoveRequest(clientid, symbol, conn) {
     console.log(ret);
 
     // the script will tell us if we need to unsubscribe from the symbol
-    if (ret[0]) {
+    if (ret[0] == 1) {
+      console.log("unsubscribing from " + symbol);
       dbsub.unsubscribe("price:" + ret[1]);
     }
   });

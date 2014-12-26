@@ -1084,7 +1084,11 @@ exports.registerCommonScripts = function () {
     end \
     local subscribe = 0 \
     redis.call("sadd", "symbol:" .. symbol .. ":serverid:" .. serverid .. ":ids", id) \
-    redis.call("sadd", "symbol:" .. symbol .. ":serverids", serverid) \
+    if redis.call("sismember", "symbol:" .. symbol .. ":serverids", serverid) == 0 then \
+      redis.call("sadd", "symbol:" .. symbol .. ":serverids", serverid) \
+      --[[ this server needs to subscribe to this symbol - subscribing will be done on a separate connection ]] \
+      subscribe = 1 \
+    end \
     redis.call("sadd", "nbtsymbol:" .. nbtsymbol .. ":symbols", symbol) \
     if redis.call("sismember", "nbtsymbols", nbtsymbol) == 0 then \
       redis.call("sadd", "nbtsymbols", nbtsymbol) \
@@ -1094,8 +1098,6 @@ exports.registerCommonScripts = function () {
     if redis.call("sismember", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) == 0 then \
       redis.call("sadd", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
       redis.call("sadd", "serverid:" .. serverid .. ":ids", id) \
-      --[[ subscribing from db will be done on separate connection ]] \
-      subscribe = 1 \
     end \
     --[[ get latest price ]] \
     local fields = {"bid", "ask", "timestamp"} \
@@ -1416,7 +1418,7 @@ exports.registerCommonScripts = function () {
     table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
     --[[ subscribe to this symbol, so as to get prices to the f/e for p&l calc ]] \
     local subscribe = subscribesymbolnbt(vals[2], KEYS[1], KEYS[2]) \
-    if subscribe[1] then \
+    if subscribe[1] == 1 then \
       table.insert(tblsubscribe, vals[2]) \
     end \
   end \
@@ -1432,7 +1434,7 @@ exports.registerCommonScripts = function () {
   local positions = redis.call("smembers", KEYS[1] .. ":positions") \
   for index = 1, #positions do \
     local unsubscribe = unsubscribesymbolnbt(positions[index], KEYS[1], KEYS[2]) \
-    if unsubscribe[1] then \
+    if unsubscribe[1] == 1 then \
       table.insert(tblunsubscribe, positions[index]) \
     end \
   end \
