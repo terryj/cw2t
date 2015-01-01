@@ -956,6 +956,12 @@ exports.registerCommonScripts = function () {
 
   exports.gettotalpositions = gettotalpositions;
 
+  //
+  // calculates free margin for a client and currency
+  // balance = cash
+  // equity = balance + unrealised p&l
+  // free margin = equity - margin used to hold positions
+  //
   getfreemargin = getcash + gettotalpositions + '\
   local getfreemargin = function(clientid, currency) \
     local cash = getcash(clientid, currency) \
