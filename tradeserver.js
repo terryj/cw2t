@@ -848,7 +848,7 @@ function registerScripts() {
   var creditcheck;
   var getproquotesymbol;
   var getinitialmargin;
-  var updatetrademargin;
+  //var updatetrademargin;
   var neworder;
   var getreserve;
   var getposition;
@@ -1106,7 +1106,7 @@ function registerScripts() {
       else \
         posqty = -tradequantity \
       end \
-      positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, tradeprice, tradecost, currency, tradeid) \
+      positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, tradecost, currency, tradeid) \
     end \
     publishposition(clientid, symbol, 10) \
     return positionid \
@@ -1192,10 +1192,9 @@ function registerScripts() {
         --[[ we are trying to close a quantity greater than current position, so need to check we can open a new position ]] \
         local freemargin = getfreemargin(clientid, currency) \
         --[[ add the margin returned by closing the position ]] \
-        local margin = getmargin(symbol, quantity) \
+        local margin = getmargin(symbol, math.abs(posqty)) \
         --[[ get initial margin for remaining quantity after closing position ]] \
         initialmargin = getinitialmargin(symbol, (quantity - math.abs(posqty)) * price) \
-        local newinitialmargin = (tonumber(quantity) - tonumber(position[1])) / tonumber(quantity) * initialmargin \
         if initialmargin + totalcost + finance > freemargin + margin then \
           rejectorder(orderid, 1020, "") \
           return {0} \
@@ -1354,12 +1353,24 @@ function registerScripts() {
     redis.call("sadd", clientid .. ":trades", tradeid) \
     redis.call("sadd", "order:" .. orderid .. ":trades", tradeid) \
     redis.call("zadd", "tradesbydate", milliseconds, tradeid) \
+    local transtype \
+    local drcr \
+    if tonumber(side) == 1 then \
+      transtype = "BT" \
+      drcr = 2 \
+    else \
+      transtype = "ST" \
+      drcr = 1 \
+    end \
+    --[[ cash transactions for the trade ]] \
+    updatecash(clientid, settlcurrency, transtype, settlcurramt, drcr, "trade consideration", tradeid, timestamp, "", operatortype, operatorid) \
+    --[[ cash transactions for any costs & finance ]] \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
     if totalcost > 0 then \
-      updatecash(clientid, settlcurrency, "TC", totalcost, 1, "trade costs", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "TC", totalcost, 2, "trade costs", tradeid, timestamp, "", operatortype, operatorid) \
     end \
     if tonumber(finance) > 0 then \
-      updatecash(clientid, settlcurrency, "FI", finance, 1, "finance", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "FI", finance, 2, "trade finance", tradeid, timestamp, "", operatortype, operatorid) \
     end \
     local positionid = updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, tradeid) \
     redis.call("hset", tradekey, "positionid", positionid) \
