@@ -312,6 +312,7 @@ function newOrder(order) {
   // note: param #7 not used
   db.eval(scriptneworder, 26, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, 0, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, hour, minute, day, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
 
     // credit check failed
     if (ret[0] == 0) {
@@ -320,7 +321,6 @@ function newOrder(order) {
       // script will publish the order back to the operator type
       return;
     }
-    console.log(ret);
 
     // see if the order was client quoted, if so, we are done
     if (ret[13] != "") {

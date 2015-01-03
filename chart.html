@@ -3272,6 +3272,8 @@
         function createPositionTable(cols) {
             var tblposition = d3.select("#tblposition");
             if (tblposition.empty()) {
+                var divposition;
+                
                 // may be a single position or array of positions
                 var divprice = d3.select("#divprice");
                 if (!divprice.empty()) {
