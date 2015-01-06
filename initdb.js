@@ -36,12 +36,13 @@ function initdb() {
   db.get("fixseqnumout", function(err, fixseqnumout) {
     db.set("fixseqnumout", fixseqnumout);
   });*/
-  // or set them to start at 1
-  db.set("fixseqnumin", 0);
-  db.set("fixseqnumout", 0); // first out will be 1
 
   // clear all key values
   db.flushdb();
+
+  // or set them to start at 1
+  db.set("fixseqnumin", 0);
+  db.set("fixseqnumout", 0); // first out will be 1
 
   // re-set sequential ids
   db.set("quotereqid", 0);
