@@ -793,7 +793,9 @@
             try {
                 var obj = JSON.parse(msg);
 
-                if ("orderbooks" in obj) {
+                if ("price" in obj) {
+                    updatePrice(obj.price);
+                } else if ("orderbooks" in obj) {
                     loadOrderBooks(obj.orderbooks);
                 } else if ("orderbook" in obj) {
                     updateOrderBook(obj.orderbook);
@@ -995,6 +997,7 @@
         }
         
         function loadInstruments(instrumentarr) {
+            console.log(instrumentarr);
             for (var i = 0; i < instrumentarr.length; ++i) {
                 instruments[instrumentarr[i].symbol] = instrumentarr[i];
             }
@@ -1265,6 +1268,53 @@
                 displayOrderBookHeadings();
                 displayOrderBook(orderbook.symbol);
             }
+        }
+
+        function updatePrice(price) {
+            var level = 0;
+
+            // create an entry in the orderbooks array for this symbol
+            if (!(price.symbol in orderbooks)) {
+                // 6 levels
+                orderbooks[price.symbol] = [{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0}];
+            }
+
+            // update the prices
+            if ("bid" in price) {
+                if (price.bid > orderbooks[price.symbol][level].bid) {
+                    orderbooks[price.symbol][level].lastbidchange = 1;
+                } else if (price.bid < orderbooks[price.symbol][level].bid) {
+                    orderbooks[price.symbol][level].lastbidchange = 2;
+                } else {
+                    orderbooks[price.symbol][level].lastbidchange = 0;                        
+                }
+                orderbooks[price.symbol][level].bid = price.bid;
+                orderbooks[price.symbol][level].bidflashcount = 3;
+                priceflash[price.symbol] = true;
+            }
+            if ("ask" in price) {
+                if (price.ask > orderbooks[price.symbol][level].offer) {
+                    orderbooks[price.symbol][level].lastofferchange = 1;
+                } else if (price.ask < orderbooks[price.symbol][level].offer) {
+                    orderbooks[price.symbol][level].lastofferchange = 2;
+                } else {
+                    orderbooks[price.symbol][level].lastofferchange = 0;                        
+                }
+                orderbooks[price.symbol][level].offer = price.ask;
+                orderbooks[price.symbol][level].offerflashcount = 3;
+                priceflash[price.symbol] = true;
+            }
+            if ("bidvol" in price) {
+                orderbooks[orderbook.symbol][level].bidvol = orderbook.prices[i].bidvol;                    
+            }
+            if ("offervol" in price) {
+                orderbooks[orderbook.symbol][level].offervol = orderbook.prices[i].offervol;                    
+            }
+
+            if (selectedmenu == MENUWATCHLIST) {
+                displayOrderBookHeadings();
+                displayOrderBook(price.symbol);
+            }            
         }
 
         function updateInstrument(instrument) {
@@ -2004,8 +2054,8 @@
                 searchtext = stockboxinput.value.toLowerCase();
 
                 for (var i in instruments) {
-                    if (i.toLowerCase().indexOf(searchtext) == 0 || instruments[i].description.toLowerCase().indexOf(searchtext) == 0) {
-                        addElement(i + " " + instruments[i].description, stocklist, i);
+                    if (i.toLowerCase().indexOf(searchtext) == 0 || instruments[i].shortname.toLowerCase().indexOf(searchtext) == 0) {
+                        addElement(i + " " + instruments[i].shortname, stocklist, i);
                     }
                 }
 
@@ -2045,7 +2095,7 @@
                 } else if (frm == "frmproduct") {
                     displayProduct(instruments[symbol]);
                 } else if (frm == "orderdiv") {
-                    inpsymboldesc.value = instruments[symbol].description;
+                    inpsymboldesc.value = instruments[symbol].shortname;
                     inpsymbol = document.getElementById("inpsymbol");
                     inpsymbol.value = symbol;
                 }
@@ -2559,7 +2609,7 @@
             for (var i = 0; i < indices[index].length; ++i) {
                 sym = indices[index][i].symbol;
                 if (sym in instruments) {
-                    s = instruments[sym].symbol + ' ' + instruments[sym].description;
+                    s = instruments[sym].symbol + ' ' + instruments[sym].shortname;
                     addElement(s, list1, sym);
                 }
             }
@@ -5946,7 +5996,7 @@
             var optptmnotexempt = document.getElementById("optptmnotexempt");
 
             inpsymbol.value = inst.symbol;
-            inpdesc.value = inst.description;
+            inpdesc.value = inst.shortname;
             inpisin.value = inst.isin;
             inpsedol.value = inst.sedol;
             inpinsttype.value = inst.instrumenttype;

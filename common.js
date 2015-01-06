@@ -879,16 +879,16 @@ exports.registerCommonScripts = function () {
 
   getunrealisedpandl = round + '\
   local getunrealisedpandl = function(symbol, quantity, cost) \
-    local bidprice = redis.call("hget", "price:" .. symbol, "bid") \
-    local askprice = redis.call("hget", "price:" .. symbol, "ask") \
     local unrealisedpandl = 0 \
     local price = 0 \
     local qty = tonumber(quantity) \
     if qty > 0 then \
+      local bidprice = redis.call("hget", "price:" .. symbol, "bid") \
       if bidprice and tonumber(bidprice) ~= 0 then \
         price = tonumber(bidprice) / 100 \
       end \
     else \
+      local askprice = redis.call("hget", "price:" .. symbol, "ask") \
       if askprice and tonumber(askprice) ~= 0 then \
         price = tonumber(askprice) / 100 \
       end \
@@ -902,19 +902,51 @@ exports.registerCommonScripts = function () {
 
   exports.getunrealisedpandl = getunrealisedpandl;
 
+  getmargin = round + '\
+  local getmargin = function(symbol, quantity) \
+    local margin = 0 \
+    local price = 0 \
+    local qty = tonumber(quantity) \
+    if qty > 0 then \
+      local bidprice = redis.call("hget", "price:" .. symbol, "bid") \
+      if bidprice and tonumber(bidprice) ~= 0 then \
+        price = tonumber(bidprice) / 100 \
+      end \
+    else \
+      local askprice = redis.call("hget", "price:" .. symbol, "ask") \
+      if askprice and tonumber(askprice) ~= 0 then \
+        price = tonumber(askprice) / 100 \
+      end \
+    end \
+    if price ~= 0 then \
+      local instrumenttype = redis.call("hget", "symbol:" .. symbol, "instrumenttype") \
+      if instrumenttype ~= "DE" and instrumenttype ~= "IE" then \
+        local marginpercent = redis.call("hget", "symbol:" .. symbol, "marginpercent") \
+        if marginpercent then \
+          margin = round(math.abs(qty) * price * tonumber(marginpercent) / 100, 2) \
+        end \
+      end \
+    end \
+    return margin \
+  end \
+  ';
+
+  exports.getmargin = getmargin;
+
   // only dealing with trade currency for the time being - todo: review
-  gettotalpositions = getunrealisedpandl + '\
+  gettotalpositions = getunrealisedpandl + getmargin + '\
   local gettotalpositions = function(clientid, currency) \
     local positions = redis.call("smembers", clientid .. ":positions") \
-    local fields = {"symbol", "currency", "quantity", "margin", "cost"} \
+    local fields = {"symbol", "currency", "quantity", "cost"} \
     local vals \
     local totalmargin = 0 \
     local totalunrealisedpandl = 0 \
     for index = 1, #positions do \
       vals = redis.call("hmget", clientid .. ":position:" .. positions[index], unpack(fields)) \
       if vals[2] == currency then \
-        totalmargin = totalmargin + tonumber(vals[4]) \
-        local unrealisedpandl = getunrealisedpandl(vals[1], vals[3], vals[5]) \
+        local margin = getmargin(vals[1], vals[3]) \
+        totalmargin = totalmargin + margin \
+        local unrealisedpandl = getunrealisedpandl(vals[1], vals[3], vals[4]) \
         totalunrealisedpandl = totalunrealisedpandl + unrealisedpandl[1] \
       end \
     end \
@@ -924,6 +956,12 @@ exports.registerCommonScripts = function () {
 
   exports.gettotalpositions = gettotalpositions;
 
+  //
+  // calculates free margin for a client and currency
+  // balance = cash
+  // equity = balance + unrealised p&l
+  // free margin = equity - margin used to hold positions
+  //
   getfreemargin = getcash + gettotalpositions + '\
   local getfreemargin = function(clientid, currency) \
     local cash = getcash(clientid, currency) \
@@ -978,8 +1016,11 @@ exports.registerCommonScripts = function () {
 
   exports.getquoterequests = getquoterequests;
 
-  // compare hour & minute with timezone open/close times to determine in/out of hours - 0=in hours, 1=ooh
+  //
+  // compare hour & minute with timezone open/close times to determine in/out of hours
+  // returns: 0=in hours, 1=ooh
   // todo: review days
+  //
   getmarkettype = '\
   local getmarkettype = function(symbol, hour, minute, day) \
     local markettype = 0 \
@@ -1041,31 +1082,33 @@ exports.registerCommonScripts = function () {
   // subscribe to an instrument with nbtrader
   // any number of symbols can subscribe to a nbtsymbol to support derivatives
   //
-  subscribesymbolnbt = getmarkettype + '\
-  local subscribesymbolnbt = function(symbol, id, serverid, hour, minute, day) \
+  subscribesymbolnbt = '\
+  local subscribesymbolnbt = function(symbol, id, serverid) \
     local nbtsymbol = redis.call("hget", "symbol:" .. symbol, "nbtsymbol") \
     if not nbtsymbol then \
       return {0, ""} \
     end \
     local subscribe = 0 \
     redis.call("sadd", "symbol:" .. symbol .. ":serverid:" .. serverid .. ":ids", id) \
-    redis.call("sadd", "symbol:" .. symbol .. ":serverids", serverid) \
+    if redis.call("sismember", "symbol:" .. symbol .. ":serverids", serverid) == 0 then \
+      redis.call("sadd", "symbol:" .. symbol .. ":serverids", serverid) \
+      --[[ this server needs to subscribe to this symbol - subscribing will be done on a separate connection ]] \
+      subscribe = 1 \
+    end \
     redis.call("sadd", "nbtsymbol:" .. nbtsymbol .. ":symbols", symbol) \
     if redis.call("sismember", "nbtsymbols", nbtsymbol) == 0 then \
       redis.call("sadd", "nbtsymbols", nbtsymbol) \
       --[[ tell the price server to subscribe ]] \
        redis.call("publish", 7, "rp:" .. nbtsymbol) \
-      --[[ subscribing from db will be done on separate connection ]] \
-      subscribe = 1 \
+    end \
+    if redis.call("sismember", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) == 0 then \
+      redis.call("sadd", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
+      redis.call("sadd", "serverid:" .. serverid .. ":ids", id) \
     end \
     --[[ get latest price ]] \
     local fields = {"bid", "ask", "timestamp"} \
     local vals = redis.call("hmget", "price:" .. symbol, unpack(fields)) \
-    --[[ get in/out of hours ]] \
-    local markettype = getmarkettype(symbol, hour, minute, day) \
-    redis.call("sadd", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
-    redis.call("sadd", "serverid:" .. serverid .. ":ids", id) \
-    return {subscribe, vals[1], vals[2], vals[3], markettype} \
+    return {subscribe, vals[1], vals[2], vals[3]} \
   end \
   ';
 
@@ -1080,7 +1123,7 @@ exports.registerCommonScripts = function () {
     if not nbtsymbol then \
       return {0, ""} \
     end \
-    --[[ deal with unsubscribing nbtsymbol ]] \
+    --[[ deal with unsubscribing symbol ]] \
     local unsubscribe = 0 \
     redis.call("srem", "symbol:" .. symbol .. ":serverid:" .. serverid .. ":ids", id) \
     if redis.call("scard", "symbol:" .. symbol .. ":serverid:" .. serverid .. ":ids") == 0 then \
@@ -1091,10 +1134,10 @@ exports.registerCommonScripts = function () {
           redis.call("srem", "nbtsymbols", nbtsymbol) \
           --[[ tell the price server to unsubscribe ]] \
           redis.call("publish", 7, "halt:" .. nbtsymbol) \
-          --[[ unsubscribing from db will be done on separate connection ]] \
-          unsubscribe = 1 \
         end \
       end \
+      --[[ unsubscribing from db will be done on separate connection ]] \
+      unsubscribe = 1 \
     end \
     --[[ deal with symbols/ids required by servers ]] \
     redis.call("srem", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbol) \
@@ -1245,7 +1288,7 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id - todo: add symbol as an option
+  // params: client id - todo: add symbol as an option
   //
   exports.scriptgetquoterequests = getquoterequests + '\
   local quoterequests = redis.call("smembers", KEYS[1] .. ":quoterequests") \
@@ -1254,7 +1297,7 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id
+  // params: client id
   //
   exports.scriptgetquotes = '\
   local tblresults = {} \
@@ -1269,7 +1312,7 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id
+  // params: client id
   //
   exports.scriptgetorders = '\
   local tblresults = {} \
@@ -1284,16 +1327,17 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id
+  // get trades, most recent first
+  // params: client id
   //
   exports.scriptgettrades = gettrades + '\
-  local trades = redis.call("smembers", KEYS[1] .. ":trades") \
+  local trades = redis.call("sort", KEYS[1] .. ":trades", "DESC") \
   local tblresults = gettrades(trades) \
   return cjson.encode(tblresults) \
   ';
 
   //
-  // pass client id, positionkey
+  // params: client id, positionkey
   //
   exports.scriptgetpostrades = gettrades + '\
   local postrades = redis.call("smembers", KEYS[1] .. ":trades:" .. KEYS[2]) \
@@ -1302,7 +1346,7 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // pass client id
+  // params: client id
   // todo: need to guarantee order
   exports.scriptgetcashhistory = '\
   local tblresults = {} \
@@ -1327,22 +1371,60 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // params: client id, server id
+  // get positions for a client
+  // params: client id
+  // returns an array of positions
   //
-  exports.scriptgetpositions = getunrealisedpandl + subscribesymbolnbt + '\
+  exports.scriptgetpositions = getunrealisedpandl + getmargin + '\
   local tblresults = {} \
-  local tblsubscribe = {} \
   local positions = redis.call("smembers", KEYS[1] .. ":positions") \
-  local fields = {"clientid","symbol","quantity","cost","currency","margin","positionid","costpershare"} \
+  local fields = {"clientid","symbol","quantity","cost","currency","positionid"} \
   local vals \
   for index = 1, #positions do \
     vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
+    local margin = getmargin(vals[2], vals[3]) \
     --[[ value the position ]] \
     local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=vals[6],positionid=vals[7],costpershare=vals[8],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+  end \
+  return tblresults \
+  ';
+
+  //
+  // params: client id, symbol
+  //
+  exports.scriptgetposition = getunrealisedpandl + getmargin + '\
+  local fields = {"clientid","symbol","quantity","cost","currency","positionid"} \
+  local vals = redis.call("hmget", KEYS[1] .. ":position:" .. KEYS[2], unpack(fields)) \
+  local pos = {} \
+  if vals[1] then \
+    local margin = getmargin(vals[2], vals[3]) \
+    --[[ value the position ]] \
+    local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
+    pos = {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
+  end \
+  return cjson.encode(pos) \
+  ';
+
+  //
+  // get positions for a client & subscribe client & server to the position symbols
+  // params: client id, server id
+  //
+  exports.scriptsubscribepositions = getunrealisedpandl + subscribesymbolnbt + getmargin + '\
+  local tblresults = {} \
+  local tblsubscribe = {} \
+  local positions = redis.call("smembers", KEYS[1] .. ":positions") \
+  local fields = {"clientid","symbol","quantity","cost","currency","positionid"} \
+  local vals \
+  for index = 1, #positions do \
+    vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
+    local margin = getmargin(vals[2], vals[3]) \
+    --[[ value the position ]] \
+    local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
     --[[ subscribe to this symbol, so as to get prices to the f/e for p&l calc ]] \
-    local subscribe = subscribesymbolnbt(vals[2], KEYS[1], KEYS[2], 8, 0, 0) \
-    if subscribe[1] then \
+    local subscribe = subscribesymbolnbt(vals[2], KEYS[1], KEYS[2]) \
+    if subscribe[1] == 1 then \
       table.insert(tblsubscribe, vals[2]) \
     end \
   end \
@@ -1350,18 +1432,19 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // params: client id, symbol
-  //
-  exports.scriptgetposition = getunrealisedpandl + '\
-  local fields = {"clientid","symbol","quantity","cost","currency","margin","positionid","costpershare"} \
-  local vals = redis.call("hmget", KEYS[1] .. ":position:" .. KEYS[2], unpack(fields)) \
-  local pos = {} \
-  if vals[0] ~= nil then \
-    --[[ value the position ]] \
-    local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-    pos = {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=vals[6],positionid=vals[7],costpershare=vals[8],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
+  // get positions for a client and unsubscribe client & server to the position symbols
+  // params: client id, server id
+  // 
+  exports.scriptunsubscribepositions = unsubscribesymbolnbt + '\
+  local tblunsubscribe = {} \
+  local positions = redis.call("smembers", KEYS[1] .. ":positions") \
+  for index = 1, #positions do \
+    local unsubscribe = unsubscribesymbolnbt(positions[index], KEYS[1], KEYS[2]) \
+    if unsubscribe[1] == 1 then \
+      table.insert(tblunsubscribe, positions[index]) \
+    end \
   end \
-  return cjson.encode(pos) \
+  return tblunsubscribe \
   ';
 
   //
@@ -1398,8 +1481,8 @@ exports.registerCommonScripts = function () {
 
   //
   // subscribe to a new instrument
-  // params: symbol, client/user/ifa id, serverid, feedtype, hour, minute, day
-  // i.e. "BARC.L", 1, 1, "digitallook", "08", "00", "00"
+  // params: symbol, client/user/ifa id, serverid, feedtype
+  // i.e. "BARC.L", 1, 1, "digitallook"
   //
   exports.scriptsubscribesymbol = subscribesymbolpq + subscribesymboldl + subscribesymbolnbt + '\
   local ret = {0, ""} \
@@ -1408,7 +1491,7 @@ exports.registerCommonScripts = function () {
   elseif KEYS[4] == "digitallook" then \
     ret = subscribesymboldl(KEYS[1], KEYS[2], KEYS[3]) \
   elseif KEYS[4] == "nbtrader" then \
-    ret = subscribesymbolnbt(KEYS[1], KEYS[2], KEYS[3], KEYS[5], KEYS[6], KEYS[7]) \
+    ret = subscribesymbolnbt(KEYS[1], KEYS[2], KEYS[3]) \
   end \
   return ret \
   ';
@@ -1555,9 +1638,44 @@ exports.registerCommonScripts = function () {
   return cjson.encode(clienttype) \
   ';
 
+  //
+  // update the latest price
+  // params: nbtsymbol, timestamp, bid, offer
+  // any symbols related to this nbtsymbol will be updated
+  //
+  scriptpriceupdate = '\
+  local nbtsymbol = KEYS[1] \
+  local bid = KEYS[3] \
+  local ask = KEYS[4] \
+  local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbols") \
+  for index = 1, #symbols do \
+    local pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbol") .. ":" .. cjson.encode(symbols[index]) .. "," \
+    --[[ may only get bid or ask ]] \
+    if bid ~= "" then \
+      if ask ~= "" then \
+        pricemsg = pricemsg .. cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("ask") .. ":" .. ask \
+        redis.call("hmset", "price:" .. symbols[index], "bid", bid, "ask", ask, "timestamp", KEYS[2]) \
+      else \
+        pricemsg = pricemsg .. cjson.encode("bid") .. ":" .. bid \
+        redis.call("hmset", "price:" .. symbols[index], "bid", bid, "timestamp", KEYS[2]) \
+      end \
+    else \
+      pricemsg = pricemsg .. cjson.encode("ask") .. ":" .. ask \
+      redis.call("hmset", "price:" .. symbols[index], "ask", ask, "timestamp", KEYS[2]) \
+    end \
+    pricemsg = pricemsg .. "}}" \
+    --[[ publish price ]] \
+    redis.call("publish", "price:" .. symbols[index], pricemsg) \
+  end \
+  return {nbtsymbol, bid, ask} \
+  ';
+
+  exports.scriptpriceupdate = scriptpriceupdate;
+
   // update the latest price & add a tick to price history
   // params: symbol, timestamp, bid, offer
-  scriptpriceupdate = '\
+  // todo: needs updating for devivs
+  scriptpricehistoryupdate = '\
   --[[ get an id for this tick ]] \
   local pricehistoryid = redis.call("incr", "pricehistoryid") \
   --[[ may only get bid or ask, so make sure we have the latest of both ]] \
@@ -1592,8 +1710,8 @@ exports.registerCommonScripts = function () {
     redis.call("zadd", "pricehistory:" .. symbols[index], KEYS[2], pricehistoryid) \
     redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbol", symbols[index], "bid", bid, "ask", ask, "id", pricehistoryid) \
   end \
-  return {pricehistoryid, nbtsymbol, bid, ask} \
+  return {nbtsymbol, bid, ask} \
   ';
 
-  exports.scriptpriceupdate = scriptpriceupdate;
+  exports.scriptpricehistoryupdate = scriptpricehistoryupdate;
 };

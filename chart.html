@@ -114,7 +114,42 @@
         background-color: #ddd;
         color: gray;
         border-style: none;        
+    }
+    .quotebutton:hover {
+        background-color: #ccc;
         cursor: pointer;
+    }
+    .quotebuttonbuy {
+        font-size: 21px;
+        background-color: #ddd;
+        color: blue;
+        border-style: none;        
+    }
+    .quotebuttonbuy:hover {
+        background-color: #ccc;
+        cursor: pointer;
+    }
+    .quotebuttonsell {
+        font-size: 21px;
+        background-color: #ddd;
+        color: red;
+        border-style: none;        
+    }
+    .quotebuttonsell:hover {
+        background-color: #ccc;
+        cursor: pointer;
+    }
+    .quotebuttonsellexpired {
+        font-size: 21px;
+        background-color: white;
+        color: red;
+        border-style: none;        
+    }
+    .quotebuttonbuyexpired {
+        font-size: 21px;
+        background-color: white;
+        color: blue;
+        border-style: none;        
     }
     .tradebutton {
         font-size: 21px;
@@ -296,6 +331,30 @@
         font-size: 15px;
         color: darkgray;
     }
+    .tblaccount {
+        margin : 0 auto;        
+        margin-top: 15px;
+    }
+    .tblaccount tr td {
+        padding: 15px;
+        text-align: center;
+        font-size: 21px;
+    }
+    .tblaccounthdr {
+        color: darkgray;
+    }
+    .tbltrade {
+        margin : 0 auto;
+        margin-top: 15px;        
+    }
+    .tbltrade tr td {
+        padding: 10px;
+        text-align: center;
+        white-space: nowrap;
+    }
+    .tbltradehdr {
+        color: darkgray;
+    }
     .divrfq {
         margin-top: 10px;
         text-align: center;
@@ -324,21 +383,23 @@
     <script>
         var sockjs_url = '/echo';
         var sockjs;
-        var orderbooks = {};
         var ukx = [];
         var pricehist = [];
-        var operatortype = 1; // client
-        var clientid;
         var instruments = {};
         var pricedata = [];
         var quotes = [];
         var quoterequests = [];
-        var qbroker = "TGRANT";
         var quoteresponses = [];
-        var email = "";
         var myquotes = [];
         var positions = [];
+        var trades = [];
+        var account = [];
+        var qbroker = "TGRANT";
+        var email = "";
+        var operatortype = 1; // client
+        var clientid;
         var selectedsymbol = "";
+        var selectedmenu = 0;
 
         var datain = function(msg) {
             //console.log(msg);
@@ -349,8 +410,6 @@
                     priceReceived(obj.price);
                 } else if ("prices" in obj) {
                     updateChart(obj.prices);
-                } else if ("orderbooks" in obj) {
-                    loadOrderBooks(obj.orderbooks);
                 } else if ("orderbook" in obj) {
                     updateOrderBook(obj.orderbook);
                 } else if ("index" in obj) {
@@ -364,6 +423,8 @@
                     myquotesReceived(obj.myquotes);*/
                 } else if ("order" in obj) {
                     orderReceived(obj.order);
+                } else if ("trades" in obj) {
+                    tradesReceived(obj.trades);
                 } else if ("trade" in obj) {
                     tradeReceived(obj.trade);
                 } else if ("pricehistory" in obj) {
@@ -385,6 +446,8 @@
                     replySignin(obj.signinreply);
                 } else if ("status" in obj) {
                     statusReceived(obj.status);
+                } else if ("account" in obj) {
+                    accountReceived(obj.account);                    
                 }
             } catch(e) {
                 console.log(e);
@@ -400,8 +463,8 @@
                 console.log("connection open");
 
                 // we are ready
-                //displayFormSignin();
-                cheat();
+                displayFormSignin();
+                //cheat();
             };
 
             sockjs.onmessage = function(e) {
@@ -445,10 +508,14 @@
 
             // single symbol select
             selectSymbol();
+
+            /*function click(d) { 
+                console.log(d); 
+            }*/
         }
 
         //
-        // request single position or all positions
+        // request single position or all positions - symbol = ""
         //
         function requestPosition(symbol) {
             var positionrequest = {};
@@ -456,6 +523,13 @@
 
             // request position
             sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
+        }
+
+        function requestUnsubscribePositions() {
+            var unsubscribepositionsrequest = {};
+
+            // request position
+            sockjs.send("{\"unsubscribepositionsrequest\":" + JSON.stringify(unsubscribepositionsrequest) + "}");            
         }
 
         function requestAccount() {
@@ -472,35 +546,14 @@
             sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");
         }
 
-        function loadOrderBooks(orderbookarr) {
-            for (var i = 0; i < orderbookarr.length; ++i) {
-                updateOrderBook(orderbookarr[i]);
-            }
-        }
-
         function loadInstruments(instrumentarr) {
-            console.log("loadInstruments");
             for (var i = 0; i < instrumentarr.length; ++i) {
                 instruments[instrumentarr[i].symbol] = instrumentarr[i];
             }
         }
 
-        function updateOrderBook(orderbook) {
-            var level;
-
-            // create an entry in the orderbooks array for this symbol
-            if (!(orderbook.symbol in orderbooks)) {
-                // 6 levels
-                orderbooks[orderbook.symbol] = [{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0}];
-            }
-        }
-
         function updatePricehistory(pricehist) {
             console.log("pricehist");
-        }
-
-        function removeOrderBook(symbol) {
-            delete orderbooks[symbol];
         }
 
         function updateIndex(index) {
@@ -527,26 +580,32 @@
             pricedata[0] = price;
         }
 
-        function formatCurrency(num) {
+        function formatCurrency(num, dp) {
             num = isNaN(num) || num === '' || num === null ? 0.00 : num;
-            return parseFloat(num).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+            return parseFloat(num).toFixed(dp).replace(/\d(?=(\d{3})+\.)/g, '$&,');
         }
 
         function priceReceived(price) {
-            console.log("priceReceived");
+            //console.log("priceReceived");
 
-            // update data
-            updatePriceData(price);
+            // only update price stuff for single symbol view
+            if (selectedmenu == 0 && price.symbol == selectedsymbol) {
+                // update price data
+                updatePriceData(price);
 
-            // update display
-            updatepricetable(price);
+                // update price display
+                updatePriceTable(price);
+            }
+
+            // update position data
+            updatePositionData(price);
+
+            updatePositionTable();
         }
 
         // update price array
         function updatePriceData(price) {
             if ("bid" in price) {
-                price.bid = formatCurrency(price.bid);
-
                 if (parseFloat(price.bid) > parseFloat(pricedata[0].bid)) {
                     pricedata[0].bidtick = '+';
                 } else if (parseFloat(price.bid) < parseFloat(pricedata[0].bid)) {
@@ -560,8 +619,6 @@
                 pricedata[0].bidtick = '';
             }
             if ("ask" in price) {
-                price.ask = formatCurrency(price.ask);
-
                 if (parseFloat(price.ask) > parseFloat(pricedata[0].ask)) {
                     pricedata[0].asktick = '+';
                 } else if (parseFloat(price.ask) < parseFloat(pricedata[0].ask)) {
@@ -576,8 +633,8 @@
             }            
         }
 
-        function updatepricetable(price) {
-            console.log(price);
+        function updatePriceTable(price) {
+            //console.log(price);
             var cols = ["bid", "", "ask"];
 
             // create a price table if one does not exist
@@ -609,7 +666,7 @@
                 if (d.column != "") {
                     if (d.value.tick != "") {
                         d3.select(this)
-                            .text(function(d) { return d.value.price; })
+                            .text(function(d) { return formatCurrency(d.value.price, 2); })
                             .attr("class", function(d) {
                                 if (d.value.tick == '+') {
                                     return "tickup";
@@ -626,7 +683,9 @@
             // enter
             cells.enter()
                 .append("td")
-                    .text(function(d) { return d.value == null ? '-' : d.value.price; });
+                    .text(function(d) { return d.value == null ? '-' : formatCurrency(d.value.price, 2); });
+
+            cells.exit().remove();
         }
 
         function createPriceTable(price, cols) {
@@ -639,7 +698,7 @@
                 .attr("id", "divprice");
 
             divprice.append("header")
-                .text(instruments[price.symbol].description + " - " + price.symbol)
+                .text(instruments[price.symbol].shortname + " - " + price.symbol)
                 .style("margin-top", "20px");
 
             // create a table
@@ -662,8 +721,9 @@
 
             // create a row
             var tblpricerow = tbody.selectAll("tr")
-                .data(pricedata)
-                .enter()
+                .data(pricedata);
+
+            tblpricerow.enter()
                 .append("tr")
                 .attr("id", "tblpricerow")
                 .attr("class", "tblpricerow");
@@ -678,12 +738,14 @@
                 .enter()
                 .append("td")
                     .text(function(d) { return d.value; });*/
+
+            tblpricerow.exit().remove();
             return tblpricerow;
         }
 
         function createMenu() {
             var data = [""];
-            var cols = ["Select A Symbol", "Portfolio", "Account Summary", "Live Quote Requests"];
+            var cols = ["Single Symbol", "Portfolio", "Account Summary", "Trades", "Live Quote Requests"];
 
             // create a table
             var tblmenu = d3.select("#divcontainer")
@@ -711,16 +773,24 @@
                 .append("td")
                     .append("a")
                         .attr("href", "#")
-                        .attr("id", function(d) { return d == cols[0] ? "mnusingleproduct" : null; })
+                        .attr("id", function(d) { return d == cols[0] ? "mnusinglesymbol" : null; })
                         .html(function (d) { return d; })
                         // add a style to treat first menu item as default
                         .style("color", function(d) { return d == cols[0] ? "gray" : null; })
-                        .on("click", function(d) {
+                        .on("click", function(d, i) {
+                            if (selectedmenu == 1) {
+                                // we have subscribed to positions, so need to unsubscribe
+                                requestUnsubscribePositions();
+                            }
+                            selectedmenu = i;
+
                             // unsubscribe current symbol
                             if (selectedsymbol != "") {
                                 requestRemoveOrderbook(selectedsymbol);
+                                selectedsymbol = "";
                             }
 
+                            clearData();
                             clearScreen();
 
                             // switch off styles
@@ -738,7 +808,10 @@
                             } else if (d == cols[2]) {
                                 requestAccount();
                             } else if (d == cols[3]) {
-                                requestOpenQuoteRequests("");
+                                requestTrades();
+                            } else if (d == cols[4]) {
+                                alert("Out of hours stuff - you need a passport to go here!");
+                                //requestOpenQuoteRequests("");
                             }
                         });
         }
@@ -775,7 +848,10 @@
                         .attr("href", "#")
                         .html(function (d) { return d; })
                         .on("click", function(d) {
-                            // clear any previous request
+                            // clear quote data
+                            quotes = [];
+
+                            // & clear any previous request
                             d3.select("#divrfq").remove();
 
                             requestQuote(symbol);
@@ -790,60 +866,139 @@
             d3.select("#divprice").remove();
             d3.select("#tblmenuprice").remove();
             d3.select("#stockboxdiv").remove();
+            d3.select("#tbltrade").remove();
+            d3.select("#tblaccount").remove();
         }
 
-        function createTradeTable() {
-            var hdr = [];
-            var cols = ["bid","ask"];
+        function clearData() {
+            // reset price
+            initPrice();
 
-            // update data arrays
-            hdr.push(price.symbol);
-            pricedata.push(price);
+            // clear positions
+            positions = [];
+        }
 
-            // create a table
+        function singleSymbol(symbol) {
+            selectedmenu = 0;
+            selectedsymbol = symbol;
+            clearData();
+            clearScreen();
+            selectSymbol();
+            requestOrderbook(symbol);
+            requestPosition(symbol);
+
+            // switch off styles
+            d3.select("#tblmenu").selectAll("a")
+                .style("color", "");
+
+            // highlight selected
+            d3.select("#mnusinglesymbol")
+                .style("color", "gray");
+        }
+
+        function tradesReceived(tradearr) {
+            console.log("tradesReceived");
+
+            // clear global array
+            trades = [];
+
+            for (var i = 0; i < tradearr.length; i++) {
+                // add quote request to global array
+                trades.push(tradearr[i]);
+            }
+
+            // update display
+            updateTradeTable();
+        }
+
+        function updateTradeTable() {
+            var cols = ["timestamp","symbol","tradeid","orderid","side","quantity","price","currency","commission","ptmlevy","stampduty","contractcharge","externaltradeid"];
+
+            // create a trade table if one does not exist
+            var tbltrade = d3.select("#tbltrade");
+            if (tbltrade.empty()) {
+                tbltrade = createTradeTable(cols);
+            }
+
+            // base the table on the trades array
+            var rows = tbltrade.select("tbody").selectAll("tr")
+                .data(trades);
+
+            // enter
+            rows.enter()
+                .append("tr");
+
+            // columns data
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(col) {
+                        return {col: col, value: row[col]};
+                    });
+                 });
+
+            // columns enter
+            cells.enter()
+                .append("td");
+
+            // columns enter & update
+            cells.each(function(d) {
+                if (d.col == "symbol") {
+                    var lnk = d3.select(this).select("a");
+                    if (lnk.empty()) {
+                        // add a link for this symbol
+                        lnk = d3.select(this)
+                            .append("a")
+                                .attr("href", "#")
+                                .on("click", function(d) {
+                                    singleSymbol(d.value);
+                                });
+
+                    }
+                    lnk.html(function(d) { return d.value; });
+                } else {
+                    d3.select(this)
+                        .text(function(d) {
+                            if (d.col == "timestamp") {
+                                return getDateString(d.value);
+                            } else if (d.col == "side") {
+                                if (d.value == "1") {
+                                    return "buy";
+                                } else {
+                                    return "sell";
+                                }
+                            } else {
+                                return d.value;
+                            }
+                        });
+                }
+            });
+        }
+
+        function createTradeTable(cols) {
+            console.log("createTradeTable");
+
+            // using full screen width
             var tbltrade = d3.select("body")
                 .append("table")
-                .attr("id", "tbltrades");
+                .attr("id", "tbltrade")
+                .attr("class", "tbltrade");
 
             // add header & body
             var thead = tbltrade.append("thead");
             var tbody = tbltrade.append("tbody");
 
-            // append the header row
-            thead.append("tr")
-                .selectAll("th")
-                .data(hdr)
+            // add the column headings
+            thead.selectAll("th")
+                .data(cols)
                 .enter()
                 .append("th")
-                    .attr("colspan", 2)
                     .attr("class", "tbltradehdr")
-                    .text(function(d) { return d + " - " + instruments[d].description; });
+                    .text(function(d) { return d; });
 
-            // create a row for each field
-            var rows = tbody.selectAll("tr")
-                .data(pricedata)
-                .enter()
-                .append("tr")
-                .attr("class", "tbltraderow")
-                .attr("id", "tbltraderow");
-
-            // create a cell in each row for each column
-            var cells = rows.selectAll("td")
-                .data(function(row) {
-                    return cols.map(function(column) {
-                        return {column: column, value: row[column]};
-                    });
-                 })
-                .enter()
-                .append("td")
-                    .text(function(d, i) { return d.value; });
+            return tbltrade;
         }
 
         function requestOrderbook(symbol) {
-            // reset price
-            initPrice();
-
-            // request
             sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
         }
 
@@ -1414,70 +1569,6 @@
             return ((finishdt - startdt) / 1000);
         }
 
-        /*function quoteReceived(quote) {
-            console.log("quote received");
-            console.log(quote);
-
-            quotes.push(quote);
-
-            // get the number of seconds the quote is valid for
-            var noseconds = getSeconds(quote.transacttime, quote.validuntiltime);
-
-            var tbody = d3.select("tbody");
-
-            var row = tbody.append("tr");
-
-            // add a buy button
-            row.append("td")
-                    .append("input")
-                        .attr("type", "button")
-                        .attr("value", "Buy " + quote.offerquantity + " @ " + quote.offerpx)
-                        .attr("class", "tradebutton buybutton")
-                        .on("click", function() {
-                            sendOrder(quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', "", quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
-                            disable();
-                            lblseconds.text("Order sent, please wait...");
-                        });
-
-            // add a label for time remaining
-            var lblseconds = row.append("td")
-                .attr("id", "lblseconds")
-                .text("Seconds remaining: " + noseconds);
-
-            // add a sell button
-            row.append("td")
-                .append("input")
-                    .attr("type", "button")
-                    .attr("value", "Sell " + quote.bidquantity + " @ " + quote.bidpx)
-                    .attr("class", "tradebutton sellbutton")
-                    .on("click", function() {
-                        sendOrder(quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', "", quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "");
-                        disable();
-                        lblseconds.text("Order sent, please wait...");
-                    });
-
-            // function to count down seconds remaining
-            var quotetimer = setInterval(function() {
-                noseconds -= 1;
-                if (noseconds == 0) {
-                    disable();
-                    lblseconds.text("Quote Expired");
-                } else {
-                    lblseconds.text("Seconds remaining: " + noseconds);
-                }
-            }, 1000);
-
-            // nothing done, so tidy
-            function disable() {
-                clearInterval(quotetimer);
-
-                // disable both buy & sell buttons
-                d3.selectAll(".tradebutton")
-                    .style("cursor", "default")
-                    .disabled = true;
-            }
-        }*/
-
         function sendOrder(symbol, side, quantity, price, ordertype, delivertocompid, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
             var order = {};
 
@@ -1509,11 +1600,15 @@
             if (order.status == "8") {
                 var msg = "Order rejected";
 
-                if ("text" in order) {
-                    msg += ": " + order.text;
+                if ("reason" in order) {
+                    msg += ", reason: " + getOrderReasonDesc(order.reason);
                 }
 
-                d3.select("#divquote")
+                if ("text" in order && order.text != "") {
+                    msg += " - " + order.text;
+                }
+
+                d3.select("#divrfq")
                     .append("p")
                     .html(msg);
             }
@@ -1523,6 +1618,13 @@
             console.log("tradeReceived");
             console.log(trade);
             var inquotes = false;
+
+            // add to trades, if that is what we are looking at
+            if (selectedmenu == 3) {
+                trades.unshift(trade); // add to start of array
+                updateTradeTable();
+                return;
+            }
 
             // indicate the quote has been traded
             // quote may be in rfq quotes
@@ -1579,7 +1681,13 @@
             var stockboxdiv = d3.select("#divcontainer")
                 .append("div")
                 .attr("id", "stockboxdiv")
-                .attr("class", "stockboxdiv");
+                .attr("class", "stockboxdiv")
+                .on("click", function () {
+                    if (d3.event.target.id == "stockboxdiv") {
+                        buildList("");
+                        displayList();
+                    }
+                });
 
             var stockboxinput = stockboxdiv
                 .append("input")
@@ -1605,9 +1713,9 @@
 
                 // match with instruments
                 for (var i in instruments) {
-                    if (instruments[i].description.toLowerCase().substr(0, searchtextlen) == searchtext) {
+                    if (instruments[i].shortname.toLowerCase().substr(0, searchtextlen) == searchtext) {
                         var elem = {};
-                        elem.name = instruments[i].description + " - " + instruments[i].symbol;
+                        elem.name = instruments[i].shortname + " - " + instruments[i].symbol;
                         symboldata.push(elem);
                     }
                 }
@@ -1620,6 +1728,10 @@
                     // clear the list if no data
                     if (!stocklist.empty()) {
                         stocklist.remove();
+
+                        // remove listener
+                        d3.select("#stockboxdiv")
+                            .on('click', null);
                     }
                 } else {
                     // create the list if necessary
@@ -1649,12 +1761,16 @@
 
                             selectedsymbol = this.innerHTML.substr(lastspace+1);
 
+                            clearData();
+
                             // clear price display in case of a previously selected symbol
                             d3.select("#divprice").remove();
                             d3.select("#tblmenuprice").remove();
+                            d3.select("#divrfq").remove();
 
                             // request a symbol
                             requestOrderbook(selectedsymbol);
+                            requestPosition(selectedsymbol);
 
                             // clear array
                             symboldata = [];
@@ -1765,9 +1881,6 @@
                     quotes[quotes.length - 1].offerquote = quote;
                 }
             }
-
-            // start a timer
-            //startQuoteInterval(quote);
         }
 
         function updateQuoteTable() {
@@ -1806,7 +1919,6 @@
                 .append("td")
                 .append("input")
                     .attr("type", "button")
-                    .attr("class", "quotebutton")
                     .on("click", function(d, i, j) { // d=data, i=col, j=row
                         if (d.col == "bidquote") {
                             // we are selling
@@ -1819,159 +1931,74 @@
                         // stop timer
                         clearInterval(d.value.interval);
 
-                        // remove the event listener
-                        d3.select(this)
-                            .on('click', null);
-
-                        // disable button
+                        // disable button & remove the event listener
                         d3.select(this)
                             .style("cursor", "default")
-                            .attr("disabled", null);
+                            .attr("disabled", null)
+                            .on('click', null);
                     });
 
             // enter & update
             cells.each(function(d) {
-                var txt;
-
-                // button text
-                if (d.col == cols[0]) {
-                    if ("tradeid" in d.value) {
-                        txt = "Sold " + d.value.bidquantity + " @ " + d.value.bidpx;
-                    } else {
-                        txt = "Sell " + d.value.bidquantity + " @ " + d.value.bidpx;
-
-                        if (d.value.noseconds == 0) {
-                            txt += " - Expired";
-                        } else {
-                            txt += " - " + (d.value.noseconds < 10 ? " " : "") + d.value.noseconds + " Seconds";
-                        }
-                    }
-                } else {
-                    if ("tradeid" in d.value) {
-                        txt = "Bought " + d.value.offerquantity + " @ " + d.value.offerpx;
-                    } else {
-                        txt = "Buy " + d.value.offerquantity + " @ " + d.value.offerpx;
-
-                        if (d.value.noseconds == 0) {
-                            txt += " - Expired";
-                        } else {
-                            txt += " - " + (d.value.noseconds < 10 ? " " : "") + d.value.noseconds + " Seconds";
-                        }
-                    }
-                }
-
-                // add timer text
-                /*if (d.value.noseconds == 0) {
-                    txt += " - Expired";
-                } else {
-                    txt += " - " + d.value.noseconds + " Seconds";
-                }*/
-
                 // display on button
                 d3.select(this).select("input")
-                    .attr("value", txt);
-                    //.style("background-color", function(d) { return d3.rgb(d.value.bkcolor); })
-                    //.style("color", function(d) { return d3.rgb(d.value.color); });
+                    .attr("class", function(d) {
+                        if (d.col == cols[0]) {
+                            if ("tradeid" in d.value) {
+                                return "quotebuttonsellexpired";
+                            } else {
+                                return "quotebuttonsell";
+                            }
+                        } else {
+                            if ("tradeid" in d.value) {
+                                return "quotebuttonbuyexpired";
+                            } else {
+                                return "quotebuttonbuy";
+                            }                            
+                        }
+                    })
+                    .attr("value", function(d) {
+                        var txt;
 
-                // stop timer if traded
-                /*if ("tradeid" in d.value) {
-                    clearInterval(d.value.interval);
-                }*/
+                        // button text
+                        if (d.col == cols[0]) {
+                            if ("tradeid" in d.value) {
+                                txt = "Sold " + d.value.bidquantity + " @ " + d.value.bidpx;
+                            } else {
+                                txt = "Sell " + d.value.bidquantity + " @ " + d.value.bidpx;
+
+                                if (d.value.noseconds == 0) {
+                                    txt += " - Expired";
+                                } else {
+                                    txt += " - " + (d.value.noseconds < 10 ? " " : "") + d.value.noseconds + " Seconds";
+                                }
+                            }
+                        } else {
+                            if ("tradeid" in d.value) {
+                                txt = "Bought " + d.value.offerquantity + " @ " + d.value.offerpx;
+                            } else {
+                                txt = "Buy " + d.value.offerquantity + " @ " + d.value.offerpx;
+
+                                if (d.value.noseconds == 0) {
+                                    txt += " - Expired";
+                                } else {
+                                    txt += " - " + (d.value.noseconds < 10 ? " " : "") + d.value.noseconds + " Seconds";
+                                }
+                            }
+                        }
+                        return txt;
+                    });
+
+                // disable
+                if (d.value.noseconds == 0) {
+                    d3.select(this).select("input")
+                        .style("cursor", "default")
+                        .attr("disabled", null)
+                        .attr("class", function(d) { return d.col == cols[0] ? "quotebuttonsellexpired" : "quotebuttonbuyexpired"; })
+                        .on('click', null);                    
+                }
             });
         }
-
-        /*function updateQuoteTable() {
-            var cols = ["bid", "offer"];
-
-            // create a quote table if one does not exist
-            var tblquote = d3.select("#tblquote");
-            if (tblquote.empty()) {
-                createQuoteTable();
-            }
-
-            // base the table on the quotes array
-            var rows = d3.select("#tblquote").select("tbody").selectAll("tr")
-                .data(quotes);
-
-            // create a new row for each quote
-            rows.enter()
-                .append("tr")
-                .attr("class", "tblquote");
-
-            // update quote button text
-            var cells = rows.selectAll("td")
-                .data(function(row) {
-                    return cols.map(function(col) {
-                        var ret = "";
-                        if (col == "bid") {
-                            if (row.bidpx != "") {
-                                ret = "Sell " + row.bidquantity + " @ " + row.bidpx + " - " + row.bidnoseconds + " Seconds";
-                            }
-                        } else {
-                            if (row.offerpx != "") {
-                                ret = "Buy " + row.offerquantity + " @ " + row.offerpx + " - " + row.offernoseconds + " Seconds";
-                            }
-                        }
-                        //return {col: col, value: row[col]};
-                        return {col: col, value: ret};
-                    });
-                 })
-                .each(function(d, i, j) { // i=column, j=row
-                    console.log("update");
-                    console.log(d);
-                    //console.log(this.value);
-                    //console.log(d3.select(this).size());
-                    //console.log(d3.select(this).node());
-                    if (d.value != "") {
-                        console.log("vis");
-                        d3.select(this).select("input")
-                            .attr("visibility", "visible")
-                            .attr("value", function(d) { return d.value; });
-                    } else {
-                        console.log("hid");
-                        d3.select(this).select("input")
-                            .attr("visibility", "hidden");
-                    }
-                    //var t = d3.select(this).property("value");
-                    //console.log(t);
-                    //d3.select(this)//.property("value", "test")
-                        //.attr("value", "test");//function(d) { return d.value; });
-                });
-
-            // create quote buttons
-            cells.enter()
-                .append("td")
-                .append("input")
-                    .attr("type", "button")
-                    .attr("value", function(d) { return d.value; })
-                    .on("click", function(d, i, j) { // i=col, j=row
-                        //var order = {};
-                        console.log("clicked");
-                        console.log(d);
-                        console.log(i);
-                        console.log(j);
-                        if (d.col == "bid") {
-                            sendOrder(quotes[j].symbol, '2', quotes[j].bidquantity, quotes[j].bidpx, 'D', "", quotes[j].settlcurrency, quotes[j].nosettdays, quotes[j].futsettdate, quotes[j].bidquoteid, "4", "", "");
-
-                            // stop timer
-                            clearInterval(quotes[j].bidinterval);
-                        } else {
-                            sendOrder(quotes[j].symbol, '1', quotes[j].offerquantity, quotes[j].offerpx, 'D', "", quotes[j].settlcurrency, quotes[j].nosettdays, quotes[j].futsettdate, quotes[j].offerquoteid, "4", "", "");
-
-                            // stop timer
-                            clearInterval(quotes[j].offerinterval);
-                        }
-
-                        // remove the event listener
-                        d3.select(this)
-                            .on('click', null);
-
-                        // disable button
-                        d3.select(this)
-                            .style("cursor", "default")
-                            .attr("disabled", null);
-                    });
-        }*/
 
         function createQuoteTable() {
             console.log("createQuoteTable");
@@ -2654,7 +2681,6 @@
                         .attr("class", "myquoteinp")
                         .attr("value", function(d) { return d.value.quantity; });
                 } else if (d.col == "price") {
-                    console.log(quotereqid);
                     d3.select(this)
                         .attr("id", "colinpprice" + d.value.quotereqid)
                         .append("input")
@@ -2794,7 +2820,7 @@
                 //.attr("id", "tblmyquotehdr" + quotereqid)
                 .append("tr");
 
-            // add the column headins
+            // add the column headings
             thead.selectAll("th")
                 .data(hdr)
                 .enter()
@@ -3062,17 +3088,10 @@
 
         function quoteackReceived(quoteack) {
             console.log("quoteackReceived");
-            console.log(quoteack);
 
             d3.select("#divrfq")
                 .append("p")
                 .html("Quote request rejected: " + quoteack.text);
-        }
-
-        function positionRequest() {
-            var positionrequest = {};
-
-            sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
         }
 
         function positionsReceived(positionsarr) {
@@ -3082,6 +3101,8 @@
             positions = [];
 
             for (var i = 0; i < positionsarr.length; i++) {
+                positionsarr[i].costpershare = Math.abs(positionsarr[i].cost / positionsarr[i].quantity);
+
                 positions.push(positionsarr[i]);
             }
 
@@ -3090,20 +3111,23 @@
 
         function positionReceived(position) {
             console.log("positionReceived");
-            console.log(position);
             var posupdated = false;
+
+            if (!('symbol' in position)) {
+                return;
+            }
+
+            // single symbol/portfolio only
+            if (selectedmenu != 0 && selectedmenu != 1) { return; }
+
+            position.costpershare = Math.abs(position.cost / position.quantity);
 
             // update or remove position
             for (var i = 0; i < positions.length; i++) {
-                console.log(positions[i].symbol);
-                console.log(position.symbol);
                 if (positions[i].symbol == position.symbol) {
-                console.log(position.quantity);
                     if (position.quantity == 0) {
-                        console.log("deleting");
                         positions.splice(i);
                     } else {
-                        console.log("updating");
                         positions[i] = position;
                     }
                     posupdated = true;
@@ -3113,9 +3137,59 @@
             // add to array
             if (!posupdated) {
                 positions.push(position);
+
+                // position has been created by someone else's actions, so request prices
+                if (selectedmenu == 1) {
+                    requestOrderbook(position.symbol);
+                }
             }
 
             updatePositionTable();
+        }
+
+        function updatePositionData(price) {
+            // see if a position for this product exists &, if so, update p&l
+            for (var i = 0; i < positions.length; i++) {
+                if (positions[i].symbol == price.symbol) {
+                    if (positions[i].quantity < 0) {
+                        if ('ask' in price) {
+                            positions[i].mktprice = price.ask / 100; // todo: ok?
+                            updatePandL(i);
+                            updateMargin(i);
+                        }
+                    } else {
+                        if ('bid' in price) {
+                            positions[i].mktprice = price.bid / 100; // todo: ok?
+                            updatePandL(i);
+                            updateMargin(i);
+                        }                        
+                    }
+                }
+            }
+        }
+
+        function updatePandL(i) {
+            var newpandl = positions[i].quantity * positions[i].mktprice - positions[i].cost;
+
+            if (newpandl > positions[i].unrealisedpandl) {
+                positions[i].unrealisedpandltick = '+';
+            } else if (newpandl < positions[i].unrealisedpandl) {
+                positions[i].unrealisedpandltick = '-';                                
+            } else {
+                positions[i].unrealisedpandltick = '0';                                
+            }
+            positions[i].unrealisedpandl = newpandl;
+        }
+
+        function updateMargin(i) {
+            console.log("updateMargin");
+            console.log(positions[i].quantity);
+            console.log(positions[i].mktprice);
+            console.log(instruments[positions[i].symbol].marginpercent);
+            // update margin for derivs
+            if (instruments[positions[i].symbol].instrumenttype != "DE" && instruments[positions[i].symbol].instrumenttype != "IE") {
+                positions[i].margin = Math.abs(positions[i].quantity) * positions[i].mktprice * instruments[positions[i].symbol].marginpercent / 100;
+            }
         }
 
         function updatePositionTable() {
@@ -3125,11 +3199,8 @@
                 cols = [];
             }
 
-            // create a div
-            var tblposition = d3.select("#tblposition");
-            if (tblposition.empty()) {
-                tblposition = createPositionTable(cols);
-            }
+            // always call create routine as this controls addition & removal of headers
+            var tblposition = createPositionTable(cols);
 
             // create a row for a position
             var rows = tblposition.select("tbody").selectAll("tr")
@@ -3149,7 +3220,23 @@
                         return {col: col, value: row[col]};
                     });
                  })
-                .text(function(d) { return d.value; });
+                .each(function(d) {
+                    if (d.col != "symbol") {
+                        d3.select(this)
+                            .text(display(d))
+                            .attr("class", function(d, i, j) {
+                                if (d.col == "unrealisedpandl") {
+                                    if (positions[j].unrealisedpandltick == '+') {
+                                        return "tickup";
+                                    } else if (positions[j].unrealisedpandltick == '-') {
+                                        return "tickdn";
+                                    } else if (positions[j].unrealisedpandltick == '0') {
+                                        return "ticknc";
+                                    }
+                                }
+                            });
+                    }
+                });
 
             // enter
             cells.enter()
@@ -3162,87 +3249,76 @@
                                 .attr("href", "#")
                                 .html(function (d) { return d.value; })
                                 .on("click", function(d) {
-                                    selectedsymbol = d.value;
-                                    clearScreen();
-                                    selectSymbol();
-                                    requestOrderbook(d.value);
-
-                                    // switch off styles
-                                    d3.select("#tblmenu").selectAll("a")
-                                        .style("color", "");
-
-                                    // highlight selected
-                                    d3.select("#mnusingleproduct")
-                                        .style("color", "gray");
+                                    requestUnsubscribePositions();
+                                    singleSymbol(d.value);
                                 });
                     } else {
                         d3.select(this)
-                            .text(function(d) { return d.value; });
+                            .text(display(d));
                     }
                 });
 
-            /*cells.each(function(d) {
-                if (d.col != "symbol") {
-                        // display a link for this symbol
-                        d3.select(this)
-                            .append("a")
-                                .attr("href", "#")
-                                .html(function (d) { return d.value; })
-                                .on("click", function(d) {
-                                    clearScreen();
-                                    selectSymbol();
-                                    requestOrderbook(d.value);
-
-                                    // switch off styles
-                                    d3.select("#tblmenu").selectAll("a")
-                                        .style("color", "");
-
-                                    // highlight selected
-                                    d3.select("#mnusingleproduct")
-                                        .style("color", "gray");
-                                });
-                    } else {
-                        d3.select(this)
-                            .text(function(d) { return d.value; });
-                    }
-
-            });*/
+            function display(d) {
+                if (d.col == "cost" || d.col == "margin" || d.col == "unrealisedpandl") {
+                    return formatCurrency(d.value, 2);
+                } else if (d.col == "costpershare" || d.col == "mktprice") {
+                    return formatCurrency(d.value, 4);
+                } else {
+                    return d.value;
+                }
+            }
         }
 
         function createPositionTable(cols) {
-            // create position div
-            var divposition = d3.select("#divcontainer")
-                .append("div")
-                .attr("class", "divposition")
-                .attr("id", "divposition");
+            var tblposition = d3.select("#tblposition");
+            if (tblposition.empty()) {
+                var divposition;
+                
+                // may be a single position or array of positions
+                var divprice = d3.select("#divprice");
+                if (!divprice.empty()) {
+                    divposition = divprice.append("div")
+                        .attr("class", "divposition")
+                        .attr("id", "divposition");
+                } else {
+                    divposition = d3.select("#divcontainer").append("div")
+                        .attr("class", "divposition")
+                        .attr("id", "divposition");
+                }
 
-            // check for no positions
-            /*if (positions.length == 0) {
-                divposition
-                    .text("No Positions");
-                return;
-            }*/
+                // create the table
+                tblposition = divposition.append("table")
+                    .attr("class", "tblposition")
+                    .attr("id", "tblposition");
 
-            // create the table
-            var tblposition = divposition.append("table")
-                .attr("class", "tblposition")
-                .attr("id", "tblposition");
+                // add header & body
+                var thead = tblposition.append("thead")
+                    .attr("class", "tblpositionhdr")
+                    .append("tr");
 
-            // add header & body
-            var thead = tblposition.append("thead")
-                .attr("class", "tblpositionhdr")
-                .append("tr");
+                var tbody = tblposition.append("tbody");
+            }
 
-            var tbody = tblposition.append("tbody");
-
-            // append the header row
-            var theadcells = thead.selectAll("th")
+            // update
+            var theadcells = tblposition.select("thead").selectAll("th")
                 .data(cols);
 
+            // enter
             theadcells.enter()
                 .append("th")
-                    .text(function(d) { return d; });
+                    .text(function(d) {
+                        if (d == "costpershare") {
+                            return "cost per share";
+                        } else if (d == "mktprice") {
+                            return "mkt. price";
+                        } else if (d == "unrealisedpandl") {
+                            return "unrealised p&l";
+                        } else {
+                            return d;
+                        }
+                    });
 
+            // exit
             theadcells.exit().remove();
 
             return tblposition;
@@ -3263,6 +3339,174 @@
 
             sockjs.send("{\"myquotesrequest\":" + JSON.stringify(myquotesrequest) + "}");            
         }
+
+        function requestTrades() {
+            var historyrequest = {};
+
+            sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
+        }
+
+        function accountReceived(acctarr) {
+            console.log("accountReceived");
+            console.log(acctarr);
+            account = [];
+
+            // account per currency
+            for (var i = 0; i < acctarr.length; ++i) {
+                account.push(acctarr[i]);
+            }
+
+            updateAccountTable();
+        }
+
+        function updateAccountTable() {
+            var cols = ["currency", "cash", "balance", "unrealisedpandl", "margin", "freemargin"];
+
+            var tblaccount = d3.select("#tblaccount");
+            if (tblaccount.empty()) {
+                tblaccount = createAccountTable(cols);
+            }
+
+            // base the table on the trades array
+            var rows = tblaccount.select("tbody").selectAll("tr")
+                .data(account);
+
+            // enter
+            rows.enter()
+                .append("tr");
+
+            // update
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(col) {
+                        return {col: col, value: row[col]};
+                    });
+                 })
+                .enter()
+                .append("td")
+                    .text(function(d) {
+                        if (d.col == "currency") {
+                            return d.value;
+                        } else {
+                            return formatCurrency(d.value, 2);
+                        }
+                    });
+        }
+
+        function createAccountTable(cols) {
+            // use the rfq div
+            var tblaccount = d3.select("#divcontainer")
+                .append("table")
+                .attr("id", "tblaccount")
+                .attr("class", "tblaccount");
+
+            // add header & body
+            var thead = tblaccount.append("thead");
+            var tbody = tblaccount.append("tbody");
+
+            // add the column headings
+            thead.selectAll("th")
+                .data(cols)
+                .enter()
+                .append("th")
+                    .attr("class", "tblaccounthdr")
+                    .text(function(d) {
+                        if (d == "unrealisedpandl") {
+                            return "unrealised p&l";
+                        } else if (d == "freemargin") {
+                            return "free margin";
+                        } else {
+                            return d;
+                        }
+                    });
+
+            return tblaccount;
+        }
+
+        function getOrderReasonDesc(reason) {
+            var desc;
+
+            if (reason == "") {
+                return "";
+            }
+
+            switch (parseInt(reason)) {
+            case 1001:
+                desc = "No currency held for this instrument";
+                break;
+            case 1002:
+                desc = "Insufficient cash in settlement currency";
+                break;
+            case 1003:
+                desc = "No position held in this instrument";
+                break;
+            case 1004:
+                desc = "Insufficient position size in this instrument";
+                break;
+            case 1005:
+                desc = "System error";
+                break;
+            case 1006:
+                desc = "Invalid order";
+                break;
+            case 1007:
+                desc = "Invalid instrument";
+                break;
+            case 1008:
+                desc = "Order already cancelled";
+                break;
+            case 1009:
+                desc = "Order not found";
+                break;
+            case 1010:
+                desc = "Order already filled";
+                break;
+            case 1011:
+                desc = "Order currency does not match symbol currency";
+                break;
+            case 1012:
+                desc = "Order already rejected";
+                break;
+            case 1013:
+                desc = "Ordercancelrequest not found";
+                break;
+            case 1014:
+                desc = "Quoterequest not found";
+                break;
+            case 1015:
+                desc = "Symbol not found";
+                break;
+            case 1016:
+                desc = "Proquote symbol not found";
+                break;
+            case 1017:
+                desc = "Client not found";
+                break;
+            case 1018:
+                desc = "Client not authorised to trade this type of product";
+                break;
+            case 1019:
+                desc = "Quantity greater than position quantity";
+                break;
+            case 1020:
+                desc = "Insufficient free margin";
+                break;
+            case 1021:
+                desc = "Order held externally";
+                break;
+            case 1022:
+                desc = "Order already expired";
+                break;
+            case 1023:
+                desc = "Email already exists";
+                break;
+            default:
+                desc = "Unknown reason";
+            }
+
+            return desc;
+        }
+
      </script>
 </body>
 </html>

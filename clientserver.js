@@ -81,13 +81,23 @@ db.on("error", function(err) {
 });
 
 function initialise() {
+  test();
   common.registerCommonScripts();
-  console.log(common.test);
   registerScripts();
   initDb();
   clearSubscriptions();
   pubsub();
   listen();
+}
+//["test keys 1", "test val 1", "test keys 2", "test val 2"]
+function test() {
+  db.hmget("client:1", ["clientid", "name"], function(err, vals) {
+    if (err) {
+      console.log("Error in signIn:" + err);
+      return;
+    }
+    console.log(vals);
+  });
 }
 
 // pubsub connections
@@ -108,6 +118,7 @@ function pubsub() {
     if (channel.substr(0, 6) == "price:") {
       common.newPrice(channel.substr(6), serverid, message, connections, feedtype);
     } else {
+      console.log("channel: " + channel + ", message: " + message);
       try {
         var obj = JSON.parse(message);
 
@@ -194,12 +205,6 @@ function listen() {
     // this will be overwritten if & when a client logs on
     var clientid = "0";
 
-    // todo: remove
-    //clientid = "1";
-    //connections[clientid] = conn;
-    //sendInstruments(1, conn);
-    //
-
     console.log('new connection');
 
     // data callback
@@ -244,6 +249,8 @@ function listen() {
             orderHistory(obj.orderhistoryrequest, clientid, conn);
           } else if ("cashhistoryrequest" in obj) {
             cashHistory(obj.cashhistoryrequest, clientid, conn);
+          } else if ("unsubscribepositionsrequest" in obj) {
+            unsubscribePositionsRequest(obj.unsubscribepositionsrequest, clientid, conn);
           } else if ("index" in obj) {
             common.sendIndex(obj.index, conn);
           } else if ("pwdrequest" in obj) {
@@ -274,6 +281,7 @@ function listen() {
       var reply = {};
       reply.success = false;
 
+      // add servertype i.e. email:client:emailaddr?
       db.get(servertype + ":" + signin.email, function(err, cid) {
         if (err) {
           console.log("Error in signIn:" + err);
@@ -644,11 +652,11 @@ function getValue(trade) {
         instrument.symbol = symbol;
         instrument.currency = inst.currency;
 
-        if ("description" in inst) {
-          instrument.description = inst.description;
+        if ("shortname" in inst) {
+          instrument.shortname = inst.shortname;
         } else {
-          console.log("no desc for "+symbol);
-          instrument.description = "";
+          console.log("no shortname for "+symbol);
+          instrument.shortname = "";
         }
 
         conn.write("{\"instrument\":" + JSON.stringify(instrument) + "}");
@@ -658,12 +666,14 @@ function getValue(trade) {
 }*/
 
 function sendInstruments(clientid, conn) {
+  console.log("sendInstruments");
   // get sorted subset of instruments for this client
   db.eval(scriptgetinst, 1, clientid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
     }
+    console.log(ret);
 
     conn.write("{\"instruments\":" + ret + "}");
   });
@@ -1173,40 +1183,31 @@ function registerClient(reg, conn) {
   });
 }
 
+//
+// request for a new symbol subscription
+//
 function orderbookRequest(clientid, symbol, conn) {
   console.log("orderbookRequest:" + symbol);
 
-  // get hour & minute for comparison with timezone to determine in/out of hours
-  var today = new Date();
-
-  var hour = today.getHours();
-  var minute = today.getMinutes();
-  var day = today.getDay();
-
-  db.eval(common.scriptsubscribesymbol, 7, symbol, clientid, serverid, feedtype, hour, minute, day, function(err, ret) {
+  db.eval(common.scriptsubscribesymbol, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
 
-    var subscribe = ret[0];
-    var markettype = ret[4];
+    console.log(ret);
 
     // see if we need to subscribe
-    if (subscribe == 1) {
+    if (ret[0] == 1) {
+      console.log("subscribing to " + symbol);
       dbsub.subscribe("price:" + symbol);
     }
 
-    //send latest price if ooh or already subscribed
-    //if (markettype == 1 || subscribe == 0) {
-      var price = {};
-      price.symbol = symbol;
-      price.bid = ret[1];
-      price.ask = ret[2];
-      price.timestamp = ret[3];
-
-      conn.write("{\"price\":" + JSON.stringify(price) + "}");
-    //}
-
     // send the current stored price
-    //common.sendCurrentOrderbook(symbol, ret[1], conn, feedtype);
+    var price = {};
+    price.symbol = symbol;
+    price.bid = ret[1];
+    price.ask = ret[2];
+    price.timestamp = ret[3];
+
+    conn.write("{\"price\":" + JSON.stringify(price) + "}");
   });
 }
 
@@ -1215,8 +1216,9 @@ function orderbookRemoveRequest(clientid, symbol, conn) {
     if (err) throw err;
     console.log(ret);
 
-    // the script will tell us if we need to unsubscribe from the topic
-    if (ret[0]) {
+    // the script will tell us if we need to unsubscribe from the symbol
+    if (ret[0] == 1) {
+      console.log("unsubscribing from " + symbol);
       dbsub.unsubscribe("price:" + ret[1]);
     }
   });
@@ -1346,19 +1348,33 @@ function positionRequest(posreq, clientid, conn) {
     });    
   } else {
     // all positions
-    db.eval(common.scriptgetpositions, 2, clientid, serverid, function(err, ret) {
+    db.eval(common.scriptsubscribepositions, 2, clientid, serverid, function(err, ret) {
       if (err) throw err;
-      console.log(ret);
 
       // send positions
       conn.write("{\"positions\":" + ret[0] + "}");
 
       // subscribe to prices, so p&l can be calculated in the front-end
       for (var i = 0; i < ret[1].length; i++) {
-        db.subscribe("price:" + ret[1][i]);
+        dbsub.subscribe("price:" + ret[1][i]);
       }
     });
   }
+}
+
+function unsubscribePositionsRequest(unsubposreq, clientid, conn) {
+  console.log("unsubscribePositionsRequest");
+  console.log(unsubposreq);
+
+  // all positions
+  db.eval(common.scriptunsubscribepositions, 2, clientid, serverid, function(err, ret) {
+    if (err) throw err;
+
+    // unsubscribe to prices
+    for (var i = 0; i < ret.length; i++) {
+      dbsub.unsubscribe("price:" + ret[i]);
+    }
+  });
 }
 
 function cashRequest(cashreq, clientid, conn) {
@@ -1537,25 +1553,17 @@ function registerScripts() {
   //
   scriptgetinst = '\
   local instruments = redis.call("sort", "instruments", "ALPHA") \
-  local fields = {"instrumenttype", "description"} \
+  local fields = {"instrumenttype", "shortname", "marginpercent"} \
   local vals \
   local inst = {} \
   for index = 1, #instruments do \
     vals = redis.call("hmget", "symbol:" .. instruments[index], unpack(fields)) \
     if redis.call("sismember", KEYS[1] .. ":instrumenttypes", vals[1]) == 1 then \
-      table.insert(inst, {symbol = instruments[index], description = vals[2]}) \
+      table.insert(inst, {symbol = instruments[index], shortname = vals[2], marginpercent = vals[3]}) \
     end \
   end \
   return cjson.encode(inst) \
   ';
-
-/* removed
-      if vals[4] then \
-        marginpc = vals[4] \
-      else \
-        marginpc = 100 \
-      end \
-*/
 
   scriptupdatepassword = '\
     local retval = 0 \

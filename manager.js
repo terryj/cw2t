@@ -46,9 +46,10 @@ var ordertypes = {};
 var brokerid = "1"; // todo: via logon
 var defaultnosettdays = 3;
 var operatortype = 2; // user
+var serverid = 11; // must be unique, use .ini file?
 var servertype = "user";
 var serverstatus = {};
-var feedtype = "digitallook";
+var feedtype = "nbtrader";
 
 // redis scripts
 var scriptgetclients;
@@ -214,9 +215,9 @@ function listen() {
           var obj = JSON.parse(msg);
 
           if ("orderbookrequest" in obj) {
-            orderBookRequest(userid, obj.orderbookrequest, conn);
+            orderbookRequest(userid, obj.orderbookrequest, conn);
           } else if ("orderbookremoverequest" in obj) {
-            orderBookRemoveRequest(userid, obj.orderbookremoverequest, conn);
+            orderbookRemoveRequest(userid, obj.orderbookremoverequest, conn);
           } else if ("orderhistoryrequest" in obj) {
             orderHistory(obj.orderhistoryrequest, conn);
           } else if ("quoterequesthistoryrequest" in obj) {
@@ -440,7 +441,7 @@ function sendOrderBooks(userid, conn) {
   });
 }
 
-function orderBookRequest(userid, symbol, conn) {
+/*function orderBookRequest(userid, symbol, conn) {
   db.eval(common.scriptsubscribeinstrument, 4, symbol, userid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
 
@@ -452,15 +453,53 @@ function orderBookRequest(userid, symbol, conn) {
     // send the orderbook, with the current stored prices
     common.sendCurrentOrderBook(symbol, ret[1], conn);
   });
+}*/
+
+function orderbookRequest(userid, symbol, conn) {
+  console.log("orderbookRequest:" + symbol);
+
+  db.eval(common.scriptsubscribesymbol, 4, symbol, userid, serverid, feedtype, function(err, ret) {
+    if (err) throw err;
+
+    console.log(ret);
+
+    // see if we need to subscribe
+    if (ret[0] == 1) {
+      console.log("subscribing to " + symbol);
+      dbsub.subscribe("price:" + symbol);
+    }
+
+    // send the current stored price
+    var price = {};
+    price.symbol = symbol;
+    price.bid = ret[1];
+    price.ask = ret[2];
+    price.timestamp = ret[3];
+
+    conn.write("{\"price\":" + JSON.stringify(price) + "}");
+  });
 }
 
-function orderBookRemoveRequest(userid, symbol, conn) {
+/*function orderBookRemoveRequest(userid, symbol, conn) {
   db.eval(common.scriptunsubscribeinstrument, 4, symbol, userid, servertype, feedtype, function(err, ret) {
     if (err) throw err;
 
     // the script will tell us if we need to unsubscribe from the topic
     if (ret[0]) {
       dbsub.unsubscribe(ret[1]);
+    }
+  });
+}*/
+
+function orderbookRemoveRequest(userid, symbol, conn) {
+  db.eval(common.scriptunsubscribesymbol, 4, symbol, userid, serverid, feedtype, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    // the script will tell us if we need to unsubscribe from the symbol
+    if (ret[0] == 1) {
+      console.log("unsubscribing from " + symbol);
+      dbsub.unsubscribe("price:" + ret[1]);
     }
   });
 }
@@ -1880,7 +1919,7 @@ function registerScripts() {
   //
   scriptgetinst = '\
   local instruments = redis.call("sort", "instruments", "ALPHA") \
-  local fields = {"instrumenttype", "description", "currency", "marginpercent", "market", "isin", "sedol", "sector", "hedge", "ptmexempt"} \
+  local fields = {"instrumenttype", "shortname", "currency", "marginpercent", "market", "isin", "sedol", "sector", "hedge", "ptmexempt"} \
   local vals \
   local inst = {} \
   local marginpc \
@@ -1892,7 +1931,7 @@ function registerScripts() {
       else \
         marginpc = 100 \
       end \
-      table.insert(inst, {symbol = instruments[index], description = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc, market = vals[5], isin = vals[6], sedol = vals[7], sector = vals[8], hedge = vals[9], ptmexempt=vals[10]}) \
+      table.insert(inst, {symbol = instruments[index], shortname = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc, market = vals[5], isin = vals[6], sedol = vals[7], sector = vals[8], hedge = vals[9], ptmexempt=vals[10]}) \
     end \
   end \
   return cjson.encode(inst) \

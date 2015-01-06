@@ -126,13 +126,14 @@ conn.on('data', function(data) {
   var msglen;
   var instrec = {};
 
+  console.log('data recd');
   console.log(data);
 
   instrec.bid = "";
   instrec.ask = "";
 
   var datalen = data.length;
-  console.log("---data.length="+data.length+"---");
+  console.log("data length="+data.length);
   console.log("bytestoread="+bytestoread);
 
   // copy this data to our global buffer, offset for any messages waiting to be read
@@ -336,7 +337,36 @@ function updateDb(functioncode, instrumentcode, instrec) {
 
   // store a complete record for a symbol
   if (functioncode == "340") {
+    // add nbtrader symbol code - same as symbol for equities
+    instrec.nbtsymbol = instrumentcode;
+
+    // add our own instrument type
+    if (instrec.insttype == 1) {
+      instrec.instrumenttype = "DE";
+      instrec.hedgesymbol = "";
+      instrec.marginpercent = "100";
+    } else if (instrec.insttype == 9) {
+      instrec.instrumenttype = "IE";
+      instrec.hedgesymbol = "";
+      instrec.marginpercent = "100";
+    } else {
+      console.log("unknown insttype");
+    }
+
+    // add an exchange - used in FIX messages
+    if (instrec.countryofissue == "GB") {
+      instrec.exchange = "L";
+    } else {
+      console.log("unknown countryofissue");
+    }
+
+    // currency
+    if (instrec.currency == "GBX") {
+      instrec.currency = "GBP";
+    }
+
     db.hmset("symbol:" + instrumentcode, instrec);
+    db.sadd("instruments", instrumentcode);
   }
 
   // update price & history

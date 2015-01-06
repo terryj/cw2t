@@ -1,6 +1,6 @@
 /****************
 * synthetics.js
-* Set-up synthetic instruments in database
+* Set-up synthetic instruments in redis
 * Cantwaittotrade Limited
 * Terry Johnston
 * October 2013
@@ -12,7 +12,8 @@ var redis = require("redis");
 db = redis.createClient();
 db.on("connect", function (err) {
   console.log("Connected to redis");
-  cfdspb("UKX", 10);
+  //cfdspb("UKX", 10);
+  createCfd();
 });
 
 db.on("error", function (err) {
@@ -67,6 +68,50 @@ function cfdspb(index, marginpercent) {
         db.sadd("topic:" + inst.topic + "D" + ":symbols", ccfd);
 
         console.log("cfd, ccfd & spreadbet added for symbol:" + symbol);
+      });
+    });
+  });
+}
+
+function createCfd() {
+  var cfd;
+  var spb;
+  var ccfd;
+
+  db.smembers("instruments", function(err, replies) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    replies.forEach(function(symbol, j) {
+      db.hgetall("symbol:" + symbol, function(err, inst) {
+        if (err) {
+          console.log(err);
+          return;
+        }
+
+        if (inst == null) {
+          console.log("Symbol " + symbol + " not found");
+          return;
+        }
+
+        // only interested in underlying
+        if (inst.instrumenttype == "DE" || inst.instrumenttype == "IE") {
+          cfd = symbol + ".CFD";
+          //spb = symbol + ".SPB";
+          //ccfd = symbol + ".CCFD";
+
+          // create cfd
+          db.hmset("symbol:" + cfd, "currency", inst.currency, "shortname", inst.shortname + " CFD", "nbtsymbol", inst.nbtsymbol, "isin", inst.isin, "exchange", inst.exchange, "instrumenttype", "CFD", "marginpercent", 10, "hedgesymbol", symbol, "hedge", 1, "symbol", cfd, "ptmexempt", 1, "timezone", inst.timezone);
+          db.sadd("instruments", cfd);
+
+          // spreadbet
+
+          // create ccfd
+
+          console.log("cfd added for symbol:" + symbol);
+        }
       });
     });
   });
