@@ -1,640 +1,349 @@
 /*
- * mmtadmin.js
- * market maker admin web page server
+ * mmtapp.js
+ * market maker server
  * Cantwaittotrade Limited
  * Paul J. Weighell
- * September 2014
+ * December 2014
  * */
 
 /* node libraries */
-var http = require('http')
 var fs = require("fs")
 
 /* external libraries */
-var sockjs = require('sockjs')
 var node_static = require('node-static')
-
-/* cw2t database */
-var redis = require('redis')
 
 /* cw2t library */
 var common = require('../common.js')
 
+/* globals */
+var static_directory = new node_static.Server(__dirname) /* static files server */
+
 /* redis */
+var redis = require('redis')
 var redishost = "127.0.0.1"
 var redisport = 6379
 
-/* globals */
-var connections = {} /* added to when a client logs on */
-var static_directory = new node_static.Server(__dirname) /* static files server */
-var cw2tport = 8083 /* listen port */
-var mmid = 1 /* could have multiple mm's */
-
-/* sockjs server */
-var sockjs_opts = { sockjs_url: "http://cdn.jsdelivr.net/sockjs/0.3.4/sockjs.min.js" }
-var sockjs_svr = sockjs.createServer(sockjs_opts)
-
-/***** starts here *****/
-var d = new Date()
-console.log("Market maker automation: " + d.toISOString() + " Starting...")
-
-/* connect to redis */
-var dd = new Date()
-console.log("Market maker automation: " + dd.toISOString() + " Connecting to database...")
+/* set-up redis client */
 db = redis.createClient(redisport, redishost)
 db.on("connect", function (err) {
     if (err) {
-        console.log(err)
+        var d = new Date()
+        console.log("Market maker automation: " + d.toISOString() + " Error: Cannot connect to Redis on host: " + redishost + ", port: " + redisport + ": " + err)
         return
-    }
-    console.log("Market maker automation: " + dd.toISOString() + " Connected to Redis at " + redishost + " port " + redisport)
-    initialise()
+        }
+    else {
+        var d = new Date()
+        console.log("Market maker automation: " + d.toISOString() + " Connected to Redis on host: " + redishost + ", port: " + redisport)
+        initialise()
+        }
+    })
+
+db.on("error", function (err) {
+    var d = new Date()
+    console.log("Market maker automation: " + d.toISOString() + " Db Error: " + err)
 })
 
-/* initialise */
 function initialise() {
     var d = new Date()
     console.log("Market maker automation: " + d.toISOString() + " Registering common scripts...")
     common.registerCommonScripts()
-
-    var dd = new Date()
-    console.log("Market maker automation: " + dd.toISOString() + " Checking database keys...")
-    checkrediskeys()
-
-    listen()
-}
-
-/* make sure redis has keys we need*/
-function checkrediskeys() {
-
-    db.set("mmGlobalPL", "123.45")
-    db.set("mmGlobalPLLimitProfit", "1000")
-    db.set("mmGlobalPLLimitLoss", "1000")
-    db.set("mmGlobalPLAlgoR", "0.05")
-    db.set("mmGlobalPositionCost", "100")
-
-    db.set("mmPLLimitProfit", "100")
-    db.set("mmPLLimitLoss", "100")
-    db.set("mmPLAlgoR", "0.05")
-
-    db.set("mmPosition", "20")
-    db.set("mmPositionCost", "100")
-    db.set("mmPositionLimitLong", "100")
-    db.set("mmPositionLimitShort", "100")
-    db.set("mmPositionAlgoR", "0.05")
-
-    db.set("mmPriceAsk", "101")
-    db.set("mmPriceBid", "99")
-    db.set("mmPriceAskCurrent", "101")
-    db.set("mmPriceBidCurrent", "99")
-    db.set("mmPriceAskClose", "101")
-    db.set("mmPriceBidClose", "99")
-    db.set("mmPriceAlgoR", "0.05")
-
-    db.set("mmProduct", "TEST.L")
-
-    db.set("mmSpread", "2")
-    db.set("mmSpreadAlgoR", "0.05")
-    db.set("mmSpreadMax", "10")
-    db.set("mmSpreadMin", "1")
-
-    db.set("mmSize", "20")
-    db.set("mmSizeMin", "100")
-    db.set("mmSizeMax", "100")
-    db.set("mmSizeAlgoR", "0.05")
-
+    var d1 = new Date()
+    console.log("Market maker automation: " + d1.toISOString() + " Registered common scripts.")
     /*
- *     db.hmset("mmProducts:TEST.L", "symbol", "TEST.L", "position", "50", "positioncost", "100", "positionlimitlong", "100", "positionlimitshort", "100", "pricealgor", "0.05", "priceask", "99", "pricebid", "101", "spreadalgor", "0.05", "spreadmax", "10", "spreadmin", "1", "pllimitmin", "-2500", "pllimitmax", "10000")
+ *     starttime()
  *         */
-    
-    /*
- *     db.hgetall("mmProducts:TEST.L", function (err, obj) {
- *             console.dir(obj)
- *                     })
- *                         */
+    pubsub()
 }
 
-/* http server */
-function listen() {
-    var server = http.createServer()
+/* calls itself at a random interval */
+function starttime() {
+    var d = new Date()
+    console.log("Market maker automation: " + d.toISOString() + " timer...")
+    var t = setTimeout(function () { starttime() }, Math.floor((Math.random() * 5000) + 1000))
+}
 
-    server.addListener('request', function (req, res) {
-        static_directory.serve(req, res)
+/* set-up pubsub connection */
+function pubsub() {
+
+    var d = new Date()
+    console.log("Market maker automation: " + d.toISOString() + " Creating Redis client on host: " + redishost + ", port: " + redisport)
+    dbsub = redis.createClient(redisport, redishost)
+
+    dbsub.on("subscribe", function (channel, count) {
+        var d1 = new Date()
+        console.log("Market maker automation: " + d1.toISOString() + " Redis subscribed to channel: " + channel + ", number of channels: " + count)
+        })
+
+    dbsub.on("unsubscribe", function (channel, count) {
+        var d2 = new Date()
+        console.log("Market maker automation: " + d2.toISOString() + " Redis unsubscribed from channel: " + channel + ", number of channels: " + count)
+        })
+
+    /* messages any subscribed channels arrive here */
+    dbsub.on("message", function (channel, message) {
+        /*
+ *         var d3 = new Date()
+ *                 console.log("Market maker automation: " + d3.toISOString() + " Message received from channel: " + channel + ", Message reads: " + message)
+ *                         */
+        try {
+            var obj = JSON.parse(message)
+            if ("quoterequest" in obj) {
+                rfqreceived(obj)
+            }
+        } catch (e) {
+            var d4 = new Date()
+            console.log("Market maker automation: " + d4.toISOString() + " mmtapp.dbsub.on: Error: " + e)
+            }
     })
 
-    server.addListener('upgrade', function (req, res) {
-        res.end()
-    })
+    /* listen for RFQs */
+    dbsub.subscribe(common.quoterequestchannel)
+}
 
-    sockjs_svr.installHandlers(server, { prefix: '/echo' })
+/* rfq received */
+function rfqreceived(rfq) {
+    /*
+ *     Dim rfqmessage As String = "{""quoterequest"":""1"",""clientid"":""1"",""symbol"":""LLOY.L.CFD"",""quantity"":""100"",""cashorderqty"":""coq"",""currency"":""GBP"",""settlcurrency"":""GBP"",""nosettdays"":""2"",""futsettdate"":""20141204"",""quotestatus"":""0"",""timestamp"":""20141202-13:50:11"",""quoterejectreason"":""qrr"",""quotereqid"":""857"",""operatortype"":""1"",""operatorid"":""1""}"
+ *         */
+    /*
+ *     var d = new Date()
+ *         console.log("Market maker automation: " + d.toISOString() + " RFQ received: quoterequest: " + rfq.quoterequest + ", symbol: " + rfq.symbol + ", quantity: " + rfq.quantity)
+ *             */
 
-    server.listen(cw2tport, function () {
-        var d = new Date()
-        console.log("Market maker automation: " + d.toISOString() + " Listening on port: " + cw2tport + "...")
-    })
+    /* get symbol record*/
+    var symbol = {}
+    db.hgetall("symbol:" + rfq.symbol, function (err, obj) {
+        if (err) {
+            var f = new Date()
+            console.log("Market maker automation: " + f.toISOString() + " rfqreceived: Error. Failed to get symbol record: " + err)
+            return
+            }
+        else {
+            /* read symbol record*/
+            symbol = obj
 
-    sockjs_svr.on('connection', function (conn) {
-        var d = new Date()
-        console.log("Market maker automation: " + d.toISOString() + " New connection opened.")
-        /* add connection to our list */
-        connections[mmid] = conn
-        /* web page data arrives here */
-        conn.on('data', function (msg) {
-            /*console.log(msg);*/
-            try {
-                var obj = JSON.parse(msg)
-                if ("mmparams" in obj) {
-                    var dd = new Date()
-                    console.log("Market maker automation: " + dd.toISOString() + " Save admin data request...")
-                    putmmparams(obj.mmparams)
-                } else if ("readadmindata" in obj) {
-                    var ddd = new Date()
-                    console.log("Market maker automation: " + ddd.toISOString() + " Read admin data request...")
-                    readadmindata(obj.mmadmindata)
-                } else if ("mmgetnewquote" in obj) {
-                    var dddd = new Date()
-                    console.log("Market maker automation: " + dddd.toISOString() + " RFQ received: " + msg)
-                    var rfq = {}
-                    rfq.id = obj.mmgetnewquote.rfqid
-                    rfq.product = obj.mmgetnewquote.product
-                    rfq.size = obj.mmgetnewquote.size
-                    rfq.testtype = obj.mmgetnewquote.testtype
-                    rfq.limitratio = "error"
-                        db.get("mmGlobalPLAlgoR", function (err, obj) {
-                            rfq.globalplalgor = 1 + Number(obj)
-                            db.get("mmGlobalPLLimitProfit", function (err, obj) {
-                                rfq.globalpllimitprofit = Number(obj)
-                                db.get("mmGlobalPLLimitLoss", function (err, obj) {
-                                    rfq.globalpllimitloss = Number(obj)
-                                db.get("mmGlobalPositionCost", function (err, obj) {
-                                  rfq.globalpositioncost = Number(obj)
-                                  db.get("mmGlobalPL", function (err, obj) {
-                                      rfq.mmglobalpl= Number(obj)
-                        db.get("mmPriceAskCurrent", function (err, obj) {
-                            rfq.currentask = Number(obj)
-                            db.get("mmPriceBidCurrent", function (err, obj) {
-                                rfq.currentbid = Number(obj)
-                                db.get("mmPosition", function (err, obj) {
-                                    rfq.position = Number(obj)
-                                    db.get("mmPositionAlgoR", function (err, obj) {
-                                        rfq.positionalgor = 1 + Number(obj)
-                                        db.get("mmPositionLimitLong", function (err, obj) {
-                                            rfq.positionlimitlong = Number(obj)
-                                            db.get("mmPositionLimitShort", function (err, obj) {
-                                                rfq.positionlimitshort = Number(obj)
-                                                db.get("mmPositionCost", function (err, obj) {
-                                                    rfq.positioncost = Number(obj)
-                                                    db.get("mmSizeAlgoR", function (err, obj) {
-                                                        rfq.sizealgor = 1 + Number(obj)
-                                                        db.get("mmSizeMin", function (err, obj) {
-                                                            rfq.sizemin = Number(obj)
-                                                            db.get("mmSizeMax", function (err, obj) {
-                                                                rfq.sizemax = Number(obj)
-                                                                db.get("mmPLAlgoR", function (err, obj) {
-                                                                    rfq.plalgor = 1 + Number(obj)
-                                                                    db.get("mmPLLimitProfit", function (err, obj) {
-                                                                        rfq.pllimitprofit = Number(obj)
-                                                                        db.get("mmPLLimitLoss", function (err, obj) {
-                                                                            rfq.pllimitloss = Number(obj)
-                                                                            db.get("mmSpread", function (err, obj) {
-                                                                                rfq.spread = Number(obj)
-                                                                                db.get("mmSpreadMin", function (err, obj) {
-                                                                                    rfq.spreadmin = Number(obj)
-                                                                                    db.get("mmSpreadMax", function (err, obj) {
-                                                                                        rfq.spreadmax = Number(obj)
-                                                                                        db.get("mmSpreadAlgoR", function (err, obj) {
-                                                                                            rfq.spreadalgor = 1 + Number(obj)
+            /* get position record*/
+            var position = {}
+            db.hgetall("999999:position:" + rfq.symbol + ":" + rfq.currency, function (err, obj) {
+                if (err) {
+                    var f1 = new Date()
+                    console.log("Market maker automation: " + f1.toISOString() + " rfqreceived: Error. Failed to get position record: " + err)
+                    return
+                    }
+                else {
+                    /* read position record */
+                    position = obj
 
-                                                                                /* what sort of test rfq? do correct test */
-                                                                                var result={}
-                                                                                switch (rfq.testtype) {
-                                                                                    case "position":
-                                                                                        result = getquotevposition(rfq)
-                                                                                        break
-                                                                                    case "Size":
-                                                                                        result = getquotevsize(rfq)
-                                                                                        break
-                                                                                    case "pl":
-                                                                                        result = getquotevpl(rfq)
-                                                                                        break
-                                                                                    case "combined":
-                                                                                        result = getquotevcombined(rfq)
-                                                                                        break
-                                                                                    default:
-                                                                                        var e = new Date()
-                                                                                        console.log("Market maker automation: " + e.toISOString() + " RFQ data error in testtype: " + rfq.testtype)
-                                                                                        break
-                                                                                }
-                                                                                /* do return to rfq */
-                                                                                var quote = {}
-                                                                                quote.rfqid = rfq.id
-                                                                                quote.size = rfq.size
-                                                                                quote.ask = result.ask
-                                                                                quote.bid = result.bid
-                                                                                quote.limitratio = result.limitratio
-                                                                                connections[mmid].write("{\"rfqreply\":" + JSON.stringify(quote) + "}")
-                                                                                var dddd = new Date()
-                                                                                console.log("Market maker automation: " + dddd.toISOString() + " RFQ quoted: " + JSON.stringify(quote))
-                                                                                        })
-                                                                                    })
-                                                                                })
-                                                                            })
-                                                                        })
-                                                                    })
-                                                                })
-                                                            })
-                                                                    })
-                                                                })
-                                                            })
-                                                        })
-                                                    })
-                                                })
-                                            })
-                                        })
-                                    })
+                    /* get price record */
+                    var price = {}
+                    db.hgetall("price:" + rfq.symbol, function (err, obj) {
+                        if (err) {
+                            var f2 = new Date()
+                            console.log("Market maker automation: " + f2.toISOString() + " rfqreceived: Error. Failed to get price record: " + err)
+                            return
+                            }
+                        else {
+                            /* read price record */
+                            price = obj
+
+                            /* get mm limits etc */
+                            var marketmaker = {}
+                            db.hgetall("mm:1", function (err, obj) {
+                                if (err) {
+                                    var f3 = new Date()
+                                    console.log("Market maker automation: " + f3.toISOString() + " rfqreceived: Error. Failed to get mm record: " + err)
+                                    return
+                                    }
+                                else {
+                                    /* read mm record */
+                                    marketmaker = obj
+                                    /* make and publish quote */
+                                    makequote(rfq, symbol, position, price, marketmaker)
+                                    }
                                 })
-                            })
+                             }
                         })
-                    })
+                    }
                 })
-                } else {
-                        var dddddd = new Date()
-                        console.log("Market maker automation: " + dddddd.toISOString() + " Unknown message received: " + msg)
-                        }
-            } catch (e) {
-                console.log(e)
-                return
             }
         })
-        conn.on('close', function () {
-            var dd = new Date()
-            console.log("Market maker automation: " + dd.toISOString() + " Connection has closed.")
-        })
-    })
-}
-
-/* form parameters received */
-function putmmparams(mmparams) {
-
-    /* global */
-    var mmGlobalPL = mmparams.mmGlobalPL
-    db.set("mmGlobalPL", mmGlobalPL)
-    var mmGlobalPLLimitProfit = mmparams.mmGlobalPLLimitProfit
-    db.set("mmGlobalPLLimitProfit", mmGlobalPLLimitProfit)
-    var mmGlobalPLLimitLoss = mmparams.mmGlobalPLLimitLoss
-    db.set("mmGlobalPLLimitLoss", mmGlobalPLLimitLoss)
-    var mmGlobalPLAlgoR = mmparams.mmGlobalPLAlgoR
-    db.set("mmGlobalPLAlgoR", mmGlobalPLAlgoR)
-    var mmGlobalPositionCost = mmparams.mmGlobalPositionCost
-    db.set("mmGlobalPositionCost", mmGlobalPositionCost)
-
-    /* PL */
-    var mmPLLimitProfit = mmparams.mmPLLimitProfit
-    db.set("mmPLLimitProfit", mmPLLimitProfit)
-    var mmPLLimitLoss = mmparams.mmPLLimitLoss
-    db.set("mmPLLimitLoss", mmPLLimitLoss)
-    var mmPLAlgoR = mmparams.mmPLAlgoR
-    db.set("mmPLAlgoR", mmPLAlgoR)
-
-    /* position */
-    var mmPosition = mmparams.mmPosition
-    db.set("mmPosition", mmPosition)
-    /* positionCost */
-    var mmPositionCost = mmparams.mmPositionCost
-    db.set("mmPositionCost", mmPositionCost)
-    /* PositionLimitLong */
-    var mmPositionLimitLong = mmparams.mmPositionLimitLong
-    db.set("mmPositionLimitLong", mmPositionLimitLong)
-    /* PositionLimitShort */
-    var mmPositionLimitShort = mmparams.mmPositionLimitShort
-    db.set("mmPositionLimitShort", mmPositionLimitShort)
-    /* PositionAlgoR */
-    var mmPositionAlgoR= mmparams.mmPositionAlgoR
-    db.set("mmPositionAlgoR", mmPositionAlgoR)
-
-    /* Last in hours close Ask */
-    var mmPriceAskClose = mmparams.mmPriceAskClose
-    db.set("mmPriceAskClose", mmPriceAskClose)
-    /* Last in hours close bid */
-    var mmPriceBidClose = mmparams.mmPriceBidClose
-    db.set("mmPriceBidClose", mmPriceBidClose)
-    /* Estimated overnight mid-price gap */
-    var mmPriceGapOvernight = mmparams.mmPriceGapOvernight
-    db.set("mmPriceGapOvernight", mmPriceGapOvernight)
-    /* Estimated Weekend mid-price gap */
-    var mmPriceGapWeekend = mmparams.mmPriceGapWeekend
-    db.set("mmPriceGapWeekend", mmPriceGapWeekend)
-    /* Current Ask */
-    var mmPriceAskCurrent = mmparams.mmPriceAskCurrent
-    db.set("mmPriceAskCurrent", mmPriceAskCurrent)
-    /* Current Bid */
-    var mmPriceBidCurrent = mmparams.mmPriceBidCurrent
-    db.set("mmPriceBidCurrent", mmPriceBidCurrent)
-    /* PriceAlgoR */
-    var mmPriceAlgoR = mmparams.mmPriceAlgoR
-    db.set("mmPriceAlgoR", mmPriceAlgoR)
-
-    /* spread */
-    var mmSpread = mmparams.mmSpread
-    db.set("mmSpread", mmSpread)
-    /* SpreadMin */
-    var mmSpreadMin= mmparams.mmSpreadMin
-    db.set("mmSpreadMin", mmSpreadMin)
-    /* SpreadMax */
-    var mmSpreadMax = mmparams.mmSpreadMax
-    db.set("mmSpreadMax", mmSpreadMax)
-    /* SpreadAlgoR */
-    var mmSpreadAlgoR = mmparams.mmSpreadAlgoR
-    db.set("mmSpreadAlgoR", mmSpreadAlgoR)
-
-    /* size */
-    var mmSize = mmparams.mmSize
-    db.set("mmSize", mmSize)
-    /* size Min */
-    var mmSizeMin = mmparams.mmSizeMin
-    db.set("mmSizeMin", mmSizeMin)
-    /* size Max */
-    var mmSizeMax = mmparams.mmSizeMax
-    db.set("mmSizeMax", mmSizeMax)
-    /* size AlgoR */
-    var mmSizeAlgoR = mmparams.mmSizeAlgoR
-    db.set("mmSizeAlgoR", mmSizeAlgoR)
-
-    /* build a reply */
-    var mmparamsreply = {}
-    mmparamsreply.updated = true
-    connections[mmid].write("{\"savedatareply\":" + JSON.stringify(mmparamsreply) + "}")
-    var d = new Date()
-    console.log("Market maker automation: " + d.toISOString() + " Database updated from manager.")
-}
-
-/* form get parameters received */
-function readadmindata(getmmadmindata) {
-    var mmadmindata = {};
-    db.get("mmGlobalPL", function (err, obj) {
-        mmadmindata.mmGlobalPL = obj;
-        db.get("mmGlobalPLLimitLoss", function (err, obj) {
-            mmadmindata.mmglobalPLLimitLoss = obj;                              
-            db.get("mmGlobalPLLimitProfit", function (err, obj) {
-                mmadmindata.mmglobalPLLimitProfit = obj;  
-                db.get("mmGlobalPLAlgoR", function (err, obj) {
-                    mmadmindata.mmglobalPLAlgoR = obj;
-                    db.get("mmGlobalPositionCost", function (err, obj) {
-                        mmadmindata.mmglobalpositioncost = obj;
-      db.get("mmPosition", function (err, obj) {
-        mmadmindata.mmposition = obj;
-        db.get("mmPositionCost", function (err, obj) {
-            mmadmindata.mmpositioncost = obj;
-            db.get("mmPositionLimitLong", function (err, obj) {
-                mmadmindata.mmPositionLimitLong = obj;
-                db.get("mmPositionLimitShort", function (err, obj) {
-                    mmadmindata.mmPositionLimitShort = obj;
-                    db.get("mmPositionAlgoR", function (err, obj) {
-                        mmadmindata.mmPositionAlgoR = obj;
-                        db.get("mmPriceAskClose", function (err, obj) {
-                            mmadmindata.mmPriceAskClose = obj;
-                            db.get("mmPriceBidClose", function (err, obj) {
-                                mmadmindata.mmPriceBidClose = obj;
-                                db.get("mmPriceGapOvernight", function (err, obj) {
-                                    mmadmindata.mmPriceGapOvernight = obj;
-                                    db.get("mmPriceGapWeekend", function (err, obj) {
-                                        mmadmindata.mmPriceGapWeekend = obj;                              
-                                        db.get("mmPriceAskCurrent", function (err, obj) {
-                                            mmadmindata.mmPriceAskCurrent = obj;                              
-                                            db.get("mmPriceBidCurrent", function (err, obj) {
-                                                mmadmindata.mmPriceBidCurrent = obj;                              
-                                                db.get("mmPriceAlgoR", function (err, obj) {
-                                                    mmadmindata.mmPriceAlgoR = obj;                              
-                                                    db.get("mmSpread", function (err, obj) {
-                                                        mmadmindata.mmSpread = obj;                              
-                                                        db.get("mmSpreadMin", function (err, obj) {
-                                                            mmadmindata.mmSpreadMin = obj;                              
-                                                            db.get("mmSpreadMax", function (err, obj) {
-                                                                mmadmindata.mmSpreadMax = obj;                              
-                                                                db.get("mmSpreadAlgoR", function (err, obj) {
-                                                                    mmadmindata.mmSpreadAlgoR = obj;                              
-                                                                    db.get("mmSize", function (err, obj) {
-                                                                        mmadmindata.mmSize = obj;                              
-                                                                        db.get("mmSizeMin", function (err, obj) {
-                                                                            mmadmindata.mmSizeMin = obj;                              
-                                                                            db.get("mmSizeMax", function (err, obj) {
-                                                                                mmadmindata.mmSizeMax = obj;                              
-                                                                                db.get("mmSizeAlgoR", function (err, obj) {
-                                                                                    mmadmindata.mmSizeAlgoR = obj;
-                                                                                    db.get("mmPLLimitLoss", function (err, obj) {
-                                                                                        mmadmindata.mmPLLimitLoss = obj;                              
-                                                                                        db.get("mmPLLimitProfit", function (err, obj) {
-                                                                                            mmadmindata.mmPLLimitProfit = obj;  
-                                                                                            db.get("mmPLAlgoR", function (err, obj) {
-                                                                                                mmadmindata.mmPLAlgoR = obj;
-                                                                                                connections[mmid].write("{\"mmadmindata\":" + JSON.stringify(mmadmindata) + "}");
-                                                                                                var d = new Date()
-                                                                                                console.log("Market maker automation: " + d.toISOString() + " Manager updated from database.")
-                                                                                            })
-                                                                                        })
-                                                                                    })
-                                                                                })
-                                                                           })
-                                                                                        })
-                                                                                    })
-                                                                                })
-                                                                            })
-                                                                        })
-                                                                    })
-                                                                })
-                                                            })
-                                                        })
-                                                    })
-                                                })
-                                            })
-                                        })
-                                    })
-                                })
-                            })
-                        })
-                    })
-                })
-            })
-        })
-    })
-    })
     }
 
 /*
+ *     make quote
+ *     */
+function makequote(rfq, symbol, position, price, marketmaker) {
+    /*
+ *     var dsd = new Date()
+ *         console.log("Market maker automation: " + dsd.toISOString() + " Price record: " + JSON.stringify(price))
+ *             var dqr = new Date()
+ *                 console.log("Market maker automation: " + dqr.toISOString() + " Position returned: " + JSON.stringify(position))
+ *                     */
+    /*
+ *         Dim rfqmessage As String = "{""quoterequest"":""1"",""clientid"":""1"",""symbol"":""LLOY.L.CFD"",""quantity"":""100"",""cashorderqty"":""coq"",""currency"":""GBP"",""settlcurrency"":""GBP"",""nosettdays"":""2"",""futsettdate"":""20141204"",""quotestatus"":""0"",""timestamp"":""20141202-13:50:11"",""quoterejectreason"":""qrr"",""quotereqid"":""857"",""operatortype"":""1"",""operatorid"":""1""}"
+ *             */
+    /*
+ *         ""quotereqid"":""857"",""clientid"":""1"",""quoteid"":""755"",""symbol"":""LLOYL.CFD"",""bestbid"":""75.97"",""bestoffer"":""76"",""bidpx"":""0.7251"",""offerpx"":"""",""bidquantity"":""100"",""offerquantity"":"""",""bidsize"":""15000"",""offersize"":"""",""validuntiltime"":""20141202-13:50:44"",""transacttime"":""20141202-13:50:14"",""currency"":""GBP"",""settlcurrency"":""GBP"",""qbroker"":""WNTSGB2LBIC"",""nosettdays"":""2"",""futsettdate"":""20141204"",""bidfinance"":""0"",""offerfinance"":""0"",""orderid"":"""",""bidquotedepth"":""1"",""offerquotedepth"":"""",""externalquoteid"":""02ACZL02N501103D"",""qclientid"":"""",""cashorderqty"":""72.510000""
+ *             */
+    /*
+ *         db.hmset("mmProducts:TEST.L", "symbol", "TEST.L", "position", "50", "positioncost", "100", "positionlimitlong", "100", "positionlimitshort", "100", "pricealgor", "0.05", "priceask", "99", "pricebid", "101", "spreadalgor", "0.05", "spreadmax", "10", "spreadmin", "1", "pllimitmin", "-2500", "pllimitmax", "10000")
+ *             */
+
+    /*
+ *     calculate new prices
+ *         */
+
+    /* is there a qty or must we make one? */
+    var mid = (Number(price.ask) + Number(price.bid)) / 2
+    var myqty = 0
+    if (Number(rfq.quantity) != 0) {
+        myqty = Number(rfq.quantity)
+    }
+    else if (Number(rfq.quantity) == 0 && Number(rfq.cashorderqty) != 0) {
+        myqty = truncate(Number(rfq.cashorderqty) / Number(mid))
+    }
+    else {
+        var f0 = new Date()
+        console.log("Market maker automation: " + f0.toISOString() + " makequote: Error. Unable to create quantity.")
+        return
+    }
+
+    var spread = Number(price.ask) - Number(price.bid)
+    var mypercentageoflimit = getpercentage(Number(myqty), Number(marketmaker.mmrfqsizemax))
+    var mmrfqsizealgor = 1 + Number(marketmaker.mmrfqsizealgor)
+    spread = Number(spread) + (Number(spread) * mypercentageoflimit * Math.pow(Number(mmrfqsizealgor), mypercentageoflimit) / Math.pow(Number(mmrfqsizealgor), 100) / 100)
+
+    /* check spread limits */
+    if (Number(spread) < Number(marketmaker.mmspreadmin)) {
+        spread = Number(marketmaker.mmspreadmin)
+        }
+    else if (Number(spread) > Number(marketmaker.mmspreadmax)) {
+        spread = Number(marketmaker.mmspreadmax)
+        }
+    /* apply new spread */
+    var bid = Number(mid) - Number(spread) / 2
+    var ask = Number(bid) + Number(spread)
+
+    /*
+ *     compile quote
+ *         */
+    var quote = {}
+    quote.bestbid = bid
+    quote.bestoffer = ask
+    quote.bidfinance = "0"
+    quote.bidpx = bid
+    quote.bidquantity = myqty
+    quote.bidquotedepth = "1"
+    quote.bidsize = myqty
+    quote.cashorderqty = rfq.cashorderqty
+    quote.clientid = rfq.clientid
+    quote.currency = rfq.currency
+    quote.externalquoteid = Number(marketmaker.mmquotesequencenumber) + 1
+    quote.futsettdate = rfq.futsettdate
+    quote.nosettdays = rfq.nosettdays
+    quote.offerfinance = "0"
+    quote.offerpx = ask
+    quote.offerquantity = myqty
+    quote.offerquotedepth = "1"
+    quote.offersize = myqty
+    quote.orderid = ""
+    quote.qbroker = "TGRANT"
+    quote.qclientid = "999999"
+    quote.quoteid = Number(marketmaker.mmquotesequencenumber) + 1
+    quote.quotereqid = rfq.quoterequest
+    quote.settlcurrency = rfq.settlcurrency
+    quote.symbol = rfq.symbol
+
+    var d = new Date()
+    var MM = addZero(Number(d.getMonth()) + 1) /* add 1 as 0-11 */
+    var dd = addZero(d.getDate())
+    var hh = addZero(d.getHours())
+    var mm = addZero(d.getMinutes())
+    var ss = addZero(d.getSeconds())
+    /* 20141202-13:50:14 */
+    quote.transacttime = d.getFullYear().toString() + MM + dd + "-" + hh + ":" + mm + ":" + ss
+
+    var dv = new Date()
+    dv.setSeconds(dv.getSeconds() + 30) /* add 30 seconds as valid quote time */
+    var MMv = addZero(Number(dv.getMonth()) + 1) /* add 1 as 0-11 */
+    var ddv = addZero(dv.getDate())
+    var hhv = addZero(dv.getHours())
+    var mmv = addZero(dv.getMinutes())
+    var ssv = addZero(dv.getSeconds())
+    /* 20141202-13:50:14 */
+    quote.validuntiltime = dv.getFullYear().toString() + MMv + ddv + "-" + hhv + ":" + mmv + ":" + ssv
+
+    /* update database*/
+    var myreturn = db.hset("mm:1", "mmquotesequencenumber", Number(marketmaker.mmquotesequencenumber) + 1)
+    if (myreturn == true) {
+        /* publish quote */
+        var myreturn1 = db.publish(common.tradechannel, JSON.stringify(quote))
+        if (myreturn1 == true) {
+            /*
+ *             var f = new Date()
+ *                         console.log("Market maker automation: " + f.toISOString() + " Published quote #" + mmquotesequencenumber)
+ *                                     */
+        }
+        else {
+            var f1 = new Date()
+            console.log("Market maker automation: " + f1.toISOString() + " makequote: Error. Failed to publish quote.")
+        }
+    }
+    else {
+        var f2 = new Date()
+        console.log("Market maker automation: " + f2.toISOString() + " makequote: Error: No quote published. Update mmquotesequencenumber in database: " + myreturn)
+    }
+
+    /*
+ *     var d = new Date()
+ *         console.log("Market maker automation: " + d.toISOString() + " Database result: " + myreturn)
+ *             var dq = new Date()
+ *                 console.log("Market maker automation: " + dq.toISOString() + " Quotation: " + JSON.stringify(quote))
+ *                     */
+}
+
+/*
+ * add leading 0 to turn 9 into 09 etc.
+ * */
+function addZero(i) {
+    if (i < 10) {
+        i = "0" + i
+    }
+    return i
+}
+
+/*
  * returns % of p1 in p2 regardless of sign
- * p3 is global PL % of limit
- * use largest 
  * */
 function getpercentage(p1, p2) {
     return Math.abs(100 * Number(p1) / Number(p2))
 }
 
-/* mm math - calc new prices re position limits */
-function getquotevposition(rfq) {
-    var ask = 0
-    var bid = 0
-    var newpositionhi = Number(rfq.position) + Number(rfq.size)
-    var newpositionlo = Number(rfq.position) - Number(rfq.size)
-
-    if (Math.abs(newpositionhi) > Math.abs(newpositionlo))
-        {
-        /*Calculate new price based on newpositionhi*/
-        /* are we long or short at the moment? */
-        if (Number(rfq.position) < 0) {
-            /*short*/
-            var mypercentageoflimit = getpercentage(newpositionhi, rfq.positionlimitshort)
-            limitratio = mypercentageoflimit
-            bid = Number(rfq.currentbid) + (Number(rfq.currentbid) * mypercentageoflimit * Math.pow(rfq.positionalgor, mypercentageoflimit) / Math.pow(rfq.positionalgor, 100) / 100)
-            ask = bid + Number(rfq.spread)
-            }
-        else if (Number(rfq.position) > 0) {
-            /*long*/
-            var mypercentageoflimit = getpercentage(newpositionhi, rfq.positionlimitlong)
-            limitratio = mypercentageoflimit
-            bid = Number(rfq.currentbid) - (Number(rfq.currentbid) * mypercentageoflimit * Math.pow(rfq.positionalgor, mypercentageoflimit) / Math.pow(rfq.positionalgor, 100) / 100)
-            ask = bid + Number(rfq.spread)
-            }
-        else {
-            /*square*/
-            console.log("Market maker automation: " + d.toISOString() + " Position square.")
-            }
-        }
-    else if (Math.abs(newpositionhi) < Math.abs(newpositionlo)) {
-        /*Calculate new price based on newpositionlo*/
-        /* are we long or short at the moment? */
-        if (Number(rfq.position) < 0) {
-            /*short*/
-            var mypercentageoflimit = getpercentage(newpositionlo, rfq.positionlimitshort)
-            limitratio = mypercentageoflimit
-            bid = Number(rfq.currentbid) + (Number(rfq.currentbid) * mypercentageoflimit * Math.pow(rfq.positionalgor, mypercentageoflimit) / Math.pow(rfq.positionalgor, 100) / 100)
-            ask = bid + Number(rfq.spread)
-        }
-        else if (Number(rfq.position) > 0) {
-            /*long*/
-            var mypercentageoflimit = getpercentage(newpositionlo, rfq.positionlimitlong)
-            limitratio = mypercentageoflimit
-            bid = Number(rfq.currentbid) - (Number(rfq.currentbid) * mypercentageoflimit * Math.pow(rfq.positionalgor, mypercentageoflimit) / Math.pow(rfq.positionalgor, 100) / 100)
-            ask = bid + Number(rfq.spread)
-        }
-        else {
-            /*square*/
-            console.log("Market maker automation: " + d.toISOString() + " Position square.")
-        }
-    }
-    else {
-        /*balanced, use current prices*/
-        console.log("Market maker automation: " + d.toISOString() + " Position balanced.")
-        ask = Number(rfq.currentask)
-        bid = Number(rfq.currentbid)
-    }
-    return { ask: ask, bid: bid, limitratio: limitratio }
+/*
+ * truncate to smallest integer.
+ * */
+function truncate(_value)
+{
+    if (_value < 0) return Math.ceil(_value)
+    else return Math.floor(_value)
 }
 
-/* mm math - calc new spread re size limits */
-function getquotevsize(rfq) {
-    var mypercentageoflimit = getpercentage(Number(rfq.size), Number(rfq.sizemax))
-    var limitratio = mypercentageoflimit
-    var spread = Number(rfq.spread) + (Number(rfq.spread) * mypercentageoflimit * Math.pow(rfq.sizealgor, mypercentageoflimit) / Math.pow(rfq.sizealgor, 100) / 100)
-    /* check spread limits */
-    if (spread < Number(rfq.spreadmin)){
-        spread = Number(rfq.spreadmin)
-    } 
-    else if (spread > Number(rfq.spreadmax)){
-        spread = Number(rfq.spreadmax)
-    } 
-    /* apply new spread */
-    var mid = (Number(rfq.currentask) + Number(rfq.currentbid))/2
-    var bid = mid - spread / 2
-    var ask = bid + spread
-    return { ask: ask, bid: bid, limitratio: limitratio }
-}
-
-/* mm math - calc new prices re pl limits */
-function getquotevpl(rfq) {
-
-    var ask = 0
-    var bid = 0
+/*
+ * calls itself at a random interval
+ * */
+function starttime() {
     var d = new Date()
-
-    /* get pl */
-    var totalpositioncost = Number(rfq.position) * Number(rfq.positioncost)
-    var newcostlong = totalpositioncost + (Number(rfq.size) * Number(rfq.currentbid))
-    var newcostshort = totalpositioncost - (Number(rfq.size) * Number(rfq.currentask))
-    var newpositionlong = Number(rfq.position) + Number(rfq.size)
-    var newpositionshort = Number(rfq.position) - Number(rfq.size)
-    var averagepositionmax = (Number(rfq.positionlimitshort) + Number(rfq.positionlimitlong)) / 2
-    var newvaluelong = newpositionlong * Number(rfq.currentask)
-    var newvalueshort = newpositionshort * Number(rfq.currentbid)
-    var newpllong = newvaluelong - newcostlong
-    var newplshort = newvalueshort - newcostshort
- 
-    if (newpllong == newplshort) {
-        /*square*/
-        ask = rfq.currentask
-        bid = rfq.currentbid
-        console.log("Market maker automation: " + d.toISOString() + " square, new pl if long: " + newpllong + ", new pl if short: " + newplshort)
-        }
-    else if ((newpllong < 0 && newplshort < 0 && Math.abs(newplshort) < Math.abs(newpllong)) 
-        || (newpllong > 0 && newplshort > 0 && Math.abs(newplshort) > Math.abs(newpllong))
-        || (newpllong < 0 && newplshort > 0)) {
-        /*discourage cwtt long/client short, encourage cwtt short/client long - raise prices*/
-        var mypercentageoflimit = getpercentage(Number(rfq.position) + Number(rfq.size), averagepositionmax)
-        limitratio = mypercentageoflimit
-        bid = Number(rfq.currentbid) + (Number(rfq.currentbid) * mypercentageoflimit * Math.pow(rfq.plalgor, mypercentageoflimit) / Math.pow(rfq.plalgor, 100) / 100)
-        ask = bid + Number(rfq.spread)
-        console.log("Market maker automation: " + d.toISOString() + ", new pl if long: " + newpllong + ", new pl if short: " + newplshort + " discourage cwtt long/client short, encourage cwtt short/client long - raise prices.")
-        }
-    else if ((newpllong < 0 && newplshort < 0 && Math.abs(newpllong) < Math.abs(newplshort)) 
-        || (newpllong > 0 && newplshort > 0 && Math.abs(newpllong) > Math.abs(newplshort))
-        || (newpllong > 0 && newplshort < 0)) {
-        /*discourage cwtt short/client long, encourage cwtt longt/client short - lower prices*/
-        var mypercentageoflimit = getpercentage(Number(rfq.position) + Number(rfq.size), averagepositionmax)
-        limitratio = mypercentageoflimit
-        bid = Number(rfq.currentbid) - (Number(rfq.currentbid) * mypercentageoflimit * Math.pow(rfq.plalgor, mypercentageoflimit) / Math.pow(rfq.plalgor, 100) / 100)
-        ask = bid + Number(rfq.spread)
-        console.log("Market maker automation: " + d.toISOString() + ", new pl if long: " + newpllong + ", new pl if short: " + newplshort + " discourage cwtt short/client long, encourage cwtt long/client short - lower prices.")
-        }
-    else
-        {
-        console.log("Market maker automation: " + d.toISOString() + " getquotevpl error: " + JSON.stringify(rfq))
-        }
-    return { ask: ask, bid: bid, limitratio: limitratio }
+    console.log("Market maker automation: " + d.toISOString() + " timer...")
+    var t = setTimeout(function () { starttime() }, Math.floor((Math.random() * 5000) + 1000))
 }
 
-/* mm math - calc new limitratios then use highest */
-function getquotevcombined(rfq) {
-    var ask = 0
-    var bid = 0
-    var limitratio = 0
-
-    var resulta = {}
-    var resultb = {}
-    var resultc = {}
-
-    /* pre-calculate all */
-    resulta = getquotevpl(rfq)
-    resultb = getquotevposition(rfq)
-    resultc = getquotevsize(rfq)
-
-    /* choose prices from largest limit ratio ??? */
-    if (Number(resulta.limitratio) >= Number(resultb.limitratio) && Number(resulta.limitratio) >= Number(resultc.limitratio))
-    {
-        ask = resulta.ask
-        bid = resulta.bid
-        limitratio = resulta.limitratio
-    }
-    else if (Number(resultb.limitratio) >= Number(resulta.limitratio) && Number(resultb.limitratio) >= Number(resultc.limitratio))
-    {
-        ask = resultb.ask
-        bid = resultb.bid
-        limitratio = resultb.limitratio
-    }
-    else if (Number(resultc.limitratio) >= Number(resulta.limitratio) && Number(resultc.limitratio) >= Number(resultb.limitratio))
-    {
-        ask = resultc.ask
-        bid = resultc.bid
-        limitratio = resultc.limitratio
-    }
-    return { ask: ask, bid: bid, limitratio: limitratio }
+/*
+ * make sure redis has keys we need
+ * */
+function checkrediskeys() {
+    db.hmset("mm:1", "mmglobalpl", "1", "mmglobalplalgor", "2", "mmglobalpllimitloss", "3", "mmglobalpllimitprofit", "4", "mmglobalpositioncost", "5", "mmplalgor", "6", "mmpllimitloss", "7", "mmpllimitprofit", "8", "mmposition", "9", "mmpositionalgor", "10", "mmpositioncost", "11", "mmpositionlimitlong", "12", "mmpositionlimitshort", "13", "mmpricealgor", "14", "mmpriceask", "15", "mmpriceaskclose", "16", "mmpriceaskcurrent", "17", "mmpricebid", "18", "mmpricebidclose", "19", "mmpricebidcurrent", "20", "mmpricegapovernight", "21", "mmpricegapweekend", "22", "mmquotesequencenumber", "23", "mmrfqsize", "24", "mmrfqsizealgor", "25", "mmrfqsizemax", "26", "mmrfqsizemin", "27", "mmrfqsizemin", "28", "mmspread", "29", "mmspreadalgor", "30", "mmspreadmax", "31", "mmspreadmin", "32")
+    db.hgetall("mm:1", function (err, obj) {
+        console.dir(obj);
+    })
 }
 

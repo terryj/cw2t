@@ -85,34 +85,34 @@
 
         function readadmindatareply(mmadmindata) {
             console.log("mmadmindata")
-            myform.txtGlobalPL.value = mmadmindata.mmGlobalPL
-            myform.txtGlobalPositionCost.value = mmadmindata.mmGlobalPositionCost
-            myform.txtGlobalPLAlgoR.value = mmadmindata.mmGlobalPLAlgoR
-            myform.txtGlobalPLLimitLoss.value = mmadmindata.mmGlobalPLLimitLoss
-            myform.txtGlobalPLLimitProfit.value = mmadmindata.mmGlobalPLLimitProfit
-            myform.txtPLAlgoR.value = mmadmindata.mmPLAlgoR
-            myform.txtPLLimitLoss.value = mmadmindata.mmPLLimitLoss
-            myform.txtPLLimitProfit.value = mmadmindata.mmPLLimitProfit
-            myform.txtPosition.value = mmadmindata.mmPosition
-            myform.txtPositionAlgoR.value = mmadmindata.mmPositionAlgoR
-            myform.txtPositionCost.value = mmadmindata.mmPositionCost
-            myform.txtPositionLimitLong.value = mmadmindata.mmPositionLimitLong
-            myform.txtPositionLimitShort.value = mmadmindata.mmPositionLimitShort
-            myform.txtPriceAlgoR.value = mmadmindata.mmPriceAlgoR
-            myform.txtPriceAskClose.value = mmadmindata.mmPriceAskClose
-            myform.txtPriceAskCurrent.value = mmadmindata.mmPriceAskCurrent
-            myform.txtPriceBidClose.value = mmadmindata.mmPriceBidClose
-            myform.txtPriceBidCurrent.value = mmadmindata.mmPriceBidCurrent
-            myform.txtPriceGapOvernight.value = mmadmindata.mmPriceGapOvernight
-            myform.txtPriceGapWeekend.value = mmadmindata.mmPriceGapWeekend
-            myform.txtSize.value = mmadmindata.mmSize
-            myform.txtSizeAlgoR.value = mmadmindata.mmSizeAlgoR
-            myform.txtSizeMax.value = mmadmindata.mmSizeMax
-            myform.txtSizeMin.value = mmadmindata.mmSizeMin
-            myform.txtSpread.value = mmadmindata.mmSpread
-            myform.txtSpreadAlgoR.value = mmadmindata.mmSpreadAlgoR
-            myform.txtSpreadMax.value = mmadmindata.mmSpreadMax
-            myform.txtSpreadMin.value = mmadmindata.mmSpreadMin
+            myform.txtglobalpl.value = mmadmindata.mmglobalpl
+            myform.txtglobalplalgor.value = mmadmindata.mmglobalplalgor
+            myform.txtglobalpllimitloss.value = mmadmindata.mmglobalpllimitloss
+            myform.txtglobalpllimitprofit.value = mmadmindata.mmglobalpllimitprofit
+            myform.txtglobalpositioncost.value = mmadmindata.mmglobalpositioncost
+            myform.txtplalgor.value = mmadmindata.mmplalgor
+            myform.txtpllimitloss.value = mmadmindata.mmpllimitloss
+            myform.txtpllimitprofit.value = mmadmindata.mmpllimitprofit
+            myform.txtposition.value = mmadmindata.mmposition
+            myform.txtpositionalgor.value = mmadmindata.mmpositionalgor
+            myform.txtpositioncost.value = mmadmindata.mmpositioncost
+            myform.txtpositionlimitlong.value = mmadmindata.mmpositionlimitlong
+            myform.txtpositionlimitshort.value = mmadmindata.mmpositionlimitshort
+            myform.txtpricealgor.value = mmadmindata.mmpricealgor
+            myform.txtpriceaskclose.value = mmadmindata.mmpriceaskclose
+            myform.txtpriceaskcurrent.value = mmadmindata.mmpriceaskcurrent
+            myform.txtpricebidclose.value = mmadmindata.mmpricebidclose
+            myform.txtpricebidcurrent.value = mmadmindata.mmpricebidcurrent
+            myform.txtpricegapovernight.value = mmadmindata.mmpricegapovernight
+            myform.txtpricegapweekend.value = mmadmindata.mmpricegapweekend
+            myform.txtrfqsize.value = mmadmindata.mmrfqsize
+            myform.txtrfqsizealgor.value = mmadmindata.mmrfqsizealgor
+            myform.txtrfqsizemax.value = mmadmindata.mmrfqsizemax
+            myform.txtrfqsizemin.value = mmadmindata.mmrfqsizemin
+            myform.txtspread.value = mmadmindata.mmspread
+            myform.txtspreadalgor.value = mmadmindata.mmspreadalgor
+            myform.txtspreadmax.value = mmadmindata.mmspreadmax
+            myform.txtspreadmin.value = mmadmindata.mmspreadmin
         }
 
         function savedata() {
@@ -130,36 +130,34 @@
         function savedataclicked() {
             console.log("savedataclicked")
             var mmparams = {}
-
-            mmparams.mmGlobalAlgoR = myform.txtGlobalAlgoR.value
-            mmparams.mmGlobalPL = myform.txtGlobalPL.value
-            mmparams.mmGlobalPLLimitLoss = myform.txtGlobalPLLimitLoss.value
-            mmparams.mmGlobalPLLimitProfit = myform.txtGlobalPLLimitProfit.value
-            mmparams.mmGlobalPositionCost = myform.txtGlobalPositionCost.value
-
-            mmparams.mmPLAlgoR = myform.txtPLAlgoR.value
-            mmparams.mmPLLimitLoss = myform.txtPLLimitLoss.value
-            mmparams.mmPLLimitProfit = myform.txtPLLimitProfit.value
-            mmparams.mmPosition = myform.txtPosition.value
-            mmparams.mmPositionAlgoR = myform.txtPositionAlgoR.value
-            mmparams.mmPositionCost = myform.txtPositionCost.value
-            mmparams.mmPositionLimitLong = myform.txtPositionLimitLong.value
-            mmparams.mmPositionLimitShort = myform.txtPositionLimitShort.value
-            mmparams.mmPriceAlgoR = myform.txtPriceAlgoR.value
-            mmparams.mmPriceAskClose = myform.txtPriceAskClose.value
-            mmparams.mmPriceAskCurrent = myform.txtPriceAskCurrent.value
-            mmparams.mmPriceBidClose = myform.txtPriceBidClose.value
-            mmparams.mmPriceBidCurrent = myform.txtPriceBidCurrent.value
-            mmparams.mmPriceGapOvernight = myform.txtPriceGapOvernight.value
-            mmparams.mmPriceGapWeekend = myform.txtPriceGapWeekend.value
-            mmparams.mmSize = myform.txtSize.value
-            mmparams.mmSizeAlgoR = myform.txtSizeAlgoR.value
-            mmparams.mmSizeMax = myform.txtSizeMax.value
-            mmparams.mmSizeMin = myform.txtSizeMin.value
-            mmparams.mmSpread = myform.txtSpread.value
-            mmparams.mmSpreadAlgoR = myform.txtSpreadAlgoR.value
-            mmparams.mmSpreadMax = myform.txtSpreadMax.value
-            mmparams.mmSpreadMin = myform.txtSpreadMin.value
+            mmparams.mmglobalpl = myform.txtglobalpl.value
+            mmparams.mmglobalplalgor = myform.txtglobalplalgor.value
+            mmparams.mmglobalpllimitloss = myform.txtglobalpllimitloss.value
+            mmparams.mmglobalpllimitprofit = myform.txtglobalpllimitprofit.value
+            mmparams.mmglobalpositioncost = myform.txtglobalpositioncost.value
+            mmparams.mmplalgor = myform.txtplalgor.value
+            mmparams.mmpllimitloss = myform.txtpllimitloss.value
+            mmparams.mmpllimitprofit = myform.txtpllimitprofit.value
+            mmparams.mmposition = myform.txtposition.value
+            mmparams.mmpositionalgor = myform.txtpositionalgor.value
+            mmparams.mmpositioncost = myform.txtpositioncost.value
+            mmparams.mmpositionlimitlong = myform.txtpositionlimitlong.value
+            mmparams.mmpositionlimitshort = myform.txtpositionlimitshort.value
+            mmparams.mmpricealgor = myform.txtpricealgor.value
+            mmparams.mmpriceaskclose = myform.txtpriceaskclose.value
+            mmparams.mmpriceaskcurrent = myform.txtpriceaskcurrent.value
+            mmparams.mmpricebidclose = myform.txtpricebidclose.value
+            mmparams.mmpricebidcurrent = myform.txtpricebidcurrent.value
+            mmparams.mmpricegapovernight = myform.txtpricegapovernight.value
+            mmparams.mmpricegapweekend = myform.txtpricegapweekend.value
+            mmparams.mmrfqsize = myform.txtrfqsize.value
+            mmparams.mmrfqsizealgor = myform.txtrfqsizealgor.value
+            mmparams.mmrfqsizemax = myform.txtrfqsizemax.value
+            mmparams.mmrfqsizemin = myform.txtrfqsizemin.value
+            mmparams.mmspread = myform.txtspread.value
+            mmparams.mmspreadalgor = myform.txtspreadalgor.value
+            mmparams.mmspreadmax = myform.txtspreadmax.value
+            mmparams.mmspreadmin = myform.txtspreadmin.value
             /*send it*/
             sockjs.send("{\"mmparams\":" + JSON.stringify(mmparams) + "}")
         }
@@ -224,9 +222,8 @@
 
         function rfqreply(rfqreply) {
             console.log("rfqreply")
-            myform.txtPriceNewAsk.value =   rfqreply.ask.toFixed(6)
-            myform.txtPriceNewBid.value =   rfqreply.bid.toFixed(6)
-            myform.txtLimitRatio.value =    rfqreply.limitratio.toFixed(6)
+            myform.txtPriceNewAsk.value = rfqreply.ask.toFixed(6)
+            myform.txtPriceNewBid.value = rfqreply.bid.toFixed(6)
         }
 
      </script>
@@ -254,23 +251,24 @@
             <td class="normalheading"></td>
         </tr>
         <tr>
-            <td class="normalright">Maximum profit target</td>
-            <td> <INPUT TYPE="text" NAME="txtPLLimitProfit" VALUE="0" class="normaltextbox" required="required"></td>
-            <td class="normalright"> Maximum limit long</td>
-            <td> <INPUT TYPE="text" NAME="txtPositionLimitLong" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">maximum profit target</td>
+            <td> <input type="text" name="txtpllimitprofit" value="0" class="normaltextbox" required="required"></td>
+            <td class="normalright"> maximum limit long</td>
+            <td> <input type="text" name="txtpositionlimitlong" value="0" class="normaltextbox" required="required"></td>
         </tr>
         <tr>
-            <td class="normalright">Maximum loss target</td>
-            <td> <INPUT TYPE="text" NAME="txtPLLimitLoss" VALUE="0" class="normaltextbox" required="required"></td>
-            <td class="normalright"> Maximum limit short</td>
-            <td> <INPUT TYPE="text" NAME="txtPositionLimitShort" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">maximum loss target</td>
+            <td> <input type="text" name="txtpllimitloss" value="0" class="normaltextbox" required="required"></td>
+            <td class="normalright"> maximum limit short</td>
+            <td> <input type="text" name="txtpositionlimitshort" value="0" class="normaltextbox" required="required"></td>
         </tr>
         <tr>
-            <td class="normalright">Risk aversion value</td>
-            <td> <INPUT TYPE="text" NAME="txtPLAlgoR" VALUE="0" class="normaltextbox" required="required"></td>
-            <td class="normalright"> Risk aversion value</td>
-            <td> <INPUT TYPE="text" NAME="txtPositionAlgoR" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">risk aversion value</td>
+            <td> <input type="text" name="txtplalgor" value="0" class="normaltextbox" required="required"></td>
+            <td class="normalright"> risk aversion value</td>
+            <td> <input type="text" name="txtpositionalgor" value="0" class="normaltextbox" required="required"></td>
         </tr>
+
         <tr>
             <td>&nbsp;</td>
             <td>&nbsp;</td>
@@ -284,29 +282,30 @@
             <td class="normalheadingright">Spread</td>
             <td class="normalheading">&nbsp;</td>
         </tr>
+
         <tr>
-            <td class="normalright">Estimated overnight mid-price gap</td>
-            <td class="normal"> <INPUT TYPE="text" NAME="txtPriceGapOvernight" VALUE="0" class="normaltextbox" required="required"> %</td>
-            <td class="normalright"> Spread</td>
-            <td class="normal"> <INPUT TYPE="text" NAME="txtSpread" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">estimated overnight mid-price gap</td>
+            <td class="normal"> <input type="text" name="txtpricegapovernight" value="0" class="normaltextbox" required="required"> %</td>
+            <td class="normalright"> spread</td>
+            <td class="normal"> <input type="text" name="txtspread" value="0" class="normaltextbox" required="required"></td>
         </tr>
         <tr>
-            <td class="normalright">Estimated weekend mid-price gap</td>
-            <td class="normal"> <INPUT TYPE="text" NAME="txtPriceGapWeekend" VALUE="0" class="normaltextbox" required="required"> %</td>
-            <td class="normalright"> Minimum</td>
-            <td class="normal"> <INPUT TYPE="text" NAME="txtSpreadMin" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">estimated weekend mid-price gap</td>
+            <td class="normal"> <input type="text" name="txtpricegapweekend" value="0" class="normaltextbox" required="required"> %</td>
+            <td class="normalright"> minimum</td>
+            <td class="normal"> <input type="text" name="txtspreadmin" value="0" class="normaltextbox" required="required"></td>
         </tr>
         <tr>
-            <td class="normalright">Risk aversion value</td>
-            <td class="normal"> <INPUT TYPE="text" NAME="txtPriceAlgoR" VALUE="0" class="normaltextbox" required="required"></td>
-            <td class="normalright"> Maximum</td>
-            <td class="normal"> <INPUT TYPE="text" NAME="txtSpreadMax" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">risk aversion value</td>
+            <td class="normal"> <input type="text" name="txtpricealgor" value="0" class="normaltextbox" required="required"></td>
+            <td class="normalright"> maximum</td>
+            <td class="normal"> <input type="text" name="txtspreadmax" value="0" class="normaltextbox" required="required"></td>
         </tr>
         <tr>
             <td>&nbsp;</td>
             <td>&nbsp;</td>
-            <td class="normalright">Risk aversion value</td>
-            <td> <INPUT TYPE="text" NAME="txtSpreadAlgoR" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">risk aversion value</td>
+            <td> <input type="text" name="txtspreadalgor" value="0" class="normaltextbox" required="required"></td>
         </tr>
 
         <tr>
@@ -322,87 +321,88 @@
             <td class="normalheadingright">Test an RFQ</td>
             <td class="normalheading">&nbsp;</td>
         </tr>
+ 
         <tr>
-            <td class="normalright">Minimum</td>
-            <td> <INPUT TYPE="text" NAME="txtSizeMin" VALUE="0" class="normaltextbox" required="required"></td>
-            <td class="normalright">RFQ size</td>
-            <td> <INPUT TYPE="text" NAME="txtSize" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">minimum size</td>
+            <td> <input type="text" name="txtrfqsizemin" value="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">rfq size</td>
+            <td> <input type="text" name="txtrfqsize" value="0" class="normaltextbox" required="required"></td>
         </tr>
         <tr>
-            <td class="normalright">Maximum</td>
-            <td> <INPUT TYPE="text" NAME="txtSizeMax" VALUE="0" class="normaltextbox" required="required"></td>
-            <td class="normalright">Current position</td>
-            <td><INPUT TYPE="text" NAME="txtPosition" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">maximum size</td>
+            <td> <input type="text" name="txtrfqsizemax" value="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">current position</td>
+            <td><input type="text" name="txtposition" value="0" class="normaltextbox" required="required"></td>
         </tr>
         <tr>
-            <td class="normalright">Risk aversion value</td>
-            <td> <INPUT TYPE="text" NAME="txtSizeAlgoR" VALUE="0" class="normaltextbox" required="required"></td>
-            <td class="normalright">Current position cost</td>
-            <td><INPUT TYPE="text" NAME="txtPositionCost" VALUE="0" class="normaltextbox" required="required"></td>
-        </tr>
-        <tr>
-            <td class="normalright">&nbsp;</td>
-            <td> &nbsp;</td>
-            <td class="normalright">Last in-hours close Ask</td>
-            <td><INPUT TYPE="text" NAME="txtPriceAskClose" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">risk aversion value</td>
+            <td> <input type="text" name="txtrfqsizealgor" value="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">current position cost</td>
+            <td><input type="text" name="txtpositioncost" value="0" class="normaltextbox" required="required"></td>
         </tr>
         <tr>
             <td class="normalright">&nbsp;</td>
             <td> &nbsp;</td>
-            <td class="normalright">Last in-hours close Bid</td>
-            <td><INPUT TYPE="text" NAME="txtPriceBidClose" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">last in-hours close ask</td>
+            <td><input type="text" name="txtpriceaskclose" value="0" class="normaltextbox" required="required"></td>
         </tr>
         <tr>
             <td class="normalright">&nbsp;</td>
             <td> &nbsp;</td>
-            <td class="normalright">Current Ask</td>
-            <td><INPUT TYPE="text" NAME="txtPriceAskCurrent" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">last in-hours close bid</td>
+            <td><input type="text" name="txtpricebidclose" value="0" class="normaltextbox" required="required"></td>
         </tr>
         <tr>
-            <td class="normalheadingright">GLOBAL</td>
+            <td class="normalright">&nbsp;</td>
+            <td> &nbsp;</td>
+            <td class="normalright">current ask</td>
+            <td><input type="text" name="txtpriceaskcurrent" value="0" class="normaltextbox" required="required"></td>
+        </tr>
+        <tr>
+            <td class="normalheadingright">global</td>
             <td class="normalheading"> </td>
-            <td class="normalright">Current Bid</td>
-            <td><INPUT TYPE="text" NAME="txtPriceBidCurrent" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">current bid</td>
+            <td><input type="text" name="txtpricebidcurrent" value="0" class="normaltextbox" required="required"></td>
         </tr>
                 
         <tr>
             <td class="normalright">&nbsp;</td>
             <td> &nbsp;</td>
-            <td class="normalright">New Quoted Ask</td>
-            <td><INPUT TYPE="text" NAME="txtPriceNewAsk" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">new quoted ask</td>
+            <td><input type="text" name="txtpricenewask" value="0" class="normaltextbox" required="required"></td>
         </tr>
                 
         <tr>
-            <td class="normalright">Profit Limit </td>
-            <td> <INPUT TYPE="text" NAME="txtGlobalPLLimitProfit" VALUE="0" class="normaltextbox" required="required"></td>
-            <td class="normalright">New Quoted Bid</td>
-            <td><INPUT TYPE="text" NAME="txtPriceNewBid" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">profit limit </td>
+            <td> <input type="text" name="txtglobalpllimitprofit" value="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">new quoted bid</td>
+            <td><input type="text" name="txtpricenewbid" value="0" class="normaltextbox" required="required"></td>
         </tr>
                 
         <tr>
-            <td class="normalright">Loss Limit</td>
-            <td> <INPUT TYPE="text" NAME="txtGlobalPLLimitLoss" VALUE="0" class="normaltextbox" required="required"></td>
-            <td class="normalright">Limit Ratio</td>
-            <td><INPUT TYPE="text" NAME="txtLimitRatio" VALUE="0" class="normaltextbox"></td>
-        </tr>
-
-        <tr>
-            <td class="normalright">Risk aversion value</td>
-            <td> <INPUT TYPE="text" NAME="txtGlobalPLAlgoR" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">loss limit</td>
+            <td> <input type="text" name="txtglobalpllimitloss" value="0" class="normaltextbox" required="required"></td>
             <td class="normalright">&nbsp;</td>
             <td>&nbsp;</td>
         </tr>
 
         <tr>
-            <td class="normalright">Global position cost</td>
-            <td> <INPUT TYPE="text" NAME="txtGlobalPositionCost" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">risk aversion value</td>
+            <td> <input type="text" name="txtglobalplalgor" value="0" class="normaltextbox" required="required"></td>
             <td class="normalright">&nbsp;</td>
             <td>&nbsp;</td>
         </tr>
 
         <tr>
-            <td class="normalright">Current PL</td>
-            <td> <INPUT TYPE="text" NAME="txtGlobalPL" VALUE="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">global position cost</td>
+            <td> <input type="text" name="txtglobalpositioncost" value="0" class="normaltextbox" required="required"></td>
+            <td class="normalright">&nbsp;</td>
+            <td>&nbsp;</td>
+        </tr>
+
+        <tr>
+            <td class="normalright">current pl</td>
+            <td> <input type="text" name="txtglobalpl" value="0" class="normaltextbox" required="required"></td>
             <td class="normalright">&nbsp;</td>
             <td>&nbsp;</td>
         </tr>
