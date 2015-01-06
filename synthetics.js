@@ -96,19 +96,22 @@ function createCfd() {
           return;
         }
 
-        cfd = symbol + ".CFD";
-        //spb = symbol + ".SPB";
-        //ccfd = symbol + ".CCFD";
+        // only interested in underlying
+        if (inst.instrumenttype == "DE" || inst.instrumenttype == "IE") {
+          cfd = symbol + ".CFD";
+          //spb = symbol + ".SPB";
+          //ccfd = symbol + ".CCFD";
 
-        // create cfd
-        db.hmset("symbol:" + cfd, "currency", inst.currency, "shortname", inst.shortname + " CFD", "nbtsymbol", inst.nbtsymbol, "isin", inst.isin, "exchange", inst.exchange, "instrumenttype", "CFD", "marginpercent", 10, "hedgesymbol", symbol, "hedge", 1, "symbol", cfd, "ptmexempt", 1, "timezone", inst.timezone);
-        db.sadd("instruments", cfd);
+          // create cfd
+          db.hmset("symbol:" + cfd, "currency", inst.currency, "shortname", inst.shortname + " CFD", "nbtsymbol", inst.nbtsymbol, "isin", inst.isin, "exchange", inst.exchange, "instrumenttype", "CFD", "marginpercent", 10, "hedgesymbol", symbol, "hedge", 1, "symbol", cfd, "ptmexempt", 1, "timezone", inst.timezone);
+          db.sadd("instruments", cfd);
 
-        // spreadbet
+          // spreadbet
 
-        // create ccfd
+          // create ccfd
 
-        console.log("cfd added for symbol:" + symbol);
+          console.log("cfd added for symbol:" + symbol);
+        }
       });
     });
   });

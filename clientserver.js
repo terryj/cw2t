@@ -81,13 +81,23 @@ db.on("error", function(err) {
 });
 
 function initialise() {
+  test();
   common.registerCommonScripts();
-  console.log(common.test);
   registerScripts();
   initDb();
   clearSubscriptions();
   pubsub();
   listen();
+}
+//["test keys 1", "test val 1", "test keys 2", "test val 2"]
+function test() {
+  db.hmget("client:1", ["clientid", "name"], function(err, vals) {
+    if (err) {
+      console.log("Error in signIn:" + err);
+      return;
+    }
+    console.log(vals);
+  });
 }
 
 // pubsub connections
@@ -272,7 +282,7 @@ function listen() {
       reply.success = false;
 
       // add servertype i.e. email:client:emailaddr?
-      db.get("email" + ":" + signin.email, function(err, cid) {
+      db.get(servertype + ":" + signin.email, function(err, cid) {
         if (err) {
           console.log("Error in signIn:" + err);
           return;

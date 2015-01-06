@@ -344,11 +344,11 @@ function updateDb(functioncode, instrumentcode, instrec) {
     if (instrec.insttype == 1) {
       instrec.instrumenttype = "DE";
       instrec.hedgesymbol = "";
-      instrec.marginpercent = 100;
+      instrec.marginpercent = "100";
     } else if (instrec.insttype == 9) {
       instrec.instrumenttype = "IE";
       instrec.hedgesymbol = "";
-      instrec.marginpercent = 100;
+      instrec.marginpercent = "100";
     } else {
       console.log("unknown insttype");
     }
@@ -360,8 +360,13 @@ function updateDb(functioncode, instrumentcode, instrec) {
       console.log("unknown countryofissue");
     }
 
-    //db.hmset("symbol:" + instrumentcode, instrec);
-    //db.sadd("instruments", instrumentcode);
+    // currency
+    if (instrec.currency == "GBX") {
+      instrec.currency = "GBP";
+    }
+
+    db.hmset("symbol:" + instrumentcode, instrec);
+    db.sadd("instruments", instrumentcode);
   }
 
   // update price & history
