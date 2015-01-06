@@ -168,7 +168,8 @@ function pubsub() {
 }
 
 // sockjs server
-var sockjs_opts = {sockjs_url: "http://cdn.sockjs.org/sockjs-0.3.min.js"};
+//var sockjs_opts = {sockjs_url: "http://cdn.sockjs.org/sockjs-0.3.min.js"};
+var sockjs_opts = {sockjs_url: "http://cdn.jsdelivr.net/sockjs/0.3.4/sockjs.min.js"};
 var sockjs_svr = sockjs.createServer(sockjs_opts);
 
 // http server
