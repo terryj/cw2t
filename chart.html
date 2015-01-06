@@ -581,7 +581,7 @@
         }
 
         function formatCurrency(num, dp) {
-            num = isNaN(num) || num === '' || num === null ? 0.00 : num;
+            num = num != num || num === '' || num === null ? 0.00 : num;
             return parseFloat(num).toFixed(dp).replace(/\d(?=(\d{3})+\.)/g, '$&,');
         }
 
@@ -3095,7 +3095,7 @@
         }
 
         function positionsReceived(positionsarr) {
-            console.log("positionsReceived");
+            //console.log("positionsReceived");
 
             // empty array
             positions = [];
@@ -3110,7 +3110,7 @@
         }
 
         function positionReceived(position) {
-            console.log("positionReceived");
+            //console.log("positionReceived");
             var posupdated = false;
 
             if (!('symbol' in position)) {
@@ -3169,7 +3169,12 @@
         }
 
         function updatePandL(i) {
-            var newpandl = positions[i].quantity * positions[i].mktprice - positions[i].cost;
+            var newpandl;
+            if (positions[i].quantity > 0) {
+                newpandl = positions[i].quantity * positions[i].mktprice - parseFloat(positions[i].cost);
+            } else {
+                newpandl = positions[i].quantity * positions[i].mktprice + parseFloat(positions[i].cost);
+            }
 
             if (newpandl > positions[i].unrealisedpandl) {
                 positions[i].unrealisedpandltick = '+';
@@ -3183,9 +3188,9 @@
 
         function updateMargin(i) {
             console.log("updateMargin");
-            console.log(positions[i].quantity);
-            console.log(positions[i].mktprice);
-            console.log(instruments[positions[i].symbol].marginpercent);
+            //console.log(positions[i].quantity);
+            //console.log(positions[i].mktprice);
+            //console.log(instruments[positions[i].symbol].marginpercent);
             // update margin for derivs
             if (instruments[positions[i].symbol].instrumenttype != "DE" && instruments[positions[i].symbol].instrumenttype != "IE") {
                 positions[i].margin = Math.abs(positions[i].quantity) * positions[i].mktprice * instruments[positions[i].symbol].marginpercent / 100;
@@ -3260,6 +3265,7 @@
 
             function display(d) {
                 if (d.col == "cost" || d.col == "margin" || d.col == "unrealisedpandl") {
+                    console.log(d.value);
                     return formatCurrency(d.value, 2);
                 } else if (d.col == "costpershare" || d.col == "mktprice") {
                     return formatCurrency(d.value, 4);
@@ -3273,7 +3279,7 @@
             var tblposition = d3.select("#tblposition");
             if (tblposition.empty()) {
                 var divposition;
-                
+
                 // may be a single position or array of positions
                 var divprice = d3.select("#divprice");
                 if (!divprice.empty()) {

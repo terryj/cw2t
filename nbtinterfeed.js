@@ -365,6 +365,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
       instrec.currency = "GBP";
     }
 
+    // create symbol & add to list
     db.hmset("symbol:" + instrumentcode, instrec);
     db.sadd("instruments", instrumentcode);
   }

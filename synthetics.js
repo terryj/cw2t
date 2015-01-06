@@ -102,7 +102,7 @@ function createCfd() {
           //spb = symbol + ".SPB";
           //ccfd = symbol + ".CCFD";
 
-          // create cfd
+          // create cfd & add to list
           db.hmset("symbol:" + cfd, "currency", inst.currency, "shortname", inst.shortname + " CFD", "nbtsymbol", inst.nbtsymbol, "isin", inst.isin, "exchange", inst.exchange, "instrumenttype", "CFD", "marginpercent", 10, "hedgesymbol", symbol, "hedge", 1, "symbol", cfd, "ptmexempt", 1, "timezone", inst.timezone);
           db.sadd("instruments", cfd);
 

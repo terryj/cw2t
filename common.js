@@ -886,15 +886,18 @@ exports.registerCommonScripts = function () {
       local bidprice = redis.call("hget", "price:" .. symbol, "bid") \
       if bidprice and tonumber(bidprice) ~= 0 then \
         price = tonumber(bidprice) / 100 \
+        if price ~= 0 then \
+          unrealisedpandl = round(qty * price - cost, 2) \
+        end \
       end \
     else \
       local askprice = redis.call("hget", "price:" .. symbol, "ask") \
       if askprice and tonumber(askprice) ~= 0 then \
         price = tonumber(askprice) / 100 \
+        if price ~= 0 then \
+          unrealisedpandl = round(cost + qty * price, 2) \
+        end \
       end \
-    end \
-    if price ~= 0 then \
-      unrealisedpandl = round(qty * price - cost, 2) \
     end \
     return {unrealisedpandl, price} \
   end \

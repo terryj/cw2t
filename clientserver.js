@@ -1350,6 +1350,7 @@ function positionRequest(posreq, clientid, conn) {
     // all positions
     db.eval(common.scriptsubscribepositions, 2, clientid, serverid, function(err, ret) {
       if (err) throw err;
+      console.log(ret);
 
       // send positions
       conn.write("{\"positions\":" + ret[0] + "}");
