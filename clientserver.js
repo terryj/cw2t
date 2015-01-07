@@ -1123,7 +1123,7 @@ function clearSubscriptions() {
       return;
     }
 
-    // unsubscribe to the returned topics
+    // unsubscribe to the returned symbols
     for (var i = 0; i < ret.length; i++) {
       dbsub.unsubscribe("price:" + ret[i]);
     }

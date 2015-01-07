@@ -219,7 +219,7 @@ function quoteRequest(quoterequest) {
 
     // see if we are in-hours
     if (quoterequest.markettype == 0) {
-      console.log("forwarding");
+      console.log("forwarding to nbt");
       // forward the request
       nbt.quoteRequest(quoterequest);
     } else {
@@ -312,7 +312,7 @@ function newOrder(order) {
   // note: param #7 not used
   db.eval(scriptneworder, 26, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, 0, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, hour, minute, day, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
+    //console.log(ret);
 
     // credit check failed
     if (ret[0] == 0) {
@@ -329,15 +329,14 @@ function newOrder(order) {
 
     // update order details
     order.orderid = ret[1];
+    order.isin = ret[2];
+    order.mnemonic = ret[3];
+    order.exchange = ret[4];
     order.instrumenttype = ret[7];
+    var hedgeorderid = ret[8];
     order.markettype = ret[12];
-
-    // use the returned instrument values required by fix connection
-    if (order.markettype == 0) {
-      order.isin = ret[2];
-      order.mnemonic = ret[3];
-      order.exchange = ret[4];
-    }
+    var hedgebookid = ret[14];
+    var hedgesymbol = ret[15];
 
     // use the returned quote values required by fix connection
     if (order.ordertype == "D") {
@@ -347,15 +346,16 @@ function newOrder(order) {
 
     // set the settlement date to equity default date for cfd orders, in case they are being hedged with the market
     if (order.instrumenttype == "CFD") {
-      order.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[11], holidays));
+      // commented out as only offering default settlement for the time being
+      //order.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[11], holidays));
 
-      // update the stored order settlement details if it is a hedge
-      if (ret[8] != "") {
-        db.hmset("order:" + ret[8], "nosettdays", ret[11], "futsettdate", order.futsettdate);
+      // update the stored order settlement details if it is a hedge - todo: req'd?
+      if (hedgeorderid != "") {
+        db.hmset("order:" + hedgeorderid, "nosettdays", ret[11], "futsettdate", order.futsettdate);
       }
     }
 
-    processOrder(order, ret[8], ret[9], ret[10]);
+    processOrder(order, hedgeorderid, ret[9], ret[10], hedgebookid, hedgesymbol);
   });
 }
 
@@ -460,7 +460,8 @@ function orderFillRequest(ofr) {
   });
 }
 
-function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
+function processOrder(order, hedgeorderid, tradeid, hedgetradeid, hedgebookid, hedgesymbol) {
+  //console.log("processOrder");
   //
   // the order has been credit checked
   // now, either forward or attempt to match the order, depending on the type of instrument & whether the market is open
@@ -489,6 +490,7 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
         nbt.newOrder(order);
       }
     } else {
+      //console.log("cfd");
       // publish the order to whence it came
       //db.publish(order.operatortype, "order:" + order.orderid);
 
@@ -504,7 +506,11 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid) {
 
       // if we are hedging, change the order id to that of the hedge & forward
       if (hedgeorderid != "") {
+        console.log("forwarding hedge order:" + hedgeorderid + " to nbt");
         order.orderid = hedgeorderid;
+        order.clientid = hedgebookid;
+        order.symbol = hedgesymbol;
+
         nbt.newOrder(order);
       }
     }
@@ -617,6 +623,7 @@ function newQuote(quote) {
 nbt.on("orderReject", function(exereport) {
   var text = "";
   var ordrejreason = "";
+  console.log("order rejected");
   console.log(exereport);
 
   console.log("order rejected, id:" + exereport.clordid);
@@ -1537,7 +1544,7 @@ function registerScripts() {
       end \
     end \
   end \
-  return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttype, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays, markettype, qclientid} \
+  return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttype, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays, markettype, qclientid, hedgebookid, proquotesymbol[4]} \
   ';
 
   // todo: add lastmkt
