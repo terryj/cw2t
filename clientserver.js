@@ -251,6 +251,8 @@ function listen() {
             cashHistory(obj.cashhistoryrequest, clientid, conn);
           } else if ("unsubscribepositionsrequest" in obj) {
             unsubscribePositionsRequest(obj.unsubscribepositionsrequest, clientid, conn);
+          } else if ("statementrequest" in obj) {
+            statementRequest(obj.statementrequest, clientid, conn);
           } else if ("index" in obj) {
             common.sendIndex(obj.index, conn);
           } else if ("pwdrequest" in obj) {
@@ -1390,6 +1392,13 @@ function accountRequest(acctreq, clientid, conn) {
     if (err) throw err;
     conn.write("{\"account\":" + ret + "}");
   });
+}
+
+function statementRequest(statementreq, clientid, conn) {
+  db.eval(common.scriptgetcashhistory, 2, clientid, statementreq.currency, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"statement\":" + ret + "}");
+  });  
 }
 
 function passwordRequest(clientid, pwdrequest, conn) {

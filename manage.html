@@ -903,12 +903,12 @@
                     clearCashHistory();
                     loadCashHistory(obj.cashhistory);
                     displayCashHistory();
-                } else if ("chat" in obj) {
-                    newChat(obj.chat);
-                } else if ("chathistory" in obj) {
+                /*} else if ("chat" in obj) {
+                    newChat(obj.chat);*/
+                /*} else if ("chathistory" in obj) {
                     clearChatHistory();
                     loadChatHistory(obj.chathistory);
-                    displayChatHistory();
+                    displayChatHistory();*/
                 } else if ("status" in obj) {
                     updateStatus(obj.status);
                 } else if ("errormsg" in obj) {
@@ -997,7 +997,6 @@
         }
         
         function loadInstruments(instrumentarr) {
-            console.log(instrumentarr);
             for (var i = 0; i < instrumentarr.length; ++i) {
                 instruments[instrumentarr[i].symbol] = instrumentarr[i];
             }
@@ -2182,7 +2181,7 @@
 
             var emptyline = addNewLine(main, "emptyline:1");
 
-            if (Object.keys(positions).length == 0) {
+            if (positions.length == 0) {
                 var list = getList("list1");
                 addElement("No positions", list, 0);
                 return;
@@ -2858,7 +2857,7 @@
             return b - a;
         }
 
-        function displayChatHistory() {
+        /*function displayChatHistory() {
             var firstchat = true;
             var msg;
             var list;
@@ -2883,7 +2882,7 @@
                     alert(chathistory[element.value].text)
                 }
             }
-        }
+        }*/
 
         function displayQuoteRequests() {
             var firstquoterequest = true;
@@ -5869,14 +5868,10 @@
             var inpdesc;
             var lblisin;
             var inpisin;
-            var lblsedol;
-            var inpsedol;
             var lblcurrency;
             var inpcurrency;
-            var lblmarket;
-            var inpmarket;
-            var lblsector;
-            var inpsector;
+            var lblexchange;
+            var inpexchange;
             var lblmargin;
             var inpmargin;
             var lblhedge;
@@ -5913,20 +5908,14 @@
             lblisin = newlabel("lblisin", "Isin:", "formlabel", frmproduct);
             inpisin = newinput("inpisin", "forminput", frmproduct, true);
             addNewLine(frmproduct, null);
-            lblsedol = newlabel("lblsedol", "Sedol:", "formlabel", frmproduct);
-            inpsedol = newinput("inpsedol", "forminput", frmproduct, true);
-            addNewLine(frmproduct, null);
             lblinsttype = newlabel("lblinsttype", "Instrument Type:", "formlabel", frmproduct);
             inpinsttype = newinput("inpinsttype", "forminput", frmproduct, true);
             addNewLine(frmproduct, null);
             lblcurrency = newlabel("lblcurrency", "Currency:", "formlabel", frmproduct);
             inpcurrency = newinput("inpcurrency", "forminput", frmproduct, true);
             addNewLine(frmproduct, null);
-            lblmarket = newlabel("lblmarket", "Market:", "formlabel", frmproduct);
-            inpmarket = newinput("inpmarket", "forminput", frmproduct, true);
-            addNewLine(frmproduct, null);
-            lblsector = newlabel("lblsector", "Sector:", "formlabel", frmproduct);
-            inpsector = newinput("inpsector", "forminput", frmproduct, true);
+            lblexchange = newlabel("lblexchange", "Exchange:", "formlabel", frmproduct);
+            inpexchange = newinput("inpexchange", "forminput", frmproduct, true);
             addNewLine(frmproduct, null);
             lblmargin = newlabel("lblmargin", "Margin %:", "formlabel", frmproduct);
             inpmargin = newinput("inpmargin", "forminput", frmproduct);
@@ -5984,10 +5973,8 @@
             var inpsymbol = document.getElementById("inpsymbol");
             var inpdesc = document.getElementById("inpdesc");
             var inpisin = document.getElementById("inpisin");
-            var inpsedol = document.getElementById("inpsedol");
             var inpinsttype = document.getElementById("inpinsttype");
             var inpsymbol = document.getElementById("inpsymbol");
-            var inpsector = document.getElementById("inpsector");
             var inpmargin = document.getElementById("inpmargin");
             var opthedgeyes = document.getElementById("opthedgeyes");
             var opthedgeno = document.getElementById("opthedgeno");
@@ -5998,12 +5985,10 @@
             inpsymbol.value = inst.symbol;
             inpdesc.value = inst.shortname;
             inpisin.value = inst.isin;
-            inpsedol.value = inst.sedol;
             inpinsttype.value = inst.instrumenttype;
-            inpsector.value = inst.sector;
             inpmargin.value = inst.marginpercent;
             inpcurrency.value = inst.currency;
-            inpmarket.value = inst.market;
+            inpexchange.value = inst.exchange;
 
             if (parseInt(inst.hedge)) {
                 opthedgeyes.checked = true;

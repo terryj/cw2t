@@ -1196,7 +1196,7 @@ function sendPositions(orgclientkey, conn) {
 function positionRequest(posreq, conn) {
   db.eval(common.scriptgetpositions, 1, posreq.clientid, function(err, ret) {
     if (err) throw err;
-    conn.write("{\"positions\":" + ret + "}");
+    conn.write("{\"positions\":" + JSON.stringify(ret) + "}");
   });
 }
 
@@ -1920,7 +1920,7 @@ function registerScripts() {
   //
   scriptgetinst = '\
   local instruments = redis.call("sort", "instruments", "ALPHA") \
-  local fields = {"instrumenttype", "shortname", "currency", "marginpercent", "market", "isin", "sedol", "sector", "hedge", "ptmexempt"} \
+  local fields = {"instrumenttype", "shortname", "currency", "marginpercent", "exchange", "isin", "hedge", "ptmexempt"} \
   local vals \
   local inst = {} \
   local marginpc \
@@ -1932,7 +1932,7 @@ function registerScripts() {
       else \
         marginpc = 100 \
       end \
-      table.insert(inst, {symbol = instruments[index], shortname = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc, market = vals[5], isin = vals[6], sedol = vals[7], sector = vals[8], hedge = vals[9], ptmexempt=vals[10]}) \
+      table.insert(inst, {symbol = instruments[index], shortname = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc, exchange = vals[5], isin = vals[6], hedge = vals[7], ptmexempt=vals[8]}) \
     end \
   end \
   return cjson.encode(inst) \

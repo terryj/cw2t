@@ -394,6 +394,7 @@
         var positions = [];
         var trades = [];
         var account = [];
+        var statement = [];
         var qbroker = "TGRANT";
         var email = "";
         var operatortype = 1; // client
@@ -448,6 +449,8 @@
                     statusReceived(obj.status);
                 } else if ("account" in obj) {
                     accountReceived(obj.account);                    
+                } else if ("statement" in obj) {
+                    statementReceived(obj.statement);
                 }
             } catch(e) {
                 console.log(e);
@@ -745,7 +748,7 @@
 
         function createMenu() {
             var data = [""];
-            var cols = ["Single Symbol", "Portfolio", "Account Summary", "Trades", "Live Quote Requests"];
+            var cols = ["Single Symbol", "Portfolio", "Account Summary", "Statement", "Trades", "Live Quote Requests"];
 
             // create a table
             var tblmenu = d3.select("#divcontainer")
@@ -808,8 +811,10 @@
                             } else if (d == cols[2]) {
                                 requestAccount();
                             } else if (d == cols[3]) {
-                                requestTrades();
+                                requestStatement();
                             } else if (d == cols[4]) {
+                                requestTrades();
+                            } else if (d == cols[5]) {
                                 alert("Out of hours stuff - you need a passport to go here!");
                                 //requestOpenQuoteRequests("");
                             }
@@ -868,6 +873,7 @@
             d3.select("#stockboxdiv").remove();
             d3.select("#tbltrade").remove();
             d3.select("#tblaccount").remove();
+            d3.select("#tblstatement").remove();
         }
 
         function clearData() {
@@ -3352,6 +3358,92 @@
             sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
         }
 
+        function requestStatement() {
+            var statementrequest = {};
+
+            statementrequest.currency = "GBP";
+
+            sockjs.send("{\"statementrequest\":" + JSON.stringify(statementrequest) + "}");            
+        }
+
+        function statementReceived(statementarr) {
+            console.log("statementReceived");
+            console.log(statementarr);
+
+            statement = [];
+
+            for (var i = 0; i < statementarr.length; ++i) {
+                statement.push(statementarr[i]);
+            }
+
+            updateStatementTable();
+        }
+
+        function updateStatementTable() {
+            var cols = ["timestamp", "transtype", "description", "reference", "amount", "balance"];
+
+            var tblstatement = d3.select("#tblstatement");
+            if (tblstatement.empty()) {
+                tblstatement = createStatementTable(cols);
+            }
+
+            // base the table on the statement array
+            var rows = tblstatement.select("tbody").selectAll("tr")
+                .data(statement);
+
+            // enter
+            rows.enter()
+                .append("tr");
+
+            // update
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(col) {
+                        return {col: col, value: row[col]};
+                    });
+                 })
+                .enter()
+                .append("td")
+                    .text(function(d, i, j) {
+                        if (d.col == "amount") {
+                            if (statement[j].drcr == "1") {
+                                return formatCurrency(d.value, 2);
+                            } else {
+                                return formatCurrency(-d.value, 2);                                
+                            }
+                        } else if (d.col == "balance") {
+                            return formatCurrency(d.value, 2);
+                        } else if (d.col == "transtype") {
+                            return getCashtransType(d.value);
+                        } else {
+                            return d.value;
+                        }
+                    });
+        }
+
+        function createStatementTable(cols) {
+            var tblstatement = d3.select("#divcontainer")
+                .append("table")
+                .attr("id", "tblstatement")
+                .attr("class", "tblaccount");
+
+            // add header & body
+            var thead = tblstatement.append("thead");
+            var tbody = tblstatement.append("tbody");
+
+            // add the column headings
+            thead.selectAll("th")
+                .data(cols)
+                .enter()
+                .append("th")
+                    .attr("class", "tblaccounthdr")
+                    .text(function(d) {
+                        return d;
+                    });
+
+            return tblstatement;
+        }
+
         function accountReceived(acctarr) {
             console.log("accountReceived");
             console.log(acctarr);
@@ -3373,7 +3465,7 @@
                 tblaccount = createAccountTable(cols);
             }
 
-            // base the table on the trades array
+            // base the table on the account array
             var rows = tblaccount.select("tbody").selectAll("tr")
                 .data(account);
 
@@ -3400,7 +3492,6 @@
         }
 
         function createAccountTable(cols) {
-            // use the rfq div
             var tblaccount = d3.select("#divcontainer")
                 .append("table")
                 .attr("id", "tblaccount")
@@ -3511,6 +3602,18 @@
             }
 
             return desc;
+        }
+
+        function getCashtransType(type) {
+            if (type == "CD") {
+                return "Cash Deposit";
+            } else if (type == "CW") {
+                return "Cash Withdrawal";
+            } else if (type == "BT") {
+                return "Buy";
+            } else if (type == "ST") {
+                return "Sell";
+            }            
         }
 
      </script>

@@ -102,7 +102,7 @@ function pubsub() {
 
   dbsub.on("message", function(channel, message) {
     try {
-      console.log("channel:" + channel + " " + message);
+      //console.log("channel:" + channel + " " + message);
       var obj = JSON.parse(message);
 
       if ("quoterequest" in obj) {
@@ -565,8 +565,6 @@ function loadHolidays() {
 
 // quote received
 function newQuote(quote) {
-  console.log("newquote");
-
   if (!('bidpx' in quote)) {
     quote.bidpx = "";
     quote.bidsize = "";
@@ -1362,22 +1360,25 @@ function registerScripts() {
     redis.call("zadd", "tradesbydate", milliseconds, tradeid) \
     local transtype \
     local drcr \
+    local desc \
     if tonumber(side) == 1 then \
       transtype = "BT" \
       drcr = 2 \
+      desc = "Bought " .. quantity .. " " .. symbol .. " @ " .. price \
     else \
       transtype = "ST" \
       drcr = 1 \
+      desc = "Sold " .. quantity .. " " .. symbol .. " @ " .. price \
     end \
     --[[ cash transactions for the trade ]] \
-    updatecash(clientid, settlcurrency, transtype, settlcurramt, drcr, "trade consideration", tradeid, timestamp, "", operatortype, operatorid) \
+    updatecash(clientid, settlcurrency, transtype, settlcurramt, drcr, desc, "trade #" .. tradeid, timestamp, "", operatortype, operatorid) \
     --[[ cash transactions for any costs & finance ]] \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
     if totalcost > 0 then \
-      updatecash(clientid, settlcurrency, "TC", totalcost, 2, "trade costs", tradeid, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "TC", totalcost, 2, "trade costs", "trade #" .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
     if tonumber(finance) > 0 then \
-      updatecash(clientid, settlcurrency, "FI", finance, 2, "trade finance", tradeid, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "FI", finance, 2, "trade finance", "trade #" .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
     local positionid = updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, tradeid) \
     redis.call("hset", tradekey, "positionid", positionid) \
