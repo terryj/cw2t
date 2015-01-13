@@ -647,9 +647,6 @@
                 createPriceMenu(price.symbol);
             }
 
-            // get the table price row
-            //var tblpricerow = d3.select("#tblpricerow");
-
             // update
             var cells = tblpricerow.selectAll("td")
                 .data(function(row) {
@@ -692,7 +689,6 @@
         }
 
         function createPriceTable(price, cols) {
-            console.log("createPriceTable");
             var hdr = ["bid","ask"];
 
             // create a price div
@@ -3193,10 +3189,6 @@
         }
 
         function updateMargin(i) {
-            console.log("updateMargin");
-            //console.log(positions[i].quantity);
-            //console.log(positions[i].mktprice);
-            //console.log(instruments[positions[i].symbol].marginpercent);
             // update margin for derivs
             if (instruments[positions[i].symbol].instrumenttype != "DE" && instruments[positions[i].symbol].instrumenttype != "IE") {
                 positions[i].margin = Math.abs(positions[i].quantity) * positions[i].mktprice * instruments[positions[i].symbol].marginpercent / 100;

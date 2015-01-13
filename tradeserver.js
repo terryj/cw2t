@@ -1371,14 +1371,14 @@ function registerScripts() {
       desc = "Sold " .. quantity .. " " .. symbol .. " @ " .. price \
     end \
     --[[ cash transactions for the trade ]] \
-    updatecash(clientid, settlcurrency, transtype, settlcurramt, drcr, desc, "trade #" .. tradeid, timestamp, "", operatortype, operatorid) \
+    updatecash(clientid, settlcurrency, transtype, settlcurramt, drcr, desc, "trade id: " .. tradeid, timestamp, "", operatortype, operatorid) \
     --[[ cash transactions for any costs & finance ]] \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
     if totalcost > 0 then \
-      updatecash(clientid, settlcurrency, "TC", totalcost, 2, "trade costs", "trade #" .. tradeid, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "TC", totalcost, 2, "trade costs", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
     if tonumber(finance) > 0 then \
-      updatecash(clientid, settlcurrency, "FI", finance, 2, "trade finance", "trade #" .. tradeid, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "FI", finance, 2, "trade finance", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
     local positionid = updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, tradeid) \
     redis.call("hset", tradekey, "positionid", positionid) \

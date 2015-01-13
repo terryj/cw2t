@@ -126,8 +126,8 @@ conn.on('data', function(data) {
   var msglen;
   var instrec = {};
 
-  console.log('data recd');
-  console.log(data);
+  //console.log('data recd');
+  //console.log(data);
 
   instrec.bid = "";
   instrec.ask = "";
@@ -164,7 +164,7 @@ conn.on('data', function(data) {
     case 1:
       if (buf[i] == 31) { // <US>
         functioncode = buf.toString('utf8', fileseparator+1, i);
-        console.log("functioncode="+functioncode);
+        //console.log("functioncode="+functioncode);
         unitseparator = i;
         parsestate = 2;
       }
@@ -179,7 +179,7 @@ conn.on('data', function(data) {
     case 3:
       if (buf[i] == 31) { // <US>
         instrumentcode = buf.toString('utf8', groupseparator+1, i);
-        console.log("instrumentcode="+instrumentcode);
+        //console.log("instrumentcode="+instrumentcode);
         unitseparator = i;
         if (functioncode == "340") {
           parsestate = 4;
@@ -332,8 +332,8 @@ function updateRec(fid, value, instrec) {
 }
 
 function updateDb(functioncode, instrumentcode, instrec) {
-  console.log("updateDb");
-  console.log(instrec);
+  //console.log("updateDb");
+  //console.log(instrec);
 
   // create a unix timestamp
   var now = new Date();
@@ -378,7 +378,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
   db.eval(common.scriptpriceupdate, 4, instrumentcode, timestamp, instrec.bid, instrec.ask, function(err, ret) {
     if (err) throw err;
     //console.log("pricehist updated: " + instrumentcode + ",ts:" + timestamp + ",bid:" + instrec.bid + ",ask:" + instrec.ask);
-    console.log(ret);
+    //console.log(ret);
   });
 }
 
