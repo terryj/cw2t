@@ -133,8 +133,8 @@ conn.on('data', function(data) {
   instrec.ask = "";
 
   var datalen = data.length;
-  console.log("data length="+data.length);
-  console.log("bytestoread="+bytestoread);
+  //console.log("data length="+data.length);
+  //console.log("bytestoread="+bytestoread);
 
   // copy this data to our global buffer, offset for any messages waiting to be read
   data.copy(buf, bytestoread);
@@ -250,6 +250,10 @@ conn.on('data', function(data) {
 
           // update the database
           updateDb(functioncode, instrumentcode, instrec);
+
+          // re-initialise prices as may be more than one message
+          instrec.bid = "";
+          instrec.ask = "";
         }
 
         // we have finished a message
@@ -265,7 +269,7 @@ conn.on('data', function(data) {
 
   // see if we have caught up, if so reset
   if (bufbytesread == bytestoread) {
-    console.log("read the lot");
+    //console.log("read the lot");
     bufbytesread = 0;
     bytestoread = 0;
   }

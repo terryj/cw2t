@@ -1642,11 +1642,11 @@ exports.registerCommonScripts = function () {
   ';
 
   //
-  // update the latest price
+  // update & publish the latest price, together with the change, used for variation margin calculation
   // params: nbtsymbol, timestamp, bid, offer
   // any symbols related to this nbtsymbol will be updated
   //
-  scriptpriceupdate = '\
+  scriptpriceupdate = round + '\
   local nbtsymbol = KEYS[1] \
   local bid = KEYS[3] \
   local ask = KEYS[4] \
@@ -1656,14 +1656,26 @@ exports.registerCommonScripts = function () {
     --[[ may only get bid or ask ]] \
     if bid ~= "" then \
       if ask ~= "" then \
-        pricemsg = pricemsg .. cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("ask") .. ":" .. ask \
+        local oldbid = redis.call("hget", "price:" .. symbols[index], "bid") \
+        if not oldbid then oldbid = 0 end \
+        local bidchange = round(tonumber(bid) - tonumber(oldbid), 4) \
+        local oldask = redis.call("hget", "price:" .. symbols[index], "ask") \
+        if not oldask then oldask = 0 end \
+        local askchange = round(tonumber(ask) - tonumber(oldask), 4) \
+        pricemsg = pricemsg .. cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("bidchange") .. ":" .. bidchange .. "," .. cjson.encode("ask") .. ":" .. ask .. "," .. cjson.encode("askchange") .. ":" .. askchange \
         redis.call("hmset", "price:" .. symbols[index], "bid", bid, "ask", ask, "timestamp", KEYS[2]) \
       else \
-        pricemsg = pricemsg .. cjson.encode("bid") .. ":" .. bid \
+        local oldbid = redis.call("hget", "price:" .. symbols[index], "bid") \
+        if not oldbid then oldbid = 0 end \
+        local bidchange = round(tonumber(bid) - tonumber(oldbid), 4) \
+        pricemsg = pricemsg .. cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("bidchange") .. ":" .. bidchange \
         redis.call("hmset", "price:" .. symbols[index], "bid", bid, "timestamp", KEYS[2]) \
       end \
     else \
-      pricemsg = pricemsg .. cjson.encode("ask") .. ":" .. ask \
+      local oldask = redis.call("hget", "price:" .. symbols[index], "ask") \
+      if not oldask then oldask = 0 end \
+      local askchange = round(tonumber(ask) - tonumber(oldask), 4) \
+      pricemsg = pricemsg .. cjson.encode("ask") .. ":" .. ask .. "," .. cjson.encode("askchange") .. ":" .. askchange \
       redis.call("hmset", "price:" .. symbols[index], "ask", ask, "timestamp", KEYS[2]) \
     end \
     pricemsg = pricemsg .. "}}" \
