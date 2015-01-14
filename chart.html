@@ -1479,7 +1479,6 @@
                 rfq.operatorid = clientid;
                 //rfq.futsettdate = this.value;
 
-                console.log(rfq);
                 sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
             }
         }
@@ -1989,7 +1988,6 @@
         }
 
         function createQuoteTable() {
-            console.log("createQuoteTable");
             //var hdr = ["Quotes"];
 
             // use the rfq div

@@ -1353,7 +1353,7 @@ exports.registerCommonScripts = function () {
   // todo: need to guarantee order
   exports.scriptgetcashhistory = '\
   local tblresults = {} \
-  local cashhistory = redis.call("smembers", KEYS[1] .. ":cashtrans") \
+  local cashhistory = redis.call("sort", KEYS[1] .. ":cashtrans") \
   local fields = {"clientid","currency","amount","transtype","drcr","description","reference","timestamp","settldate","cashtransid"} \
   local vals \
   local balance = 0 \
