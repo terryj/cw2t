@@ -560,8 +560,6 @@
         }
 
         function updateIndex(index) {
-            console.log("updateIndex");
-
             var rootnode = {};
             rootnode.name = "FTSE 100";
             rootnode.children = [];
@@ -744,7 +742,7 @@
 
         function createMenu() {
             var data = [""];
-            var cols = ["Single Symbol", "Portfolio", "Account Summary", "Statement", "Trades", "Live Quote Requests"];
+            var cols = ["Request Quotes", "Portfolio", "Account Summary", "Statement", "Trades", "Live Quote Requests"];
 
             // create a table
             var tblmenu = d3.select("#divcontainer")
@@ -899,8 +897,6 @@
         }
 
         function tradesReceived(tradearr) {
-            console.log("tradesReceived");
-
             // clear global array
             trades = [];
 
@@ -977,8 +973,6 @@
         }
 
         function createTradeTable(cols) {
-            console.log("createTradeTable");
-
             // using full screen width
             var tbltrade = d3.select("body")
                 .append("table")
@@ -1596,9 +1590,6 @@
         }
 
         function orderReceived(order) {
-            console.log("orderReceived");
-            console.log(order);
-
             if (order.status == "8") {
                 var msg = "Order rejected";
 
@@ -1617,8 +1608,6 @@
         }
 
         function tradeReceived(trade) {
-            console.log("tradeReceived");
-            console.log(trade);
             var inquotes = false;
 
             // add to trades, if that is what we are looking at
@@ -1806,9 +1795,6 @@
         }
 
         function quoteReceived(quote) {
-            console.log("quoteReceived");
-            console.log(quote);
-
             // see if it is my quote
             if (quote.qclientid == clientid) {
                 // calculate the duration of the quote - todo: on the server?
@@ -3263,7 +3249,6 @@
 
             function display(d) {
                 if (d.col == "cost" || d.col == "margin" || d.col == "unrealisedpandl") {
-                    console.log(d.value);
                     return formatCurrency(d.value, 2);
                 } else if (d.col == "costpershare" || d.col == "mktprice") {
                     return formatCurrency(d.value, 4);
@@ -3359,9 +3344,6 @@
         }
 
         function statementReceived(statementarr) {
-            console.log("statementReceived");
-            console.log(statementarr);
-
             statement = [];
 
             for (var i = 0; i < statementarr.length; ++i) {
@@ -3437,8 +3419,6 @@
         }
 
         function accountReceived(acctarr) {
-            console.log("accountReceived");
-            console.log(acctarr);
             account = [];
 
             // account per currency

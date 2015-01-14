@@ -1068,7 +1068,7 @@ function registerScripts() {
           --[[ close position ]] \
           closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
           --[[ & open new ]] \
-          posqty = tradequantity + posqty \
+          posqty = posqty + tradequantity \
           poscost = round(posqty * tonumber(tradeprice), 5) \
           positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, poscost, currency, tradeid) \
         else \
@@ -1093,7 +1093,7 @@ function registerScripts() {
           --[[ close position ]] \
           closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
           --[[ & open new ]] \
-          posqty = tradequantity - posqty \
+          posqty = posqty - tradequantity \
           poscost = round(posqty * tonumber(tradeprice), 5) \
           positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, poscost, currency, tradeid) \
         else \
