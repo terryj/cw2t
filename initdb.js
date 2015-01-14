@@ -289,22 +289,26 @@ function initdb() {
   db.sadd("cashtranstypes", "CW");
   db.sadd("cashtranstypes", "BT");
   db.sadd("cashtranstypes", "ST");
-  db.sadd("cashtranstypes", "TC");
   db.sadd("cashtranstypes", "CO");
   db.sadd("cashtranstypes", "DI");
   db.sadd("cashtranstypes", "FI");
   db.sadd("cashtranstypes", "IN");
+  db.sadd("cashtranstypes", "PL");
+  db.sadd("cashtranstypes", "CC");
+  db.sadd("cashtranstypes", "SD");
   db.sadd("cashtranstypes", "OT");
 
   db.set("cashtranstype:CD", "Cash Deposit");
   db.set("cashtranstype:CW", "Cash Withdrawal");
   db.set("cashtranstype:BT", "Buy Trade");
   db.set("cashtranstype:ST", "Sell Trade");
-  db.set("cashtranstype:TC", "Trade Costs");
   db.set("cashtranstype:CO", "Commission");
   db.set("cashtranstype:DI", "Dividend");
   db.set("cashtranstype:FI", "Finance");
   db.set("cashtranstype:IN", "Interest");
+  db.set("cashtranstype:PL", "PTM Levy");
+  db.set("cashtranstype:CC", "Contract Charge");
+  db.set("cashtranstype:SD", "Stamp Duty");
   db.set("cashtranstype:OT", "Other");
 
   // currencies

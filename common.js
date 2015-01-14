@@ -780,7 +780,7 @@ exports.registerCommonScripts = function () {
     redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currency", currency, "transtype", transtype, "amount", amount, "drcr", drcr, "description", desc, "reference", reference, "timestamp", timestamp, "settldate", settldate, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
     redis.call("sadd", clientid .. ":cashtrans", cashtransid) \
     local cashkey = clientid .. ":cash:" .. currency \
-    local cashskey = clientid .. ":cash" \
+    local cashsetkey = clientid .. ":cash" \
     local cash = redis.call("get", cashkey) \
     --[[ adjust for credit]] \
     if tonumber(drcr) == 2 then \
@@ -788,20 +788,51 @@ exports.registerCommonScripts = function () {
     end \
     if not cash then \
       redis.call("set", cashkey, amount) \
-      redis.call("sadd", cashskey, currency) \
+      redis.call("sadd", cashsetkey, currency) \
     else \
       local adjamount = tonumber(cash) + amount \
       if adjamount == 0 then \
         redis.call("del", cashkey) \
-        redis.call("srem", cashskey, currency) \
+        redis.call("srem", cashsetkey, currency) \
       else \
         redis.call("set", cashkey, adjamount) \
       end \
     end \
+    local key \
+    if transtype == "ST" then \
+      key = clientid .. ":selltrades:" .. currency \
+    elseif transtype == "BT" then \
+      key = clientid .. ":buytrades:" .. currency \
+    elseif transtype == "CO" then \
+      key = clientid .. ":commission:" .. currency \
+    elseif transtype == "PL" then \
+      key = clientid .. ":ptmlevy:" .. currency \
+    elseif transtype == "CC" then \
+      key = clientid .. ":contractcharge:" .. currency \
+    elseif transtype == "SD" then \
+      key = clientid .. ":stampduty:" .. currency \
+    elseif transtype == "DI" then \
+      key = clientid .. ":dividend:" .. currency \
+    elseif transtype == "FI" then \
+      key = clientid .. ":finance:" .. currency \
+    elseif transtype == "IN" then \
+      key = clientid .. ":dividend:" .. currency \
+    elseif transtype == "CD" then \
+      key = clientid .. ":deposits:" .. currency \
+    elseif transtype == "CW" then \
+      key = clientid .. ":withdrawals:" .. currency \
+    elseif transtype == "OT" then \
+      key = clientid .. ":other:" .. currency \
+    else \
+      key = clientid .. ":unknown:" .. currency \
+    end \
+    local val = redis.call("get", key) \
+    if not val then val = 0 end \
+    redis.call("set", key, val - amount) \
     return {0, cashtransid} \
   end \
   ';
-
+  
   exports.updatecash = updatecash;
 
   getcash = '\

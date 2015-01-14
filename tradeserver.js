@@ -1370,13 +1370,22 @@ function registerScripts() {
       drcr = 1 \
       desc = "Sold " .. quantity .. " " .. symbol .. " @ " .. price \
     end \
-    --[[ cash transactions for the trade ]] \
+    --[[ cash transaction for the trade consideration ]] \
     updatecash(clientid, settlcurrency, transtype, settlcurramt, drcr, desc, "trade id: " .. tradeid, timestamp, "", operatortype, operatorid) \
-    --[[ cash transactions for any costs & finance ]] \
-    local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
-    if totalcost > 0 then \
-      updatecash(clientid, settlcurrency, "TC", totalcost, 2, "trade costs", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
+    --[[ cash transactions for any costs ]] \
+    if costs[1] > 0 then \
+      updatecash(clientid, settlcurrency, "CO", costs[1], 2, "commission", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
+    if costs[2] > 0 then \
+      updatecash(clientid, settlcurrency, "PL", costs[2], 2, "ptm levy", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
+    end \
+    if costs[3] > 0 then \
+      updatecash(clientid, settlcurrency, "SD", costs[3], 2, "stamp duty", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
+    end \
+    if costs[4] > 0 then \
+      updatecash(clientid, settlcurrency, "CC", costs[4], 2, "contract charge", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
+    end \
+    --[[ cash transaction for any finance ]] \
     if tonumber(finance) > 0 then \
       updatecash(clientid, settlcurrency, "FI", finance, 2, "trade finance", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
