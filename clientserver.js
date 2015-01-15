@@ -113,7 +113,7 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    console.log("channel: " + channel + ", message: " + message);
+    //console.log("channel: " + channel + ", message: " + message);
 
     if (channel.substr(0, 6) == "price:") {
       common.newPrice(channel.substr(6), serverid, message, connections, feedtype);

@@ -809,7 +809,7 @@
                             } else if (d == cols[4]) {
                                 requestTrades();
                             } else if (d == cols[5]) {
-                                alert("Out of hours stuff - you need a passport to go here!");
+                                alert("The dark side - out of hours - you need a passport to go here!");
                                 //requestOpenQuoteRequests("");
                             }
                         });
@@ -3583,6 +3583,22 @@
                 return "Buy";
             } else if (type == "ST") {
                 return "Sell";
+            } else if (type == "CO") {
+                return "Commission";
+            } else if (type == "DI") {
+                return "Dividend";
+            } else if (type == "FI") {
+                return "Finance";
+            } else if (type == "IN") {
+                return "Interest";
+            } else if (type == "PL") {
+                return "PTM Levy";
+            } else if (type == "CC") {
+                return "Contract Charge";
+            } else if (type == "SD") {
+                return "Stamp Duty";
+            } else if (type == "OT") {
+                return "Other";
             }            
         }
 

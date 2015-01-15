@@ -1374,20 +1374,20 @@ function registerScripts() {
     updatecash(clientid, settlcurrency, transtype, settlcurramt, drcr, desc, "trade id: " .. tradeid, timestamp, "", operatortype, operatorid) \
     --[[ cash transactions for any costs ]] \
     if costs[1] > 0 then \
-      updatecash(clientid, settlcurrency, "CO", costs[1], 2, "commission", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "CO", costs[1], 2, "commission", "trade id: " .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
     if costs[2] > 0 then \
-      updatecash(clientid, settlcurrency, "PL", costs[2], 2, "ptm levy", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "PL", costs[2], 2, "ptm levy", "trade id: " .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
     if costs[3] > 0 then \
-      updatecash(clientid, settlcurrency, "SD", costs[3], 2, "stamp duty", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "SD", costs[3], 2, "stamp duty", "trade id: " .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
     if costs[4] > 0 then \
-      updatecash(clientid, settlcurrency, "CC", costs[4], 2, "contract charge", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "CC", costs[4], 2, "contract charge", "trade id: " .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
     --[[ cash transaction for any finance ]] \
     if tonumber(finance) > 0 then \
-      updatecash(clientid, settlcurrency, "FI", finance, 2, "trade finance", "trade id:" .. tradeid, timestamp, "", operatortype, operatorid) \
+      updatecash(clientid, settlcurrency, "FI", finance, 2, "trade finance", "trade id: " .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
     local positionid = updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, tradeid) \
     redis.call("hset", tradekey, "positionid", positionid) \

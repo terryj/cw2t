@@ -340,10 +340,16 @@ function initdb() {
   db.set("ordertype:X", "Hedge");
 
   db.sadd("costs", "DE:GBP:1");
-  db.hmset("cost:DE:GBP:1","defaultnosettdays",3,"costkey","DE:GBP:1","commissionpercent","","commissionmin","","ptmlevylimit","","ptmlevy","","stampdutylimit","","stampdutypercent","","contractcharge","","finance",""
+  db.hmset("cost:DE:GBP:1","defaultnosettdays",3,"costkey","DE:GBP:1","commissionpercent","0","commissionmin","0","ptmlevylimit","10000","ptmlevy","1","stampdutylimit","1000","stampdutypercent","0.5","contractcharge","0","finance","0"
 );
   db.sadd("costs", "DE:GBP:2");
-  db.hmset("cost:DE:GBP:2","defaultnosettdays",3,"costkey","DE:GBP:2","commissionpercent","","commissionmin","","ptmlevylimit","","ptmlevy","","stampdutylimit","","stampdutypercent","","contractcharge","","finance",""
+  db.hmset("cost:DE:GBP:2","defaultnosettdays",3,"costkey","DE:GBP:2","commissionpercent","0","commissionmin","0","ptmlevylimit","10000","ptmlevy","1","stampdutylimit","0","stampdutypercent","0","contractcharge","0","finance","0"
+);
+  db.sadd("costs", "CFD:GBP:1");
+  db.hmset("cost:DE:GBP:1","defaultnosettdays",0,"costkey","CFD:GBP:1","commissionpercent","0","commissionmin","0","ptmlevylimit","0","ptmlevy","0","stampdutylimit","0","stampdutypercent","0","contractcharge","0","finance","0"
+);
+  db.sadd("costs", "CFD:GBP:2");
+  db.hmset("cost:DE:GBP:2","defaultnosettdays",0,"costkey","CFD:GBP:2","commissionpercent","0","commissionmin","0","ptmlevylimit","0","ptmlevy","0","stampdutylimit","0","stampdutypercent","0","contractcharge","0","finance","0"
 );
 
   // timezone

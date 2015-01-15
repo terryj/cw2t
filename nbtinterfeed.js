@@ -284,7 +284,7 @@ conn.on('error', function(error) {
 });
 
 function subscribe(instcode) {
-  console.log("subscribe");
+  console.log("subscribe to " + instcode);
   var instcodelen = instcode.length;
   var buf = new Buffer(25+instcodelen);
 
