@@ -251,6 +251,10 @@ function listen() {
             cashHistory(obj.cashhistoryrequest, clientid, conn);
           } else if ("unsubscribepositionsrequest" in obj) {
             unsubscribePositionsRequest(obj.unsubscribepositionsrequest, clientid, conn);
+          } else if ("watchlistrequest" in obj) {
+            watchlistRequest(obj.watchlistrequest, clientid, conn);
+          } else if ("unwatchlistrequest" in obj) {
+            unwatchlistrequest(obj.unwatchlistrequest, clientid, conn);
           } else if ("statementrequest" in obj) {
             statementRequest(obj.statementrequest, clientid, conn);
           } else if ("index" in obj) {
@@ -1556,6 +1560,61 @@ function newChat(chat) {
   }
 }
 
+function watchlistRequest(watchlist, clientid, conn) {
+  console.log("watchlistRequest");
+  console.log(watchlist);
+
+  if ("symbol" in watchlist) {
+    // add a symbol to the watchlist for this client
+    db.eval(scriptaddtowatchlist, 3, watchlist.symbol, clientid, serverid, function(err, ret) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+      console.log(ret);
+
+      conn.write("{\"watchlist\":[\"" + watchlist.symbol + "\"]}");
+
+      if (ret == 1) {
+        dbsub.subscribe("price:" + watchlist.symbol);
+      }
+    });
+  } else {
+    // get the watchlist for this client
+    db.eval(scriptgetwatchlist, 2, clientid, serverid, function(err, ret) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+      console.log(ret);
+
+      conn.write("{\"watchlist\":" + ret[0] + "}");
+
+      // subscribe to symbols
+      for (var i = 0; i < ret[1].length; i++) {
+        dbsub.subscribe("price:" + ret[1][i]);
+      }
+   });
+  }
+}
+
+function unwatchlistrequest(clientid, conn) {
+  console.log("unwatchlistrequest");
+  // unsubscribe from the watchlist for this client
+  db.eval(scriptunwatchlist, 2, clientid, serverid, function(err, ret) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+    console.log(ret);
+
+    // unsubscribe from symbols
+    for (var i = 0; i < ret.length; i++) {
+      dbsub.unsubscribe("price:" + ret[i]);
+    }
+  });
+}
+
 function registerScripts() {
   //
   // get alpha sorted list of instruments for a specified client
@@ -1583,6 +1642,51 @@ function registerScripts() {
       retval = 1 \
     end \
     return retval \
+  ';
+
+  //
+  // get watchlist for a client
+  // params: client id, server id
+  //
+  scriptgetwatchlist = common.subscribesymbolnbt + '\
+    local tblresults = {} \
+    local tblsubscribe = {} \
+    local watchlist = redis.call("smembers", KEYS[1] .. ":watchlist") \
+    for index = 1, #watchlist do \
+      --[[ subscribe to this symbol ]] \
+      local subscribe = subscribesymbolnbt(watchlist[index], KEYS[1], KEYS[2]) \
+      if subscribe[1] == 1 then \
+        table.insert(tblsubscribe, watchlist[index]) \
+      end \
+      --[[ get current prices ]] \
+      local bid = redis.call("hget", "price:" .. watchlist[index], "bid") \
+      local ask = redis.call("hget", "price:" .. watchlist[index], "ask") \
+      table.insert(tblresults, {symbol=watchlist[index], bid=bid, ask=ask}) \
+    end \
+    return {cjson.encode(tblresults), tblsubscribe} \
+  ';
+
+  scriptunwatchlist = common.unsubscribesymbolnbt + '\
+    local tblunsubscribe = {} \
+    local watchlist = redis.call("smembers", KEYS[1] .. ":watchlist") \
+    for index = 1, #watchlist do \
+      --[[ unsubscribe from this symbol ]] \
+      local unsubscribe = unsubscribesymbolnbt(watchlist[index], KEYS[1], KEYS[2]) \
+      if unsubscribe[1] == 1 then \
+        table.insert(tblunsubscribe, watchlist[index]) \
+      end \
+    end \
+    return tblunsubscribe \
+  ';
+
+  //
+  // add a symbol to a watchlist
+  // params: symbol, client id, server id
+  //
+  scriptaddtowatchlist = common.subscribesymbolnbt + '\
+    redis.call("sadd", KEYS[2] .. ":watchlist", KEYS[1]) \
+    local subscribe = subscribesymbolnbt(KEYS[1], KEYS[2], KEYS[3]) \
+    return subscribe[1] \
   ';
 
   scriptgetorderbooks = common.subscribesymbol + common.subscribesymboldl + '\

@@ -816,7 +816,7 @@ exports.registerCommonScripts = function () {
     elseif transtype == "FI" then \
       key = clientid .. ":finance:" .. currency \
     elseif transtype == "IN" then \
-      key = clientid .. ":dividend:" .. currency \
+      key = clientid .. ":interest:" .. currency \
     elseif transtype == "CD" then \
       key = clientid .. ":deposits:" .. currency \
     elseif transtype == "CW" then \
@@ -832,7 +832,7 @@ exports.registerCommonScripts = function () {
     return {0, cashtransid} \
   end \
   ';
-  
+
   exports.updatecash = updatecash;
 
   getcash = '\
@@ -1181,6 +1181,8 @@ exports.registerCommonScripts = function () {
     return {unsubscribe, nbtsymbol} \
   end \
   ';
+
+  exports.unsubscribesymbolnbt = unsubscribesymbolnbt;
 
   //
   // subscribe to an instrument with digitallook

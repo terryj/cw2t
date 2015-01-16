@@ -395,6 +395,7 @@
         var trades = [];
         var account = [];
         var statement = [];
+        var watchlist = [];
         var qbroker = "TGRANT";
         var email = "";
         var operatortype = 1; // client
@@ -451,6 +452,8 @@
                     accountReceived(obj.account);                    
                 } else if ("statement" in obj) {
                     statementReceived(obj.statement);
+                } else if ("watchlist" in obj) {
+                    watchlistReceived(obj.watchlist);
                 }
             } catch(e) {
                 console.log(e);
@@ -742,7 +745,7 @@
 
         function createMenu() {
             var data = [""];
-            var cols = ["Request Quotes", "Portfolio", "Account Summary", "Statement", "Trades", "Live Quote Requests"];
+            var cols = ["Request Quotes", "Watchlist", "Portfolio", "Account Summary", "Statement", "Trades", "Quote Requests"];
 
             // create a table
             var tblmenu = d3.select("#divcontainer")
@@ -775,7 +778,7 @@
                         // add a style to treat first menu item as default
                         .style("color", function(d) { return d == cols[0] ? "gray" : null; })
                         .on("click", function(d, i) {
-                            if (selectedmenu == 1) {
+                            if (selectedmenu == 2) { // portfolio
                                 // we have subscribed to positions, so need to unsubscribe
                                 requestUnsubscribePositions();
                             }
@@ -801,14 +804,16 @@
                             if (d == cols[0]) {
                                 selectSymbol();
                             } else if (d == cols[1]) {
-                                requestPosition("");
+                                requestWatchlist();
                             } else if (d == cols[2]) {
-                                requestAccount();
+                                requestPosition("");
                             } else if (d == cols[3]) {
-                                requestStatement();
+                                requestAccount();
                             } else if (d == cols[4]) {
-                                requestTrades();
+                                requestStatement();
                             } else if (d == cols[5]) {
+                                requestTrades();
+                            } else if (d == cols[6]) {
                                 alert("The dark side - out of hours - you need a passport to go here!");
                                 //requestOpenQuoteRequests("");
                             }
@@ -868,6 +873,7 @@
             d3.select("#tbltrade").remove();
             d3.select("#tblaccount").remove();
             d3.select("#tblstatement").remove();
+            d3.select("#tblwatchlist").remove();
         }
 
         function clearData() {
@@ -1610,7 +1616,7 @@
             var inquotes = false;
 
             // add to trades, if that is what we are looking at
-            if (selectedmenu == 3) {
+            if (selectedmenu == 5) {
                 trades.unshift(trade); // add to start of array
                 updateTradeTable();
                 return;
@@ -1663,6 +1669,122 @@
                     }
                 }
             }
+        }
+
+        function requestWatchlist() {
+            watchlistRequest("");
+            selectSymbol();
+        }
+
+        function requestUnwatchlist() {
+            var wl = {};
+            sockjs.send("{\"unwatchlistrequest\":" + JSON.stringify(wl) + "}");            
+        }
+
+        function watchlistRequest(symbol) {
+            var wl = {};
+
+            if (symbol != "") {
+                if (inWatchlist(symbol)) {
+                    alert("Symbol: " + symbol + " is already in your watchlist");
+                    return;
+                }
+                wl.symbol = symbol;
+            } else {
+                watchlist = [];
+            }
+
+            sockjs.send("{\"watchlistrequest\":" + JSON.stringify(wl) + "}");
+        }
+
+        function watchlistReceived(watchlistarr) {
+            console.log("watchlistReceived");
+            console.log(watchlistarr);
+
+            for (var i = 0; i < watchlistarr.length; ++i) {
+                if (!inWatchlist(watchlistarr[i].symbol)) {
+                    watchlistarr[i].remove = "x";
+                    watchlist.push(watchlistarr[i]);
+                }
+            }
+
+            updateWatchlistTable();
+        }
+
+        function inWatchlist(symbol) {
+            for (i = 0; i < watchlist.length; i++) {
+                if (symbol == watchlist[i].symbol) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+
+        function updateWatchlistTable() {
+            var cols = ["symbol", "bid", "ask", "remove"];
+
+            var tblwatchlist = d3.select("#tblwatchlist");
+            if (tblwatchlist.empty()) {
+                tblwatchlist = createWatchlistTable(cols);
+            }
+
+            // base the table on the watchlist array
+            var rows = tblwatchlist.select("tbody").selectAll("tr")
+                .data(watchlist);
+
+            // rows enter
+            rows.enter()
+                .append("tr");
+
+            // cols enter
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(col) {
+                        return {col: col, value: row[col]};
+                    });
+                 })
+                .enter()
+                .append("td")
+                .each(function(d) {
+                    if (d.col == "symbol") {
+                        // display a link for this symbol
+                        d3.select(this)
+                            .append("a")
+                                .attr("href", "#")
+                                .text(function (d) { return d.value; })
+                                .on("click", function(d) {
+                                    requestUnwatchlist();
+                                    singleSymbol(d.value);
+                                });
+                    } else {
+                        d3.select(this)
+                            .text(d.value);
+                    }
+                });
+        }
+
+        function createWatchlistTable(cols) {
+            var tblwatchlist = d3.select("#divcontainer")
+                .append("table")
+                .attr("id", "tblwatchlist")
+                .attr("class", "tblaccount");
+
+            // add header & body
+            var thead = tblwatchlist.append("thead");
+            var tbody = tblwatchlist.append("tbody");
+
+            // add the column headings
+            thead.selectAll("th")
+                .data(cols)
+                .enter()
+                .append("th")
+                    .attr("class", "tblaccounthdr")
+                    .text(function(d) {
+                        return d;
+                    });
+
+            return tblwatchlist;
         }
 
         function selectSymbol() {
@@ -1744,23 +1866,27 @@
                         .on("click", function(d, i) {
                             var lastspace = this.innerHTML.lastIndexOf(' ');
 
-                            // unsubscribe current symbol
-                            if (selectedsymbol != "") {
-                                requestRemoveOrderbook(selectedsymbol);
+                            if (selectedmenu == 0) {
+                                // unsubscribe current symbol
+                                if (selectedsymbol != "") {
+                                    requestRemoveOrderbook(selectedsymbol);
+                                }
+
+                                selectedsymbol = this.innerHTML.substr(lastspace+1);
+
+                                clearData();
+
+                                // clear price display in case of a previously selected symbol
+                                d3.select("#divprice").remove();
+                                d3.select("#tblmenuprice").remove();
+                                d3.select("#divrfq").remove();
+
+                                // request a symbol
+                                requestOrderbook(selectedsymbol);
+                                requestPosition(selectedsymbol);
+                            } else {
+                                watchlistRequest(this.innerHTML.substr(lastspace+1));
                             }
-
-                            selectedsymbol = this.innerHTML.substr(lastspace+1);
-
-                            clearData();
-
-                            // clear price display in case of a previously selected symbol
-                            d3.select("#divprice").remove();
-                            d3.select("#tblmenuprice").remove();
-                            d3.select("#divrfq").remove();
-
-                            // request a symbol
-                            requestOrderbook(selectedsymbol);
-                            requestPosition(selectedsymbol);
 
                             // clear array
                             symboldata = [];
@@ -3104,7 +3230,10 @@
             }
 
             // single symbol/portfolio only
-            if (selectedmenu != 0 && selectedmenu != 1) { return; }
+            if (selectedmenu != 0 && selectedmenu != 2) { return; }
+
+            // only display position if this is the symbol we are looking at
+            if (selectedmenu == 2 && position.symbol != selectedsymbol) { return; }
 
             position.costpershare = Math.abs(position.cost / position.quantity);
 
@@ -3125,7 +3254,7 @@
                 positions.push(position);
 
                 // position has been created by someone else's actions, so request prices
-                if (selectedmenu == 1) {
+                if (selectedmenu == 2) {
                     requestOrderbook(position.symbol);
                 }
             }
