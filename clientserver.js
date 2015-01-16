@@ -254,7 +254,7 @@ function listen() {
           } else if ("watchlistrequest" in obj) {
             watchlistRequest(obj.watchlistrequest, clientid, conn);
           } else if ("unwatchlistrequest" in obj) {
-            unwatchlistrequest(obj.unwatchlistrequest, clientid, conn);
+            unwatchlistrequest(clientid, conn);
           } else if ("statementrequest" in obj) {
             statementRequest(obj.statementrequest, clientid, conn);
           } else if ("index" in obj) {
@@ -1600,6 +1600,7 @@ function watchlistRequest(watchlist, clientid, conn) {
 
 function unwatchlistrequest(clientid, conn) {
   console.log("unwatchlistrequest");
+  console.log(clientid);
   // unsubscribe from the watchlist for this client
   db.eval(scriptunwatchlist, 2, clientid, serverid, function(err, ret) {
     if (err) {
@@ -1666,6 +1667,10 @@ function registerScripts() {
     return {cjson.encode(tblresults), tblsubscribe} \
   ';
 
+  //
+  // unsubscribe from watchlist for this client
+  // params: client id, server id
+  //
   scriptunwatchlist = common.unsubscribesymbolnbt + '\
     local tblunsubscribe = {} \
     local watchlist = redis.call("smembers", KEYS[1] .. ":watchlist") \

@@ -781,6 +781,9 @@
                             if (selectedmenu == 2) { // portfolio
                                 // we have subscribed to positions, so need to unsubscribe
                                 requestUnsubscribePositions();
+                            } else if (selectedmenu == 1) { // watchlist
+                                // need to unsubscribe from watchlist
+                                requestUnwatchlist();
                             }
                             selectedmenu = i;
 
