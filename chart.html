@@ -454,6 +454,8 @@
                     statementReceived(obj.statement);
                 } else if ("watchlist" in obj) {
                     watchlistReceived(obj.watchlist);
+                } else if ("unwatchlist" in obj) {
+                    unwatchlistReceived(obj.unwatchlist);
                 }
             } catch(e) {
                 console.log(e);
@@ -745,7 +747,7 @@
 
         function createMenu() {
             var data = [""];
-            var cols = ["Request Quotes", "Watchlist", "Portfolio", "Account Summary", "Statement", "Trades", "Quote Requests"];
+            var cols = ["Request Quotes", "Watchlist", "Portfolio", "Account Summary", "Statement", "Trades", "Live Quote Requests"];
 
             // create a table
             var tblmenu = d3.select("#divcontainer")
@@ -783,7 +785,7 @@
                                 requestUnsubscribePositions();
                             } else if (selectedmenu == 1) { // watchlist
                                 // need to unsubscribe from watchlist
-                                requestUnwatchlist();
+                                requestUnwatchlist("");
                             }
                             selectedmenu = i;
 
@@ -1675,13 +1677,19 @@
         }
 
         function requestWatchlist() {
+            watchlist = [];
             watchlistRequest("");
             selectSymbol();
         }
 
-        function requestUnwatchlist() {
-            var wl = {};
-            sockjs.send("{\"unwatchlistrequest\":" + JSON.stringify(wl) + "}");            
+        function requestUnwatchlist(symbol) {
+            var uwl = {};
+
+            if (symbol != "") {
+                uwl.symbol = symbol;
+            }
+
+            sockjs.send("{\"unwatchlistrequest\":" + JSON.stringify(uwl) + "}");            
         }
 
         function watchlistRequest(symbol) {
@@ -1693,8 +1701,6 @@
                     return;
                 }
                 wl.symbol = symbol;
-            } else {
-                watchlist = [];
             }
 
             sockjs.send("{\"watchlistrequest\":" + JSON.stringify(wl) + "}");
@@ -1705,7 +1711,9 @@
             console.log(watchlistarr);
 
             for (var i = 0; i < watchlistarr.length; ++i) {
-                if (!inWatchlist(watchlistarr[i].symbol)) {
+                console.log("checking"+watchlistarr[i].symbol);
+                if (!(inWatchlist(watchlistarr[i].symbol))) {
+                    console.log("adding to watchlist");
                     watchlistarr[i].remove = "x";
                     watchlist.push(watchlistarr[i]);
                 }
@@ -1714,18 +1722,38 @@
             updateWatchlistTable();
         }
 
+        function unwatchlistReceived(symbol) {
+            console.log("unwatchlistReceived");
+            //console.log(unwatchlist);
+
+            for (var i = 0; i < watchlist.length; ++i) {
+                if (symbol == watchlist[i].symbol) {
+                    console.log("removing");
+                    watchlist.splice(i);
+                    break;
+                }
+            }
+
+            updateWatchlistTable();   
+        }
+
         function inWatchlist(symbol) {
+            console.log("inWatchlist"+symbol);
             for (i = 0; i < watchlist.length; i++) {
                 if (symbol == watchlist[i].symbol) {
+                    console.log("rettrue");
                     return true;
                 }
             }
+            console.log("retfalse");
             return false;
         }
 
 
         function updateWatchlistTable() {
             var cols = ["symbol", "bid", "ask", "remove"];
+            console.log("updateWatchlistTable");
+            console.log(watchlist);
 
             var tblwatchlist = d3.select("#tblwatchlist");
             if (tblwatchlist.empty()) {
@@ -1740,16 +1768,19 @@
             rows.enter()
                 .append("tr");
 
+            rows.exit().remove();
+
             // cols enter
             var cells = rows.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(col) {
                         return {col: col, value: row[col]};
                     });
-                 })
-                .enter()
+                 });
+
+            cells.enter()
                 .append("td")
-                .each(function(d) {
+                .each(function(d, i, j) {
                     if (d.col == "symbol") {
                         // display a link for this symbol
                         d3.select(this)
@@ -1757,14 +1788,25 @@
                                 .attr("href", "#")
                                 .text(function (d) { return d.value; })
                                 .on("click", function(d) {
-                                    requestUnwatchlist();
+                                    requestUnwatchlist("");
                                     singleSymbol(d.value);
+                                });
+                    } else if (d.col == "remove") {
+                        // display a link for this symbol
+                        d3.select(this)
+                            .append("a")
+                                .attr("href", "#")
+                                .text(function (d) { return d.value; })
+                                .on("click", function(d) {
+                                    requestUnwatchlist(watchlist[j].symbol);
                                 });
                     } else {
                         d3.select(this)
                             .text(d.value);
                     }
                 });
+
+            //cells.exit().remove();
         }
 
         function createWatchlistTable(cols) {
@@ -3249,6 +3291,7 @@
                         positions[i] = position;
                     }
                     posupdated = true;
+                    break;
                 }
             }
 

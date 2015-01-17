@@ -254,7 +254,7 @@ function listen() {
           } else if ("watchlistrequest" in obj) {
             watchlistRequest(obj.watchlistrequest, clientid, conn);
           } else if ("unwatchlistrequest" in obj) {
-            unwatchlistrequest(clientid, conn);
+            unwatchlistrequest(obj.unwatchlistrequest, clientid, conn);
           } else if ("statementrequest" in obj) {
             statementRequest(obj.statementrequest, clientid, conn);
           } else if ("index" in obj) {
@@ -1573,9 +1573,9 @@ function watchlistRequest(watchlist, clientid, conn) {
       }
       console.log(ret);
 
-      conn.write("{\"watchlist\":[\"" + watchlist.symbol + "\"]}");
+      conn.write("{\"watchlist\":" + ret[0] + "}");
 
-      if (ret == 1) {
+      if (ret[1] == 1) {
         dbsub.subscribe("price:" + watchlist.symbol);
       }
     });
@@ -1598,22 +1598,40 @@ function watchlistRequest(watchlist, clientid, conn) {
   }
 }
 
-function unwatchlistrequest(clientid, conn) {
+function unwatchlistrequest(uwl, clientid, conn) {
   console.log("unwatchlistrequest");
-  console.log(clientid);
-  // unsubscribe from the watchlist for this client
-  db.eval(scriptunwatchlist, 2, clientid, serverid, function(err, ret) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-    console.log(ret);
 
-    // unsubscribe from symbols
-    for (var i = 0; i < ret.length; i++) {
-      dbsub.unsubscribe("price:" + ret[i]);
-    }
-  });
+  if ("symbol" in uwl) {
+    // unsubscribe from the watchlist for this client
+    db.eval(scriptremovewatchlist, 3, uwl.symbol, clientid, serverid, function(err, ret) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+      console.log(ret);
+
+      // unsubscribe from symbol
+      if (ret == 1) {
+        dbsub.unsubscribe("price:" + uwl.symbol);
+      }
+
+      conn.write("{\"unwatchlist\":[\"" + uwl.symbol + "\"]}");
+    });
+  } else {
+    // unsubscribe from the watchlist for this client
+    db.eval(scriptunwatchlist, 2, clientid, serverid, function(err, ret) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+      console.log(ret);
+
+      // unsubscribe from symbols
+      for (var i = 0; i < ret.length; i++) {
+        dbsub.unsubscribe("price:" + ret[i]);
+      }
+    });
+  }
 }
 
 function registerScripts() {
@@ -1691,7 +1709,22 @@ function registerScripts() {
   scriptaddtowatchlist = common.subscribesymbolnbt + '\
     redis.call("sadd", KEYS[2] .. ":watchlist", KEYS[1]) \
     local subscribe = subscribesymbolnbt(KEYS[1], KEYS[2], KEYS[3]) \
-    return subscribe[1] \
+    --[[ get current prices ]] \
+    local bid = redis.call("hget", "price:" .. KEYS[1], "bid") \
+    local ask = redis.call("hget", "price:" .. KEYS[1], "ask") \
+    local tblresults = {} \
+    table.insert(tblresults, {symbol=KEYS[1], bid=bid, ask=ask}) \
+    return {cjson.encode(tblresults), subscribe[1]} \
+  ';
+
+  //
+  // remove a symbol from a watchlist
+  // params: symbol, client id, server id
+  //
+  scriptremovewatchlist = common.unsubscribesymbolnbt + '\
+    redis.call("srem", KEYS[2] .. ":watchlist", KEYS[1]) \
+    local unsubscribe = unsubscribesymbolnbt(KEYS[1], KEYS[2], KEYS[3]) \
+    return unsubscribe[1] \
   ';
 
   scriptgetorderbooks = common.subscribesymbol + common.subscribesymboldl + '\
