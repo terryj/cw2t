@@ -1723,13 +1723,13 @@
         }
 
         function unwatchlistReceived(symbol) {
-            console.log("unwatchlistReceived");
+            console.log("unwatchlistReceived"+symbol);
             //console.log(unwatchlist);
 
             for (var i = 0; i < watchlist.length; ++i) {
                 if (symbol == watchlist[i].symbol) {
                     console.log("removing");
-                    watchlist.splice(i);
+                    watchlist.splice(i, 1);
                     break;
                 }
             }
@@ -1777,6 +1777,8 @@
                         return {col: col, value: row[col]};
                     });
                  });
+                                            //.text(function(d) { return d.value });
+
 
             cells.enter()
                 .append("td")
@@ -1805,8 +1807,6 @@
                             .text(d.value);
                     }
                 });
-
-            //cells.exit().remove();
         }
 
         function createWatchlistTable(cols) {
@@ -3286,7 +3286,7 @@
             for (var i = 0; i < positions.length; i++) {
                 if (positions[i].symbol == position.symbol) {
                     if (position.quantity == 0) {
-                        positions.splice(i);
+                        positions.splice(i, 1);
                     } else {
                         positions[i] = position;
                     }
