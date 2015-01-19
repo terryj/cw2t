@@ -126,8 +126,8 @@ conn.on('data', function(data) {
   var msglen;
   var instrec = {};
 
-  //console.log('data recd');
-  //console.log(data);
+  console.log('data recd');
+  console.log(data);
 
   instrec.bid = "";
   instrec.ask = "";
@@ -332,9 +332,8 @@ function updateRec(fid, value, instrec) {
 }
 
 function updateDb(functioncode, instrumentcode, instrec) {
-  //console.log("updateDb");
-  //console.log(instrec);
-
+  console.log("updateDb");
+  console.log(instrec);
   // create a unix timestamp
   var now = new Date();
   var timestamp = +now;
@@ -345,23 +344,27 @@ function updateDb(functioncode, instrumentcode, instrec) {
     instrec.nbtsymbol = instrumentcode;
 
     // add our own instrument type
-    if (instrec.insttype == 1) {
-      instrec.instrumenttype = "DE";
-      instrec.hedgesymbol = "";
-      instrec.marginpercent = "100";
-    } else if (instrec.insttype == 9) {
-      instrec.instrumenttype = "IE";
-      instrec.hedgesymbol = "";
-      instrec.marginpercent = "100";
-    } else {
-      console.log("unknown insttype");
+    if ("insttype" in instrec) {
+      if (instrec.insttype == 1) {
+        instrec.instrumenttype = "DE";
+        instrec.hedgesymbol = "";
+        instrec.marginpercent = "100";
+      } else if (instrec.insttype == 9) {
+        instrec.instrumenttype = "IE";
+        instrec.hedgesymbol = "";
+        instrec.marginpercent = "100";
+      } else {
+        console.log("unknown insttype: " + instrec.insttype);
+      }
     }
 
     // add an exchange - used in FIX messages
-    if (instrec.countryofissue == "GB") {
-      instrec.exchange = "L";
-    } else {
-      console.log("unknown countryofissue");
+    if ("countryofissue" in  instrec) {
+      if (instrec.countryofissue == "GB") {
+        instrec.exchange = "L";
+      } else {
+        console.log("unknown countryofissue: " + instrec.countryofissue);
+      }
     }
 
     // currency
@@ -370,8 +373,10 @@ function updateDb(functioncode, instrumentcode, instrec) {
     }
 
     // create symbol & add to list
-    db.hmset("symbol:" + instrumentcode, instrec);
-    db.sadd("instruments", instrumentcode);
+    if ("insttype" in instrec) {
+      db.hmset("symbol:" + instrumentcode, instrec);
+      db.sadd("instruments", instrumentcode);
+    }
   }
 
   // update price & history

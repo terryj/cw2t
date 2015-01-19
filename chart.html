@@ -592,21 +592,27 @@
         }
 
         function priceReceived(price) {
-            //console.log("priceReceived");
-
             // only update price stuff for single symbol view
-            if (selectedmenu == 0 && price.symbol == selectedsymbol) {
-                // update price data
-                updatePriceData(price);
+            if (selectedmenu == 0) {
+                if (price.symbol == selectedsymbol) {
+                    // update price data
+                    updatePriceData(price);
 
-                // update price display
-                updatePriceTable(price);
+                    // update price display
+                    updatePriceTable(price);
+                }
+
+                // update position data
+                updatePositionData(price);
+                updatePositionTable();
+            } else if (selectedmenu == 1) {
+                updateWatchlist(price);
+                updateWatchlistTable();
+            } else if (selectedmenu == 2) {
+                // update position data
+                updatePositionData(price);
+                updatePositionTable();
             }
-
-            // update position data
-            updatePositionData(price);
-
-            updatePositionTable();
         }
 
         // update price array
@@ -819,7 +825,7 @@
                             } else if (d == cols[5]) {
                                 requestTrades();
                             } else if (d == cols[6]) {
-                                alert("The dark side - out of hours - you need a passport to go here!");
+                                alert("Out of hours - the dark side...");
                                 //requestOpenQuoteRequests("");
                             }
                         });
@@ -1707,14 +1713,12 @@
         }
 
         function watchlistReceived(watchlistarr) {
-            console.log("watchlistReceived");
-            console.log(watchlistarr);
-
             for (var i = 0; i < watchlistarr.length; ++i) {
-                console.log("checking"+watchlistarr[i].symbol);
                 if (!(inWatchlist(watchlistarr[i].symbol))) {
-                    console.log("adding to watchlist");
                     watchlistarr[i].remove = "x";
+                    watchlistarr[i].bidtick = '';
+                    watchlistarr[i].asktick = '';
+
                     watchlist.push(watchlistarr[i]);
                 }
             }
@@ -1723,12 +1727,8 @@
         }
 
         function unwatchlistReceived(symbol) {
-            console.log("unwatchlistReceived"+symbol);
-            //console.log(unwatchlist);
-
             for (var i = 0; i < watchlist.length; ++i) {
                 if (symbol == watchlist[i].symbol) {
-                    console.log("removing");
                     watchlist.splice(i, 1);
                     break;
                 }
@@ -1738,22 +1738,47 @@
         }
 
         function inWatchlist(symbol) {
-            console.log("inWatchlist"+symbol);
             for (i = 0; i < watchlist.length; i++) {
                 if (symbol == watchlist[i].symbol) {
-                    console.log("rettrue");
                     return true;
                 }
             }
-            console.log("retfalse");
             return false;
         }
 
+        function updateWatchlist(price) {
+            for (var i = 0; i < watchlist.length; ++i) {
+                if (price.symbol == watchlist[i].symbol) {
+                    if ("bid" in price) {
+                        if (parseFloat(price.bid) > parseFloat(watchlist[i].bid)) {
+                            watchlist[i].bidtick = '+';
+                        } else if (parseFloat(price.bid) < parseFloat(watchlist[i].bid)) {
+                            watchlist[i].bidtick = '-';
+                        } else {
+                            watchlist[i].bidtick = '0';
+                        }
+
+                        watchlist[i].bid = price.bid;
+                    }
+
+                    if ("ask" in price) {
+                        if (parseFloat(price.ask) > parseFloat(watchlist[i].ask)) {
+                            watchlist[i].asktick = '+';
+                        } else if (parseFloat(price.ask) < parseFloat(watchlist[i].ask)) {
+                            watchlist[i].asktick = '-';
+                        } else {
+                            watchlist[i].asktick = '0';
+                        }
+
+                        watchlist[i].ask = price.ask;
+                    }
+                    break;
+                }
+            }            
+        }
 
         function updateWatchlistTable() {
             var cols = ["symbol", "bid", "ask", "remove"];
-            console.log("updateWatchlistTable");
-            console.log(watchlist);
 
             var tblwatchlist = d3.select("#tblwatchlist");
             if (tblwatchlist.empty()) {
@@ -1764,21 +1789,17 @@
             var rows = tblwatchlist.select("tbody").selectAll("tr")
                 .data(watchlist);
 
-            // rows enter
             rows.enter()
                 .append("tr");
 
             rows.exit().remove();
 
-            // cols enter
             var cells = rows.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(col) {
                         return {col: col, value: row[col]};
                     });
                  });
-                                            //.text(function(d) { return d.value });
-
 
             cells.enter()
                 .append("td")
@@ -1788,7 +1809,6 @@
                         d3.select(this)
                             .append("a")
                                 .attr("href", "#")
-                                .text(function (d) { return d.value; })
                                 .on("click", function(d) {
                                     requestUnwatchlist("");
                                     singleSymbol(d.value);
@@ -1802,11 +1822,40 @@
                                 .on("click", function(d) {
                                     requestUnwatchlist(watchlist[j].symbol);
                                 });
-                    } else {
-                        d3.select(this)
-                            .text(d.value);
                     }
                 });
+
+            cells.each(function(d) {
+                if (d.col == "symbol") {
+                    // update text for link as symbol may have changed
+                    d3.select(this).select("a")
+                        .text(function (d) { return d.value; });
+                } else if (d.col == "remove") {
+                } else {
+                    d3.select(this)
+                        .text(function(d) { return formatCurrency(d.value, 2); })
+                        .attr("class", function(d, i, j) {
+                            if (d.col == "bid") {
+                                if (watchlist[j].bidtick == '+') {
+                                    return "tickup";
+                                } else if (watchlist[j].bidtick == '-') {
+                                    return "tickdn";
+                                } else if (watchlist[j].bidtick == '0') {
+                                    return "ticknc";
+                                }
+                            } else if (d.col == "ask") {
+                                if (watchlist[j].asktick == '+') {
+                                    return "tickup";
+                                } else if (watchlist[j].asktick == '-') {
+                                    return "tickdn";
+                                } else if (watchlist[j].asktick == '0') {
+                                    return "ticknc";
+                                }
+                            }
+                            return null;
+                        });
+                }
+            });
         }
 
         function createWatchlistTable(cols) {
