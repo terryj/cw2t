@@ -126,8 +126,8 @@ conn.on('data', function(data) {
   var msglen;
   var instrec = {};
 
-  console.log('data recd');
-  console.log(data);
+  //console.log('data recd');
+  //console.log(data);
 
   instrec.bid = "";
   instrec.ask = "";
@@ -197,7 +197,7 @@ conn.on('data', function(data) {
     case 4:
       if (buf[i] == 31) { // <US>
         var recordtype = buf.toString('utf8', unitseparator+1, i);
-        console.log("recordtype="+recordtype);
+        //console.log("recordtype="+recordtype);
         unitseparator = i;
         parsestate = 5;
       } else if (buf[i] == 28) { // <FS>
@@ -332,8 +332,8 @@ function updateRec(fid, value, instrec) {
 }
 
 function updateDb(functioncode, instrumentcode, instrec) {
-  console.log("updateDb");
-  console.log(instrec);
+  //console.log("updateDb");
+  //console.log(instrec);
   // create a unix timestamp
   var now = new Date();
   var timestamp = +now;
@@ -372,10 +372,11 @@ function updateDb(functioncode, instrumentcode, instrec) {
       instrec.currency = "GBP";
     }
 
-    // create symbol & add to list
+    // create symbol & add to lists
     if ("insttype" in instrec) {
       db.hmset("symbol:" + instrumentcode, instrec);
       db.sadd("instruments", instrumentcode);
+      db.sadd("nbtsymbol:" + instrec.nbtsymbol + ":instruments");
     }
   }
 

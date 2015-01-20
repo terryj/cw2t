@@ -1683,7 +1683,7 @@ exports.registerCommonScripts = function () {
   local nbtsymbol = KEYS[1] \
   local bid = KEYS[3] \
   local ask = KEYS[4] \
-  local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbols") \
+  local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":instruments") \
   for index = 1, #symbols do \
     local pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbol") .. ":" .. cjson.encode(symbols[index]) .. "," \
     --[[ may only get bid or ask ]] \

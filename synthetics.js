@@ -106,6 +106,9 @@ function createCfd() {
           db.hmset("symbol:" + cfd, "currency", inst.currency, "shortname", inst.shortname + " CFD", "nbtsymbol", inst.nbtsymbol, "isin", inst.isin, "exchange", inst.exchange, "instrumenttype", "CFD", "marginpercent", 10, "hedgesymbol", symbol, "hedge", 1, "symbol", cfd, "ptmexempt", 1, "timezone", inst.timezone, "mnemonic", inst.mnemonic);
           db.sadd("instruments", cfd);
 
+          // this is used by the price feed to update any symbols for a nbtsymbol
+          db.sadd("nbtsymbol:" + inst.nbtsymbol + ":instruments");
+
           // spreadbet
 
           // create ccfd
