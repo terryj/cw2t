@@ -3316,7 +3316,7 @@
         }
 
         function positionReceived(position) {
-            //console.log("positionReceived");
+            console.log("positionReceived");
             var posupdated = false;
 
             if (!('symbol' in position)) {
@@ -3327,7 +3327,7 @@
             if (selectedmenu != 0 && selectedmenu != 2) { return; }
 
             // only display position if this is the symbol we are looking at
-            if (selectedmenu == 2 && position.symbol != selectedsymbol) { return; }
+            if (selectedmenu == 0 && position.symbol != selectedsymbol) { return; }
 
             position.costpershare = Math.abs(position.cost / position.quantity);
 
