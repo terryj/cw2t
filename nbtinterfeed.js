@@ -376,7 +376,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
     if ("insttype" in instrec) {
       db.hmset("symbol:" + instrumentcode, instrec);
       db.sadd("instruments", instrumentcode);
-      db.sadd("nbtsymbol:" + instrec.nbtsymbol + ":instruments");
+      db.sadd("nbtsymbol:" + instrec.nbtsymbol + ":instruments", instrumentcode);
     }
   }
 

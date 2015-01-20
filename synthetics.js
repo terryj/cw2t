@@ -107,7 +107,7 @@ function createCfd() {
           db.sadd("instruments", cfd);
 
           // this is used by the price feed to update any symbols for a nbtsymbol
-          db.sadd("nbtsymbol:" + inst.nbtsymbol + ":instruments");
+          db.sadd("nbtsymbol:" + inst.nbtsymbol + ":instruments", cfd);
 
           // spreadbet
 
