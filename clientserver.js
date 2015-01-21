@@ -1647,7 +1647,7 @@ function registerScripts() {
   for index = 1, #instruments do \
     vals = redis.call("hmget", "symbol:" .. instruments[index], unpack(fields)) \
     if redis.call("sismember", KEYS[1] .. ":instrumenttypes", vals[1]) == 1 then \
-      table.insert(inst, {symbol = instruments[index], shortname = vals[2], marginpercent = vals[3]}) \
+      table.insert(inst, {symbol = instruments[index], instrumenttype = vals[1], shortname = vals[2], marginpercent = vals[3]}) \
     end \
   end \
   return cjson.encode(inst) \

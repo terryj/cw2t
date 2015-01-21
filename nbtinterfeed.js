@@ -332,8 +332,8 @@ function updateRec(fid, value, instrec) {
 }
 
 function updateDb(functioncode, instrumentcode, instrec) {
-  //console.log("updateDb");
-  //console.log(instrec);
+  console.log("updateDb");
+  console.log(instrec);
   // create a unix timestamp
   var now = new Date();
   var timestamp = +now;
