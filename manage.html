@@ -741,7 +741,6 @@
         var extendedsettlement = false;
         var defaultsettlcurrency = "GBP";
         var monthtext = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sept','Oct','Nov','Dec'];
-        var pricetimer;
         var priceflash = {};
         var heartbeattimer = null;
         var inconnectiontest = false;
@@ -796,10 +795,8 @@
 
                 if ("price" in obj) {
                     updatePrice(obj.price);
-                } else if ("orderbooks" in obj) {
-                    loadOrderBooks(obj.orderbooks);
-                } else if ("orderbook" in obj) {
-                    updateOrderBook(obj.orderbook);
+                } else if ("watchlist" in obj) {
+                    watchlistReceived(obj.watchlist);
                 } else if ("orders" in obj) {
                     clearOrders();
                     loadOrders(obj.orders);
@@ -933,16 +930,6 @@
         function loadIndex(index) {
             indices[index.name] = index.symbols;
             displayIndex(index.name);
-        }
-
-        function loadOrderBooks(orderbookarr) {
-            for (var i = 0; i < orderbookarr.length; ++i) {
-                orderbooks[orderbookarr[i].symbol] = orderbookarr[i];
-            }
-
-            if (selectedmenu == MENUWATCHLIST) {
-                displayOrderBooks();
-            }
         }
 
         function loadOrders(orderarr) {
@@ -1219,106 +1206,6 @@
             }
         }
 
-        function updateOrderBook(orderbook) {
-            var level;
-
-            // create an entry in the orderbooks array for this symbol
-            if (!(orderbook.symbol in orderbooks)) {
-                // 6 levels
-                orderbooks[orderbook.symbol] = [{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0}];
-            }
-
-            // update the prices
-            for (var i = 0; i < orderbook.prices.length; ++i) {
-                level = orderbook.prices[i].level - 1;
-
-                if ("bid" in orderbook.prices[i]) {
-                    if (orderbook.prices[i].bid > orderbooks[orderbook.symbol][level].bid) {
-                        orderbooks[orderbook.symbol][level].lastbidchange = 1;
-                    } else if (orderbook.prices[i].bid < orderbooks[orderbook.symbol][level].bid) {
-                        orderbooks[orderbook.symbol][level].lastbidchange = 2;
-                    } else {
-                        orderbooks[orderbook.symbol][level].lastbidchange = 0;                        
-                    }
-                    orderbooks[orderbook.symbol][level].bid = orderbook.prices[i].bid;
-                    orderbooks[orderbook.symbol][level].bidflashcount = 3;
-                    priceflash[orderbook.symbol] = true;
-                }
-                if ("offer" in orderbook.prices[i]) {
-                    if (orderbook.prices[i].offer > orderbooks[orderbook.symbol][level].offer) {
-                        orderbooks[orderbook.symbol][level].lastofferchange = 1;
-                    } else if (orderbook.prices[i].offer < orderbooks[orderbook.symbol][level].offer) {
-                        orderbooks[orderbook.symbol][level].lastofferchange = 2;
-                    } else {
-                        orderbooks[orderbook.symbol][level].lastofferchange = 0;                        
-                    }
-                    orderbooks[orderbook.symbol][level].offer = orderbook.prices[i].offer;
-                    orderbooks[orderbook.symbol][level].offerflashcount = 3;
-                    priceflash[orderbook.symbol] = true;
-                }
-                if ("bidvol" in orderbook.prices[i]) {
-                    orderbooks[orderbook.symbol][level].bidvol = orderbook.prices[i].bidvol;                    
-                }
-                if ("offervol" in orderbook.prices[i]) {
-                    orderbooks[orderbook.symbol][level].offervol = orderbook.prices[i].offervol;                    
-                }
-            }
-
-            if (selectedmenu == MENUWATCHLIST) {
-                displayOrderBookHeadings();
-                displayOrderBook(orderbook.symbol);
-            }
-        }
-
-        function updatePrice(price) {
-            var level = 0;
-            console.log("updatePrice");
-            console.log(price);
-
-            // create an entry in the orderbooks array for this symbol
-            if (!(price.symbol in orderbooks)) {
-                // 6 levels
-                orderbooks[price.symbol] = [{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0},{bid:0, offer:0, bidvol:0, offervol:0}];
-            }
-
-            // update the prices
-            if ("bid" in price) {
-                if (price.bid > orderbooks[price.symbol][level].bid) {
-                    orderbooks[price.symbol][level].lastbidchange = 1;
-                } else if (price.bid < orderbooks[price.symbol][level].bid) {
-                    orderbooks[price.symbol][level].lastbidchange = 2;
-                } else {
-                    orderbooks[price.symbol][level].lastbidchange = 0;                        
-                }
-                orderbooks[price.symbol][level].bid = price.bid;
-                orderbooks[price.symbol][level].bidflashcount = 3;
-                priceflash[price.symbol] = true;
-            }
-            if ("ask" in price) {
-                if (price.ask > orderbooks[price.symbol][level].offer) {
-                    orderbooks[price.symbol][level].lastofferchange = 1;
-                } else if (price.ask < orderbooks[price.symbol][level].offer) {
-                    orderbooks[price.symbol][level].lastofferchange = 2;
-                } else {
-                    orderbooks[price.symbol][level].lastofferchange = 0;                        
-                }
-                orderbooks[price.symbol][level].offer = price.ask;
-                orderbooks[price.symbol][level].offerflashcount = 3;
-                priceflash[price.symbol] = true;
-            }
-            if ("bidvol" in price) {
-                orderbooks[orderbook.symbol][level].bidvol = orderbook.prices[i].bidvol;                    
-            }
-            if ("offervol" in price) {
-                orderbooks[orderbook.symbol][level].offervol = orderbook.prices[i].offervol;                    
-            }
-
-            if (selectedmenu == MENUWATCHLIST) {
-                displayOrderBookHeadings();
-                displayOrderBook(price.symbol);
-            }            
-        }
-
         function updateInstrument(instrument) {
             var lblinstconf;
 
@@ -1488,8 +1375,6 @@
             displayMenu();
 
             selectedmenu = MENUWATCHLIST;
-
-            displayOrderBooks();
         }
 
         function startHeartbeatTimer() {
@@ -1500,14 +1385,6 @@
 
         function stopHeartbeatTimer() {
             clearTimeout(heartbeattimer);
-        }
-
-        function startPriceTimer() {
-            pricetimer = setInterval(flashText, 1000);
-        }
-
-        function stopPriceTimer() {
-            clearInterval(pricetimer);
         }
 
         function startRestartTimer() {
@@ -1548,7 +1425,6 @@
 
             clearMenu();
             clearScreen();
-            clearOrderBooks();
 
             cw2theading = document.getElementById('cw2t');
             cw2theading.innerHTML = coheading + " - User Signin";
@@ -1643,7 +1519,6 @@
             sockjs.onopen = function()  {
                 console.log("connection open");
                 stopRestartTimer();
-                startPriceTimer();
                 displayFormSignin();
                 loggedout = false;
             };
@@ -1655,7 +1530,6 @@
             sockjs.onclose = function()  {
                 console.log("connection closed");
                 stopRestartTimer();
-                stopPriceTimer();
                 if (!loggedout) {
                     startRestartTimer();
                 } else {
@@ -1668,80 +1542,6 @@
         };
 
         newconn();
-
-        //
-        // handles the flashing of colours on receiving prices
-        //
-        function flashText() {
-            var bidprice;
-            var offerprice;
-            var removesymbol;
-
-            for (var symbol in priceflash) {
-                removesymbol = true;
-
-                for (var i = 0; i < orderbooks[symbol].length; i++) {
-                    // bid prices
-                    orderbooks[symbol][i].bidflashcount--;
-                    if (orderbooks[symbol][i].bidflashcount == 0) {
-                        bidprice = document.getElementById("bidprice:" + symbol + ":" + i);
-                        if (bidprice != null) {
-                            if (i == 0) {
-                                if (orderbooks[symbol][i].lastbidchange == 1) {
-                                    bidprice.className = "yellowstripbidup";
-                                } else if (orderbooks[symbol][i].lastbidchange == 2) {
-                                    bidprice.className = "yellowstripbiddn";
-                                } else {
-                                    bidprice.className = "yellowstripbidnochange";
-                                }
-                            } else {
-                                if (orderbooks[symbol][i].lastbidchange == 1) {
-                                    bidprice.className = "bidup";
-                                } else if (orderbooks[symbol][i].lastbidchange == 2) {
-                                    bidprice.className = "biddn";
-                                } else {
-                                    bidprice.className = "bidnochange";
-                                }
-                            }
-                        }
-                    }
-
-                    // offer prices
-                    orderbooks[symbol][i].offerflashcount--;
-                    if (orderbooks[symbol][i].offerflashcount == 0) {
-                        offerprice = document.getElementById("offerprice:" + symbol + ":" + i);
-                        if (offerprice != null) {
-                            if (i == 0) {
-                                if (orderbooks[symbol][i].lastofferchange == 1) {
-                                    offerprice.className = "yellowstripofferup";
-                                } else if (orderbooks[symbol][i].lastofferchange == 2) {
-                                    offerprice.className = "yellowstripofferdn";
-                                } else {
-                                    offerprice.className = "yellowstripoffernochange";           
-                                }
-                            } else {
-                                if (orderbooks[symbol][i].lastofferchange == 1) {
-                                    offerprice.className = "offerup";
-                                } else if (orderbooks[symbol][i].lastofferchange == 2) {
-                                    offerprice.className = "offerdn";
-                                } else {
-                                    offerprice.className = "offernochange";
-                                }
-                            }
-                        }
-                    }
-
-                    // keep track of whether we can remove this symbol
-                    if (orderbooks[symbol][i].bidflashcount > 0 || orderbooks[symbol][i].offerflashcount > 0) {
-                        removesymbol = false;
-                    }
-                }
-
-                if (removesymbol) {
-                    delete priceflash[symbol];
-                }
-            }
-        }
 
         //
         // various clear routines
@@ -1776,10 +1576,6 @@
                 }
                 main.removeChild(headingstrip);
             }
-        }
-
-        function clearOrderBooks() {
-            orderbooks = [];
         }
 
         function clearList(liststr, remove) {
@@ -1824,12 +1620,6 @@
             }
 
             delete orderdivnumarr[symbol];
-        }
-
-        function clearAllSymbolDivs() {
-            for (var symbol in orderbooks) {
-                clearSymbolDiv(symbol);
-            }
         }
 
         function clearStrip(stripid) {
@@ -1878,7 +1668,6 @@
             clearDivs();
             clearForms();
             clearStrips();
-            clearAllSymbolDivs();
             clearEmptyLines();
             clearTables();
             clearLabels();
@@ -2090,7 +1879,6 @@
                         e.stopPropagation();
                     } else {
                         watchlistRequest(symbol);
-                        //sockjs.send("{\"watchlistrequest\":" + JSON.stringify(symbol) + "}");
                         stocklist.style.visibility = "hidden";
                         stockboxinput.value = "";
                         stockboxinput.focus();

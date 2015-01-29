@@ -865,7 +865,7 @@
                             // & clear any previous request
                             d3.select("#divrfq").remove();
 
-                            requestQuote(symbol);
+                            requestQuote(symbol, "");
                         });            
         }
 
@@ -1371,7 +1371,7 @@
             //console.log(line);
         }
 
-        function requestQuote(symbol) {
+        function requestQuote(symbol, quantity) {
             var fields = ["Quantity"]; // one per row
 
             var cashorshares = ["Number of shares", "Cash amount"];
@@ -1424,7 +1424,13 @@
                 .append("input")
                     .attr("id", "rfqqty")
                     .attr("class", "rfqqty")
-                    .attr("placeholder", qtycashorshares[0]);
+                    .attr("value", quantity)
+                    .attr("placeholder", qtycashorshares[0])
+                    .on("keydown", function() {
+                        if (d3.event.keyCode == 13) {
+                            rfq();
+                        }
+                    });
 
             // add a button, with associated function to send rfq
             rows.append("td")
@@ -1437,14 +1443,7 @@
                         if (!validateRfq()) {
                             d3.select("#rfqqty").node().focus();
                         } else {
-                            sendRfq();
-
-                            // remove button
-                            d3.select(this).remove();
-
-                            // add text
-                            d3.select("#tdrfq")
-                                .text("Quote Request Sent");
+                            rfq();
                         }
                     });
 
@@ -1455,7 +1454,7 @@
 
                 // validate qty
                 if (quantity == "") {
-                    alert("Please enter a number");
+                    alert("Please enter a quantity");
                     return false;
                 } else if (isNaN(quantity)) {
                     alert("Quantity must be numeric");
@@ -1468,32 +1467,48 @@
                 return true
             }
 
-            function sendRfq() {
-                var rfq = {};
-
+            function rfq() {
                 // quantity as cash or shares
                 var selcashorshares = d3.select("#selcashorshares");
-                var quantity = d3.select("#rfqqty").node().value;
+                var qty;
+                var cashorderqty;
 
                 if (selcashorshares.node().value == cashorshares[0]) {
-                    rfq.cashorderqty = "";
-                    rfq.quantity = quantity;
+                    cashorderqty = "";
+                    qty = d3.select("#rfqqty").node().value;
                 } else {
-                    rfq.cashorderqty = quantity;
-                    rfq.quantity = "";                    
+                    cashorderqty = d3.select("#rfqqty").node().value;
+                    qty = "";                    
                 }
 
-                rfq.clientid = clientid;
-                rfq.symbol = symbol;
-                rfq.currency = "GBP"; // todo
-                rfq.settlcurrency = "GBP"; // todo
-                rfq.nosettdays = 2;
-                rfq.operatortype = operatortype;
-                rfq.operatorid = clientid;
-                //rfq.futsettdate = this.value;
+                sendRfq(qty, cashorderqty, symbol, "GBP"); // todo: currency
 
-                sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
+                // remove button
+                d3.select(this).remove();
+
+                // add text
+                d3.select("#tdrfq")
+                    .text("Quote Request Sent");
             }
+        }
+
+        function sendRfq(quantity, cashorderqty, symbol, currency) {
+            var rfq = {};
+
+            rfq.clientid = clientid;
+            rfq.symbol = symbol;
+            rfq.quantity = quantity;
+            rfq.cashorderqty = cashorderqty;
+            rfq.currency = currency;
+            rfq.settlcurrency = currency;
+            rfq.nosettdays = 2;
+            rfq.operatortype = operatortype;
+            rfq.operatorid = clientid;
+            //rfq.futsettdate = this.value;
+
+            console.log(rfq);
+
+            sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
         }
 
         function displayForm(symbol) {
@@ -3460,8 +3475,8 @@
             // enter
             cells.enter()
                 .append("td")
-                .each(function(d) {
-                    if (d.col == "symbol") {
+                .each(function(d, i, j) {
+                    if (d.col == "symbol" && selectedmenu != 0) {
                         // display a link for this symbol
                         d3.select(this)
                             .append("a")
@@ -3470,6 +3485,20 @@
                                 .on("click", function(d) {
                                     requestUnsubscribePositions();
                                     singleSymbol(d.value);
+                                });
+                    } else if (d.col == "quantity" && selectedmenu == 0) {
+                        d3.select(this)
+                            .append("a")
+                                .attr("href", "#")
+                                .html(function (d) { return d.value; })
+                                .on("click", function(d) {
+                                    // clear quote data
+                                    quotes = [];
+
+                                    // & clear any previous request
+                                    d3.select("#divrfq").remove();
+
+                                    requestQuote(positions[j].symbol, positions[j].quantity);
                                 });
                     } else {
                         d3.select(this)
