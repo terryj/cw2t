@@ -509,7 +509,7 @@
             // add a header
             divcontainer.append("header")
                 .attr("id", "stockboxtitle")
-                .text("Cantwaittotrade - " + email);
+                .text("TG Online - " + email);
 
             // display main menu
             createMenu();
@@ -3239,31 +3239,44 @@
 
             signindiv.append("p")
                 .attr("class", "signintitle")
-                .html("Cantwaittotrade");
+                .html("TG Online");
 
             var signinemail = signindiv.append("input")
                 .attr("id", "signinemail")
                 .attr("class", "signininput")
-                .attr("placeholder", "Email");
-
+                .attr("placeholder", "Email")
+                .on("keydown", key);
+                
             var signinpwd = signindiv.append("input")
                 .attr("id", "signinpwd")
                 .attr("class", "signininput")
                 .attr("type", "password")
-                .attr("placeholder", "Password");
+                .attr("placeholder", "Password")
+                .on("keydown", key);
 
             signindiv.append("input")
                 .attr("type", "button")
                 .attr("value", "Sign In")
-                    .attr("class", "signinbutton")
-                    .on("click", function() {
-                        var signin = {};
-                        signin.email = document.getElementById("signinemail").value;
-                        signin.password = document.getElementById("signinpwd").value;
-                        sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");
-                    });
+                .attr("class", "signinbutton")
+                .on("click", function() {
+                    signin();
+                });                
 
             d3.select("#signinemail").node().focus();
+
+            // return key test
+            function key() {
+                if (d3.event.keyCode == 13) {
+                    signin();
+                }
+            }
+
+            function signin() {
+                var signin = {};
+                signin.email = document.getElementById("signinemail").value;
+                signin.password = document.getElementById("signinpwd").value;
+                sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");                
+            }
         }
 
         //
