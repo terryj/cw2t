@@ -52,7 +52,6 @@ if (redislocal) {
 // redis scripts
 var scriptgetinst;
 var scriptupdatepassword;
-var scriptgetorderbooks;
 
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
@@ -148,8 +147,6 @@ function pubsub() {
       sendQuoteack(message.substr(9));
     } else if (message.substr(0, 5) == "quote") {
       sendQuote(message.substr(6));
-    } else if (message.substr(0, 15) == "orderbookupdate") {
-      common.broadcastLevelOne(message.substr(16), connections);
     } else if (message.substr(0, 5) == "order") {
       getSendOrder(message.substr(6));
     } else if (message.substr(0, 5) == "trade") {
@@ -225,10 +222,10 @@ function listen() {
         try {
           var obj = JSON.parse(msg);
 
-          if ("orderbookrequest" in obj) {
-            orderbookRequest(clientid, obj.orderbookrequest, conn);
-          } else if ("orderbookremoverequest" in obj) {
-            orderbookRemoveRequest(clientid, obj.orderbookremoverequest, conn);
+          if ("singlesymbolrequest" in obj) {
+            singleSymbolRequest(clientid, obj.singlesymbolrequest, conn);
+          } else if ("singlesymbolremoverequest" in obj) {
+            singleSymbolRemoveRequest(clientid, obj.singlesymbolremoverequest, conn);
           } else if ("positionrequest" in obj) {
             positionRequest(obj.positionrequest, clientid, conn);
           } else if ("cashrequest" in obj) {
@@ -602,18 +599,6 @@ function getSendReserve(clientid, symbol, currency) {
   });
 }
 
-function displayOrderBook(symbol, lowerbound, upperbound) {
-  db.zrangebyscore(symbol, lowerbound, upperbound, function(err, matchorders) {
-    console.log("order book for instrument " + symbol + " has " + matchorders.length + " order(s)");
-
-    matchorders.forEach(function (matchorderid, i) {
-      db.hgetall("order:" + matchorderid, function(err, matchorder) {
-        console.log("orderid="+matchorder.orderid+", clientid="+matchorder.clientid+", price="+matchorder.price+", side="+matchorder.side+", quantity="+matchorder.remquantity);
-      });
-    });
-  });
-}
-
 function getValue(trade) {
   if (parseInt(trade.side) == 1) {
     return trade.quantity * trade.price + trade.commission + trade.costs;
@@ -622,64 +607,13 @@ function getValue(trade) {
   }
 }
 
-/*function sendInstruments(conn) {
-  console.log("sending Instruments");
-
-  db.sort("instruments", "ALPHA", function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (replies.length == 0) {
-      console.log("Error: no instruments in database");
-      return;
-    }
-
-    replies.forEach(function(symbol, j) {
-      db.hgetall("symbol:" + symbol, function(err, inst) {
-        var instrument = {};
-
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        if (inst == null) {
-          console.log("symbol " + symbol + " not found");
-          return;
-        }
-
-        // todo: reinstate/choice
-        if (inst.instrumenttype != "DE") {
-          return;
-        }
-
-        instrument.symbol = symbol;
-        instrument.currency = inst.currency;
-
-        if ("shortname" in inst) {
-          instrument.shortname = inst.shortname;
-        } else {
-          console.log("no shortname for "+symbol);
-          instrument.shortname = "";
-        }
-
-        conn.write("{\"instrument\":" + JSON.stringify(instrument) + "}");
-      });
-    });
-  });
-}*/
-
 function sendInstruments(clientid, conn) {
-  console.log("sendInstruments");
   // get sorted subset of instruments for this client
   db.eval(scriptgetinst, 1, clientid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
     }
-    console.log(ret);
 
     conn.write("{\"instruments\":" + ret + "}");
   });
@@ -965,120 +899,6 @@ function sendReserves(clientid, conn) {
   });
 }
 
-function sendAllOrderBooks(conn) {
-  var level1arr = [];
-  var count;
-  var send = false;
-
-  // get all the instruments in the order book
-  db.smembers("orderbooks", function(err, instruments) {
-    if (err) {
-      console.log("Error in sendAllOrderBooks:" + err);
-      return;
-    }
-
-    count = instruments.length;
-    if (count == 0) {
-      return;
-    }
-
-    // send the order book for each instrument
-    instruments.forEach(function(symbol, i) {
-      count--;
-      if (count <= 0) {
-        send = true;
-      }
-
-      sendOrderBook(symbol, level1arr, send, conn);
-    });
-  });
-}
-
-function sendOrderBook(symbol, level1arr, send, conn) {
-  var level1 = {};
-  var count;
-
-  level1.symbol = symbol;
-  level1.bestbid = 0;
-  level1.bestoffer = 0;
-
-  // we go through the entire order book to determine the best bid & offer
-  // todo: may be a better way
-  db.zrange(symbol, 0, -1, "WITHSCORES", function(err, orders) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    // we are assuming there is always at least 1 order
-    count = orders.length;
-
-    orders.forEach(function (reply, i) {
-      if (i % 2 != 0) {
-        if (i == 1) { // first score
-          if (reply < 0) {
-            level1.bestbid = -parseFloat(reply);
-          } else if (reply > 0) {
-            level1.bestoffer = parseFloat(reply);
-          }
-        } else if (level1.bestoffer == 0) {
-          if (reply > 0) {
-            level1.bestoffer = parseFloat(reply);
-          }
-        }
-      }
- 
-      // level 1 prices for a single instrument
-      count--;
-      if (count <= 0) {
-        // add level1 object to our array
-        level1arr.push(level1);
-
-        if (send) {
-          conn.write("{\"orderbooks\":" + JSON.stringify(level1arr) +"}");
-        }
-      }
-    });
-  });
-}
-
-//
-// send all the orderbooks for a single client
-//
-  // get all the instruments in the order book for this client
-/*function sendOrderBooksClient(clientid, conn) {
-  db.smembers("client:" + clientid + ":orderbooks", function(err, instruments) {
-    if (err) {
-      console.log("Error in sendOrderBooksClient:" + err);
-      return;
-    }
-
-    // send the order book for each instrument
-    instruments.forEach(function (symbol, i) {
-      orderBookRequest(clientid, symbol, conn);
-    });
-  });
-}*/
-
-//
-// send all the orderbooks for a single client
-//
-function sendOrderBooksClient(clientid, conn) {
-  db.eval(scriptgetorderbooks, 2, clientid, feedtype, function(err, ret) {
-    if (err) throw err;
-
-    conn.write("{\"orderbooks\":" + ret[1] + "}");
-
-    // todo: is this needed or the right place?
-    sendReadyToTrade(conn);
-
-    // subscribe to any associated topics that are not already subscribed to
-    for (var i = 0; i < ret[0].length; i++) {
-      dbsub.subscribe("ticker:" + ret[0][i]);
-    }
-  });
-}
-
 function getTimeInForceDesc(timeinforce) {
 /*0 = Day
 
@@ -1096,7 +916,6 @@ function getTimeInForceDesc(timeinforce) {
 }
 
 function start(clientid, conn) {
-  //sendOrderBooksClient(clientid, conn);
   //sendOrderTypes(conn);
   sendInstruments(clientid, conn);
   //sendPositions(clientid, conn);
@@ -1192,8 +1011,8 @@ function registerClient(reg, conn) {
 //
 // request for a new symbol subscription
 //
-function orderbookRequest(clientid, symbol, conn) {
-  console.log("orderbookRequest:" + symbol);
+function singleSymbolRequest(clientid, symbol, conn) {
+  console.log("singleSymbolRequest:" + symbol);
 
   db.eval(common.scriptsubscribesymbol, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
@@ -1217,7 +1036,7 @@ function orderbookRequest(clientid, symbol, conn) {
   });
 }
 
-function orderbookRemoveRequest(clientid, symbol, conn) {
+function singleSymbolRemoveRequest(clientid, symbol, conn) {
   db.eval(common.scriptunsubscribesymbol, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
@@ -1229,44 +1048,6 @@ function orderbookRemoveRequest(clientid, symbol, conn) {
     }
   });
 }
-
-/*function orderBookRequestDL(clientid, symbol, conn) {
-  console.log("orderBookRequest");
-  db.eval(common.scriptsubscribesymbol, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
-    if (err) throw err;
-
-    console.log(ret);
-
-    // the script tells us if we need to subscribe to a topic
-    if (ret[0]) {
-      dbsub.subscribe("ticker:" + ret[1]);
-    }
-
-    // publish the ticker list if it has changed
-    if (ret[2]) {
-      db.publish("digitallook", ret[3]);
-    }
-
-    // send the orderbook, with the current stored prices
-    common.sendCurrentOrderBook(symbol, ret[1], conn, feedtype);
-  });
-}
-
-function orderBookRemoveRequestDL(clientid, symbol, conn) {
-  db.eval(common.scriptunsubscribesymbol, 4, symbol, clientid, servertype, feedtype, function(err, ret) {
-    if (err) throw err;
-    console.log(ret);
-
-    // the script will tell us if we need to unsubscribe from the topic
-    if (ret[0]) {
-      dbsub.unsubscribe("ticker:" + ret[1]);
-    }
-
-    if (ret[2]) {
-      db.publish("digitallook", ret[3]);
-    }
-  });
-}*/
 
 /*function positionHistory(clientid, symbol, conn) {
   // todo: remove
@@ -1566,7 +1347,7 @@ function watchlistRequest(watchlist, clientid, conn) {
 
   if ("symbol" in watchlist) {
     // add a symbol to the watchlist for this client
-    db.eval(scriptaddtowatchlist, 3, watchlist.symbol, clientid, serverid, function(err, ret) {
+    db.eval(common.scriptaddtowatchlist, 4, watchlist.symbol, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1581,7 +1362,7 @@ function watchlistRequest(watchlist, clientid, conn) {
     });
   } else {
     // get the watchlist for this client
-    db.eval(scriptgetwatchlist, 2, clientid, serverid, function(err, ret) {
+    db.eval(common.scriptgetwatchlist, 3, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1603,7 +1384,7 @@ function unwatchlistrequest(uwl, clientid, conn) {
 
   if ("symbol" in uwl) {
     // unsubscribe from the watchlist for this client
-    db.eval(scriptremovewatchlist, 3, uwl.symbol, clientid, serverid, function(err, ret) {
+    db.eval(common.scriptremovewatchlist, 4, uwl.symbol, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1619,7 +1400,7 @@ function unwatchlistrequest(uwl, clientid, conn) {
     });
   } else {
     // unsubscribe from the watchlist for this client
-    db.eval(scriptunwatchlist, 2, clientid, serverid, function(err, ret) {
+    db.eval(common.scriptunwatchlist, 2, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1661,100 +1442,5 @@ function registerScripts() {
       retval = 1 \
     end \
     return retval \
-  ';
-
-  //
-  // get watchlist for a client
-  // params: client id, server id
-  //
-  scriptgetwatchlist = common.subscribesymbolnbt + '\
-    local tblresults = {} \
-    local tblsubscribe = {} \
-    local watchlist = redis.call("smembers", KEYS[1] .. ":watchlist") \
-    for index = 1, #watchlist do \
-      --[[ subscribe to this symbol ]] \
-      local subscribe = subscribesymbolnbt(watchlist[index], KEYS[1], KEYS[2]) \
-      if subscribe[1] == 1 then \
-        table.insert(tblsubscribe, watchlist[index]) \
-      end \
-      --[[ get current prices ]] \
-      local bid = redis.call("hget", "price:" .. watchlist[index], "bid") \
-      local ask = redis.call("hget", "price:" .. watchlist[index], "ask") \
-      table.insert(tblresults, {symbol=watchlist[index], bid=bid, ask=ask}) \
-    end \
-    return {cjson.encode(tblresults), tblsubscribe} \
-  ';
-
-  //
-  // unsubscribe from watchlist for this client
-  // params: client id, server id
-  //
-  scriptunwatchlist = common.unsubscribesymbolnbt + '\
-    local tblunsubscribe = {} \
-    local watchlist = redis.call("smembers", KEYS[1] .. ":watchlist") \
-    for index = 1, #watchlist do \
-      --[[ unsubscribe from this symbol ]] \
-      local unsubscribe = unsubscribesymbolnbt(watchlist[index], KEYS[1], KEYS[2]) \
-      if unsubscribe[1] == 1 then \
-        table.insert(tblunsubscribe, watchlist[index]) \
-      end \
-    end \
-    return tblunsubscribe \
-  ';
-
-  //
-  // add a symbol to a watchlist
-  // params: symbol, client id, server id
-  //
-  scriptaddtowatchlist = common.subscribesymbolnbt + '\
-    redis.call("sadd", KEYS[2] .. ":watchlist", KEYS[1]) \
-    local subscribe = subscribesymbolnbt(KEYS[1], KEYS[2], KEYS[3]) \
-    --[[ get current prices ]] \
-    local bid = redis.call("hget", "price:" .. KEYS[1], "bid") \
-    local ask = redis.call("hget", "price:" .. KEYS[1], "ask") \
-    local tblresults = {} \
-    table.insert(tblresults, {symbol=KEYS[1], bid=bid, ask=ask}) \
-    return {cjson.encode(tblresults), subscribe[1]} \
-  ';
-
-  //
-  // remove a symbol from a watchlist
-  // params: symbol, client id, server id
-  //
-  scriptremovewatchlist = common.unsubscribesymbolnbt + '\
-    redis.call("srem", KEYS[2] .. ":watchlist", KEYS[1]) \
-    local unsubscribe = unsubscribesymbolnbt(KEYS[1], KEYS[2], KEYS[3]) \
-    return unsubscribe[1] \
-  ';
-
-  scriptgetorderbooks = common.subscribesymbol + common.subscribesymboldl + '\
-    local needtosubscribe = {} \
-    local tblresults = {} \
-    local vals \
-    local fields = {"bid1", "offer1", "bid2", "offer2", "bid3", "offer3", "bid4", "offer4", "bid5", "offer5", "bid6", "offer6"} \
-    local ret = {0, ""} \
-    local orderbooks = redis.call("smembers", "client:" .. KEYS[1] .. ":orderbooks") \
-    for index = 1, #orderbooks do \
-      if KEYS[2] == "proquote" then \
-        ret = subscribesymbol(orderbooks[index], KEYS[1], "client") \
-      elseif KEYS[2] == "digitallook" then \
-        ret = subscribesymboldl(orderbooks[index], KEYS[1], "client") \
-      end \
-      if ret[1] == 1 then \
-        --[[ keep a list of topics/tickers we need to subscribe to as has to be done separately as on separate connection ]] \
-        table.insert(needtosubscribe, ret[2]) \
-      end \
-      if KEYS[2] == "proquote" then \
-        vals = redis.call("hmget", "topic:" .. ret[2], unpack(fields)) \
-      elseif KEYS[2] == "digitallook" then \
-        vals = redis.call("hmget", "ticker:" .. ret[2], unpack(fields)) \
-      end \
-      if vals[1] then \
-        table.insert(tblresults, {symbol=orderbooks[index], prices={{bid=vals[1],offer=vals[2],level=1},{bid=vals[3],offer=vals[4],level=2},{bid=vals[5],offer=vals[6],level=3},{bid=vals[7],offer=vals[8],level=4},{bid=vals[9],offer=vals[10],level=5},{bid=vals[11],offer=vals[12],level=6}}}) \
-      else \
-        table.insert(tblresults, {symbol=orderbooks[index], prices={{bid=0,offer=0,level=1},{bid=0,offer=0,level=2},{bid=0,offer=0,level=3},{bid=0,offer=0,level=4},{bid=0,offer=0,level=5},{bid=0,offer=0,level=6}}}) \
-      end \
-    end \
-    return {needtosubscribe, cjson.encode(tblresults)} \
   ';
 }

@@ -412,8 +412,6 @@
                     priceReceived(obj.price);
                 } else if ("prices" in obj) {
                     updateChart(obj.prices);
-                } else if ("orderbook" in obj) {
-                    updateOrderBook(obj.orderbook);
                 } else if ("index" in obj) {
                     updateIndex(obj.index);
                     displayIndex(ukx);
@@ -495,8 +493,6 @@
             //requestPricehistory("LLOY.L");
             //displayForm("LLOY.L");
             //sendOrder("LLOY.L", '1', 100, 0, 1, "BEST", "GBP", 2, "", "", "4", "", "");
-            //requestOrderbook("LLOY.L.CFD");
-            //requestRemoveOrderbook("LLOY.L");
 
 
         // things start here
@@ -797,7 +793,7 @@
 
                             // unsubscribe current symbol
                             if (selectedsymbol != "") {
-                                requestRemoveOrderbook(selectedsymbol);
+                                requestRemoveSingleSymbol(selectedsymbol);
                                 selectedsymbol = "";
                             }
 
@@ -901,7 +897,7 @@
             clearData();
             clearScreen();
             selectSymbol();
-            requestOrderbook(symbol);
+            requestSingleSymbol(symbol);
             requestPosition(symbol);
 
             // switch off styles
@@ -1011,12 +1007,12 @@
             return tbltrade;
         }
 
-        function requestOrderbook(symbol) {
-            sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
+        function requestSingleSymbol(symbol) {
+            sockjs.send("{\"singlesymbolrequest\":" + JSON.stringify(symbol) + "}");
         }
 
-        function requestRemoveOrderbook(symbol) {
-            sockjs.send("{\"orderbookremoverequest\":" + JSON.stringify(symbol) + "}");
+        function requestRemoveSingleSymbol(symbol) {
+            sockjs.send("{\"singlesymbolremoverequest\":" + JSON.stringify(symbol) + "}");
         }
 
         function requestIndex(index) {
@@ -1963,7 +1959,7 @@
                             if (selectedmenu == 0) {
                                 // unsubscribe current symbol
                                 if (selectedsymbol != "") {
-                                    requestRemoveOrderbook(selectedsymbol);
+                                    requestRemoveSingleSymbol(selectedsymbol);
                                 }
 
                                 selectedsymbol = this.innerHTML.substr(lastspace+1);
@@ -1976,7 +1972,7 @@
                                 d3.select("#divrfq").remove();
 
                                 // request a symbol
-                                requestOrderbook(selectedsymbol);
+                                requestSingleSymbol(selectedsymbol);
                                 requestPosition(selectedsymbol);
                             } else {
                                 watchlistRequest(this.innerHTML.substr(lastspace+1));
@@ -3246,7 +3242,7 @@
                 .attr("class", "signininput")
                 .attr("placeholder", "Email")
                 .on("keydown", key);
-                
+
             var signinpwd = signindiv.append("input")
                 .attr("id", "signinpwd")
                 .attr("class", "signininput")
@@ -3362,7 +3358,7 @@
 
                 // position has been created by someone else's actions, so request prices
                 if (selectedmenu == 2) {
-                    requestOrderbook(position.symbol);
+                    requestSingleSymbol(position.symbol);
                 }
             }
 

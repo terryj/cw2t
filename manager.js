@@ -137,15 +137,15 @@ function pubsub() {
     //console.log("channel:" + channel + ", " + message);
 
     if (message.substr(1, 6) == "prices") {
-      common.newPrice(channel, servertype, message, connections);
+      common.newPrice(channel, servertype, message, connections, feedtype);
+    } else if (message.substr(0, 5) == "price") {
+      common.newPrice(channel.substr(6), serverid, message, connections, feedtype);
     } else if (message.substr(0, 8) == "quoteack") {
       sendQuoteack(message.substr(9));
     } else if (message.substr(0, 5) == "quote") {
       sendQuote(message.substr(6));
     } else if (message.substr(0, 17) == "ordercancelreject") {
       orderCancelReject(message.substr(18));
-    } else if (message.substr(0, 15) == "orderbookupdate") {
-      common.broadcastLevelOne(message.substr(16), connections);
     } else if (message.substr(0, 5) == "order") {
       getSendOrder(message.substr(6));
     } else if (message.substr(0, 5) == "trade") {
@@ -215,10 +215,10 @@ function listen() {
         try {
           var obj = JSON.parse(msg);
 
-          if ("orderbookrequest" in obj) {
-            orderbookRequest(userid, obj.orderbookrequest, conn);
-          } else if ("orderbookremoverequest" in obj) {
-            orderbookRemoveRequest(userid, obj.orderbookremoverequest, conn);
+          if ("watchlistrequest" in obj) {
+            watchlistRequest(obj.watchlistrequest, userid, conn);
+          } else if ("unwatchlistrequest" in obj) {
+            unwatchlistRequest(obj.watchlistrequest, userid, conn);
           } else if ("orderhistoryrequest" in obj) {
             orderHistory(obj.orderhistoryrequest, conn);
           } else if ("quoterequesthistoryrequest" in obj) {
@@ -399,110 +399,78 @@ function unsubscribeConnection(id) {
   });
 }
 
-/*function newPrice(topic, msg) {
-  // which symbols are subscribed to for this topic (may be more than 1 as covers derivatives)
-  db.smembers("topic:" + topic + ":" + servertype + ":symbols", function(err, symbols) {
-    if (err) throw err;
+function watchlistRequest(watchlist, userid, conn) {
+  console.log("watchlistRequest");
+  console.log(watchlist);
 
-    symbols.forEach(function(symbol, i) {
-      // build the message according to the symbol
-      var jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
+  if ("symbol" in watchlist) {
+    // add a symbol to the watchlist for this user
+    db.eval(common.scriptaddtowatchlist, 4, watchlist.symbol, userid, serverid, servertype, function(err, ret) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+      console.log(ret);
 
-      // get the users watching this symbol
-      db.smembers("topic:" + topic + ":symbol:" + symbol + ":" + servertype, function(err, users) {
-        if (err) throw err;
+      conn.write("{\"watchlist\":" + ret[0] + "}");
 
-        // send the message to each user
-        users.forEach(function(user, j) {
-          if (user in connections) {
-            connections[user].write(jsonmsg);
-          }
-        });
-      });
+      if (ret[1] == 1) {
+        dbsub.subscribe("price:" + watchlist.symbol);
+      }
     });
-  });
-}*/
+  } else {
+    // get the watchlist for this user
+    db.eval(scriptgetwatchlist, 3, userid, serverid, servertype, function(err, ret) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+      console.log(ret);
 
-//
-// send all the orderbooks for a single user
-//
-function sendOrderBooks(userid, conn) {
-  // get all the instruments in the order book for this user
-  // todo: script?
-  db.smembers(servertype + ":" + userid + ":orderbooks", function(err, instruments) {
-    if (err) {
-      console.log("Error in sendOrderBooks:" + err);
-      return;
-    }
+      conn.write("{\"watchlist\":" + ret[0] + "}");
 
-    // send the order book for each instrument
-    instruments.forEach(function (symbol, i) {
-      orderBookRequest(userid, symbol, conn);
-    });
-  });
+      // subscribe to symbols
+      for (var i = 0; i < ret[1].length; i++) {
+        dbsub.subscribe("price:" + ret[1][i]);
+      }
+   });
+  }
 }
 
-/*function orderBookRequest(userid, symbol, conn) {
-  db.eval(common.scriptsubscribeinstrument, 4, symbol, userid, servertype, feedtype, function(err, ret) {
-    if (err) throw err;
+function unwatchlistrequest(uwl, userid, conn) {
+  console.log("unwatchlistrequest");
 
-    // the script tells us if we need to subscribe to a topic
-    if (ret[0]) {
-      dbsub.subscribe(ret[1]);
-    }
+  if ("symbol" in uwl) {
+    // unsubscribe from the watchlist for this client
+    db.eval(common.scriptremovewatchlist, 4, uwl.symbol, userid, serverid, servertype, function(err, ret) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+      console.log(ret);
 
-    // send the orderbook, with the current stored prices
-    common.sendCurrentOrderBook(symbol, ret[1], conn);
-  });
-}*/
+      // unsubscribe from symbol
+      if (ret == 1) {
+        dbsub.unsubscribe("price:" + uwl.symbol);
+      }
 
-function orderbookRequest(userid, symbol, conn) {
-  console.log("orderbookRequest:" + symbol);
+      conn.write("{\"unwatchlist\":[\"" + uwl.symbol + "\"]}");
+    });
+  } else {
+    // unsubscribe from the watchlist for this client
+    db.eval(common.scriptunwatchlist, 2, userid, serverid, servertype, function(err, ret) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+      console.log(ret);
 
-  db.eval(common.scriptsubscribesymbol, 4, symbol, userid, serverid, feedtype, function(err, ret) {
-    if (err) throw err;
-
-    console.log(ret);
-
-    // see if we need to subscribe
-    if (ret[0] == 1) {
-      console.log("subscribing to " + symbol);
-      dbsub.subscribe("price:" + symbol);
-    }
-
-    // send the current stored price
-    var price = {};
-    price.symbol = symbol;
-    price.bid = ret[1];
-    price.ask = ret[2];
-    price.timestamp = ret[3];
-
-    conn.write("{\"price\":" + JSON.stringify(price) + "}");
-  });
-}
-
-/*function orderBookRemoveRequest(userid, symbol, conn) {
-  db.eval(common.scriptunsubscribeinstrument, 4, symbol, userid, servertype, feedtype, function(err, ret) {
-    if (err) throw err;
-
-    // the script will tell us if we need to unsubscribe from the topic
-    if (ret[0]) {
-      dbsub.unsubscribe(ret[1]);
-    }
-  });
-}*/
-
-function orderbookRemoveRequest(userid, symbol, conn) {
-  db.eval(common.scriptunsubscribesymbol, 4, symbol, userid, serverid, feedtype, function(err, ret) {
-    if (err) throw err;
-    console.log(ret);
-
-    // the script will tell us if we need to unsubscribe from the symbol
-    if (ret[0] == 1) {
-      console.log("unsubscribing from " + symbol);
-      dbsub.unsubscribe("price:" + ret[1]);
-    }
-  });
+      // unsubscribe from symbols
+      for (var i = 0; i < ret.length; i++) {
+        dbsub.unsubscribe("price:" + ret[i]);
+      }
+    });
+  }
 }
 
 function newClient(client, userid, conn) {
@@ -1022,8 +990,6 @@ function sendIndex(orgclientkey, index, conn) {
         //count--;
         //if (count <= 0) {
           //conn.write("{\"index\":" + JSON.stringify(i) + "}");
-          //orderBookOut(orgclientkey, symbol, conn);
-          //orderBookRequest...
         //}
       });
     });
@@ -1350,83 +1316,6 @@ function sendReserves(orgclientkey, conn) {
   });
 }
 
-function sendAllOrderBooks(conn) {
-  var level1arr = [];
-  var count;
-  var send = false;
-
-  // get all the instruments in the order book
-  db.smembers("orderbooks", function(err, instruments) {
-    if (err) {
-      console.log("error in sendAllOrderBooks:" + err);
-      return;
-    }
-
-    count = instruments.length;
-    if (count == 0) {
-      return;
-    }
-
-    // send the order book for each instrument
-    instruments.forEach(function(symbol, i) {
-      count--;
-      if (count <= 0) {
-        send = true;
-      }
-
-      sendOrderBook(symbol, level1arr, send, conn);
-    });
-  });
-}
-
-function sendOrderBook(symbol, level1arr, send, conn) {
-  var level1 = {};
-  var count;
-
-  level1.symbol = symbol;
-  level1.bestbid = 0;
-  level1.bestoffer = 0;
-
-  // we go through the entire order book to determine the best bid & offer
-  // todo: may be a better way
-  db.zrange(symbol, 0, -1, "WITHSCORES", function(err, orders) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    // we are assuming there is always at least 1 order
-    count = orders.length;
-
-    orders.forEach(function (reply, i) {
-      if (i % 2 != 0) {
-        if (i == 1) { // first score
-          if (reply < 0) {
-            level1.bestbid = -parseFloat(reply);
-          } else if (reply > 0) {
-            level1.bestoffer = parseFloat(reply);
-          }
-        } else if (level1.bestoffer == 0) {
-          if (reply > 0) {
-            level1.bestoffer = parseFloat(reply);
-          }
-        }
-      }
- 
-      // level 1 prices for a single instrument
-      count--;
-      if (count <= 0) {
-        // add level1 object to our array
-        level1arr.push(level1);
-
-        if (send) {
-          conn.write("{\"orderbooks\":" + JSON.stringify(level1arr) +"}");
-        }
-      }
-    });
-  });
-}
-
 function getTimeInForceDesc(timeinforce) {
 /*0 = Day
 
@@ -1444,7 +1333,6 @@ function getTimeInForceDesc(timeinforce) {
 }
 
 function start(user, conn) {
-  sendOrderBooks(user.userid, conn);
   sendInstruments(conn);
   //sendBrokers(conn);
   sendIfas(conn);

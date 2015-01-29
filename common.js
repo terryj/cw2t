@@ -1762,4 +1762,76 @@ exports.registerCommonScripts = function () {
   ';
 
   exports.scriptpricehistoryupdate = scriptpricehistoryupdate;
+
+  //
+  // get watchlist for a client
+  // params: client id, server id, server type
+  //
+  scriptgetwatchlist = subscribesymbolnbt + '\
+    local tblresults = {} \
+    local tblsubscribe = {} \
+    local watchlist = redis.call("smembers", KEYS[3] .. ":" .. KEYS[1] .. ":watchlist") \
+    for index = 1, #watchlist do \
+      --[[ subscribe to this symbol ]] \
+      local subscribe = subscribesymbolnbt(watchlist[index], KEYS[1], KEYS[2]) \
+      if subscribe[1] == 1 then \
+        table.insert(tblsubscribe, watchlist[index]) \
+      end \
+      --[[ get current prices ]] \
+      local bid = redis.call("hget", "price:" .. watchlist[index], "bid") \
+      local ask = redis.call("hget", "price:" .. watchlist[index], "ask") \
+      table.insert(tblresults, {symbol=watchlist[index], bid=bid, ask=ask}) \
+    end \
+    return {cjson.encode(tblresults), tblsubscribe} \
+  ';
+
+  exports.scriptgetwatchlist = scriptgetwatchlist;
+
+  //
+  // unsubscribe from watchlist for this client
+  // params: client id, server id, server type
+  //
+  scriptunwatchlist = unsubscribesymbolnbt + '\
+    local tblunsubscribe = {} \
+    local watchlist = redis.call("smembers", KEYS[3] .. ":" .. KEYS[1] .. ":watchlist") \
+    for index = 1, #watchlist do \
+      --[[ unsubscribe from this symbol ]] \
+      local unsubscribe = unsubscribesymbolnbt(watchlist[index], KEYS[1], KEYS[2]) \
+      if unsubscribe[1] == 1 then \
+        table.insert(tblunsubscribe, watchlist[index]) \
+      end \
+    end \
+    return tblunsubscribe \
+  ';
+
+  exports.scriptunwatchlist = scriptunwatchlist;
+
+  //
+  // add a symbol to a watchlist
+  // params: symbol, client id, server id, server type
+  //
+  scriptaddtowatchlist = subscribesymbolnbt + '\
+    redis.call("sadd", KEYS[4] .. ":" .. KEYS[2] .. ":watchlist", KEYS[1]) \
+    local subscribe = subscribesymbolnbt(KEYS[1], KEYS[2], KEYS[3]) \
+    --[[ get current prices ]] \
+    local bid = redis.call("hget", "price:" .. KEYS[1], "bid") \
+    local ask = redis.call("hget", "price:" .. KEYS[1], "ask") \
+    local tblresults = {} \
+    table.insert(tblresults, {symbol=KEYS[1], bid=bid, ask=ask}) \
+    return {cjson.encode(tblresults), subscribe[1]} \
+  ';
+
+  exports.scriptaddtowatchlist = scriptaddtowatchlist;
+
+  //
+  // remove a symbol from a watchlist
+  // params: symbol, client id, server id, server type
+  //
+  scriptremovewatchlist = unsubscribesymbolnbt + '\
+    redis.call("srem", KEYS[4] .. ":" .. KEYS[2] .. ":watchlist", KEYS[1]) \
+    local unsubscribe = unsubscribesymbolnbt(KEYS[1], KEYS[2], KEYS[3]) \
+    return unsubscribe[1] \
+  ';
+
+  exports.scriptremovewatchlist = scriptremovewatchlist;
 };

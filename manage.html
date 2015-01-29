@@ -753,6 +753,7 @@
         var connections = {};
         var chathistory = {};
         var cashhistory = {};
+        var watchlist = [];
         var showvolume = false;
         var account = {};
         var coheading = "Thomas Grant & Company";
@@ -1271,6 +1272,8 @@
 
         function updatePrice(price) {
             var level = 0;
+            console.log("updatePrice");
+            console.log(price);
 
             // create an entry in the orderbooks array for this symbol
             if (!(price.symbol in orderbooks)) {
@@ -2086,7 +2089,8 @@
                         alert(symbol + " already in Watch List");
                         e.stopPropagation();
                     } else {
-                        sockjs.send("{\"orderbookrequest\":" + JSON.stringify(symbol) + "}");
+                        watchlistRequest(symbol);
+                        //sockjs.send("{\"watchlistrequest\":" + JSON.stringify(symbol) + "}");
                         stocklist.style.visibility = "hidden";
                         stockboxinput.value = "";
                         stockboxinput.focus();
@@ -2152,6 +2156,29 @@
         //
         // various display routines to display incoming data
         //
+
+        function watchlistRequest(symbol) {
+            var wl = {};
+
+            if (symbol != "") {
+                if (inWatchlist(symbol)) {
+                    alert("Symbol: " + symbol + " is already in your watchlist");
+                    return;
+                }
+                wl.symbol = symbol;
+            }
+
+            sockjs.send("{\"watchlistrequest\":" + JSON.stringify(wl) + "}");
+        }
+
+        function inWatchlist(symbol) {
+            for (i = 0; i < watchlist.length; i++) {
+                if (symbol == watchlist[i].symbol) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         function displayOrderBooks() {
             selectStock("watchlist", null, false, true, null);
@@ -3995,7 +4022,7 @@
                         removestock.onclick = function() {
                             if (symbol in obdisplay) {
                                 removeOrderBook(symbol);
-                                sockjs.send("{\"orderbookremoverequest\":" + JSON.stringify(symbol) + "}");
+                                sockjs.send("{\"unwatchlistrequest\":" + JSON.stringify(symbol) + "}");
                             } else {
                                 alert(symbol + " not in Watch List");
                             }
