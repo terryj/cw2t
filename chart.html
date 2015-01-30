@@ -3457,9 +3457,9 @@
                 .each(function(d) {
                     if (d.col == "symbol") {
                     } else if (d.col == "quantity" && selectedmenu == 0) {
-                        d3.select(this)
-                            .append("a")
-                                .attr("href", "#")
+                        d3.select(this).select("a")
+                            //.append("a")
+                                //.attr("href", "#")
                                 .html(function (d) { return d.value; })
                                 .on("click", function(d) {
                                     // clear quote data
