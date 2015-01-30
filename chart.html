@@ -642,7 +642,6 @@
         }
 
         function updatePriceTable(price) {
-            //console.log(price);
             var cols = ["bid", "", "ask"];
 
             // create a price table if one does not exist
@@ -1505,8 +1504,6 @@
             rfq.operatortype = operatortype;
             rfq.operatorid = clientid;
             //rfq.futsettdate = this.value;
-
-            console.log(rfq);
 
             sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
         }
