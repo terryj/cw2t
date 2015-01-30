@@ -1701,6 +1701,20 @@ function endOfDay(userid) {
   });
 }
 
+function watchlistReceived(watchlistarr) {
+  for (var i = 0; i < watchlistarr.length; ++i) {
+    if (!(inWatchlist(watchlistarr[i].symbol))) {
+      watchlistarr[i].remove = "x";
+      watchlistarr[i].bidtick = '';
+      watchlistarr[i].asktick = '';
+
+      watchlist.push(watchlistarr[i]);
+    }
+  }
+
+  updateWatchlistTable();
+}
+
 function registerScripts() {
   var stringsplit;
   var gettotalpositions = common.gettotalpositions;
