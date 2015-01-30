@@ -762,24 +762,23 @@
         var serverstatus = {};
         var allclients = "All clients";
         var numtradecols = 20;
-        var MENUWATCHLIST = 0;
+        var MENURFQ = 0;
         var MENUMAINTAIN = 1;
         var MENUHISTORY = 2;
         var MENUPORTFOLIO = 3;
-        var MENUCHAT = 4;
-        var MENUEOD = 5;
-        var MENUMONITOR = 6;
-        var MENULOGOUT = 7;
-        var MENUCLIENTS = 8;
-        var MENUCASH = 9;
-        var MENUPRODUCTS = 10;
-        var MENUHEDGEBOOKS = 11;
-        var MENUCOSTS = 12;
-        var MENUIFAS = 13;
-        var MENUHOLIDAYS = 14;
-        var MENUORDERS = 15;
-        var MENUTRADES = 16;
-        var MENUPOSITIONS = 17;
+        var MENUEOD = 4;
+        var MENUMONITOR = 5;
+        var MENULOGOUT = 6;
+        var MENUCLIENTS = 7;
+        var MENUCASH = 8;
+        var MENUPRODUCTS = 9;
+        var MENUHEDGEBOOKS = 10;
+        var MENUCOSTS = 11;
+        var MENUIFAS = 12;
+        var MENUHOLIDAYS = 13;
+        var MENUORDERS = 14;
+        var MENUTRADES = 15;
+        var MENUPOSITIONS = 16;
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -1323,7 +1322,7 @@
                 msg = "Order cancelled";
             }
 
-            if (selectedmenu == MENUWATCHLIST) {
+            if (selectedmenu == MENURFQ) {
                 addMessageToDiv(msg, "orderdiv:" + order.symbol + ":" + order.orderdivnum);
             } else if (selectedmenu == MENUORDERS) {
                 removeElementFromList(order.orderid, list1);
@@ -1374,7 +1373,8 @@
             clearScreen();
             displayMenu();
 
-            selectedmenu = MENUWATCHLIST;
+            selectedmenu = MENURFQ;
+            rfq();
         }
 
         function startHeartbeatTimer() {
@@ -1889,6 +1889,12 @@
                     inpsymboldesc.value = instruments[symbol].shortname;
                     inpsymbol = document.getElementById("inpsymbol");
                     inpsymbol.value = symbol;
+                } else if (frm == "frmrfq") {
+                    inpsymbol = document.createElement("span");
+                    inpsymbol.id = "inpsymbol";
+                    var txt = document.createTextNode(symbol);
+                    inpsymbol.appendChild(txt);
+                    stockbox.appendChild(inpsymbol);
                 }
 
                 stocklist.style.visibility = "hidden";
@@ -1939,43 +1945,6 @@
             main.appendChild(list);
 
             return list;
-        }
-
-        //
-        // various display routines to display incoming data
-        //
-
-        function watchlistRequest(symbol) {
-            var wl = {};
-
-            if (symbol != "") {
-                if (inWatchlist(symbol)) {
-                    alert("Symbol: " + symbol + " is already in your watchlist");
-                    return;
-                }
-                wl.symbol = symbol;
-            }
-
-            sockjs.send("{\"watchlistrequest\":" + JSON.stringify(wl) + "}");
-        }
-
-        function inWatchlist(symbol) {
-            for (i = 0; i < watchlist.length; i++) {
-                if (symbol == watchlist[i].symbol) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        function displayOrderBooks() {
-            selectStock("watchlist", null, false, true, null);
-
-            displayOrderBookHeadings();
-
-            for (var symbol in orderbooks) {
-                displayOrderBook(symbol);
-            }
         }
 
         function displayOrderHeadings() {
@@ -2633,7 +2602,7 @@
         function displayTrade(trade) {
             var msg;
 
-            if (selectedmenu == MENUWATCHLIST) {
+            if (selectedmenu == MENURFQ) {
                 addMessageToDiv(msg, "orderdiv:" + trade.symbol + ":" + trade.orderdivnum);
             } else if (selectedmenu == MENUTRADES) {
                 displayATrade(trade);
@@ -3378,7 +3347,7 @@
             chattextlen.value = chattext.value.length;
         }
 
-        function newChat(chat) {
+        /*function newChat(chat) {
             var chattext;
             var chattextlen;
             var chatid;
@@ -3429,7 +3398,7 @@
             if (chatid != null) {
                 chatid.value = chat.chatid;
             }
-        }
+        }*/
 
         function addHeading(text, list) {
             var newtext = document.createTextNode(text);
@@ -3669,7 +3638,101 @@
             }
         }
 
-        function displayOrderBook(symbol) {
+        function rfq() {
+            var inpclientid;
+
+            var frmrfq = getForm("frmrfq");
+
+            inpclientid = document.createElement("input");
+            inpclientid.type = "hidden";
+            inpclientid.id = "inpclientid";
+            inpclientid.value = "";
+
+            frmrfq.appendChild(inpclientid);
+
+            selectClient("frmrfq", frmrfq, null, true, "", "inpclientid", "stockboxinput", false);
+
+            addNewLine(frmrfq, null);
+
+            selectStock("frmrfq", frmrfq, false, false, null);
+
+            addNewLine(frmrfq, null);
+            var lblqtyascashorshares = newlabel("lblqtyascashorshares", "Quantity as Cash/Shares", "formlabel", frmrfq);
+            var selqtyascashorshares = newselect("selqtyascashorshares", "formselect", frmrfq);
+
+            selqtyascashorshares[0] = new Option("Quantity as shares", 0, true, true);
+            selqtyascashorshares[1] = new Option("Quantity as cash", 1, false, false);
+
+            addNewLine(frmrfq, null);
+            var lblqty = newlabel("lblqty", "Quantity:", "formlabel", frmrfq);
+            var inpqty = newinput("inpqty", "forminput", frmrfq);
+
+            addNewLine(frmrfq, null);
+            var btnsend = newbutton("btnsend", "Send Rfq", "formbutton", frmrfq);
+
+            btnsend.onclick = function() {
+                var qty;
+                var cashqty;
+
+                // validate there is a client
+                if (inpclientid.value == "") {
+                    alert("Please select a client");
+                    //validclient = false;
+                    selectClientFocus("clientboxinput");
+                    return;
+                }
+
+                // validate there is a symbol
+                var stockboxinput = document.getElementById("stockboxinput");
+                if (stockboxinput.value == "") {
+                    alert("Please select a symbol");
+                    return;
+                }
+
+                // validate the quantity
+                if (!validateNumeric(inpqty, "Quantity")) {
+                    return;
+                }
+
+                // quantity as cash or shares
+                if (selqtyascashorshares.selectedIndex == 0) {
+                    qty = inpqty.value;
+                    cashqty = "";
+                } else {
+                    qty = "";
+                    cashqty = inpqty.value;                    
+                }
+
+                sendRfq(inpclientid.value, qty, cashqty, inpsymbol.textContent, "GBP"); // todo
+            }
+
+            main.appendChild(frmrfq);
+        }
+
+        function sendRfq(clientid, quantity, cashorderqty, symbol, currency) {
+            var rfq = {};
+
+            console.log(clientid);
+            console.log(quantity);
+            console.log(cashorderqty);
+            console.log(symbol);
+            console.log(currency);
+
+            rfq.clientid = clientid;
+            rfq.symbol = symbol;
+            rfq.quantity = quantity;
+            rfq.cashorderqty = cashorderqty;
+            rfq.currency = currency;
+            rfq.settlcurrency = currency;
+            rfq.nosettdays = 2;
+            rfq.operatortype = operatortype;
+            rfq.operatorid = clientid;
+            //rfq.futsettdate = this.value;
+
+            sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
+        }
+
+        /*function displayOrderBook(symbol) {
             var strip;
             var display = {};
             var bidprice;
@@ -3862,7 +3925,7 @@
 
                 if (!obdisplay[symbol].level2) {break;}
             }
-        }
+        }*/
 
         function isTouchDevice() {
             try {
@@ -3954,7 +4017,7 @@
             }
         }
 
-        function displayOrderBookHeadings() {
+        /*function displayOrderBookHeadings() {
             var headingstrip;
             var headinglevel2;
             var headingstock;
@@ -4017,7 +4080,7 @@
             }
 
             main.appendChild(headingstrip);
-        }
+        }*/
 
         function getOrderDivNum(symbol) {
             var orderdivnum = 0;
@@ -4320,7 +4383,7 @@
                 msg += ", " + quoteack.text;
             }
 
-            if (selectedmenu == MENUWATCHLIST) {
+            if (selectedmenu == MENURFQ) {
                 addMessageToDiv(msg, "orderdiv:" + quoteack.symbol + ":" + quoteack.orderdivnum);
             }
         }
@@ -4406,7 +4469,7 @@
             }, 1000);
             // todo: clear if form is closed
 
-            if (selectedmenu == MENUWATCHLIST) {
+            if (selectedmenu == MENURFQ) {
                 orderdiv = getDiv("orderdiv:" + quote.symbol + ":" + quote.orderdivnum, quote.symbol);
 
                 addNewLine(orderdiv, null);
@@ -4946,18 +5009,16 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Watch List", "Maintain", "History", "Portfolio", "Chat", "End Of Day", "Monitor", "Log Out"];
+            menuarr = ["Request A Quote", "Maintain", "History", "Portfolio", "End Of Day", "Monitor", "Log Out"];
 
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");
                 menuitem.value = i;
                 menuitem.innerHTML = menuarr[i];
 
-                if (i == MENUWATCHLIST) {
+                if (i == MENURFQ) {
                     menuitem.className = "menuitemselected";
                     lastElement = menuitem;
-                } else if (i == MENUCHAT) {
-                    menuitem.id = "menuitemchat";
                 }
                 menu.appendChild(menuitem);
             }
@@ -4984,8 +5045,8 @@
                 selectedmenu = element.value;
 
                 switch (selectedmenu) {
-                case MENUWATCHLIST:
-                    displayOrderBooks();
+                case MENURFQ:
+                    rfq();
                     break;
                 case MENUMAINTAIN:
                     maintain();
@@ -4995,9 +5056,6 @@
                     break;
                 case MENUPORTFOLIO:
                     portfolio();
-                    break;
-                case MENUCHAT:
-                    requestConnections();
                     break;
                 case MENUEOD:
                     endOfDay();

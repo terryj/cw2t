@@ -136,27 +136,31 @@ function pubsub() {
   dbsub.on("message", function(channel, message) {
     //console.log("channel:" + channel + ", " + message);
 
-    if (message.substr(1, 6) == "prices") {
-      common.newPrice(channel, servertype, message, connections, feedtype);
-    } else if (message.substr(0, 5) == "price") {
+    if (channel.substr(0, 6) == "price:") {
       common.newPrice(channel.substr(6), serverid, message, connections, feedtype);
-    } else if (message.substr(0, 8) == "quoteack") {
-      sendQuoteack(message.substr(9));
-    } else if (message.substr(0, 5) == "quote") {
-      sendQuote(message.substr(6));
-    } else if (message.substr(0, 17) == "ordercancelreject") {
-      orderCancelReject(message.substr(18));
-    } else if (message.substr(0, 5) == "order") {
-      getSendOrder(message.substr(6));
-    } else if (message.substr(0, 5) == "trade") {
-      getSendTrade(message.substr(6));
-    } else if (message.substr(2, 6) == "status") {
-      updateStatus(message.substr(0, 2), message.substr(9));
-      sendStatus();
-    } else if (message.substr(2, 4) == "chat") {
-      newChatClient(message);
     } else {
-      console.log("unknown message, channel=" + channel + ", message=" + message);
+      if (message.substr(1, 6) == "prices") {
+        common.newPrice(channel, servertype, message, connections, feedtype);
+      } else if (message.substr(0, 5) == "price") {
+        common.newPrice(channel.substr(6), serverid, message, connections, feedtype);
+      } else if (message.substr(0, 8) == "quoteack") {
+        sendQuoteack(message.substr(9));
+      } else if (message.substr(0, 5) == "quote") {
+        sendQuote(message.substr(6));
+      } else if (message.substr(0, 17) == "ordercancelreject") {
+        orderCancelReject(message.substr(18));
+      } else if (message.substr(0, 5) == "order") {
+        getSendOrder(message.substr(6));
+      } else if (message.substr(0, 5) == "trade") {
+        getSendTrade(message.substr(6));
+      } else if (message.substr(2, 6) == "status") {
+        updateStatus(message.substr(0, 2), message.substr(9));
+        sendStatus();
+      } else if (message.substr(2, 4) == "chat") {
+        newChatClient(message);
+      } else {
+        console.log("unknown message, channel=" + channel + ", message=" + message);
+      }
     }
   });
 
@@ -1699,20 +1703,6 @@ function endOfDay(userid) {
       });
     });
   });
-}
-
-function watchlistReceived(watchlistarr) {
-  for (var i = 0; i < watchlistarr.length; ++i) {
-    if (!(inWatchlist(watchlistarr[i].symbol))) {
-      watchlistarr[i].remove = "x";
-      watchlistarr[i].bidtick = '';
-      watchlistarr[i].asktick = '';
-
-      watchlist.push(watchlistarr[i]);
-    }
-  }
-
-  updateWatchlistTable();
 }
 
 function registerScripts() {

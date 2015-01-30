@@ -333,7 +333,7 @@ function updateRec(fid, value, instrec) {
 
 function updateDb(functioncode, instrumentcode, instrec) {
   console.log("updateDb");
-  console.log(instrec);
+  //console.log(instrec);
   // create a unix timestamp
   var now = new Date();
   var timestamp = +now;
@@ -374,6 +374,8 @@ function updateDb(functioncode, instrumentcode, instrec) {
 
     // create symbol & add to lists
     if ("insttype" in instrec) {
+      console.log("creating..." + instrumentcode);
+
       db.hmset("symbol:" + instrumentcode, instrec);
       db.sadd("instruments", instrumentcode);
       db.sadd("nbtsymbol:" + instrec.nbtsymbol + ":instruments", instrumentcode);
@@ -381,6 +383,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
   }
 
   // update price & history
+  console.log("updating price..." + instrumentcode);
   db.eval(common.scriptpriceupdate, 4, instrumentcode, timestamp, instrec.bid, instrec.ask, function(err, ret) {
     if (err) throw err;
     //console.log("pricehist updated: " + instrumentcode + ",ts:" + timestamp + ",bid:" + instrec.bid + ",ask:" + instrec.ask);
