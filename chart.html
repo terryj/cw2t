@@ -3454,22 +3454,20 @@
                         return {col: col, value: row[col]};
                     });
                  })
-                .each(function(d) {
+                .each(function(d, i, j) {
                     if (d.col == "symbol") {
                     } else if (d.col == "quantity" && selectedmenu == 0) {
                         d3.select(this).select("a")
-                            //.append("a")
-                                //.attr("href", "#")
-                                .html(function (d) { return d.value; })
-                                .on("click", function(d) {
-                                    // clear quote data
-                                    quotes = [];
+                            .html(function (d) { return d.value; })
+                            .on("click", function(d) {
+                                // clear quote data
+                                quotes = [];
 
-                                    // & clear any previous request
-                                    d3.select("#divrfq").remove();
+                                // & clear any previous request
+                                d3.select("#divrfq").remove();
 
-                                    requestQuote(positions[j].symbol, positions[j].quantity);
-                                });
+                                requestQuote(positions[j].symbol, positions[j].quantity);
+                            });
                     } else {
                         d3.select(this)
                             .text(display(d))
@@ -3492,7 +3490,6 @@
                 .append("td")
                 .each(function(d, i, j) {
                     if (d.col == "symbol" && selectedmenu != 0) {
-                        console.log("symbol");
                         // display a link for this symbol
                         d3.select(this)
                             .append("a")
@@ -3503,7 +3500,6 @@
                                     singleSymbol(d.value);
                                 });
                     } else if (d.col == "quantity" && selectedmenu == 0) {
-                        console.log("quantity");
                         d3.select(this)
                             .append("a")
                                 .attr("href", "#")
