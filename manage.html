@@ -1,8 +1,9 @@
 <!doctype html>
 <html><head>
-    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <meta http-equiv="content-type" content="text/html;charset=utf-8"/>
     <title>TG-Online User v0.9</title>
     <script src="http://cdn.jsdelivr.net/sockjs/0.3.4/sockjs.min.js"></script>
+    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
     <style type="text/css">
         table {
             font-size: 21px;
@@ -725,7 +726,8 @@
         var obdisplay = {};
         var ordervol = {};
         var ordertypes = {};
-        var quotes = {};
+        //var quotes = {};
+        var quotes = [];
         var indices = {};
         var timeinforces = {};
         var clients = {};
@@ -762,6 +764,10 @@
         var serverstatus = {};
         var allclients = "All clients";
         var numtradecols = 20;
+        var selectedsymbol = "";
+        var pricedata = [];
+
+        // menu items
         var MENURFQ = 0;
         var MENUMAINTAIN = 1;
         var MENUHISTORY = 2;
@@ -779,6 +785,7 @@
         var MENUORDERS = 14;
         var MENUTRADES = 15;
         var MENUPOSITIONS = 16;
+        var MENUWATCHLIST = 17;
 
         // redefine console.log for IE
         if (typeof console == "undefined") 
@@ -793,9 +800,9 @@
                 var obj = JSON.parse(msg);
 
                 if ("price" in obj) {
-                    updatePrice(obj.price);
-                } else if ("watchlist" in obj) {
-                    watchlistReceived(obj.watchlist);
+                    priceReceived(obj.price);
+                /*} else if ("watchlist" in obj) {
+                    watchlistReceived(obj.watchlist);*/
                 } else if ("orders" in obj) {
                     clearOrders();
                     loadOrders(obj.orders);
@@ -1873,7 +1880,7 @@
                 firstspace = element.innerHTML.indexOf(' ');
                 symbol = element.innerHTML.substr(0, firstspace);
 
-                if (frm == "watchlist") {
+                if (selectedmenu == MENUWATCHLIST) { // todo: not implemented
                     if (symbol in obdisplay) {
                         alert(symbol + " already in Watch List");
                         e.stopPropagation();
@@ -1883,18 +1890,37 @@
                         stockboxinput.value = "";
                         stockboxinput.focus();
                     }
-                } else if (frm == "frmproduct") {
+                } else if (selectedmenu == MENUPRODUCTS) {
                     displayProduct(instruments[symbol]);
                 } else if (frm == "orderdiv") {
                     inpsymboldesc.value = instruments[symbol].shortname;
                     inpsymbol = document.getElementById("inpsymbol");
                     inpsymbol.value = symbol;
-                } else if (frm == "frmrfq") {
-                    inpsymbol = document.createElement("span");
-                    inpsymbol.id = "inpsymbol";
-                    var txt = document.createTextNode(symbol);
-                    inpsymbol.appendChild(txt);
-                    stockbox.appendChild(inpsymbol);
+                } else if (selectedmenu == MENURFQ) {
+                    //inpsymbol = document.getElementById("inpsymbol");
+                    //inpsymbol.id = "inpsymbol";
+                    //inpsymbol.value = symbol;
+                    //var txt = document.createTextNode(instruments[symbol].shortname);
+                    //inpsymbol.appendChild(txt);
+                    //stockbox.appendChild(inpsymbol);
+
+                    // unsubscribe current symbol
+                    if (selectedsymbol != "") {
+                        requestRemoveSingleSymbol(selectedsymbol);
+                    }
+
+                    selectedsymbol = symbol;
+
+                    clearData();
+
+                    // clear price display in case of a previously selected symbol
+                    //d3.select("#divprice").remove();
+                    //d3.select("#tblmenuprice").remove();
+                    //d3.select("#divrfq").remove();
+
+                    // request a symbol
+                    requestSingleSymbol(selectedsymbol);
+                    //requestPosition(selectedsymbol);
                 }
 
                 stocklist.style.visibility = "hidden";
@@ -1945,6 +1971,338 @@
             main.appendChild(list);
 
             return list;
+        }
+
+        function clearData() {
+            // reset price
+            initPrice();
+
+            // clear positions
+            //positions = [];
+        }
+
+        function initPrice() {
+            var price = {};
+            price.bid = "0.00";
+            price.ask = "0.00";
+            pricedata[0] = price;
+        }
+
+        function requestSingleSymbol(symbol) {
+            sockjs.send("{\"singlesymbolrequest\":" + JSON.stringify(symbol) + "}");
+        }
+
+        function requestRemoveSingleSymbol(symbol) {
+            sockjs.send("{\"singlesymbolremoverequest\":" + JSON.stringify(symbol) + "}");
+        }
+
+        function priceReceived(price) {
+            // only update price stuff for single symbol view
+            if (selectedmenu == MENURFQ) {
+                if (price.symbol == selectedsymbol) {
+                    // update price data
+                    updatePriceData(price);
+
+                    // update price display
+                    updatePriceTable(price);
+                }
+
+                // update position data
+                //updatePositionData(price);
+                //updatePositionTable();
+            } else if (selectedmenu == MENUWATCHLIST) {
+                updateWatchlist(price);
+                updateWatchlistTable();
+            } else if (selectedmenu == MENUPOSITIONS) {
+                // update position data
+                updatePositionData(price);
+                updatePositionTable();
+            }
+        }
+
+        // update price array
+        function updatePriceData(price) {
+            if ("bid" in price) {
+                if (parseFloat(price.bid) > parseFloat(pricedata[0].bid)) {
+                    pricedata[0].bidtick = '+';
+                } else if (parseFloat(price.bid) < parseFloat(pricedata[0].bid)) {
+                    pricedata[0].bidtick = '-';
+                } else {
+                    pricedata[0].bidtick = '0';                    
+                }
+
+                pricedata[0].bid = price.bid;
+            } else {
+                pricedata[0].bidtick = '';
+            }
+            if ("ask" in price) {
+                if (parseFloat(price.ask) > parseFloat(pricedata[0].ask)) {
+                    pricedata[0].asktick = '+';
+                } else if (parseFloat(price.ask) < parseFloat(pricedata[0].ask)) {
+                    pricedata[0].asktick = '-';
+                } else {
+                    pricedata[0].asktick = '0';
+                }
+
+                pricedata[0].ask = price.ask;
+            } else {
+                pricedata[0].asktick = "";
+            }            
+        }
+
+        function updatePriceTable(price) {
+            var cols = ["bid", "", "ask"];
+
+            // create a price table if one does not exist
+            var tblpricerow = d3.select("#tblpricerow");
+            if (tblpricerow.empty()) {
+                tblpricerow = createPriceTable(price, cols);
+                createPriceMenu(price.symbol);
+            }
+
+            // update
+            var cells = tblpricerow.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(column) {
+                        var ret = null;
+                        if (column == "bid") {
+                            ret = {price: row[column], tick: pricedata[0].bidtick};
+                        } else if (column == "ask") {
+                            ret = {price: row[column], tick: pricedata[0].asktick};                            
+                        }
+                        return {column: column, value: ret};
+                    });
+                 });
+
+            // update display
+            cells.each(function(d) {
+                if (d.column != "") {
+                    if (d.value.tick != "") {
+                        d3.select(this)
+                            .text(function(d) { return formatCurrency(d.value.price, 2); })
+                            .attr("class", function(d) {
+                                if (d.value.tick == '+') {
+                                    return "tickup";
+                                } else if (d.value.tick == '-') {
+                                    return "tickdn";
+                                } else {
+                                    return "ticknc";
+                                }
+                            });
+                    }
+                }
+            });
+
+            // enter
+            cells.enter()
+                .append("td")
+                    .text(function(d) { return d.value == null ? '-' : formatCurrency(d.value.price, 2); });
+
+            cells.exit().remove();
+        }
+
+        function createPriceTable(price, cols) {
+            var hdr = ["bid","ask"];
+
+            // create a price div
+            var divprice = d3.select("#frmrfq")
+                .append("div")
+                .attr("id", "divprice");
+
+            divprice.append("header")
+                .text(instruments[price.symbol].shortname + " - " + price.symbol)
+                .style("margin-top", "20px");
+
+            // create a table
+            var tblprice = divprice.append("table")
+                .attr("id", "tblprice")
+                .attr("class", "tblprice");
+
+            // add header & body
+            var thead = tblprice.append("thead");
+            var tbody = tblprice.append("tbody");
+
+            // create a row
+            var tblpricerow = tbody.selectAll("tr")
+                .data(pricedata);
+
+            tblpricerow.enter()
+                .append("tr")
+                .attr("id", "tblpricerow")
+                .attr("class", "tblpricerow");
+
+            tblpricerow.exit().remove();
+
+            return tblpricerow;
+        }
+
+        function createPriceMenu(symbol) {
+            var data = [""];
+            var cols = ["Request A Quote"];
+
+            // create a table
+            var tblmenu = d3.select("#frmrfq")
+                .append("table")
+                .attr("id", "tblmenuprice")
+                .attr("class", "tblmenu");
+
+            // add a body
+            var tbody = tblmenu.append("tbody");
+
+            // create a row for each field
+            var rows = tbody.selectAll("tr")
+                .data(data)
+                .enter()
+                .append("tr");
+
+            // create a cell in each row for each column
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(col) {
+                        return col;
+                    });
+                 })
+                .enter()
+                .append("td")
+                    .append("a")
+                        .attr("href", "#")
+                        .html(function (d) { return d; })
+                        .on("click", function(d) {
+                            // clear quote data
+                            quotes = [];
+
+                            // & clear any previous request
+                            //d3.select("#divrfq").remove();
+
+                            requestQuote(symbol, "");
+                        });            
+        }
+
+        function requestQuote(symbol, quantity) {
+            var fields = ["Quantity"]; // one per row
+
+            var cashorshares = ["Number of shares", "Cash amount"];
+            var qtycashorshares = ["Quantity", "Cash"];
+
+            // create a div
+            var divrfq = d3.select("#frmrfq")
+                .append("div")
+                .attr("id", "divrfq")
+                .attr("class", "divrfq");
+
+            // add a table
+            var tblrfq = divrfq.append("table")
+                .attr("id", "tblrfq")
+                .attr("class", "tblrfq");
+
+            // add header & body
+            var thead = tblrfq.append("thead");
+            var tbody = tblrfq.append("tbody");
+
+            // create a row for each field
+            var rows = tbody.selectAll("tr")
+                .data(fields)
+                .enter()
+                .append("tr");
+
+            // option to select cash or shares
+            var selcashorshares = rows.append("td")
+                .append("select")
+                    .attr("id", "selcashorshares")
+                    .attr("class", "selcashorshares")
+                    .on("change", function() {
+                        var rfqqty = d3.select("#rfqqty");
+                        if (this.value == cashorshares[0]) {
+                            rfqqty.attr("placeholder", qtycashorshares[0]);
+                        } else {
+                            rfqqty.attr("placeholder", qtycashorshares[1]);
+                        }
+                        d3.select("#rfqqty").node().focus();
+                    });
+
+            selcashorshares.append("option")
+                .text(cashorshares[0]);
+
+            selcashorshares.append("option")
+                .text(cashorshares[1]);
+
+            // quantity
+            rows.append("td")
+                .append("input")
+                    .attr("id", "rfqqty")
+                    .attr("class", "rfqqty")
+                    .attr("value", quantity)
+                    .attr("placeholder", qtycashorshares[0])
+                    .on("keydown", function() {
+                        if (d3.event.keyCode == 13) {
+                            rfq();
+                        }
+                    });
+
+            // add a button, with associated function to send rfq
+            rows.append("td")
+                .attr("id", "tdrfq")
+                .append("input")
+                    .attr("type", "button")
+                    .attr("value", "Send Quote Request")
+                    .attr("class", "rfqbutton")
+                    .on("click", function() {
+                        if (document.getElementById("inpclientid").value == "") {
+                            alert("Enter a client");
+                            selectClientFocus("clientboxinput");
+                        } else if (!validateRfq()) {
+                            d3.select("#rfqqty").node().focus();
+                        } else {
+                            rfq();
+                        }
+                    });
+
+            d3.select("#rfqqty").node().focus();
+
+            function validateRfq() {
+                var quantity = d3.select("#rfqqty").node().value;
+
+                // validate qty
+                if (quantity == "") {
+                    alert("Please enter a quantity");
+                    return false;
+                } else if (isNaN(quantity)) {
+                    alert("Quantity must be numeric");
+                    return false;
+                } else if (quantity <= 0) {
+                    alert("Quantity must be greater than zero");
+                    return false;
+                }
+
+                return true
+            }
+
+            function rfq() {
+                // client id
+                var clientid = document.getElementById("inpclientid").value;
+
+                // quantity as cash or shares
+                var selcashorshares = d3.select("#selcashorshares");
+                var qty;
+                var cashorderqty;
+
+                if (selcashorshares.node().value == cashorshares[0]) {
+                    cashorderqty = "";
+                    qty = d3.select("#rfqqty").node().value;
+                } else {
+                    cashorderqty = d3.select("#rfqqty").node().value;
+                    qty = "";                    
+                }
+
+                sendRfq(clientid, qty, cashorderqty, symbol, "GBP"); // todo: currency
+
+                // remove button
+                d3.select(this).remove();
+
+                // add text
+                d3.select("#tdrfq")
+                    .text("Quote Request Sent");
+            }
         }
 
         function displayOrderHeadings() {
@@ -3640,9 +3998,11 @@
 
         function rfq() {
             var inpclientid;
+            var inpsymbol;
 
             var frmrfq = getForm("frmrfq");
 
+            // to hold entered client id
             inpclientid = document.createElement("input");
             inpclientid.type = "hidden";
             inpclientid.id = "inpclientid";
@@ -3656,8 +4016,15 @@
 
             selectStock("frmrfq", frmrfq, false, false, null);
 
+            // to hold entered symbol
+            inpsymbol = document.createElement("span");
+            inpsymbol.id = "inpsymbol";
+            frmrfq.appendChild(inpsymbol);
+
             addNewLine(frmrfq, null);
-            var lblqtyascashorshares = newlabel("lblqtyascashorshares", "Quantity as Cash/Shares", "formlabel", frmrfq);
+            addNewLine(frmrfq, null);
+
+            /*var lblqtyascashorshares = newlabel("lblqtyascashorshares", "Quantity as Cash or Shares", "formlabel", frmrfq);
             var selqtyascashorshares = newselect("selqtyascashorshares", "formselect", frmrfq);
 
             selqtyascashorshares[0] = new Option("Quantity as shares", 0, true, true);
@@ -3677,7 +4044,6 @@
                 // validate there is a client
                 if (inpclientid.value == "") {
                     alert("Please select a client");
-                    //validclient = false;
                     selectClientFocus("clientboxinput");
                     return;
                 }
@@ -3686,7 +4052,8 @@
                 var stockboxinput = document.getElementById("stockboxinput");
                 if (stockboxinput.value == "") {
                     alert("Please select a symbol");
-                    return;
+                    stockboxinput.focus();
+                    //return;
                 }
 
                 // validate the quantity
@@ -3703,8 +4070,10 @@
                     cashqty = inpqty.value;                    
                 }
 
+                console.log(inpsymbol.value);
+
                 sendRfq(inpclientid.value, qty, cashqty, inpsymbol.textContent, "GBP"); // todo
-            }
+            }*/
 
             main.appendChild(frmrfq);
         }
@@ -4102,7 +4471,7 @@
             return orderdivnumarr[symbol];
         }
 
-        function requestQuote(symbol) {
+        /*function requestQuote(symbol) {
             var quotereqbutton;
             var quotereqqty;
             var orderdiv;
@@ -4240,7 +4609,7 @@
                 quotereqqty.disabled = true;
                 quotereqqty.onkeypress = null;
             }
-        }
+        }*/
 
         function getQuantityDesc(qtyval) {
             var qtydesc;

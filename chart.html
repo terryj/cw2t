@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
 <head>
-    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <meta http-equiv="content-type" content="text/html;charset=utf-8"/>
     <title>TG-Online v0.9</title>
     <script src="https://d1fxtkz8shb9d2.cloudfront.net/sockjs-0.3.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.4.13/d3.js"></script>
@@ -713,15 +713,6 @@
             var thead = tblprice.append("thead");
             var tbody = tblprice.append("tbody");
 
-            // append the header row
-            /*thead.append("tr")
-                .selectAll("th")
-                .data(hdr)
-                .enter()
-                .append("th")
-                    .attr("class", "tblpricehdr")
-                    .text(function(d) { return d; });*/
-
             // create a row
             var tblpricerow = tbody.selectAll("tr")
                 .data(pricedata);
@@ -730,17 +721,6 @@
                 .append("tr")
                 .attr("id", "tblpricerow")
                 .attr("class", "tblpricerow");
-
-            // create a cell in each row for each column
-            /*var cells = rows.selectAll("td")
-                .data(function(row) {
-                    return cols.map(function(column) {
-                        return {column: column, value: row[column]};
-                    });
-                 })
-                .enter()
-                .append("td")
-                    .text(function(d) { return d.value; });*/
 
             tblpricerow.exit().remove();
             return tblpricerow;

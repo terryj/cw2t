@@ -1012,8 +1012,6 @@ function registerClient(reg, conn) {
 // request for a new symbol subscription
 //
 function singleSymbolRequest(clientid, symbol, conn) {
-  console.log("singleSymbolRequest:" + symbol);
-
   db.eval(common.scriptsubscribesymbol, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
 

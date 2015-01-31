@@ -156,8 +156,8 @@ function pubsub() {
       } else if (message.substr(2, 6) == "status") {
         updateStatus(message.substr(0, 2), message.substr(9));
         sendStatus();
-      } else if (message.substr(2, 4) == "chat") {
-        newChatClient(message);
+      /*} else if (message.substr(2, 4) == "chat") {
+        newChatClient(message);*/
       } else {
         console.log("unknown message, channel=" + channel + ", message=" + message);
       }
@@ -219,10 +219,14 @@ function listen() {
         try {
           var obj = JSON.parse(msg);
 
-          if ("watchlistrequest" in obj) {
+          if ("singlesymbolrequest" in obj) {
+            singleSymbolRequest(obj.singlesymbolrequest, userid, conn);
+          } else if ("singlesymbolremoverequest" in obj) {
+            singleSymbolRemoveRequest(obj.singlesymbolremoverequest, userid, conn);
+          /*} else if ("watchlistrequest" in obj) {
             watchlistRequest(obj.watchlistrequest, userid, conn);
           } else if ("unwatchlistrequest" in obj) {
-            unwatchlistRequest(obj.watchlistrequest, userid, conn);
+            unwatchlistRequest(obj.watchlistrequest, userid, conn);*/
           } else if ("orderhistoryrequest" in obj) {
             orderHistory(obj.orderhistoryrequest, conn);
           } else if ("quoterequesthistoryrequest" in obj) {
@@ -399,6 +403,43 @@ function unsubscribeConnection(id) {
     // unsubscribe returned topics
     for (var i = 0; i < ret.length; i++) {
       dbsub.unsubscribe(ret[i]);
+    }
+  });
+}
+
+//
+// request for a new symbol subscription
+//
+function singleSymbolRequest(symbol, userid, conn) {
+  db.eval(common.scriptsubscribesymbol, 4, symbol, userid, serverid, feedtype, function(err, ret) {
+    if (err) throw err;
+
+    // see if we need to subscribe
+    if (ret[0] == 1) {
+      console.log("subscribing to " + symbol);
+      dbsub.subscribe("price:" + symbol);
+    }
+
+    // send the current stored price
+    var price = {};
+    price.symbol = symbol;
+    price.bid = ret[1];
+    price.ask = ret[2];
+    price.timestamp = ret[3];
+
+    conn.write("{\"price\":" + JSON.stringify(price) + "}");
+  });
+}
+
+function singleSymbolRemoveRequest(symbol, userid, conn) {
+  db.eval(common.scriptunsubscribesymbol, 4, symbol, userid, serverid, feedtype, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    // the script will tell us if we need to unsubscribe from the symbol
+    if (ret[0] == 1) {
+      console.log("unsubscribing from " + symbol);
+      dbsub.unsubscribe("price:" + ret[1]);
     }
   });
 }
