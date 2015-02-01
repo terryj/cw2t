@@ -139,7 +139,29 @@ function pubsub() {
     if (channel.substr(0, 6) == "price:") {
       common.newPrice(channel.substr(6), serverid, message, connections, feedtype);
     } else {
-      if (message.substr(1, 6) == "prices") {
+      try {
+        var obj = JSON.parse(message);
+
+        if ("quote" in obj) {
+          forwardQuote(obj.quote, message);
+        } else if ("order" in obj) {
+          forwardOrder(obj.order, message);
+        } else if ("trade" in obj) {
+          forwardTrade(obj.trade, message);
+        } else if ("quoterequest" in obj) {
+          forwardQuoterequest(obj.quoterequest, message);
+        } else if ("quoteack" in obj) {
+          forwardQuoteAck(obj.quoteack, message);
+        } else if ("position" in obj) {
+          forwardPosition(obj.position, message);
+        }
+      } catch (e) {
+        console.log(e);
+        console.log(message);
+        return;
+      }
+
+      /*if (message.substr(1, 6) == "prices") {
         common.newPrice(channel, servertype, message, connections, feedtype);
       } else if (message.substr(0, 5) == "price") {
         common.newPrice(channel.substr(6), serverid, message, connections, feedtype);
@@ -156,11 +178,9 @@ function pubsub() {
       } else if (message.substr(2, 6) == "status") {
         updateStatus(message.substr(0, 2), message.substr(9));
         sendStatus();
-      /*} else if (message.substr(2, 4) == "chat") {
-        newChatClient(message);*/
       } else {
         console.log("unknown message, channel=" + channel + ", message=" + message);
-      }
+      }*/
     }
   });
 
@@ -223,10 +243,6 @@ function listen() {
             singleSymbolRequest(obj.singlesymbolrequest, userid, conn);
           } else if ("singlesymbolremoverequest" in obj) {
             singleSymbolRemoveRequest(obj.singlesymbolremoverequest, userid, conn);
-          /*} else if ("watchlistrequest" in obj) {
-            watchlistRequest(obj.watchlistrequest, userid, conn);
-          } else if ("unwatchlistrequest" in obj) {
-            unwatchlistRequest(obj.watchlistrequest, userid, conn);*/
           } else if ("orderhistoryrequest" in obj) {
             orderHistory(obj.orderhistoryrequest, conn);
           } else if ("quoterequesthistoryrequest" in obj) {
@@ -442,80 +458,6 @@ function singleSymbolRemoveRequest(symbol, userid, conn) {
       dbsub.unsubscribe("price:" + ret[1]);
     }
   });
-}
-
-function watchlistRequest(watchlist, userid, conn) {
-  console.log("watchlistRequest");
-  console.log(watchlist);
-
-  if ("symbol" in watchlist) {
-    // add a symbol to the watchlist for this user
-    db.eval(common.scriptaddtowatchlist, 4, watchlist.symbol, userid, serverid, servertype, function(err, ret) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-      console.log(ret);
-
-      conn.write("{\"watchlist\":" + ret[0] + "}");
-
-      if (ret[1] == 1) {
-        dbsub.subscribe("price:" + watchlist.symbol);
-      }
-    });
-  } else {
-    // get the watchlist for this user
-    db.eval(scriptgetwatchlist, 3, userid, serverid, servertype, function(err, ret) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-      console.log(ret);
-
-      conn.write("{\"watchlist\":" + ret[0] + "}");
-
-      // subscribe to symbols
-      for (var i = 0; i < ret[1].length; i++) {
-        dbsub.subscribe("price:" + ret[1][i]);
-      }
-   });
-  }
-}
-
-function unwatchlistrequest(uwl, userid, conn) {
-  console.log("unwatchlistrequest");
-
-  if ("symbol" in uwl) {
-    // unsubscribe from the watchlist for this client
-    db.eval(common.scriptremovewatchlist, 4, uwl.symbol, userid, serverid, servertype, function(err, ret) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-      console.log(ret);
-
-      // unsubscribe from symbol
-      if (ret == 1) {
-        dbsub.unsubscribe("price:" + uwl.symbol);
-      }
-
-      conn.write("{\"unwatchlist\":[\"" + uwl.symbol + "\"]}");
-    });
-  } else {
-    // unsubscribe from the watchlist for this client
-    db.eval(common.scriptunwatchlist, 2, userid, serverid, servertype, function(err, ret) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-      console.log(ret);
-
-      // unsubscribe from symbols
-      for (var i = 0; i < ret.length; i++) {
-        dbsub.unsubscribe("price:" + ret[i]);
-      }
-    });
-  }
 }
 
 function newClient(client, userid, conn) {
@@ -795,8 +737,6 @@ function getSendTrade(tradeid) {
         console.log(err);
         return;
       }
-
-      trade.orderdivnum = order.orderdivnum;
 
       db.hgetall("client:" + trade.clientid, function(err, client) {
         if (err) {
@@ -1578,7 +1518,6 @@ function sendQuoteack(quotereqid) {
     if ('text' in quoterequest) {
       quoteack.text = quoterequest.text;
     }
-    quoteack.orderdivnum = quoterequest.orderdivnum;
 
     // send the quote acknowledgement
     if (quoterequest.operatorid in connections) {
@@ -1587,7 +1526,7 @@ function sendQuoteack(quotereqid) {
   });
 }
 
-function sendQuote(quoteid) {
+/*function sendQuote(quoteid) {
   // get the quote
   db.hgetall("quote:" + quoteid, function(err, quote) {
     if (err) {
@@ -1610,14 +1549,21 @@ function sendQuote(quoteid) {
         return;
       }
 
-      // add the orderdivnum so the front-end knows which orderdiv
-      quote.orderdivnum = quoterequest.orderdivnum;
-
       if (quoterequest.operatorid in connections) {
         connections[quoterequest.operatorid].write("{\"quote\":" + JSON.stringify(quote) + "}");
       }
     });
   });
+}*/
+
+// forward quote to relevant user
+function forwardQuote(quote, msg) {
+  console.log("forwardQuote");
+  console.log(quote);
+
+  if (quoterequest.operatorid in connections) {
+    connections[quoterequest.operatorid].write(msg);
+  }
 }
 
 function sendConnections(connectionreq, conn) {

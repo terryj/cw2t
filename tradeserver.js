@@ -1321,19 +1321,19 @@ function registerScripts() {
   ';
 
   publishquote = '\
-  local publishquote = function(quoteid, channel) \
+  local publishquote = function(quoteid, channel, operatorid) \
     local fields = {"quotereqid","clientid","quoteid","symbol","bidpx","offerpx","bidquantity","offerquantity","validuntiltime","transacttime","settlcurrency","nosettdays","futsettdate","bidsize","offersize","qclientid"} \
     local vals = redis.call("hmget", "quote:" .. quoteid, unpack(fields)) \
-    local quote = {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],symbol=vals[4],bidpx=vals[5],offerpx=vals[6],bidquantity=vals[7],offerquantity=vals[8],validuntiltime=vals[9],transacttime=vals[10],settlcurrency=vals[11],nosettdays=vals[12],futsettdate=vals[13],bidsize=vals[14],offersize=vals[15],qclientid=vals[16]} \
+    local quote = {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],symbol=vals[4],bidpx=vals[5],offerpx=vals[6],bidquantity=vals[7],offerquantity=vals[8],validuntiltime=vals[9],transacttime=vals[10],settlcurrency=vals[11],nosettdays=vals[12],futsettdate=vals[13],bidsize=vals[14],offersize=vals[15],qclientid=vals[16],operatorid=operatorid} \
     redis.call("publish", channel, "{" .. cjson.encode("quote") .. ":" .. cjson.encode(quote) .. "}") \
   end \
   ';
 
   publishorder = '\
   local publishorder = function(orderid, channel) \
-    local fields = {"clientid","symbol","side","quantity","price","ordertype","remquantity","status","markettype","futsettdate","partfill","quoteid","currency","currencyratetoorg","currencyindtoorg","timestamp","margin","timeinforce","expiredate","expiretime","settlcurrency","settlcurrfxrate","settlcurrfxratecalc","orderid","externalorderid","execid","nosettdays","operatortype","operatorid","hedgeorderid","orderdivnum","text","reason"} \
+    local fields = {"clientid","symbol","side","quantity","price","ordertype","remquantity","status","markettype","futsettdate","partfill","quoteid","currency","currencyratetoorg","currencyindtoorg","timestamp","margin","timeinforce","expiredate","expiretime","settlcurrency","settlcurrfxrate","settlcurrfxratecalc","orderid","externalorderid","execid","nosettdays","operatortype","operatorid","hedgeorderid","text","reason"} \
     local vals = redis.call("hmget", "order:" .. orderid, unpack(fields)) \
-    local order = {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],price=vals[5],ordertype=vals[6],remquantity=vals[7],status=vals[8],markettype=vals[9],futsettdate=vals[10],partfill=vals[11],quoteid=vals[12],currency=vals[13],currencyratetoorg=vals[14],currencyindtoorg=vals[15],timestamp=vals[16],margin=vals[17],timeinforce=vals[18],expiredate=vals[19],expiretime=vals[20],settlcurrency=vals[21],settlcurrfxrate=vals[22],settlcurrfxratecalc=vals[23],orderid=vals[24],externalorderid=vals[25],execid=vals[26],nosettdays=vals[27],operatortype=vals[28],operatorid=vals[29],hedgeorderid=vals[30],orderdivnum=vals[31],text=vals[32],reason=vals[33]} \
+    local order = {clientid=vals[1],symbol=vals[2],side=vals[3],quantity=vals[4],price=vals[5],ordertype=vals[6],remquantity=vals[7],status=vals[8],markettype=vals[9],futsettdate=vals[10],partfill=vals[11],quoteid=vals[12],currency=vals[13],currencyratetoorg=vals[14],currencyindtoorg=vals[15],timestamp=vals[16],margin=vals[17],timeinforce=vals[18],expiredate=vals[19],expiretime=vals[20],settlcurrency=vals[21],settlcurrfxrate=vals[22],settlcurrfxratecalc=vals[23],orderid=vals[24],externalorderid=vals[25],execid=vals[26],nosettdays=vals[27],operatortype=vals[28],operatorid=vals[29],hedgeorderid=vals[30],text=vals[31],reason=vals[32]} \
     redis.call("publish", channel, "{" .. cjson.encode("order") .. ":" .. cjson.encode(order) .. "}") \
   end \
   ';
@@ -1845,7 +1845,7 @@ function registerScripts() {
   local errorcode = 0 \
   local quoteid = "" \
   --[[ get the quote request ]] \
-  local fields = {"clientid", "quoteid", "symbol", "quantity", "cashorderqty", "nosettdays", "settlcurrency", "operatortype", "futsettdate", "orderdivnum"} \
+  local fields = {"clientid", "quoteid", "symbol", "quantity", "cashorderqty", "nosettdays", "settlcurrency", "operatortype", "futsettdate", "operatorid"} \
   local vals = redis.call("hmget", "quoterequest:" .. KEYS[1], unpack(fields)) \
   if not vals[1] then \
     errorcode = 1014 \
@@ -1902,8 +1902,8 @@ function registerScripts() {
   end \
   --[[ add status to stored quoterequest ]] \
   redis.call("hmset", "quoterequest:" .. KEYS[1], "quotestatus", status) \
-  --[[ publish quote to operator type ]] \
-  publishquote(quoteid, vals[8]) \
+  --[[ publish quote to operator type, with operator id, so can be forwarded as appropriate ]] \
+  publishquote(quoteid, vals[8], vals[10]) \
   return errorcode \
   ';
 

@@ -38,18 +38,6 @@
             color: #666666;
             cursor: pointer;
         }
-        .listchat {
-            display: block;
-            font-size: 24px;
-            background-color: inherit;
-            color: #666666;
-            white-space: nowrap;
-        }
-        .listchat li:hover {
-            background-color: inherit;
-            color: #666666;
-            cursor: pointer;
-        }
         .menu li {
             display: inline;
             margin: 0 10px;
@@ -68,7 +56,7 @@
             background-color: inherit;
             color: #666666;
         }
-        .menu .menuitemchat {
+        .menu {
             background-color: inherit;
             color: yellow;
         }
@@ -677,12 +665,6 @@
             font-size: 15px;
             margin: 2px 4px 15px 10px;           
         }
-        .chatbtn {
-            font-size: 21px;
-            background-color: #ddd;
-            color: #666666;
-            cursor: pointer;
-        }
         .heading {
             font-size: 18px;
             background-color: inherit;
@@ -752,7 +734,6 @@
         var defaultHedgebook = "999999";
         var quoterequests = {};
         var connections = {};
-        var chathistory = {};
         var cashhistory = {};
         var watchlist = [];
         var showvolume = false;
@@ -907,12 +888,6 @@
                     clearCashHistory();
                     loadCashHistory(obj.cashhistory);
                     displayCashHistory();
-                /*} else if ("chat" in obj) {
-                    newChat(obj.chat);*/
-                /*} else if ("chathistory" in obj) {
-                    clearChatHistory();
-                    loadChatHistory(obj.chathistory);
-                    displayChatHistory();*/
                 } else if ("status" in obj) {
                     updateStatus(obj.status);
                 } else if ("errormsg" in obj) {
@@ -982,12 +957,6 @@
             for (var i = 0; i < tradearr.length; ++i) {
                 trades[tradearr[i].tradeid] = tradearr[i];
             }                                    
-        }
-
-        function loadChatHistory(chathistarr) {
-            for (var i = 0; i < chathistarr.length; ++i) {
-                chathistory[chathistarr[i].chatid] = chathistarr[i];
-            }                                                
         }
         
         function loadInstruments(instrumentarr) {
@@ -1112,10 +1081,6 @@
 
         function clearConnections() {
             connections = [];
-        }
-
-        function clearChatHistory() {
-            chathistory = [];
         }
 
         function clearCash() {
@@ -1381,7 +1346,7 @@
             displayMenu();
 
             selectedmenu = MENURFQ;
-            rfq();
+            singleSymbol();
         }
 
         function startHeartbeatTimer() {
@@ -1897,13 +1862,6 @@
                     inpsymbol = document.getElementById("inpsymbol");
                     inpsymbol.value = symbol;
                 } else if (selectedmenu == MENURFQ) {
-                    //inpsymbol = document.getElementById("inpsymbol");
-                    //inpsymbol.id = "inpsymbol";
-                    //inpsymbol.value = symbol;
-                    //var txt = document.createTextNode(instruments[symbol].shortname);
-                    //inpsymbol.appendChild(txt);
-                    //stockbox.appendChild(inpsymbol);
-
                     // unsubscribe current symbol
                     if (selectedsymbol != "") {
                         requestRemoveSingleSymbol(selectedsymbol);
@@ -1920,7 +1878,6 @@
 
                     // request a symbol
                     requestSingleSymbol(selectedsymbol);
-                    //requestPosition(selectedsymbol);
                 }
 
                 stocklist.style.visibility = "hidden";
@@ -2006,10 +1963,6 @@
                     // update price display
                     updatePriceTable(price);
                 }
-
-                // update position data
-                //updatePositionData(price);
-                //updatePositionTable();
             } else if (selectedmenu == MENUWATCHLIST) {
                 updateWatchlist(price);
                 updateWatchlistTable();
@@ -2303,6 +2256,205 @@
                 d3.select("#tdrfq")
                     .text("Quote Request Sent");
             }
+        }
+
+        function quoteReceived(quote) {
+            // update quote array
+            updateQuoteLadder(quote);
+
+            // update display
+            updateQuoteTable();
+
+            // start a timer
+            startQuoteInterval(quote);
+        }
+
+        //
+        // update a ladder of quotes & start a timer for each quote
+        //
+        function updateQuoteLadder(quote) {
+            // we create either a bid or offer quote for a quote level
+            var updated = false;
+
+            // calculate the duration of the quote
+            var noseconds = getSeconds(quote.transacttime, quote.validuntiltime);
+            quote.noseconds = noseconds;
+            quote.startnoseconds = noseconds;
+
+            // button colours
+            if (quote.bidpx != "") {
+                quote.bkcolor = d3.rgb(255, 0, 0);
+            } else {
+                quote.bkcolor = d3.rgb(0, 0, 255);
+            }
+            quote.color = d3.rgb(255, 255, 255);                
+
+            // see if we can add the quote to an existing quote level
+            for (var i = 0; i < quotes.length; i++) {
+                if (quote.bidpx != "") {
+                    if (!('bidquote' in quotes[i])) {
+                        quotes[i].bidquote = quote;
+                        updated = true;
+                        break;
+                    }
+                } else {
+                    if (!('offerquote' in quotes[i])) {
+                        quotes[i].offerquote = quote;
+                        updated = true;
+                        break;
+                    }           
+                }
+            }
+
+            // if not, create a new level
+            if (!updated) {
+                quotes.push([]);
+
+                if (quote.bidpx != "") {
+                    quotes[quotes.length - 1].bidquote = quote;
+                } else {
+                    quotes[quotes.length - 1].offerquote = quote;
+                }
+            }
+        }
+
+        function updateQuoteTable() {
+            var cols = ["bidquote", "offerquote"];
+
+            // create a quote table if one does not exist
+            var tblquote = d3.select("#tblquote");
+            if (tblquote.empty()) {
+                tblquote = createQuoteTable();
+            }
+
+            // base the table on the quotes array
+            var rows = tblquote.select("tbody").selectAll("tr")
+                .data(quotes);
+
+            // create a new row for each quote level (may be bid/offer/both)
+            rows.enter()
+                .append("tr");
+
+            // update
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    if (cols[0] in row) {
+                        if (cols[1] in row) {
+                            return [{col: cols[0], value: row[cols[0]]},{col: cols[1], value: row[cols[1]]}];
+                        } else {
+                            return [{col: cols[0], value: row[cols[0]]}];
+                        }
+                    } else {
+                        return [{col: cols[1], value: row[cols[1]]}];
+                    }
+                 });
+
+            // enter
+            cells.enter()
+                .append("td")
+                .append("input")
+                    .attr("type", "button")
+                    .on("click", function(d, i, j) { // d=data, i=col, j=row
+                        if (d.col == "bidquote") {
+                            // we are selling
+                            sendOrder(d.value.symbol, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+                        } else {
+                            // we are buying
+                            sendOrder(d.value.symbol, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+                        }
+
+                        // stop timer
+                        clearInterval(d.value.interval);
+
+                        // disable button & remove the event listener
+                        d3.select(this)
+                            .style("cursor", "default")
+                            .attr("disabled", null)
+                            .on('click', null);
+                    });
+
+            // enter & update
+            cells.each(function(d) {
+                // display on button
+                d3.select(this).select("input")
+                    .attr("class", function(d) {
+                        if (d.col == cols[0]) {
+                            if ("tradeid" in d.value) {
+                                return "quotebuttonsellexpired";
+                            } else {
+                                return "quotebuttonsell";
+                            }
+                        } else {
+                            if ("tradeid" in d.value) {
+                                return "quotebuttonbuyexpired";
+                            } else {
+                                return "quotebuttonbuy";
+                            }                            
+                        }
+                    })
+                    .attr("value", function(d) {
+                        var txt;
+
+                        // button text
+                        if (d.col == cols[0]) {
+                            if ("tradeid" in d.value) {
+                                txt = "Sold " + d.value.bidquantity + " @ " + d.value.bidpx;
+                            } else {
+                                txt = "Sell " + d.value.bidquantity + " @ " + d.value.bidpx;
+
+                                if (d.value.noseconds == 0) {
+                                    txt += " - Expired";
+                                } else {
+                                    txt += " - " + (d.value.noseconds < 10 ? " " : "") + d.value.noseconds + " Seconds";
+                                }
+                            }
+                        } else {
+                            if ("tradeid" in d.value) {
+                                txt = "Bought " + d.value.offerquantity + " @ " + d.value.offerpx;
+                            } else {
+                                txt = "Buy " + d.value.offerquantity + " @ " + d.value.offerpx;
+
+                                if (d.value.noseconds == 0) {
+                                    txt += " - Expired";
+                                } else {
+                                    txt += " - " + (d.value.noseconds < 10 ? " " : "") + d.value.noseconds + " Seconds";
+                                }
+                            }
+                        }
+                        return txt;
+                    });
+
+                // disable
+                if (d.value.noseconds == 0) {
+                    d3.select(this).select("input")
+                        .style("cursor", "default")
+                        .attr("disabled", null)
+                        .attr("class", function(d) { return d.col == cols[0] ? "quotebuttonsellexpired" : "quotebuttonbuyexpired"; })
+                        .on('click', null);                    
+                }
+            });
+        }
+
+        function createQuoteTable() {
+            //var hdr = ["Quotes"];
+
+            // use the rfq div
+            var divrfq = d3.select("#divrfq");
+
+            divrfq.append("header")
+                .attr("class", "divrfqhdr")
+                .text("Quotes");
+
+            // create a table
+            var tblquote = divrfq.append("table")
+                .attr("id", "tblquote")
+                .attr("class", "tblquote");
+
+            // add header & body
+            //var thead = tblquote.append("thead");
+            var tbody = tblquote.append("tbody");
+
+            return tblquote;
         }
 
         function displayOrderHeadings() {
@@ -2999,33 +3151,6 @@
             return b - a;
         }
 
-        /*function displayChatHistory() {
-            var firstchat = true;
-            var msg;
-            var list;
-
-            list = getList("list1");
-
-            for (var x in chathistory) {
-                msg = chatMsg(chathistory[x]);
-                addElement(msg, list, chathistory[x].chatid);
-                firstchat = false;
-            }
-
-            if (firstchat) {
-                addElement("No chat", list, 0);                
-            } else {
-                list.onclick = function(e) {
-                    var element;
-                    
-                    if (!e) e = window.event;
-                    element = e.target || e.srcElement;
-
-                    alert(chathistory[element.value].text)
-                }
-            }
-        }*/
-
         function displayQuoteRequests() {
             var firstquoterequest = true;
             var msg;
@@ -3611,10 +3736,6 @@
             for (var x in connections) {
                 msg = connections[x].name;
 
-                if ('pendingchat' in connections[x] && connections[x].pendingchat) {
-                    msg += " *** chat pending ***";
-                }
-
                 addElement(msg, list, connections[x].clientid);
                 firstconnection = false;
             }
@@ -3627,136 +3748,9 @@
 
                     if (!e) e = window.event;
                     element = e.target || e.srcElement;
-
-                    chatConnection(element);
                 }
             }
         }
-
-        //
-        // start a chat conversation
-        //
-        function chatConnection(elem) {
-            var chatid;
-            var chattext;
-            var chattextlen;
-            var pendingchatrequest = {};
-
-            var ls = document.getElementById("list1");
-            ls.className = "listchat";
-
-            if ('pendingchat' in connections[elem.value] && connections[elem.value].pendingchat) {
-                pendingchatrequest.clientid = elem.value;
-                sockjs.send("{\"pendingchatrequest\":" + JSON.stringify(pendingchatrequest) + "}");
-            }
-
-            var chatdiv = getDiv("chatdiv:" + elem.value);
-
-            chattext = document.getElementById("chattext:" + elem.value);
-            if (chattext != null) {
-                return;
-            }
-
-            chattext = document.createElement("textarea");
-            chattext.id = "chattext:" + elem.value;
-
-            chatdiv.appendChild(chattext);
-
-            addNewLine(chatdiv, null);
-
-            var chatbtn = newbutton("btnchat:" + elem.value, "Send", "chatbtn", chatdiv);
-
-            chatid = document.createElement("input");
-            chatid.type = "hidden";
-            chatid.id = "chatid:" + elem.value;
-            chatid.value = "0";
-
-            chattextlen = document.createElement("input");
-            chattextlen.type = "hidden";
-            chattextlen.id = "chattextlen:" + elem.value;
-
-            chatdiv.appendChild(chatid);
-            chatdiv.appendChild(chattextlen);
-
-            elem.appendChild(chatdiv);
-
-            chatbtn.onclick = function(event) {
-                var chat = {};
-
-                event = event || window.event;  // cross-browser event
-
-                chat.chatid = chatid.value;
-                chat.clientid = elem.value;
-                chat.text = chattext.value.substr(chattextlen.value);
-
-                sockjs.send("{\"chat\":" + JSON.stringify(chat) + "}");
-
-                if (event.stopPropagation) {
-                    // W3C standard variant
-                    event.stopPropagation();
-                } else {
-                    // IE variant
-                    event.cancelBubble = true;
-                }
-            }
-
-            chattext.focus();
-            chattext.value = ">>";;
-            chattextlen.value = chattext.value.length;
-        }
-
-        /*function newChat(chat) {
-            var chattext;
-            var chattextlen;
-            var chatid;
-            var menuitemchat;
-            var list;
-            var items;
-
-            // if chat not selected, just highlight the menu option
-            if (selectedmenu != MENUCHAT) {
-                menuitemchat = document.getElementById("menuitemchat");
-                if (menuitemchat != null) {
-                    menuitemchat.className = "menuitemchat";
-                }
-                return;
-            }
-
-            // is the relevant client selected?
-            chattext = document.getElementById("chattext:" + chat.clientid);
-            if (chattext == null) {
-                // highlight client connection
-                list = document.getElementById("list1");
-                if (list != null) {
-                    items = list.getElementsByTagName("li");
-
-                    for (var i = 0; i < items.length; ++i) {
-                        if (items[i].value == chat.clientid) {
-                            items[i].innerHTML += " *** chat pending ***";
-                            break;
-                        }
-                    }
-                }
-                return;
-            }
-
-            chattext.focus();
-
-            if (chattext.value != "") {
-                chattext.value += "\n";
-            }
-            chattext.value += chat.text + "\n" + ">>";
-
-            chattextlen = document.getElementById("chattextlen:" + chat.clientid);
-            if (chattextlen != null) {
-                chattextlen.value = chattext.value.length;
-            }
-
-            chatid = document.getElementById("chatid:" + chat.clientid);
-            if (chatid != null) {
-                chatid.value = chat.chatid;
-            }
-        }*/
 
         function addHeading(text, list) {
             var newtext = document.createTextNode(text);
@@ -3909,14 +3903,6 @@
             return msg;
         }
 
-        function chatMsg(chat) {
-            var msg;
-
-            msg = "Chat id:" + chat.chatid + " with " + chat.user + ", started at " + formatUTCDateTime(chat.timestamp);
-
-            return msg;
-        }
-
         function cashMsg(cash) {
             return formatCurrency(cash.amount) + " " + cash.currency;
         }
@@ -3950,53 +3936,7 @@
             alert("Request to cancel order #" + ordercancelreject.orderid + " rejected, reason: " + ordercancelreject.reasondesc);
         }
 
-        function removeOrderBook(symbol) {
-            var stockboxinput;
-
-            if (symbol in orderbooks) {
-                clearSymbolDiv(symbol);
-                clearAllStrips(symbol);
-
-                if (obdisplay[symbol].previoussymbol != null) {
-                    if (obdisplay[symbol].insertbefore != null) {
-                        obdisplay[obdisplay[symbol].previoussymbol].insertbefore = obdisplay[symbol].insertbefore;
-                    } else {
-                        obdisplay[obdisplay[symbol].previoussymbol].insertbefore = null;                        
-                    }
-                }
-
-                if (obdisplay[symbol].insertbefore != null) {
-                    if (obdisplay[symbol].previoussymbol != null) {
-                        obdisplay[obdisplay[symbol].insertbefore].previoussymbol = obdisplay[symbol].previoussymbol;
-                    } else {
-                        obdisplay[obdisplay[symbol].insertbefore].previoussymbol = null;
-                    }
-                }
-
-                if (symbol == lastsymbol) {
-                    if (obdisplay[symbol].previoussymbol != null) {
-                        lastsymbol = obdisplay[symbol].previoussymbol;
-                    } else {
-                        lastsymbol = null;
-                    }
-                }
-
-                delete obdisplay[symbol];
-                delete orderbooks[symbol];
-                delete priceflash[symbol];
-
-                if (Object.keys(orderbooks).length == 0) {
-                    clearOrderBookHeadings();
-                }
-
-                stockboxinput = document.getElementById("stockboxinput");
-                if (stockboxinput != null) {
-                    stockboxinput.focus();
-                }
-            }
-        }
-
-        function rfq() {
+        function singleSymbol() {
             var inpclientid;
             var inpsymbol;
 
@@ -4016,76 +3956,11 @@
 
             selectStock("frmrfq", frmrfq, false, false, null);
 
-            // to hold entered symbol
-            inpsymbol = document.createElement("span");
-            inpsymbol.id = "inpsymbol";
-            frmrfq.appendChild(inpsymbol);
-
-            addNewLine(frmrfq, null);
-            addNewLine(frmrfq, null);
-
-            /*var lblqtyascashorshares = newlabel("lblqtyascashorshares", "Quantity as Cash or Shares", "formlabel", frmrfq);
-            var selqtyascashorshares = newselect("selqtyascashorshares", "formselect", frmrfq);
-
-            selqtyascashorshares[0] = new Option("Quantity as shares", 0, true, true);
-            selqtyascashorshares[1] = new Option("Quantity as cash", 1, false, false);
-
-            addNewLine(frmrfq, null);
-            var lblqty = newlabel("lblqty", "Quantity:", "formlabel", frmrfq);
-            var inpqty = newinput("inpqty", "forminput", frmrfq);
-
-            addNewLine(frmrfq, null);
-            var btnsend = newbutton("btnsend", "Send Rfq", "formbutton", frmrfq);
-
-            btnsend.onclick = function() {
-                var qty;
-                var cashqty;
-
-                // validate there is a client
-                if (inpclientid.value == "") {
-                    alert("Please select a client");
-                    selectClientFocus("clientboxinput");
-                    return;
-                }
-
-                // validate there is a symbol
-                var stockboxinput = document.getElementById("stockboxinput");
-                if (stockboxinput.value == "") {
-                    alert("Please select a symbol");
-                    stockboxinput.focus();
-                    //return;
-                }
-
-                // validate the quantity
-                if (!validateNumeric(inpqty, "Quantity")) {
-                    return;
-                }
-
-                // quantity as cash or shares
-                if (selqtyascashorshares.selectedIndex == 0) {
-                    qty = inpqty.value;
-                    cashqty = "";
-                } else {
-                    qty = "";
-                    cashqty = inpqty.value;                    
-                }
-
-                console.log(inpsymbol.value);
-
-                sendRfq(inpclientid.value, qty, cashqty, inpsymbol.textContent, "GBP"); // todo
-            }*/
-
             main.appendChild(frmrfq);
         }
 
         function sendRfq(clientid, quantity, cashorderqty, symbol, currency) {
             var rfq = {};
-
-            console.log(clientid);
-            console.log(quantity);
-            console.log(cashorderqty);
-            console.log(symbol);
-            console.log(currency);
 
             rfq.clientid = clientid;
             rfq.symbol = symbol;
@@ -4100,201 +3975,6 @@
 
             sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
         }
-
-        /*function displayOrderBook(symbol) {
-            var strip;
-            var display = {};
-            var bidprice;
-            var offerprice;
-            var bidquantity;
-            var offerquantity;
-            var level2;
-            var stock;
-            var slash;
-            var y;
-            var removestock;
-            var orderdiv;
-            var nextsymbol;
-            var links;
-
-            if (!(symbol in orderbooks)) {
-                return;
-            }
-
-            if (!(symbol in obdisplay)) {
-                display.level2 = false;
-                display.insertbefore = null;
-                display.previoussymbol = null;
-                obdisplay[symbol] = display;
-
-                displayOrderBookHeadings();
-
-                if (lastsymbol != null) {
-                    obdisplay[lastsymbol].insertbefore = symbol;
-                    obdisplay[symbol].previoussymbol = lastsymbol;
-                }
-                lastsymbol = symbol;
-            }
-
-            for (y = 0; y < orderbooks[symbol].length; ++y) {
-                strip = document.getElementById("strip:" + symbol + ":" + y);
-                if (strip != null) {
-                    bidprice = document.getElementById("bidprice:" + symbol + ":" + y);
-                    offerprice = document.getElementById("offerprice:" + symbol + ":" + y);
-                    if (showvolume) {
-                        bidquantity = document.getElementById("bidquantity:" + symbol + ":" + y);
-                        offerquantity = document.getElementById("offerquantity:" + symbol + ":" + y);
-                    }
-                } else {
-                    // first time through, so create elements
-                    strip = document.createElement('div');
-                    strip.id = "strip:" + symbol + ":" + y;
-
-                    if (!isTouchDevice()) {
-                        strip.onmouseover = function() {
-                            links.style.visibility = "visible";
-                        }
-                        strip.onmouseout = function() {
-                            links.style.visibility = "hidden";
-                        }
-                    }
-
-                    if (showvolume) {
-                        level2 = document.createElement('span');
-                        level2.className = "level2";
-                    }
-
-                    stock = document.createElement('span');
-                    stock.className = "stock";
-                    bidprice = document.createElement('span');
-                    bidprice.id = "bidprice:" + symbol + ":" + y;
-                    bidprice.title = "Place a new limit sell order";
-                    bidprice.onclick = function() {setOrderPrice(this, "2", symbol);}
-                    offerprice = document.createElement('span');
-                    offerprice.id = "offerprice:" + symbol + ":" + y;
-                    offerprice.title = "Place a new limit buy order";
-                    offerprice.onclick = function() {setOrderPrice(this, "1", symbol);}
-
-                    if (showvolume) {
-                        bidquantity = document.createElement('span');
-                        bidquantity.className = "bidquantity";
-                        bidquantity.id = "bidquantity:" + symbol + ":" + y;
-                        bidquantity.title = "Place a new limit sell order";
-                        bidquantity.onclick = function() {setOrderQuantity(this, "2", symbol);}
-                        offerquantity = document.createElement('span');
-                        offerquantity.className = "offerquantity";
-                        offerquantity.id = "offerquantity:" + symbol + ":" + y;
-                        offerquantity.title = "Place a new limit buy order";
-                        offerquantity.onclick = function() {setOrderQuantity(this, "1", symbol);}
-                    }
-
-                    slash = document.createElement('span');
-                    slash.className = "slash";
-                    slash.innerHTML = "/";
-                    removestock = document.createElement('span');
-                    removestock.className = "removestock";
-
-                    if (y == 0) {
-                        strip.className = "yellowstrip";
-
-                        links = document.createElement('div');
-
-                        if (!isTouchDevice()) {
-                            links.style.visibility = "hidden";
-                        }
-
-                        var reqquotelnk = newlink("reqquotelnk", "Request Quote", "", links);
-                        var buyorderlnk = newlink("buyorderlnk", "Limit Buy", "", links);
-                        var sellorderlnk = newlink("sellorderlnk", "Limit Sell", "", links);
-                        var clearquotelnk = newlink("clearquotelnk", "Clear Ticket", "", links);
-
-                        reqquotelnk.onclick = function() {requestQuote(symbol);}
-                        buyorderlnk.onclick = function() {placeOrder(symbol, '1', 0, 0);}
-                        sellorderlnk.onclick = function() {placeOrder(symbol, '2', 0, 0);}
-                        clearquotelnk.onclick = function() {clearSymbolDiv(symbol);}
-
-                        if (showvolume) {
-                            level2.onclick = function() {
-                                clearAllStrips(symbol);
-                                obdisplay[symbol].level2 = !obdisplay[symbol].level2;
-                                displayOrderBook(symbol);
-                            }
-
-                            if (obdisplay[symbol].level2) {
-                                level2.title = "hide depth";
-                                level2.innerHTML = "-";
-                            } else {
-                                level2.title = "show depth";
-                                level2.innerHTML = "+";
-                            }
-                        }
-
-                        stock.innerHTML = symbol;
-                        stock.title = "Request a quote";
-
-                        stock.onclick = function() {
-                            requestQuote(symbol);
-                        }
-
-                        removestock.innerHTML = "x";
-                        removestock.title = "Remove from Watch List";
-
-                        removestock.onclick = function() {
-                            if (symbol in obdisplay) {
-                                removeOrderBook(symbol);
-                                sockjs.send("{\"unwatchlistrequest\":" + JSON.stringify(symbol) + "}");
-                            } else {
-                                alert(symbol + " not in Watch List");
-                            }
-                        }
-                    } else {
-                        strip.className = "depthstrip";
-                    }
-
-                    if (showvolume) {
-                        strip.appendChild(level2);
-                    }
-                    strip.appendChild(stock);
-                    if (showvolume) {
-                        strip.appendChild(bidquantity);
-                    }
-                    strip.appendChild(bidprice);
-                    strip.appendChild(slash);
-                    strip.appendChild(offerprice);
-                    if (showvolume) {
-                        strip.appendChild(offerquantity);
-                    }
-                    strip.appendChild(removestock);
-
-                    if (y == 0) {
-                        strip.appendChild(links);
-                    }
-
-                    orderdiv = document.getElementById("orderdiv:" + symbol + ":1");
-
-                    if (orderdiv != null) {
-                        main.insertBefore(strip, orderdiv);
-                    } else if (obdisplay[symbol].insertbefore == null) {
-                        main.appendChild(strip);
-                    } else {
-                        nextsymbol = document.getElementById("strip:" + obdisplay[symbol].insertbefore + ":0");
-                        main.insertBefore(strip, nextsymbol);
-                    }
-                }
-
-                priceChange(symbol, y, bidprice, offerprice);
-
-                bidprice.innerHTML = orderbooks[symbol][y].bid;
-                offerprice.innerHTML = orderbooks[symbol][y].offer;
-
-                if (showvolume) {
-                    bidquantity.innerHTML = orderbooks[symbol][y].bidvol;
-                    offerquantity.innerHTML = orderbooks[symbol][y].offervol;
-                }
-
-                if (!obdisplay[symbol].level2) {break;}
-            }
-        }*/
 
         function isTouchDevice() {
             try {
@@ -4386,231 +4066,6 @@
             }
         }
 
-        /*function displayOrderBookHeadings() {
-            var headingstrip;
-            var headinglevel2;
-            var headingstock;
-            var headingbidquantity;
-            var headingbidprice;
-            var headingofferprice;
-            var headingofferquantity;
-            var headingslash;
-
-            if (Object.keys(orderbooks).length == 0) {
-                return;
-            }
-
-            headingstrip = document.getElementById("headingstrip");
-            if (headingstrip != null) {
-                return;
-            }
-
-            headingstrip = document.createElement('div');
-            headingstrip.id = "headingstrip";
-            headingstrip.className = "headingstrip";
-            if (showvolume) {
-                headinglevel2 = document.createElement('span');
-                headinglevel2.className = "level2heading";
-            }
-            headingstock = document.createElement('span');
-            headingstock.innerHTML = "Symbol";
-            headingstock.className = "stockheading";
-            if (showvolume) {
-                headingbidquantity = document.createElement('span');
-                headingbidquantity.innerHTML = "Bid Vol";
-                headingbidquantity.className = "bidquantityheading";
-            }
-            headingbidprice = document.createElement('span');
-            headingbidprice.innerHTML = "Bid Price";
-            headingbidprice.className = "bidheading";
-            headingofferprice = document.createElement('span');
-            headingofferprice.innerHTML = "Offer Price";
-            headingofferprice.className = "offerheading";
-            if (showvolume) {
-                headingofferquantity = document.createElement('span');
-                headingofferquantity.innerHTML = "Offer Vol";
-                headingofferquantity.className = "offerquantityheading";
-            }
-            headingslash = document.createElement('span');
-            headingslash.innerHTML = "/";
-            headingslash.className = "slashheading";
-            if (showvolume) {
-                headingstrip.appendChild(headinglevel2);
-            }
-            headingstrip.appendChild(headingstock);
-            if (showvolume) {
-                headingstrip.appendChild(headingbidquantity);
-            }
-            headingstrip.appendChild(headingbidprice);
-            headingstrip.appendChild(headingslash);
-            headingstrip.appendChild(headingofferprice);
-            if (showvolume) {
-                headingstrip.appendChild(headingofferquantity);
-            }
-
-            main.appendChild(headingstrip);
-        }*/
-
-        function getOrderDivNum(symbol) {
-            var orderdivnum = 0;
-
-            if (symbol in orderdivnumarr) {
-                orderdivnum = orderdivnumarr[symbol];
-            }
-
-            return orderdivnum;
-        }
-
-        function incrOrderDivNum(symbol) {
-            if (symbol in orderdivnumarr) {
-                orderdivnumarr[symbol]++;
-            } else {
-                orderdivnumarr[symbol] = 1;
-            }
-
-            return orderdivnumarr[symbol];
-        }
-
-        /*function requestQuote(symbol) {
-            var quotereqbutton;
-            var quotereqqty;
-            var orderdiv;
-            var quantity;
-            var cashorderqty;
-            var currencysel;
-            var qtyascashorshares = 1;
-            var settlperiod;
-            var lblquantity;
-            var lblsettle;
-            var inpclientid;
-            var lblcurrency;
-            var focusfield;
-            var focusfldstr;
-            var quotereqqtystr;
-            var inpclientidstr;
-            var orderdivnum;
-
-            // get the order div. number for this symbol as there may be more than one
-            orderdivnum = incrOrderDivNum(symbol);
-
-            symbolstr = symbol + ":" + orderdivnum;
-            orderdiv = getDiv("orderdiv:" + symbolstr, symbol);
-            inpclientidstr = "inpclientid:" + symbolstr;
-            quotereqqtystr = "quotereqquantity:" + symbolstr;
-            focusfldstr = "clientboxinput:" + symbolstr;
-
-            selectClient("orderdiv", orderdiv, symbolstr, true, null, inpclientidstr, quotereqqtystr, false);
-
-            // remember the client
-            inpclientid = document.createElement("input");
-            inpclientid.type = "hidden";
-            inpclientid.id = inpclientidstr;
-
-            quotereqqty = document.createElement("input");
-            quotereqqty.className = "quotereqquantity";
-            quotereqqty.placeholder = getQuantityDesc(qtyascashorshares);
-            quotereqqty.id = quotereqqtystr;
-
-            quotereqqty.onkeypress = function(event) {
-                event = event || window.event;  // cross-browser event
-
-                if (event.keyCode == 13) {
-                    sendIt();
-                }
-            }
-
-            quantitycashsel = document.createElement("select");
-            quantitycashsel.id = "quantitycashsel:" + symbolstr;
-
-            quantitycashsel[0] = new Option("Number of shares", 1, true, true);
-            quantitycashsel[1] = new Option("Cash amount", 2, false, false);
-
-            quantitycashsel.onchange = function() {
-                qtyascashorshares = quantitycashsel[quantitycashsel.selectedIndex].value;
-                quotereqqty.placeholder = getQuantityDesc(qtyascashorshares);
-                quotereqqty.focus();
-            }
-            quantitycashsel.className = "formselect";
-
-            lblquantity = document.createElement("label");
-            lblquantity.innerHTML = "Quantity:";
-            lblquantity.className = "formlabelshort";
-            lblcurrency = document.createElement("label");
-            lblcurrency.className = "formlabelshort";
-            lblcurrency.innerHTML = "Currency:";
-            lblsettle = document.createElement("label");
-            lblsettle.className = "formlabelshort";
-            lblsettle.innerHTML = "Settlement:";
-
-            // option to change settlement currency
-            currencysel = document.createElement("select");
-            currencysel.id = "currency";
-            currencysel.className = "formselect";
-
-            populateCurrencies(currencysel, defaultsettlcurrency);
-
-            settlperiod = document.createElement("select");
-            settlperiod.id = "settlperiod";
-            settlperiod.className = "formselect";
-
-            populateSettlPeriod(settlperiod, instruments[symbol].instrumenttype);
-
-            quotereqbutton = document.createElement("input");
-            quotereqbutton.type = "button";
-            quotereqbutton.className = "quotereqbutton";
-            quotereqbutton.id = "quotereqbutton";
-            quotereqbutton.value = "Request a quote";
-
-            quotereqbutton.onclick = function() {
-                sendIt();
-            }
-
-            addNewLine(orderdiv, null);
-            orderdiv.appendChild(lblquantity);
-            orderdiv.appendChild(quantitycashsel);
-            orderdiv.appendChild(quotereqqty);
-            addNewLine(orderdiv, null);
-            orderdiv.appendChild(lblcurrency);
-            orderdiv.appendChild(currencysel);
-            addNewLine(orderdiv, null);
-            orderdiv.appendChild(lblsettle);
-            orderdiv.appendChild(settlperiod);
-            addNewLine(orderdiv, null);
-            orderdiv.appendChild(quotereqbutton);
-            orderdiv.appendChild(inpclientid);
-
-            function sendIt() {
-                if (inpclientid.value == "") {
-                    alert("Enter a client");
-                    focusfield = document.getElementById(focusfldstr);
-                    focusfield.focus();
-                    return;
-                }
-
-                if (validateNumeric(quotereqqty, getQuantityDesc(qtyascashorshares))) {
-                    if (qtyascashorshares == 1) {
-                        quantity = quotereqqty.value;
-                        cashorderqty = "";
-                    } else {
-                        cashorderqty = quotereqqty.value;
-                        quantity = "";                        
-                    }
-
-                    sendRequestQuote(inpclientid.value, symbol, quantity, cashorderqty, instruments[symbol].currency, currencysel[currencysel.selectedIndex].value, settlperiod[settlperiod.selectedIndex].value, orderdivnum);
-
-                    disable();
-                } else {
-                    quotereqqty.focus();
-                }
-            }
- 
-            function disable() {
-                quotereqbutton.disabled = true;
-                quotereqqty.disabled = true;
-                quotereqqty.onkeypress = null;
-            }
-        }*/
-
         function getQuantityDesc(qtyval) {
             var qtydesc;
 
@@ -4647,60 +4102,15 @@
             return (formatUTCDate(utcdatetime) + utcdatetime.substr(8));
         }
 
-        function displayElement(element, symbol) {
-            var nextsymbol;
-
-            if (symbol == null || obdisplay[symbol].insertbefore == null) {
-                main.appendChild(element);
-            } else {
-                nextsymbol = document.getElementById("strip:" + obdisplay[symbol].insertbefore + ":0");
-                main.insertBefore(element, nextsymbol);
-            }
-        }
-
-        function getDiv(divid, symbol) {
+        function getDiv(divid) {
             var div = document.getElementById(divid);
 
             if (div == null) {
                 div = document.createElement("div");
                 div.id = divid;
-                displayElement(div, symbol);
             }
 
             return div;
-        }
-
-        function sendRequestQuote(clientid, symbol, quantity, cashorderqty, currency, settlcurrency, nosettdays, orderdivnum) {
-            var quotereq = {};
-            var msg;
-
-            quotereq.clientid = clientid;
-            quotereq.quantity = quantity;
-            quotereq.cashorderqty = cashorderqty;
-            quotereq.symbol = symbol;
-            quotereq.currency = currency;
-            quotereq.settlcurrency = settlcurrency;
-            quotereq.nosettdays = nosettdays;
-            quotereq.operatortype = operatortype;
-            quotereq.operatorid = userid;
-            quotereq.orderdivnum = orderdivnum;
-
-            sockjs.send("{\"quoterequest\":" + JSON.stringify(quotereq) + "}");
-
-            msg = "Placed a quote request for ";
-            if (quantity != "") {
-                msg += quantity;
-            } else {
-                msg += cashorderqty + " " + settlcurrency + " of";
-            }
-
-            msg += " " + symbol + " for settlement T+" + nosettdays;
-
-            if (settlcurrency != instruments[symbol].currency) {
-                msg += " in " + settlcurrency;
-            }
-
-            addMessageToDiv(msg, "orderdiv:" + symbol + ":" + orderdivnum);
         }
 
         function validateNumeric(field, fieldname) {
@@ -4753,106 +4163,7 @@
             }
 
             if (selectedmenu == MENURFQ) {
-                addMessageToDiv(msg, "orderdiv:" + quoteack.symbol + ":" + quoteack.orderdivnum);
-            }
-        }
-
-        function quoteReceived(quote) {
-            var buybutton;
-            var sellbutton;
-            var timerlabel;
-            var numsecsremaining;
-            var timer;
-            var timertext = "Seconds Remaining";
-            var orderdiv;
-            var msg;
-            var sellmsg;
-            var buymsg;
-
-            quotes[quote.quoteid] = quote;
-
-            sellmsg = "Sell " + quote.bidquantity + " " + quote.symbol;
-            buymsg = "Buy " + quote.offerquantity + " " + quote.symbol;
-
-            if (quote.nosettdays != "3" && quote.nosettdays != "0") {
-                sellmsg += " " + "T+" + quote.nosettdays;
-                buymsg += " " + "T+" + quote.nosettdays;                
-            }
-
-            sellmsg += " @ " + quote.bidpx;
-            buymsg += " @ " + quote.offerpx;
-
-            if (parseFloat(quote.bidfinance) != 0) {
-                sellmsg += ", finance " + quote.bidfinance;
-                if (quote.nosettdays == "0") {
-                    sellmsg += " per day";
-                }
-            }
-            if (parseFloat(quote.offerfinance) != 0) {
-                buymsg += ", finance " + quote.offerfinance;
-                if (quote.nosettdays == "0") {
-                    buymsg += " per day";
-                }
-            }
-
-            if (quote.settlcurrency != "GBP" || quote.settlcurrency != instruments[quote.symbol].currency) {
-                sellmsg += " " + quote.settlcurrency;
-                buymsg += " " + quote.settlcurrency;
-            }
-
-            sellbutton = document.createElement("input");
-            sellbutton.type = "button";
-            sellbutton.className = "quotesellbutton";
-            sellbutton.value = sellmsg;
-
-            sellbutton.onclick = function() {
-                sendOrder(quote.clientid, quote.symbol, '2', quote.bidquantity, quote.bidpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", quote.orderdivnum);
-                disable();
-            }
-
-            buybutton = document.createElement("input");
-            buybutton.type = "button";
-            buybutton.className = "quotebuybutton";
-            buybutton.value = buymsg;
-
-            buybutton.onclick = function() {
-                sendOrder(quote.clientid, quote.symbol, '1', quote.offerquantity, quote.offerpx, 'D', quote.settlcurrency, quote.nosettdays, quote.futsettdate, quote.quoteid, "4", "", "", quote.orderdivnum);
-                disable();
-            }
-
-            numsecsremaining = parseInt(quote.noseconds);
-
-            timerlabel = document.createElement("label");
-            timerlabel.innerHTML = numsecsremaining + " " + timertext;
-            timerlabel.className = "timerlabel";
-
-            numsecsremaining = parseInt(quote.noseconds);
-            timer = setInterval(function() {
-                numsecsremaining -= 1;
-                if (numsecsremaining == 0) {
-                    disable();
-                    timerlabel.innerHTML = "Quote Expired";
-                } else {
-                    timerlabel.innerHTML = numsecsremaining + " " + timertext;
-                }
-            }, 1000);
-            // todo: clear if form is closed
-
-            if (selectedmenu == MENURFQ) {
-                orderdiv = getDiv("orderdiv:" + quote.symbol + ":" + quote.orderdivnum, quote.symbol);
-
-                addNewLine(orderdiv, null);
-                orderdiv.appendChild(sellbutton);
-                orderdiv.appendChild(timerlabel);
-                orderdiv.appendChild(buybutton);
-            }
-
-            function disable() {
-                clearInterval(timer);
-                buybutton.disabled = true;
-                buybutton.style.cursor = 'default';
-                sellbutton.disabled = true;
-                sellbutton.style.cursor = 'default';
+                //addMessageToDiv(msg, "orderdiv:" + quoteack.symbol + ":" + quoteack.orderdivnum);
             }
         }
 
@@ -5415,7 +4726,7 @@
 
                 switch (selectedmenu) {
                 case MENURFQ:
-                    rfq();
+                    singleSymbol();
                     break;
                 case MENUMAINTAIN:
                     maintain();
@@ -6743,7 +6054,6 @@
             var lnkorders = newlink("lnkorders", "Orders", "", frmhistory);
             var lnktrades = newlink("lnktrades", "Trades", "", frmhistory);
             var lnkcash = newlink("lnkcash", "Cash", "", frmhistory);
-            var lnkchat = newlink("lnkchat", "Chat", "", frmhistory);
 
             lnkquoterequests.onclick = function() {
                 if (!validateClientid(false)) {return;}
@@ -6797,15 +6107,6 @@
                 sockjs.send("{\"cashhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
             }
 
-            lnkchat.onclick = function() {
-                if (!validateClientid(false)) {return;}
-
-                tidy();
-                setSelected(lnkchat);
-                historyrequest.clientid = inpclientid.value;
-                sockjs.send("{\"chathistoryrequest\":" + JSON.stringify(historyrequest) + "}");
-            }
-
             inpclientid = document.createElement("input");
             inpclientid.type = "hidden";
             inpclientid.id = "inpclientid";
@@ -6842,7 +6143,6 @@
                 lnkquotes.className = "";
                 lnkorders.className = "";
                 lnktrades.className = "";
-                lnkchat.className = "";
                 lnkcash.className = "";
 
                 link.className = "linkselected";
