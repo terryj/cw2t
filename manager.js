@@ -1590,8 +1590,8 @@ function forwardQuote(quote, msg) {
   console.log("forwardQuote");
   console.log(quote);
 
-  if (quoterequest.operatorid in connections) {
-    connections[quoterequest.operatorid].write(msg);
+  if (quote.operatorid in connections) {
+    connections[quote.operatorid].write(msg);
   }
 }
 
