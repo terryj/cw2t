@@ -208,6 +208,7 @@ function listen() {
     conn.on('data', function(msg) {
       console.log('recd:' + msg);
 
+      // just forward to trade server
       if (msg.substr(2, 18) == "ordercancelrequest") {
         db.publish(common.tradeserverchannel, msg);
       } else if (msg.substr(2, 6) == "order\"") {

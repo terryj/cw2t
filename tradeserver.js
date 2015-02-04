@@ -217,6 +217,9 @@ function quoteRequest(quoterequest) {
 
     quoterequest.markettype = ret[7];
 
+    // todo: remove for ooh
+    quoterequest.markettype = 0;
+
     // see if we are in-hours
     if (quoterequest.markettype == 0) {
       console.log("forwarding to nbt");
@@ -1313,9 +1316,9 @@ function registerScripts() {
 
   publishquoteack = '\
   local publishquoteack = function(quotereqid) \
-    local fields = {"clientid", "symbol", "operatortype", "quotestatus", "quoterejectreason", "text"} \
+    local fields = {"clientid", "symbol", "operatortype", "quotestatus", "quoterejectreason", "text", "operatorid"} \
     local vals = redis.call("hmget", "quoterequest:" .. quotereqid, unpack(fields)) \
-    local quoteack = {quotereqid=quotereqid, clientid=vals[1], symbol=vals[2], quotestatus=vals[4], quoterejectreason=vals[5], text=vals[6]} \
+    local quoteack = {quotereqid=quotereqid, clientid=vals[1], symbol=vals[2], quotestatus=vals[4], quoterejectreason=vals[5], text=vals[6], operatorid=vals[7]} \
     redis.call("publish", vals[3], "{" .. cjson.encode("quoteack") .. ":" .. cjson.encode(quoteack) .. "}") \
     end \
   ';

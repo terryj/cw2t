@@ -223,7 +223,7 @@ function listen() {
     conn.on('data', function(msg) {
       console.log('recd:' + msg);
 
-      // may be able to just forward to trade server
+      // just forward to trade server
       if (msg.substr(2, 13) == "quoterequest\"") {
         db.publish(common.tradeserverchannel, msg);
       } else if (msg.substr(2, 18) == "ordercancelrequest") {
@@ -232,8 +232,6 @@ function listen() {
         db.publish(common.tradeserverchannel, msg);
       } else if (msg.substr(2, 6) == "order\"") {
         db.publish(common.tradeserverchannel, msg);
-      //} else if (msg.substr(0, 4) == "ping") {
-        //conn.write("pong");
       } else {
         // need to parse
         try {
@@ -701,7 +699,7 @@ function getSideDesc(side) {
   }
 }
 
-function getSendOrder(orderid) {
+/*function getSendOrder(orderid) {
   db.hgetall("order:" + orderid, function(err, order) {
     if (err) {
       console.log(err);
@@ -718,9 +716,19 @@ function getSendOrder(orderid) {
       sendOrder(order, connections[order.operatorid]);
     }
   });
+}*/
+
+// forward order to relevant user
+function forwardOrder(order, msg) {
+  console.log("forwarding order to user");
+  console.log(order);
+
+  if (order.operatorid in connections) {
+    connections[order.operatorid].write(msg);
+  }
 }
 
-function getSendTrade(tradeid) {
+/*function getSendTrade(tradeid) {
   db.hgetall("trade:" + tradeid, function(err, trade) {
     if (err) {
       console.log(err);
@@ -752,6 +760,17 @@ function getSendTrade(tradeid) {
       });
     });
   });
+}*/
+
+// forward trade to relevant client
+function forwardTrade(trade, msg) {
+  console.log("forwardTrade");
+  console.log(trade);
+
+  // send trade to all users as we don't know if & which client they may be looking at
+  for (var i in connections) {
+    connections[i].write(msg);
+  }
 }
 
 function getSendPosition(positionid, orgclientid) {
@@ -1053,11 +1072,11 @@ function sendStatus() {
   }
 }
 
-function sendTrade(trade, conn) {
+/*function sendTrade(trade, conn) {
   if (conn != null) {
     conn.write("{\"trade\":" + JSON.stringify(trade) + "}");
   }
-}
+}*/
 
 function tradeHistory(req, conn) {
   var fromdate;
@@ -1555,6 +1574,16 @@ function sendQuoteack(quotereqid) {
     });
   });
 }*/
+
+// forward quoteack to relevant user
+function forwardQuoteAck(quoteack, msg) {
+  console.log("forwardQuoteAck");
+  console.log(quoteack);
+
+  if (quoteack.operatorid in connections) {
+    connections[quoteack.operatorid].write(msg);
+  }
+}
 
 // forward quote to relevant user
 function forwardQuote(quote, msg) {

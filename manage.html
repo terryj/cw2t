@@ -703,7 +703,8 @@
         var reserves = {};
         var cash = {};
         var margins = {};
-        var trades = {};
+        //var trades = {};
+        var trades = [];
         var instruments = {};
         var obdisplay = {};
         var ordervol = {};
@@ -793,14 +794,16 @@
                 } else if ("ordertypes" in obj) {
                     loadOrderTypes(obj.ordertypes);
                 } else if ("order" in obj) {
-                    updateOrder(obj.order);
+                    orderReceived(obj.order);
                 } else if ("trades" in obj) {
-                    clearTrades();
-                    loadTrades(obj.trades);
-                    displayTrades();
+                    //clearTrades();
+                    //loadTrades(obj.trades);
+                    //displayTrades();
+                    tradesReceived(obj.trades);
                 } else if ("trade" in obj) {
-                    updateTrade(obj.trade);
-                    displayTrade(obj.trade);
+                    //updateTrade(obj.trade);
+                    //displayTrade(obj.trade);
+                    tradeReceived(obj.trade);
                 } else if ("quoterequests" in obj) {
                     clearQuoteRequests();
                     loadQuoteRequests(obj.quoterequests);
@@ -953,11 +956,11 @@
             }                        
         }
 
-        function loadTrades(tradearr) {
+        /*function loadTrades(tradearr) {
             for (var i = 0; i < tradearr.length; ++i) {
                 trades[tradearr[i].tradeid] = tradearr[i];
             }                                    
-        }
+        }*/
         
         function loadInstruments(instrumentarr) {
             for (var i = 0; i < instrumentarr.length; ++i) {
@@ -1071,9 +1074,9 @@
             orders = [];
         }
 
-        function clearTrades() {
+        /*function clearTrades() {
             trades = [];
-        }
+        }*/
 
         function clearPositions() {
             positions = [];
@@ -1129,9 +1132,9 @@
             }
         }
 
-        function updateTrade(trade) {
+        /*function updateTrade(trade) {
             trades[trade.tradeid] = trade;
-        }
+        }*/
 
         function updatePosition(position) {
             var msg;
@@ -1270,7 +1273,7 @@
             }
         }
 
-        function updateOrder(order) {
+        /*function updateOrder(order) {
             var msg;
 
             orders[order.orderid] = order;
@@ -1303,6 +1306,24 @@
                 }
                 msg = orderCancelMsg(order);
                 addElement(msg, list5, order.orderid);
+            }
+        }*/
+
+        function orderReceived(order) {
+            if (order.status == "8") {
+                var msg = "Order rejected";
+
+                if ("reason" in order) {
+                    msg += ", reason: " + getOrderReasonDesc(order.reason);
+                }
+
+                if ("text" in order && order.text != "") {
+                    msg += " - " + order.text;
+                }
+
+                d3.select("#divrfq")
+                    .append("p")
+                    .html(msg);
             }
         }
 
@@ -2355,12 +2376,14 @@
                 .append("input")
                     .attr("type", "button")
                     .on("click", function(d, i, j) { // d=data, i=col, j=row
+                        var clientid = document.getElementById("inpclientid").value;
+
                         if (d.col == "bidquote") {
                             // we are selling
-                            sendOrder(d.value.symbol, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+                            sendOrder(clientid, d.value.symbol, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
                         } else {
                             // we are buying
-                            sendOrder(d.value.symbol, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+                            sendOrder(clientid, d.value.symbol, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
                         }
 
                         // stop timer
@@ -2455,6 +2478,152 @@
             var tbody = tblquote.append("tbody");
 
             return tblquote;
+        }
+
+        function tradesReceived(tradearr) {
+            // clear global array
+            trades = [];
+
+            for (var i = 0; i < tradearr.length; i++) {
+                // add quote request to global array
+                trades.push(tradearr[i]);
+            }
+
+            // update display
+            updateTradeTable();
+        }
+
+        function tradeReceived(trade) {
+            var inquotes = false;
+
+            // make sure trade is for this client
+            var inpclientid = document.getElementById("inpclientid");
+            if (inpclientid == null) { return; }
+            if (trade.clientid != inpclientid) { return; }
+
+            // add to trades, if that is what we are looking at
+            if (selectedmenu == MENUTRADES) {
+                trades.unshift(trade); // add to start of array
+                updateTradeTable();
+                return;
+            }
+
+            // indicate the quote has been traded
+            // quote may be in rfq quotes
+            for (var i in quotes) {
+                if (trade.side == "1") {
+                    if (trade.quoteid == quotes[i].offerquote.quoteid) {
+                        quotes[i].offerquote.tradeid = trade.tradeid;
+
+                        // update display
+                        updateQuoteTable();
+
+                        // clear timer
+                        clearInterval(quotes[i].interval);
+
+                        inquotes = true;
+                        break;
+                    }
+                } else {
+                    if (trade.quoteid == quotes[i].bidquote.quoteid) {
+                        quotes[i].bidquote.tradeid = trade.tradeid;
+
+                        // update display
+                        updateQuoteTable();
+
+                        // clear timer
+                        clearInterval(quotes[i].interval);
+
+                        inquotes = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        function updateTradeTable() {
+            var cols = ["timestamp","symbol","tradeid","orderid","side","quantity","price","currency","commission","ptmlevy","stampduty","contractcharge","externaltradeid"];
+
+            // create a trade table if one does not exist
+            var tbltrade = d3.select("#tbltrade");
+            if (tbltrade.empty()) {
+                tbltrade = createTradeTable(cols);
+            }
+
+            // base the table on the trades array
+            var rows = tbltrade.select("tbody").selectAll("tr")
+                .data(trades);
+
+            // enter
+            rows.enter()
+                .append("tr");
+
+            // columns data
+            var cells = rows.selectAll("td")
+                .data(function(row) {
+                    return cols.map(function(col) {
+                        return {col: col, value: row[col]};
+                    });
+                 });
+
+            // columns enter
+            cells.enter()
+                .append("td");
+
+            // columns enter & update
+            cells.each(function(d) {
+                if (d.col == "symbol") {
+                    var lnk = d3.select(this).select("a");
+                    if (lnk.empty()) {
+                        // add a link for this symbol
+                        lnk = d3.select(this)
+                            .append("a")
+                                .attr("href", "#")
+                                .on("click", function(d) {
+                                    singleSymbol(d.value);
+                                });
+
+                    }
+                    lnk.html(function(d) { return d.value; });
+                } else {
+                    d3.select(this)
+                        .text(function(d) {
+                            if (d.col == "timestamp") {
+                                return getDateString(d.value);
+                            } else if (d.col == "side") {
+                                if (d.value == "1") {
+                                    return "buy";
+                                } else {
+                                    return "sell";
+                                }
+                            } else {
+                                return d.value;
+                            }
+                        });
+                }
+            });
+        }
+
+        function createTradeTable(cols) {
+            // using full screen width
+            var tbltrade = d3.select("body")
+                .append("table")
+                .attr("id", "tbltrade")
+                .attr("class", "tbltrade");
+
+            // add header & body
+            var thead = tbltrade.append("thead");
+            var tbody = tbltrade.append("tbody");
+
+            // add the column headings
+            thead.selectAll("th")
+                .data(cols)
+                .enter()
+                .append("th")
+                    .attr("class", "tbltradehdr")
+                    .text(function(d) { return d; });
+
+            return tbltrade;
         }
 
         function displayOrderHeadings() {
@@ -2908,7 +3077,7 @@
             }
         }
 
-        function displayTrades() {
+        /*function displayTrades() {
             var tbltrades;
 
             // see if there any trades to display
@@ -2920,11 +3089,11 @@
 
             tbltrades = createTradeTable();
 
-            displayTradeHeadings(tbltrades);
-            displayTradeDetail(tbltrades);
-        }
+            //displayTradeHeadings(tbltrades);
+            //displayTradeDetail(tbltrades);
+        }*/
 
-        function createTradeTable() {
+        /*function createTradeTable() {
             tbltrades = document.createElement("table");
             tbltrades.id = "tbltrades";
             tbltrades.setAttribute("border", "1");
@@ -2932,9 +3101,9 @@
             main.appendChild(tbltrades);
 
             return tbltrades;
-        }
+        }*/
 
-        function displayTradeHeadings(tbltrades) {
+        /*function displayTradeHeadings(tbltrades) {
             var headingrow = tbltrades.insertRow();
 
             for (var i = 0; i < numtradecols; ++i) {
@@ -3015,9 +3184,9 @@
 
                 headingrow.appendChild(col);
             }
-        }
+        }*/
 
-        function displayTradeDetail(tbltrades) {
+        /*function displayTradeDetail(tbltrades) {
             var numtrades;
 
             var keys = sortTrades();
@@ -3028,7 +3197,7 @@
                 var traderow = tbltrades.insertRow(-1);
                 addTradeRow(trades[x], traderow);
              }
-        }
+        }*/
 
         function addTradeRow(trade, traderow) {
             for (var k = 0; k < numtradecols; ++k) {
@@ -3109,7 +3278,7 @@
             }
         }
 
-        function displayTrade(trade) {
+        /*function displayTrade(trade) {
             var msg;
 
             if (selectedmenu == MENURFQ) {
@@ -3117,9 +3286,9 @@
             } else if (selectedmenu == MENUTRADES) {
                 displayATrade(trade);
             }
-        }
+        }*/
 
-        function displayATrade(trade) {
+        /*function displayATrade(trade) {
             var tbltrades = document.getElementById("tbltrades");
             if (tbltrades == null) {
                 tbltrades = createTradeTable();
@@ -3129,7 +3298,7 @@
             // insert trade at first row below heading
             var row = tbltrades.insertRow(1);
             addTradeRow(trade, row);
-        }
+        }*/
 
         function sortTrades() {
             var keys = [];
@@ -4154,7 +4323,7 @@
             }
         }
 
-        function quoteAckReceived(quoteack) {
+        /*function quoteAckReceived(quoteack) {
             var msg;
 
             msg = " Quote request rejected, reason: " + quoteack.quoterejectreasondesc;
@@ -4165,324 +4334,14 @@
             if (selectedmenu == MENURFQ) {
                 //addMessageToDiv(msg, "orderdiv:" + quoteack.symbol + ":" + quoteack.orderdivnum);
             }
-        }
+        }*/
 
-        function placeOrder(symbol, side, quantity, price) {
-            var stocklabel;
-            var quantityinput;
-            var priceinput;
-            var btn;
-            var ordertypesel;
-            var orderdiv;
-            var ordertype = '2';
-            var settlabel;
-            var timeinforce;
-            var expiredate = "";
-            var expiretime = "";
-            var qtydesc;
-            var timeinforcesel;
-            var pricedesc;
-            var settlcurrency;
-            var currencysel;
-            var qtyascashorshares = 1;
-            var expireday;
-            var expiremonth;
-            var expireyear;
-            var settlperiod;
-            var nosettdays;
-            var inpclientid;
-            var inpclientidstr;
-            var focusfldstr;
-            var orderdivnum;
+        function quoteackReceived(quoteack) {
+            console.log("quoteackReceived");
 
-            clearSymbolDiv(symbol);
-
-            orderdivnum = incrOrderDivNum(symbol);
-
-            orderdiv = getDiv("orderdiv:" + symbol + ":" + orderdivnum, symbol);
-            focusfldstr = "orderquantity:" + symbol;
-            inpclientidstr = "inpclientid:" + symbol;
-
-            selectClient("orderdiv", orderdiv, symbol, true, null, inpclientidstr, focusfldstr, false);
-
-            // remember the client
-            inpclientid = document.createElement("input");
-            inpclientid.type = "hidden";
-            inpclientid.id = inpclientidstr;
-
-            btn = document.createElement("input");
-            btn.type = "button";
-            btn.id = "orderbuysell" + symbol;
-            btn.value = getSideDesc(side);
-            if (side == "1") {
-                btn.className = "orderbuttonbuy";
-            } else {
-                btn.className = "orderbuttonsell";
-            }
-
-            btn.onclick = function() {
-                sendIt();
-            }
-
-            quantityinput = document.createElement("input");
-            quantityinput.id = "orderquantity:" + symbol;
-            quantityinput.className = "orderquantity";
-            quantityinput.placeholder = "Quantity";
-
-            if (quantity != 0) {
-                quantityinput.value = quantity;
-            }
-
-            quantityinput.onkeypress = function(event) {
-                event = event || window.event;  // cross-browser event
-
-                if (event.keyCode == 13) {
-                    sendIt();
-                }
-            }
-
-            stocklabel = document.createElement("label");
-            stocklabel.className = "orderstock";
-            stocklabel.innerHTML = symbol;// + " @ ";
-
-            atlabel = document.createElement("label");
-            atlabel.innerHTML = " @ ";
-
-            /*ordertypesel = document.createElement("select");
-            ordertypesel.id = "ordertype" + symbol;
-            ordertypesel.className = "ordertype";
-            for (var i in ordertypes) {
-                option = document.createElement("option");
-                option.setAttribute('value', i);
-                option.innerHTML = ordertypes[i].description;
-                ordertypesel.appendChild(option);
-            }
-
-            ordertypesel.onchange = function() {
-                ordertype = ordertypesel[ordertypesel.selectedIndex].value;
-                pricedisplay();
-            }*/
-
-            priceinput = document.createElement("input");
-            priceinput.id = "orderprice:" + symbol;
-            priceinput.className = "orderprice";
-            pricedesc = "PriceLimit";
-
-            if (priceinput.placeholder == undefined) {
-            } else {
-                priceinput.placeholder = pricedesc;
-            }
-
-            priceinput.onkeypress = function(event) {
-                event = event || window.event;  // cross-browser event
-
-                if (event.keyCode == 13) {
-                    sendIt();
-                }
-            }
-
-            timeinforcesel = document.createElement("select");
-            timeinforcesel.id = "timeinforce:" + symbol;
-            timeinforcesel.className = "timeinforce";
-            for (var i in timeinforces) {
-                option = document.createElement("option");
-                // todo: this is a hack
-                if (i == 0) {
-                    timeinforce = "0";
-                } else if (i == 1) {
-                    timeinforce = "6";
-                } else if (i == 2) {                  
-                    timeinforce = "1";
-                }
-                option.setAttribute('value', timeinforce);
-                option.innerHTML = timeinforces[i];
-                timeinforcesel.appendChild(option);
-            }
-
-            timeinforcesel.onchange = function() {
-                timeinforce = timeinforcesel[timeinforcesel.selectedIndex].value;
-                expiredatedisplay();
-            }
-
-            function expiredatedisplay() {
-                if (timeinforce == "6") {
-                    expireday = document.getElementById("expireday:" + symbol);
-                    if (expireday == null) {
-                        expireday = document.createElement("select");
-                        expireday.id = "expireday:" + symbol;
-                        expiremonth = document.createElement("select");
-                        expiremonth.id = "expiremonth:" + symbol;
-                        expireyear = document.createElement("select");
-                        expireyear.id = "expireyear:" + symbol;
-                        /*expirehour = document.createElement("select");
-                        expirehour.id = "expirehour:" + symbol;
-                        expireminute = document.createElement("select");
-                        expireminute.id = "expireminute:" + symbol;
-                        expiresecond = document.createElement("select");
-                        expiresecond.id = "expiresecond:" + symbol;*/
-
-                        populateDate(expireday, expiremonth, expireyear, new Date());
-                        //populateTime(expirehour, expireminute, expiresecond);
-
-                        orderdiv.insertBefore(expireday, settlabel);
-                        orderdiv.insertBefore(expiremonth, settlabel);
-                        orderdiv.insertBefore(expireyear, settlabel);
-                        //orderdiv.insertBefore(expirehour, settlabel);
-                        //orderdiv.insertBefore(expireminute, settlabel);
-                        //orderdiv.insertBefore(expiresecond, settlabel);
-                    }
-                } else {
-                    expireday = document.getElementById("expireday:" + symbol);
-                    if (expireday != null) {
-                        orderdiv.removeChild(expireday);
-                    }
-                    expiremonth = document.getElementById("expiremonth:" + symbol);
-                    if (expiremonth != null) {
-                        orderdiv.removeChild(expiremonth);
-                    }
-                    expireyear = document.getElementById("expireyear:" + symbol);
-                    if (expireyear != null) {
-                        orderdiv.removeChild(expireyear);
-                    }
-                    /*expirehour = document.getElementById("expirehour:" + symbol);
-                    if (expirehour != null) {
-                        orderdiv.removeChild(expirehour);
-                    }
-                    expireminute = document.getElementById("expireminute:" + symbol);
-                    if (expireday != null) {
-                        orderdiv.removeChild(expireminute);
-                    }
-                    expiresecond = document.getElementById("expiresecond:" + symbol);
-                    if (expiresecond != null) {
-                        orderdiv.removeChild(expiresecond);
-                    }*/
-                }                
-            }
-
-            settlabel = document.createElement("label");
-            settlabel.innerHTML = " for settlement ";
-            settlabel.className = "settlabel";
-
-            settlcurrency = defaultsettlcurrency;
-
-            // todo: combine with quoterequest?
-            if (instruments[symbol].currency != defaultsettlcurrency) {
-                settlabel.innerHTML = settlabel.innerHTML + "in ";
-                currencysel = document.createElement("select");
-                currencysel.id = "currency" + symbol;
-                currencysel.className = "currency";
-                currencysel[0] = new Option(defaultsettlcurrency, defaultsettlcurrency, true, true);
-                currencysel[1] = new Option(instruments[symbol].currency, instruments[symbol].currency, false, false);
-
-                currencysel.onchange = function() {
-                    settlcurrency = currencysel[currencysel.selectedIndex].value;
-                }
-            }
-
-            /*settday = document.createElement("select");
-            settday.id = "ordersettday:" + symbol;
-            settmonth = document.createElement("select");
-            settmonth.id = "ordersettmonth:" + symbol;
-            settyear = document.createElement("select");
-            settyear.id = "ordersettyear:" + symbol;
-
-            populateDate(settday, settmonth, settyear, getDefaultSettleDate());*/
-
-            settlperiod = document.createElement("select");
-            settlperiod.id = "settlperiod:" + symbol;
-            settlperiod.className = "formselect";
-
-            //settlperiod[0] = new Option("GBP", defaultsettlcurrency, true, true);
-
-            populateSettlPeriod(settlperiod, instruments[symbol].instrumenttype);
-
-            addNewLine(orderdiv, null);
-            orderdiv.appendChild(btn);
-            orderdiv.appendChild(quantityinput);
-            orderdiv.appendChild(stocklabel);
-            orderdiv.appendChild(atlabel);
-            orderdiv.appendChild(priceinput);
-            //orderdiv.appendChild(ordertypesel);
-            orderdiv.appendChild(timeinforcesel);
-            orderdiv.appendChild(settlabel);
-            if (instruments[symbol].currency != defaultsettlcurrency) {
-                orderdiv.appendChild(currencysel);
-            }
-            //orderdiv.appendChild(settday);
-            //orderdiv.appendChild(settmonth);
-            //orderdiv.appendChild(settyear);
-            orderdiv.appendChild(settlperiod);
-            orderdiv.appendChild(inpclientid);
-
-            //pricedisplay();
-
-            function disable() {
-                btn.disabled = true;
-                btn.style.cursor = 'default';
-                quantityinput.disabled = true;
-                quantityinput.onkeypress = null;
-                priceinput.disabled = true;
-                priceinput.onkeypress = null;
-            }
-
-            /*function pricedisable() {
-                priceinput.disabled = true;
-                priceinput.onkeypress = null;
-            }*/
-
-            /*function pricedisplay() {
-                if (ordertype == '1') {
-                    stocklabel.innerHTML = symbol;
-                    priceinput = document.getElementById("orderprice:" + symbol);
-                    if (priceinput != null) {
-                        orderdiv.removeChild(priceinput);
-                    }
-                } else {
-                    stocklabel.innerHTML = symbol + " @ ";
-                    priceinput = document.getElementById("orderprice:" + symbol);
-                    if (priceinput == null) {
-                        priceinput = document.createElement("input");
-                        priceinput.id = "orderprice:" + symbol;
-                        priceinput.className = "orderprice";
-                        priceinput.placeholder = "PriceLimit";
-                        if (price != 0) {
-                            priceinput.value = price;
-                        }
-
-                        priceinput.onkeypress = function(event) {
-                            event = event || window.event;  // cross-browser event
-
-                            if (event.keyCode == 13) {
-                                sendIt();
-                            }
-                        }
-
-                        orderdiv.insertBefore(priceinput, ordertypesel);
-                        priceinput.focus();
-                    }
-                }
-            }*/
-
-            function sendIt() {
-                var settdate = ""; // calculated by server
-
-                if ((!validateNumeric(quantityinput, getQuantityDesc(qtyascashorshares))) || (!validateNumeric(priceinput, pricedesc))) {
-                    return;
-                }
-
-                // todo: validate timeinforce
-                timeinforce = timeinforcesel[timeinforcesel.selectedIndex].value;
-                if (timeinforce == "6") {
-                    expiredate = formatToUTCDate(expireday.value, expiremonth.value, expireyear.value);
-                    expiretime = "00:00:00";//formatToUTCTime(expirehour.value, expireminute.value, expiresecond.value);
-                }
-
-                nosettdays = settlperiod[settlperiod.selectedIndex].value;
-
-                sendOrder(inpclientid.value, symbol, getSide(btn.value), quantityinput.value, priceinput.value, ordertype, settlcurrency, nosettdays, settdate, "", timeinforce, expiredate, expiretime, "1");
-
-                disable();
-            }
+            d3.select("#divrfq")
+                .append("p")
+                .html("Quote request rejected: " + quoteack.text);
         }
 
         function populateSettlPeriod(settlperiod, instrumenttype) {
@@ -4504,54 +4363,28 @@
             }
         }
 
-        function sendOrder(clientid, symbol, side, quantity, price, ordertype, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime, orderdivnum) {
-            var neworder = {};
-            var msg;
+        function sendOrder(clientid, symbol, side, quantity, price, ordertype, delivertocompid, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
+            var order = {};
 
-            neworder.clientid = clientid;
-            neworder.side = side;
-            neworder.quantity = quantity;
-            neworder.symbol = symbol;
-            neworder.currency = instruments[symbol].currency;
-            neworder.price = price;
-            neworder.ordertype = ordertype;
-            neworder.settlcurrency = settlcurrency;
-            neworder.nosettdays = nosettdays;
-            neworder.futsettdate = settdate;
-            neworder.quoteid = quoteid;
-            neworder.timeinforce = timeinforce;
-            neworder.expiredate = expiredate;
-            neworder.expiretime = expiretime;
-            neworder.operatortype = operatortype;
-            neworder.operatorid = userid;
-            neworder.orderdivnum = orderdivnum;
+            order.clientid = clientid;
+            order.side = side;
+            order.symbol = symbol;
+            order.quantity = quantity;
+            order.price = price;
+            order.currency = "GBP"; // todo - use quote currency? instruments[symbol].currency;
+            order.ordertype = ordertype;
+            order.delivertocompid = delivertocompid;
+            order.settlcurrency = settlcurrency;
+            order.nosettdays = nosettdays;
+            order.futsettdate = settdate;
+            order.quoteid = quoteid;
+            order.timeinforce = timeinforce;
+            order.expiredate = expiredate;
+            order.expiretime = expiretime;
+            order.operatortype = operatortype;
+            order.operatorid = userid;
 
-            sockjs.send("{\"order\":" + JSON.stringify(neworder) + "}");
-
-            msg = "Placed order to " + getSideDesc(side) + " " + quantity + " " + symbol;
-            if (price != "") {
-                msg += " @ " + price;
-            }
-            msg += ", " + getOrdertypeDesc(ordertype);
-
-            if (instruments[symbol].instrumenttype == "DE") {
-                msg += ", for settlement T+" + nosettdays;
-                if (settdate != "") {
-                    msg += " (" + formatUTCDate(settdate) + ")";
-                }
-            } else {
-                msg += ", for rolling settlement";
-            }
-
-            if (neworder.settlcurrency != "GBP" || neworder.settlcurrency != neworder.currency) {
-                msg += " in " + neworder.settlcurrency;
-            }
-
-            if (quoteid != "") {
-                msg += ", quote id " + quoteid;
-            }
-
-            addMessageToDiv(msg, "orderdiv:" + symbol + ":" + orderdivnum);
+            sockjs.send("{\"order\":" + JSON.stringify(order) + "}");
         }
 
         function getSideDesc(side) {
