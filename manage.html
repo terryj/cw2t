@@ -1966,6 +1966,16 @@
             pricedata[0] = price;
         }
 
+        function getDateString(utcdatetime) {
+            return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
+        }
+
+        function getSeconds(startutctime, finishutctime) {
+            var startdt = new Date(getDateString(startutctime));
+            var finishdt = new Date(getDateString(finishutctime));
+            return ((finishdt - startdt) / 1000);
+        }
+
         function requestSingleSymbol(symbol) {
             sockjs.send("{\"singlesymbolrequest\":" + JSON.stringify(symbol) + "}");
         }
