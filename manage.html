@@ -1288,7 +1288,7 @@
             } else if (order.status == "2") {
                 msg = "Order filled, order id: " + order.orderid;
             } else if (order.status == "8") {
-                msg = "Order rejected, reason: " + getReasonDesc(order.reason);
+                msg = "Order rejected, reason: " + getOrderReasonDesc(order.reason);
                 if (order.text != "") {
                     msg += " " + order.text;
                 }
@@ -1686,6 +1686,8 @@
             clearForm("frmpositions", true);
             clearForm("frmdates", true);
             clearForm("frmmaintain", true);
+            clearForm("frmrfq", true);
+
             clearMaintainForms();
         }
 
@@ -2490,6 +2492,24 @@
             return tblquote;
         }
 
+        function startQuoteInterval(quote) {
+            var interval = setInterval(function() {
+                countdownQuote(quote);
+                updateQuoteTable();
+            }, 1000);
+
+            // keep track of timer
+            quote.interval = interval;
+        }
+
+        function countdownQuote(quote) {
+            if (quote.noseconds > 0) {
+                quote.noseconds--;
+            } else {
+                clearInterval(quote.interval);
+            }
+        }
+
         function tradesReceived(tradearr) {
             // clear global array
             trades = [];
@@ -2504,10 +2524,16 @@
         }
 
         function tradeReceived(trade) {
+            console.log("tradeReceived");
             var inquotes = false;
+
+            console.log(trade);
 
             // make sure trade is for this client
             var inpclientid = document.getElementById("inpclientid");
+
+            console.log(inpclientid);
+
             if (inpclientid == null) { return; }
             if (trade.clientid != inpclientid) { return; }
 
@@ -3692,7 +3718,7 @@
                         fielddesc = formatUTCDateTime(fieldcontents);
                         break;
                     case 'reason':
-                        fielddesc = getReasonDesc(fieldcontents);
+                        fielddesc = getOrderReasonDesc(fieldcontents);
                         break;
                     default:
                         fielddesc = fieldcontents;
@@ -4021,7 +4047,7 @@
                 msg += " @ " + order.price;
             }
 
-            msg +=  " " + getOrdertypeDesc(order.ordertype) + ", rejected, reason: " + getReasonDesc(order.reason);
+            msg +=  " " + getOrdertypeDesc(order.ordertype) + ", rejected, reason: " + getOrderReasonDesc(order.reason);
 
             if (order.text != "") {
                 msg += " " + order.text;
@@ -4129,13 +4155,14 @@
 
             frmrfq.appendChild(inpclientid);
 
+            main.appendChild(frmrfq);
+
             selectClient("frmrfq", frmrfq, null, true, "", "inpclientid", "stockboxinput", false);
 
             addNewLine(frmrfq, null);
 
             selectStock("frmrfq", frmrfq, false, false, null);
 
-            main.appendChild(frmrfq);
         }
 
         function sendRfq(clientid, quantity, cashorderqty, symbol, currency) {
@@ -4346,8 +4373,8 @@
             }
         }*/
 
-        function quoteackReceived(quoteack) {
-            console.log("quoteackReceived");
+        function quoteAckReceived(quoteack) {
+            console.log("quoteAckReceived");
 
             d3.select("#divrfq")
                 .append("p")
@@ -6301,7 +6328,7 @@
             return [31, (isLeap ? 29 : 28), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month];
         }
 
-        function getReasonDesc(reason) {
+        function getOrderReasonDesc(reason) {
             var desc;
 
             if (reason == "") {

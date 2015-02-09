@@ -26,6 +26,8 @@ var redispassword;
 var redislocal = true; // local or external server
 
 // globals
+var testmode; // 0 = off, 1 = on
+
 //var markettype; // comes from database, 0=normal market, 1=out of hours
 var holidays = {};
 
@@ -170,11 +172,6 @@ function quoteRequest(quoterequest) {
   var minute = today.getMinutes();
   var day = today.getDay();
 
-  //todo - remove
-  //hour = hour + 4;
-  //day = 0;
-  //
-
   // get settlement date from T+n no. of days
   quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, quoterequest.nosettdays, holidays));
 
@@ -217,20 +214,109 @@ function quoteRequest(quoterequest) {
 
     quoterequest.markettype = ret[7];
 
-    // todo: remove for ooh
-    quoterequest.markettype = 0;
-
-    // see if we are in-hours
-    if (quoterequest.markettype == 0) {
-      console.log("forwarding to nbt");
-      // forward the request
-      nbt.quoteRequest(quoterequest);
+    if (testmode == "1") {
+      console.log("test response");
+      testQuoteResponse(quoterequest);
     } else {
-      console.log("publishing");
-      // publish it
-      db.publish(common.quoterequestchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
-      //db.publish("quoterequest", "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
+      // see if we are in-hours
+      if (quoterequest.markettype == 0) {
+        console.log("forwarding to nbt");
+
+        // forward the request
+        nbt.quoteRequest(quoterequest);
+      } else {
+        console.log("publishing");
+        // publish it to other clients
+        db.publish(common.quoterequestchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
+      }
     }
+  });
+}
+
+//
+// just testing
+//
+function testQuoteResponse(quoterequest) {
+  if (quoterequest.quantity == 99) {
+    testQuoteAck(quoterequest);
+  } else {
+    // bid & offer
+    testQuote(quoterequest, 1);
+    testQuote(quoterequest, 2);
+  }
+}
+
+//
+// publish a test quote rejection
+//
+function testQuoteAck(quoterequest) {
+  var quoteack = {};
+
+  quoteack.quotereqid = quoterequest.quotereqid;
+  quoteack.quoteackstatus = "";
+  quoteack.quoterejectreason = "";
+  quoteack.text = "too much toblerone";
+
+  db.eval(scriptquoteack, 4, quoteack.quotereqid, quoteack.quoteackstatus, quoteack.quoterejectreason, quoteack.text, function(err, ret) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+  });
+}
+
+function testQuote(quoterequest, side) {
+  var quote = {};
+
+  if (side == 1) {
+    quote.bidpx = "1.23";
+    quote.bidsize = quoterequest.quantity;
+    quote.bidquotedepth = "1";
+    quote.offerpx = "";
+    quote.offersize = "";
+    quote.offerquotedepth = "";
+  } else {
+    quote.bidpx = "";
+    quote.bidsize = "";
+    quote.bidquotedepth = "";
+    quote.offerpx = "1.25";
+    quote.offersize = quoterequest.quantity;
+    quote.offerquotedepth = "1";
+  }
+
+  quote.cashorderqty = quoterequest.cashorderqty;
+  quote.quotereqid = quoterequest.quotereqid;
+  quote.qclientid = "";
+  quote.symbol = quoterequest.symbol;
+  quote.currency = "GBP";
+  quote.settlcurrency = "GBP";
+  quote.qbroker = "ABC";
+  quote.futsettdate = quoterequest.futsettdate;
+  quote.externalquoteid = "";
+
+  var today = new Date();
+  quote.transacttime = common.getUTCTimeStamp(today);
+
+  var validuntiltime = today;
+  quote.noseconds = 30;
+  validuntiltime.setSeconds(today.getSeconds() + quote.noseconds);
+  quote.validuntiltime = common.getUTCTimeStamp(validuntiltime);
+
+  // quote script
+  // note: not passing securityid & idsource as proquote symbol should be enough
+  db.eval(scriptquote, 17, quote.quotereqid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.qclientid, quote.cashorderqty, function(err, ret) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (ret != 0) {
+      // can't find quote request, so don't know which client to inform
+      console.log("Error in scriptquote:" + common.getReasonDesc(ret[0]));
+      return;
+    }
+
+    // script publishes quote to the operator type that made the request
   });
 }
 
@@ -315,7 +401,7 @@ function newOrder(order) {
   // note: param #7 not used
   db.eval(scriptneworder, 26, order.clientid, order.symbol, order.side, order.quantity, order.price, order.ordertype, 0, order.futsettdate, order.partfill, order.quoteid, order.currency, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrency, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, hour, minute, day, function(err, ret) {
     if (err) throw err;
-    //console.log(ret);
+    console.log(ret);
 
     // credit check failed
     if (ret[0] == 0) {
@@ -464,7 +550,7 @@ function orderFillRequest(ofr) {
 }
 
 function processOrder(order, hedgeorderid, tradeid, hedgetradeid, hedgebookid, hedgesymbol) {
-  //console.log("processOrder");
+  console.log("processOrder");
   //
   // the order has been credit checked
   // now, either forward or attempt to match the order, depending on the type of instrument & whether the market is open
@@ -476,37 +562,17 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid, hedgebookid, h
     console.log("matching");
     matchOrder(order);
   } else {*/
+
+  if (testmode == "1") {
+      // test only
+      testTradeResponse(order);
+  } else {
     // equity orders
     if (order.instrumenttype == "DE" || order.instrumenttype == "IE") {
-      if (tradeid != "") {
-        // the order has been executed, so publish the order to the sending server type
-        //db.publish(order.operatortype, "order:" + order.orderid);
-
-        // publish the trade
-        //db.publish(common.tradechannel, "trade:" + tradeid);
-
-        // publish the hedge
-        //db.publish(common.tradechannel, "trade:" + hedgetradeid);
-      } else {
-        console.log("forwarding to nbt");
-        // forward order to the market
-        nbt.newOrder(order);
-      }
+      console.log("forwarding to nbt");
+      // forward order to the market
+      nbt.newOrder(order);
     } else {
-      //console.log("cfd");
-      // publish the order to whence it came
-      //db.publish(order.operatortype, "order:" + order.orderid);
-
-      // publish the trade if there is one
-      /*if (tradeid != "") {
-        db.publish(common.tradechannel, "trade:" + tradeid);
-      }*/
-
-      // publish any hedge to the client server, so anyone viewing the hedgebook receives it
-      /*if (hedgetradeid != "") {
-        db.publish(common.tradechannel, "trade:" + hedgetradeid);
-      }*/
-
       // if we are hedging, change the order id to that of the hedge & forward
       if (hedgeorderid != "") {
         console.log("forwarding hedge order:" + hedgeorderid + " to nbt");
@@ -517,7 +583,44 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid, hedgebookid, h
         nbt.newOrder(order);
       }
     }
-  //}
+  }
+}
+
+function testTradeResponse(order) {
+  var exereport = {};
+  var currencyratetoorg = 1; // product currency rate back to org 
+  var currencyindtoorg = 1;
+
+  console.log("test fill");
+
+  exereport.clordid = order.orderid;
+  exereport.symbol = order.symbol;
+  exereport.side = order.side;
+  exereport.lastshares = order.quantity;
+  exereport.lastpx = order.price;
+  exereport.currency = "GBP";
+  exereport.execbroker = order.qbroker;
+  exereport.execid = 1;
+  exereport.futsettdate = order.futsettdate;
+  exereport.transacttime = order.timestamp;
+  exereport.ordstatus = 2;
+  exereport.lastmkt = "";
+  exereport.leavesqty = 0;
+  exereport.orderid = "";
+  exereport.settlcurrency = "GBP";
+  exereport.settlcurramt = parseFloat(order.price) * parseInt(order.quantity);
+  exereport.settlcurrfxrate = 1;
+  exereport.settlcurrfxratecalc = 1;
+  var milliseconds = new Date().getTime();
+
+  db.eval(scriptnewtrade, 21, exereport.clordid, exereport.symbol, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currency, currencyratetoorg, currencyindtoorg, exereport.execbroker, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.ordstatus, exereport.lastmkt, exereport.leavesqty, exereport.orderid, exereport.settlcurrency, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, function(err, ret) {
+    if (err) {
+      console.log(err);
+      return
+    }
+
+    console.log(ret);
+  });
 }
 
 function displayOrderBook(symbol, lowerbound, upperbound) {
@@ -536,6 +639,7 @@ function initDb() {
   common.registerCommonScripts();
   registerScripts();
   loadHolidays();
+  getTestmode();
 }
 
 function loadHolidays() {
@@ -546,6 +650,17 @@ function loadHolidays() {
     for (var i = 0; i < ret.length; ++i) {
       holidays[ret[i]] = ret[i];
     }
+  });
+}
+
+function getTestmode() {
+  db.get("testmode", function(err, tm) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    testmode = tm;
   });
 }
 
@@ -1684,7 +1799,7 @@ function registerScripts() {
   --[[ todo: adjust trade related margin ]] \
   --[[updatetrademargin(tradeid, vals[1], KEYS[17], initialmargin[1])]] \
   --[[publishorder(orderid, vals[9]) ]]\
-  return \
+  return cptyid \
   ';
 
   scriptordercancelrequest = removefromorderbook + cancelorder + getproquotesymbol + '\

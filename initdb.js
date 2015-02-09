@@ -361,6 +361,9 @@ function initdb() {
   db.set("sendercompid", "CWTT_UAT");
   db.set("targetcompid", "NBT_UAT");
   db.set("onbehalfofcompid", "TGRANT");
+
+  // testing
+  db.set("testmode", "0");
 }
 
 /*
