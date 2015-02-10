@@ -61,8 +61,10 @@
             color: yellow;
         }
         .cw2t {
+            margin : 0 auto;
             /*width: 620px;*/
-            width: 460px;
+            /*width: 460px;*/
+            width: 50%;
             font-size: 33px;
             background-color: inherit;
             color: #C0C0C0;
@@ -665,11 +667,11 @@
             font-size: 15px;
             margin: 2px 4px 15px 10px;           
         }
-        .heading {
+        /*.heading {
             font-size: 18px;
             background-color: inherit;
             color: #666666;
-        }
+        }*/
         .rowlong {
             background-color: inherit;
             color: blue;
@@ -682,14 +684,138 @@
             display:inline-block;
             background-color:inherit;
         }
+        .divprice {
+            margin : 0 auto;
+            margin-top: 15px;
+            font-size: 21px;
+            text-align: center;
+            color: grey;
+        }
+        .tblprice {
+            margin : 0 auto;
+            margin-top: 15px;
+        }
+        .tblmenu {
+            margin : 0 auto;
+            margin-top: 10px;
+        }
+        .tblmenu tr td {
+            text-align: center;
+            padding: 15px;
+        }
+        .divrfq {
+            margin-top: 10px;
+            text-align: center;
+        }
+        .tblrfq {
+            margin : 0 auto;
+        }
+        .tblrfq tr td {
+            padding: 10px;
+            font-size: 21px;
+        }
+        .tblquote {
+            margin-top: 20px;
+            margin : 0 auto;  
+            font-size: 21px;
+        }
+        .selcashorshares {
+            background-color: #ddd;
+            border-style: none;
+            font-size: 21px;
+            color: gray;
+            outline: none;
+        }
+        .rfqqty {
+            font-size: 21px;
+            color: gray;
+            border: solid 1px #c0c0c0;
+        }
+        .rfqqty:focus {
+            border: solid 1px;
+            outline: none;
+        }
+        .rfqbutton {
+            font-size: 21px;
+            color: gray;
+            border-style: none;
+            background-color: #ddd;
+            outline: none;
+        }
+        .rfqbutton:hover {
+            background-color: #ccc;
+            cursor: pointer;
+        }
+        .rfqbutton:active {
+            background: #bbb;
+        }
+        .divrfqhdr {
+            margin-top: 20px;
+        }
+        .quotebutton {
+            font-size: 21px;
+            background-color: #ddd;
+            color: gray;
+            border-style: none;        
+        }
+        .quotebutton:hover {
+            background-color: #ccc;
+            cursor: pointer;
+        }
+        .quotebuttonbuy {
+            font-size: 21px;
+            background-color: #ddd;
+            color: blue;
+            border-style: none;        
+        }
+        .quotebuttonbuy:hover {
+            background-color: #ccc;
+            cursor: pointer;
+        }
+        .quotebuttonsell {
+            font-size: 21px;
+            background-color: #ddd;
+            color: red;
+            border-style: none;        
+        }
+        .quotebuttonsell:hover {
+            background-color: #ccc;
+            cursor: pointer;
+        }
+        .quotebuttonsellexpired {
+            font-size: 21px;
+            background-color: white;
+            color: red;
+            border-style: none;        
+        }
+        .quotebuttonbuyexpired {
+            font-size: 21px;
+            background-color: white;
+            color: blue;
+            border-style: none;        
+        }
+        .tblpricerow {
+            font-size: 33px;
+        }
+        .tickup {
+            color: blue;
+        }
+        .tickdn {
+            color: red;
+        }
+        .ticknc {
+            color: green;
+        }
+        .greytext {
+            color: grey;
+        }
     </style>
 </head>
 <body lang="en">
     <div id="heading">
         <div id="cw2t" class="cw2t"></div>
     </div>
-    <div id="main">
-    </div>
+    <div id="main" class="cw2t"></div>
 
     <script>
         var sockjs_url = '/echo';
@@ -778,6 +904,7 @@
         // JSON data is parsed into an object & then processed
         //
         var datain = function(msg) {
+            console.log(msg);
             try {
                 var obj = JSON.parse(msg);
 
@@ -1067,6 +1194,16 @@
         }
 
         function clearQuotes() {
+            // clear any timers
+            for (var i = 0; i < quotes.length; i++) {
+                if ('bidquote' in quotes[i]) {
+                    clearInterval(quotes[i].bidquote.interval);
+                }
+                if ('offerquote' in quotes[i]) {
+                    clearInterval(quotes[i].offerquote.interval);
+                }
+            }
+
             quotes = [];
         }
 
@@ -1895,9 +2032,9 @@
                     clearData();
 
                     // clear price display in case of a previously selected symbol
-                    //d3.select("#divprice").remove();
-                    //d3.select("#tblmenuprice").remove();
-                    //d3.select("#divrfq").remove();
+                    d3.select("#divprice").remove();
+                    d3.select("#tblmenuprice").remove();
+                    d3.select("#divrfq").remove();
 
                     // request a symbol
                     requestSingleSymbol(selectedsymbol);
@@ -2093,11 +2230,11 @@
             // create a price div
             var divprice = d3.select("#frmrfq")
                 .append("div")
-                .attr("id", "divprice");
+                .attr("id", "divprice")
+                .attr("class", "divprice");
 
             divprice.append("header")
-                .text(instruments[price.symbol].shortname + " - " + price.symbol)
-                .style("margin-top", "20px");
+                .text(instruments[price.symbol].shortname + " - " + price.symbol);
 
             // create a table
             var tblprice = divprice.append("table")
@@ -2154,11 +2291,10 @@
                         .attr("href", "#")
                         .html(function (d) { return d; })
                         .on("click", function(d) {
-                            // clear quote data
-                            quotes = [];
+                            clearQuotes();
 
                             // & clear any previous request
-                            //d3.select("#divrfq").remove();
+                            d3.select("#divrfq").remove();
 
                             requestQuote(symbol, "");
                         });            
@@ -2287,11 +2423,15 @@
 
                 // add text
                 d3.select("#tdrfq")
-                    .text("Quote Request Sent");
+                    .text("Quote Request Sent")
+                    .attr("class", "greytext");
             }
         }
 
         function quoteReceived(quote) {
+            // start a timer
+            quote.interval = startQuoteInterval(quote);
+
             // update quote array
             updateQuoteLadder(quote);
 
@@ -2299,7 +2439,7 @@
             updateQuoteTable();
 
             // start a timer
-            startQuoteInterval(quote);
+            //startQuoteInterval(quote);
         }
 
         //
@@ -2471,14 +2611,13 @@
         }
 
         function createQuoteTable() {
-            //var hdr = ["Quotes"];
-
             // use the rfq div
             var divrfq = d3.select("#divrfq");
 
             divrfq.append("header")
                 .attr("class", "divrfqhdr")
-                .text("Quotes");
+                .text("Quotes")
+                .attr("class", "greytext");
 
             // create a table
             var tblquote = divrfq.append("table")
@@ -2498,8 +2637,10 @@
                 updateQuoteTable();
             }, 1000);
 
+            return interval;
+
             // keep track of timer
-            quote.interval = interval;
+            //quote.interval = interval;
         }
 
         function countdownQuote(quote) {
@@ -2524,18 +2665,13 @@
         }
 
         function tradeReceived(trade) {
-            console.log("tradeReceived");
             var inquotes = false;
-
-            console.log(trade);
 
             // make sure trade is for this client
             var inpclientid = document.getElementById("inpclientid");
 
-            console.log(inpclientid);
-
             if (inpclientid == null) { return; }
-            if (trade.clientid != inpclientid) { return; }
+            if (trade.clientid != inpclientid.value) { return; }
 
             // add to trades, if that is what we are looking at
             if (selectedmenu == MENUTRADES) {
@@ -4162,7 +4298,6 @@
             addNewLine(frmrfq, null);
 
             selectStock("frmrfq", frmrfq, false, false, null);
-
         }
 
         function sendRfq(clientid, quantity, cashorderqty, symbol, currency) {
@@ -4559,7 +4694,7 @@
             menu.id = "menu";
 
             // build the main menu
-            menuarr = ["Request A Quote", "Maintain", "History", "Portfolio", "End Of Day", "Monitor", "Log Out"];
+            menuarr = ["Request Quotes", "Maintain", "History", "Portfolio", "End Of Day", "Monitor", "Log Out"];
 
             for (var i = 0; i < menuarr.length; ++i) {
                 menuitem = document.createElement("li");

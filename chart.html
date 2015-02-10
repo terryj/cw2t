@@ -273,6 +273,7 @@
     }
     .divprice {
         margin : 0 auto;
+        margin-top: 20px;
     }
     .divcontainer {
         width: 70%;
@@ -696,11 +697,11 @@
             // create a price div
             var divprice = d3.select("#divcontainer")
                 .append("div")
-                .attr("id", "divprice");
+                .attr("id", "divprice")
+                .attr("class", "divprice");
 
             divprice.append("header")
-                .text(instruments[price.symbol].shortname + " - " + price.symbol)
-                .style("margin-top", "20px");
+                .text(instruments[price.symbol].shortname + " - " + price.symbol);
 
             // create a table
             var tblprice = divprice.append("table")
