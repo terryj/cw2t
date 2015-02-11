@@ -117,6 +117,7 @@ function initialise() {
   common.registerCommonScripts();
   registerScripts();
   initDb();
+  clearSubscriptions();
   pubsub();
   listen();
 }
@@ -411,12 +412,12 @@ function tidy(userid, conn) {
 }
 
 function unsubscribeConnection(id) {
-  db.eval(common.scriptunsubscribeid, 3, id, servertype, feedtype, function(err, ret) {
+  db.eval(common.scriptunsubscribeid, 3, id, serverid, feedtype, function(err, ret) {
     if (err) throw err;
 
     // unsubscribe returned topics
     for (var i = 0; i < ret.length; i++) {
-      dbsub.unsubscribe(ret[i]);
+      dbsub.unsubscribe("price:" + ret[i]);      
     }
   });
 }
@@ -1375,11 +1376,27 @@ function replySignIn(reply, conn) {
 }
 
 function initDb() {
-  clearConnections();
-  clearPendingChat();
+  //clearConnections();
+  //clearPendingChat();
 }
 
-function clearConnections() {
+function clearSubscriptions() {
+  // clears connections & subscriptions
+  db.eval(common.scriptunsubscribeserver, 1, serverid, function(err, ret) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    // unsubscribe to the returned symbols
+    for (var i = 0; i < ret.length; i++) {
+      dbsub.unsubscribe("price:" + ret[i]);
+    }
+  });  
+}
+
+
+/*function clearConnections() {
   // clear any connected users
   db.smembers("connections:" + servertype, function(err, connections) {
     if (err) {
@@ -1393,7 +1410,7 @@ function clearConnections() {
       db.srem("connections:" + servertype, connection);
     });
   });
-}
+}*/
 
 function clearPendingChat() {
   db.smembers("pendingchatclients", function(err, pendingchat) {

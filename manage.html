@@ -716,7 +716,7 @@
         }
         .tblquote {
             margin-top: 20px;
-            margin : 0 auto;  
+            margin : 0 auto;
             font-size: 21px;
         }
         .selcashorshares {
@@ -2682,7 +2682,7 @@
 
             // indicate the quote has been traded
             // quote may be in rfq quotes
-            for (var i in quotes) {
+            for (var i = 0; i < quotes.length; i++) {
                 if (trade.side == "1") {
                     if (trade.quoteid == quotes[i].offerquote.quoteid) {
                         quotes[i].offerquote.tradeid = trade.tradeid;
@@ -4718,6 +4718,11 @@
 
                 if (element.id == "menu") {
                     return;
+                }
+
+                if (selectedsymbol != "") {
+                    requestRemoveSingleSymbol(selectedsymbol);
+                    selectedsymbol = "";
                 }
 
                 clearScreen();

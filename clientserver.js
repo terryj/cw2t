@@ -80,23 +80,12 @@ db.on("error", function(err) {
 });
 
 function initialise() {
-  test();
   common.registerCommonScripts();
   registerScripts();
   initDb();
   clearSubscriptions();
   pubsub();
   listen();
-}
-//["test keys 1", "test val 1", "test keys 2", "test val 2"]
-function test() {
-  db.hmget("client:1", ["clientid", "name"], function(err, vals) {
-    if (err) {
-      console.log("Error in signIn:" + err);
-      return;
-    }
-    console.log(vals);
-  });
 }
 
 // pubsub connections
@@ -353,7 +342,6 @@ function listen() {
 }
 
 function tidy(clientid, conn) {
-  console.log("tidy");
   if (clientid != "0") {
     if (clientid in connections) {
       var timestamp = common.getUTCTimeStamp(new Date());
@@ -957,7 +945,7 @@ function clearSubscriptions() {
 }
 
 function initDb() {
-  console.log("initDb");
+  //console.log("initDb");
 
   // clear any connected clients
   /*db.smembers("connections:" + serverid, function(err, connections) {
@@ -1388,7 +1376,6 @@ function unwatchlistrequest(uwl, clientid, conn) {
         console.log(err);
         return;
       }
-      console.log(ret);
 
       // unsubscribe from symbol
       if (ret == 1) {
@@ -1404,7 +1391,6 @@ function unwatchlistrequest(uwl, clientid, conn) {
         console.log(err);
         return;
       }
-      console.log(ret);
 
       // unsubscribe from symbols
       for (var i = 0; i < ret.length; i++) {

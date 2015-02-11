@@ -488,7 +488,7 @@ function requestData(msg) {
     var instcode = msg.substr(5);
     var instcodelen = instcode.length;
 
-    console.log("halting:" + instcode);
+    console.log("unsubscribe: " + instcode);
 
     var buf = new Buffer(15+instcodelen);
 

@@ -837,8 +837,7 @@
                         .attr("href", "#")
                         .html(function (d) { return d; })
                         .on("click", function(d) {
-                            // clear quote data
-                            quotes = [];
+                            clearQuotes();
 
                             // & clear any previous request
                             d3.select("#divrfq").remove();
@@ -867,6 +866,20 @@
 
             // clear positions
             positions = [];
+        }
+
+        function clearQuotes() {
+            // clear any timers
+            for (var i = 0; i < quotes.length; i++) {
+                if ('bidquote' in quotes[i]) {
+                    clearInterval(quotes[i].bidquote.interval);
+                }
+                if ('offerquote' in quotes[i]) {
+                    clearInterval(quotes[i].offerquote.interval);
+                }
+            }
+
+            quotes = [];
         }
 
         function singleSymbol(symbol) {
@@ -1622,7 +1635,7 @@
 
             // indicate the quote has been traded
             // quote may be in rfq quotes
-            for (var i in quotes) {
+            for (var i = 0; i < quotes.length; i++) {
                 if (trade.side == "1") {
                     if (trade.quoteid == quotes[i].offerquote.quoteid) {
                         quotes[i].offerquote.tradeid = trade.tradeid;
@@ -1654,7 +1667,7 @@
 
             // or quote may be in myquotes, responding to an rfq
             if (!inquotes) {
-                for (var i in myquotes) {
+                for (var i = 0; i < myquotes.length; i++) {
                     if (trade.quoteid == myquotes[i][0].quoteid) {
                         myquotes[i][0].tradeid = trade.tradeid;
 
@@ -2008,23 +2021,23 @@
                 quote.noseconds = noseconds;
                 quote.startnoseconds = noseconds;
 
+                // start a timer
+                quote.interval = startMyQuoteInterval(quote);
+
                 // update the quote
                 updateMyQuote(quote);
 
                 // update the display
                 updateMyQuoteForm(quote.quotereqid);
-
-                // start a timer
-                startMyQuoteInterval(quote);
             } else {
+                // start a timer
+                quote.interval = startQuoteInterval(quote);
+
                 // update quote array
                 updateQuoteLadder(quote);
 
                 // update display
                 updateQuoteTable();
-
-                // start a timer
-                startQuoteInterval(quote);
             }
         }
 
@@ -2195,8 +2208,6 @@
         }
 
         function createQuoteTable() {
-            //var hdr = ["Quotes"];
-
             // use the rfq div
             var divrfq = d3.select("#divrfq");
 
@@ -2222,8 +2233,7 @@
                 updateQuoteTable();
             }, 1000);
 
-            // keep track of timer
-            quote.interval = interval;
+            return interval;
         }
 
         function startMyQuoteInterval(quote) {
@@ -2232,8 +2242,7 @@
                 updateMyQuoteForm(quote.quotereqid);
             }, 1000);
 
-            // keep track of timer
-            quote.interval = interval;            
+            return interval;
         }
 
         // open quote requests
