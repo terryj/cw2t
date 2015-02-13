@@ -694,6 +694,21 @@
         .tblprice {
             margin : 0 auto;
             margin-top: 15px;
+            border-collapse: collapse;
+            border-spacing:0;
+        }
+        .tblpricerow {
+            font-size: 33px;
+            background-color: yellow;
+        }
+        .tickup {
+            color: blue;
+        }
+        .tickdn {
+            color: red;
+        }
+        .ticknc {
+            color: green;
         }
         .tblmenu {
             margin : 0 auto;
@@ -793,18 +808,6 @@
             background-color: white;
             color: blue;
             border-style: none;        
-        }
-        .tblpricerow {
-            font-size: 33px;
-        }
-        .tickup {
-            color: blue;
-        }
-        .tickdn {
-            color: red;
-        }
-        .ticknc {
-            color: green;
         }
         .greytext {
             color: grey;
@@ -2171,10 +2174,16 @@
             } else {
                 pricedata[0].asktick = "";
             }            
+            if ("midnetchg" in price) {
+                pricedata[0].midnetchg = price.midnetchg;
+            }
+            if ("midpctchg" in price) {
+                pricedata[0].midpctchg = price.midpctchg;
+            }
         }
 
         function updatePriceTable(price) {
-            var cols = ["bid", "", "ask"];
+            var cols = ["bid", "", "ask", "midnetchg", "midpctchg"];
 
             // create a price table if one does not exist
             var tblpricerow = d3.select("#tblpricerow");
@@ -2187,11 +2196,15 @@
             var cells = tblpricerow.selectAll("td")
                 .data(function(row) {
                     return cols.map(function(column) {
+                        console.log(column);
+                        console.log(row);
                         var ret = null;
                         if (column == "bid") {
                             ret = {price: row[column], tick: pricedata[0].bidtick};
                         } else if (column == "ask") {
                             ret = {price: row[column], tick: pricedata[0].asktick};                            
+                        } else if (column == "midnetchg" || column == "midpctchg") {
+                            ret = row[column];                            
                         }
                         return {column: column, value: ret};
                     });
@@ -2199,7 +2212,7 @@
 
             // update display
             cells.each(function(d) {
-                if (d.column != "") {
+                if (d.column == "bid" || d.column == "ask") {
                     if (d.value.tick != "") {
                         d3.select(this)
                             .text(function(d) { return formatCurrency(d.value.price, 2); })
@@ -2213,13 +2226,57 @@
                                 }
                             });
                     }
+                } else if (d.column == "midnetchg" || d.column == "midpctchg") {
+                    d3.select(this)
+                        .text(function(d) { return d.value; })
+                        .attr("class", function(d) {
+                            if (d.value.tick == '+') {
+                                return "tickup";
+                            } else if (d.value.tick == '-') {
+                                return "tickdn";
+                            } else {
+                                return "ticknc";
+                            }
+                        });
                 }
             });
 
             // enter
             cells.enter()
                 .append("td")
-                    .text(function(d) { return d.value == null ? '-' : formatCurrency(d.value.price, 2); });
+                .each(function(d, i, j) {
+                if (d.column == "bid" || d.column == "ask") {
+                    if (d.value.tick != "") {
+                        d3.select(this)
+                            .text(function(d) { return formatCurrency(d.value.price, 2); })
+                            .attr("class", function(d) {
+                                if (d.value.tick == '+') {
+                                    return "tickup";
+                                } else if (d.value.tick == '-') {
+                                    return "tickdn";
+                                } else {
+                                    return "ticknc";
+                                }
+                            });
+                    }
+                } else if (d.column == "midnetchg" || d.column == "midpctchg") {
+                    console.log(d);
+                    d3.select(this)
+                        .text(function(d) { return d.value; });
+                        /*.attr("class", function(d) {
+                            if (d.value.tick == '+') {
+                                return "tickup";
+                            } else if (d.value.tick == '-') {
+                                return "tickdn";
+                            } else {
+                                return "ticknc";
+                            }
+                        });*/
+                } else {
+                    d3.select(this)
+                    .text(function(d) { return '-'; });
+                }
+                });
 
             cells.exit().remove();
         }

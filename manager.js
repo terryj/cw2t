@@ -426,6 +426,7 @@ function unsubscribeConnection(id) {
 // request for a new symbol subscription
 //
 function singleSymbolRequest(symbol, userid, conn) {
+  console.log("singleSymbolRequest");
   db.eval(common.scriptsubscribesymbol, 4, symbol, userid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
 
@@ -441,6 +442,9 @@ function singleSymbolRequest(symbol, userid, conn) {
     price.bid = ret[1];
     price.ask = ret[2];
     price.timestamp = ret[3];
+    price.midnetchg = ret[4];
+    price.midpctchg = ret[5];
+    console.log(price);
 
     conn.write("{\"price\":" + JSON.stringify(price) + "}");
   });

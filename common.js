@@ -1140,9 +1140,9 @@ exports.registerCommonScripts = function () {
       redis.call("sadd", "serverid:" .. serverid .. ":ids", id) \
     end \
     --[[ get latest price ]] \
-    local fields = {"bid", "ask", "timestamp"} \
+    local fields = {"bid", "ask", "timestamp", "midnetchg", "midpctchg"} \
     local vals = redis.call("hmget", "price:" .. symbol, unpack(fields)) \
-    return {subscribe, vals[1], vals[2], vals[3]} \
+    return {subscribe, vals[1], vals[2], vals[3], vals[4], vals[5]} \
   end \
   ';
 
@@ -1676,46 +1676,51 @@ exports.registerCommonScripts = function () {
 
   //
   // update & publish the latest price, together with the change, used for variation margin calculation
-  // params: nbtsymbol, timestamp, bid, offer
+  // params: nbtsymbol, timestamp, bid, offer, calcmidnetchg, calcmidpctchg
   // any symbols related to this nbtsymbol will be updated
   //
   scriptpriceupdate = round + '\
   local nbtsymbol = KEYS[1] \
   local bid = KEYS[3] \
   local ask = KEYS[4] \
+  local publish = false \
   local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":instruments") \
   for index = 1, #symbols do \
-    local pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbol") .. ":" .. cjson.encode(symbols[index]) .. "," \
-    --[[ may only get bid or ask ]] \
-    if bid ~= "" then \
-      if ask ~= "" then \
-        local oldbid = redis.call("hget", "price:" .. symbols[index], "bid") \
-        if not oldbid then oldbid = 0 end \
-        local bidchange = round(tonumber(bid) - tonumber(oldbid), 4) \
-        local oldask = redis.call("hget", "price:" .. symbols[index], "ask") \
-        if not oldask then oldask = 0 end \
-        local askchange = round(tonumber(ask) - tonumber(oldask), 4) \
-        pricemsg = pricemsg .. cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("bidchange") .. ":" .. bidchange .. "," .. cjson.encode("ask") .. ":" .. ask .. "," .. cjson.encode("askchange") .. ":" .. askchange \
-        redis.call("hmset", "price:" .. symbols[index], "bid", bid, "ask", ask, "timestamp", KEYS[2]) \
-      else \
-        local oldbid = redis.call("hget", "price:" .. symbols[index], "bid") \
-        if not oldbid then oldbid = 0 end \
-        local bidchange = round(tonumber(bid) - tonumber(oldbid), 4) \
-        pricemsg = pricemsg .. cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("bidchange") .. ":" .. bidchange \
-        redis.call("hmset", "price:" .. symbols[index], "bid", bid, "timestamp", KEYS[2]) \
-      end \
-    else \
+    local pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbol") .. ":" .. cjson.encode(symbols[index]) \
+    --[[ may get all or none of params ]] \
+    if KEYS[3] ~= "" then \
+      local oldbid = redis.call("hget", "price:" .. symbols[index], "bid") \
+      if not oldbid then oldbid = 0 end \
+      local bidchange = round(tonumber(KEYS[3]) - tonumber(oldbid), 4) \
+      pricemsg = pricemsg .. "," .. cjson.encode("bid") .. ":" .. KEYS[3] .. "," .. cjson.encode("bidchange") .. ":" .. bidchange \
+      redis.call("hmset", "price:" .. symbols[index], "bid", KEYS[3], "timestamp", KEYS[2]) \
+      publish = true \
+    end \
+    if KEYS[4] ~= "" then \
       local oldask = redis.call("hget", "price:" .. symbols[index], "ask") \
       if not oldask then oldask = 0 end \
-      local askchange = round(tonumber(ask) - tonumber(oldask), 4) \
-      pricemsg = pricemsg .. cjson.encode("ask") .. ":" .. ask .. "," .. cjson.encode("askchange") .. ":" .. askchange \
-      redis.call("hmset", "price:" .. symbols[index], "ask", ask, "timestamp", KEYS[2]) \
+      local askchange = round(tonumber(KEYS[4]) - tonumber(oldask), 4) \
+      pricemsg = pricemsg .. "," .. cjson.encode("ask") .. ":" .. KEYS[4] .. "," .. cjson.encode("askchange") .. ":" .. askchange \
+      redis.call("hmset", "price:" .. symbols[index], "ask", KEYS[4], "timestamp", KEYS[2]) \
+      publish = true \
     end \
-    pricemsg = pricemsg .. "}}" \
-    --[[ publish price ]] \
-    redis.call("publish", "price:" .. symbols[index], pricemsg) \
+    if KEYS[5] ~= "" then \
+      pricemsg = pricemsg .. "," .. cjson.encode("midnetchg") .. ":" .. KEYS[5] \
+      redis.call("hmset", "price:" .. symbols[index], "midnetchg", KEYS[5], "timestamp", KEYS[2]) \
+      publish = true \
+    end \
+    if KEYS[6] ~= "" then \
+      pricemsg = pricemsg .. "," .. cjson.encode("midpctchg") .. ":" .. cjson.encode(KEYS[6]) \
+      redis.call("hmset", "price:" .. symbols[index], "midpctchg", KEYS[6], "timestamp", KEYS[2]) \
+      publish = true \
+    end \
+    if publish then \
+      --[[ publish msg ]] \
+      pricemsg = pricemsg .. "}}" \
+      redis.call("publish", "price:" .. symbols[index], pricemsg) \
+    end \
   end \
-  return {nbtsymbol, bid, ask} \
+  return \
   ';
 
   exports.scriptpriceupdate = scriptpriceupdate;

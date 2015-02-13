@@ -1110,11 +1110,11 @@ function registerScripts() {
   ';
 
   createposition = '\
-  local createposition = function(positionkey, positionskey, postradeskey, clientid, symbol, quantity, cost, currency, tradeid) \
+  local createposition = function(positionkey, positionskey, postradeskey, clientid, symbol, quantity, cost, currency, tradeid, futsettdate, symbolsettdatekey) \
     local positionid = redis.call("incr", "positionid") \
-    redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "quantity", quantity, "cost", cost, "currency", currency, "positionid", positionid) \
-    redis.call("sadd", positionskey, symbol) \
-    redis.call("sadd", "position:" .. symbol .. ":clients", clientid) \
+    redis.call("hmset", positionkey, "clientid", clientid, "symbol", symbol, "quantity", quantity, "cost", cost, "currency", currency, "positionid", positionid, "futsettdate", futsettdate) \
+    redis.call("sadd", positionskey, symbolsettdatekey) \
+    redis.call("sadd", "position:" .. symbolsettdatekey .. ":clients", clientid) \
     redis.call("sadd", postradeskey, tradeid) \
     return positionid \
   end \
@@ -1122,10 +1122,10 @@ function registerScripts() {
 
   // remove position
   closeposition = '\
-  local closeposition = function(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
-    redis.call("hdel", positionkey, "clientid", "symbol", "side", "quantity", "cost", "currency", "margin", "positionid") \
-    redis.call("srem", positionskey, symbol) \
-    redis.call("srem", "position:" .. symbol .. ":clients", clientid) \
+  local closeposition = function(positionkey, positionskey, postradeskey, clientid, symbol, tradeid, futsettdate, symbolsettdatekey) \
+    redis.call("hdel", positionkey, "clientid", "symbol", "side", "quantity", "cost", "currency", "margin", "positionid", "futsettdate") \
+    redis.call("srem", positionskey, symbolsettdatekey) \
+    redis.call("srem", "position:" .. symbolsettdatekey .. ":clients", clientid) \
     local postrades = redis.call("smembers", postradeskey) \
     for index = 1, #postrades do \
       redis.call("srem", postradeskey, postrades[index]) \
@@ -1135,14 +1135,14 @@ function registerScripts() {
 
   publishposition = common.getunrealisedpandl + common.getmargin + '\
   local publishposition = function(clientid, symbol, channel) \
-    local fields = {"quantity", "cost", "currency", "positionid"} \
+    local fields = {"quantity", "cost", "currency", "positionid", "futsettdate"} \
     local vals = redis.call("hmget", clientid .. ":position:" .. symbol, unpack(fields)) \
     local pos = {} \
     if vals[1] then \
       local margin = getmargin(symbol, vals[1]) \
       --[[ value the position ]] \
       local unrealisedpandl = getunrealisedpandl(symbol, vals[1], vals[2]) \
-      pos = {clientid=clientid,symbol=symbol,quantity=vals[1],cost=vals[2],currency=vals[3],margin=margin,positionid=vals[4],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
+      pos = {clientid=clientid,symbol=symbol,quantity=vals[1],cost=vals[2],currency=vals[3],margin=margin,positionid=vals[4],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1],futsettdate=vals[5]} \
     else \
       pos = {clientid=clientid,symbol=symbol,quantity=0} \
     end \
@@ -1156,10 +1156,18 @@ function registerScripts() {
   // a position id is allocated against a position and stored against the trade
   //
   updateposition = round + closeposition + createposition + publishposition + '\
-  local updateposition = function(clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, tradeid) \
+  local updateposition = function(clientid, symbol, side, tradequantity, tradeprice, tradecost, currency, tradeid, futsettdate) \
+    local instrumenttype = redis.call("hget", "symbol:" .. symbol, "instrumenttype") \
     local positionkey = clientid .. ":position:" .. symbol \
-    local positionskey = clientid .. ":positions" \
     local postradeskey = clientid .. ":trades:" .. symbol \
+    local positionskey = clientid .. ":positions" \
+    local symbolsettdatekey = symbol \
+    --[[ add settlement date to key for devivs ]] \
+    if instrumenttype == "CFD" or instrumenttype == "SPD" then \
+      positionkey = positionkey .. ":" .. futsettdate \
+      postradeskey = postradeskey .. ":" .. futsettdate \
+      symbolsettdatekey = symbolsettdatekey .. ":" .. futsettdate \
+    end \
     local posqty = 0 \
     local poscost = 0 \
     local positionid = "" \
@@ -1181,14 +1189,14 @@ function registerScripts() {
           redis.call("sadd", postradeskey, tradeid) \
         elseif tradequantity == math.abs(posqty) then \
           --[[ just close position ]] \
-          closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
+          closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid, futsettdate, symbolsettdatekey) \
         elseif tradequantity > math.abs(posqty) then \
           --[[ close position ]] \
-          closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
+          closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid, futsettdate, symbolsettdatekey) \
           --[[ & open new ]] \
           posqty = posqty + tradequantity \
           poscost = round(posqty * tonumber(tradeprice), 5) \
-          positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, poscost, currency, tradeid) \
+          positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, poscost, currency, tradeid, futsettdate, symbolsettdatekey) \
         else \
           --[[ part-fill ]] \
           posqty = posqty + tradequantity \
@@ -1206,14 +1214,14 @@ function registerScripts() {
           redis.call("sadd", postradeskey, tradeid) \
         elseif tradequantity == posqty then \
           --[[ just close position ]] \
-          closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
+          closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid, futsettdate, symbolsettdatekey) \
         elseif tradequantity > posqty then \
           --[[ close position ]] \
-          closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid) \
+          closeposition(positionkey, positionskey, postradeskey, clientid, symbol, tradeid, futsettdate, symbolsettdatekey) \
           --[[ & open new ]] \
           posqty = posqty - tradequantity \
           poscost = round(posqty * tonumber(tradeprice), 5) \
-          positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, poscost, currency, tradeid) \
+          positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, poscost, currency, tradeid, futsettdate, symbolsettdatekey) \
         else \
           --[[ part-fill ]] \
           posqty = posqty - tradequantity \
@@ -1229,7 +1237,7 @@ function registerScripts() {
       else \
         posqty = -tradequantity \
       end \
-      positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, tradecost, currency, tradeid) \
+      positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, tradecost, currency, tradeid, futsettdate, symbolsettdatekey) \
     end \
     publishposition(clientid, symbol, 10) \
     return positionid \
@@ -1264,9 +1272,9 @@ function registerScripts() {
   ';
 
   getposition = '\
-  local getposition = function(clientid, symbol) \
+  local getposition = function(clientid, symbolsettdatekey) \
     local fields = {"quantity", "cost"} \
-    local position = redis.call("hmget", clientid .. ":position:" .. symbol, unpack(fields)) \
+    local position = redis.call("hmget", clientid .. ":position:" .. symbolsettdatekey, unpack(fields)) \
     return position \
   end \
   ';
@@ -1297,7 +1305,11 @@ function registerScripts() {
     local costs =  getcosts(clientid, symbol, instrumenttype, side, consid, currency) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
     local finance = calcfinance(instrumenttype, consid, currency, side, nosettdays) \
-    local position = getposition(clientid, symbol) \
+    local symbolsettdatekey = symbol \
+    if instrumenttype == "CFD" or instrumenttype == "SPB" then \
+      symbolsettdatekey = symbolsettdatekey .. ":" .. settldate \
+    end \
+    local position = getposition(clientid, symbolsettdatekey) \
     if position[1] then \
       --[[ we have a position - always allow closing trades ]] \
       local posqty = tonumber(position[1]) \
@@ -1507,7 +1519,7 @@ function registerScripts() {
     if tonumber(finance) > 0 then \
       updatecash(clientid, settlcurrency, "FI", finance, 2, "trade finance", "trade id: " .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
-    local positionid = updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, tradeid) \
+    local positionid = updateposition(clientid, symbol, side, quantity, price, settlcurramt, settlcurrency, tradeid, futsettdate) \
     redis.call("hset", tradekey, "positionid", positionid) \
     publishtrade(tradeid, 6) \
     return tradeid \

@@ -129,8 +129,11 @@ conn.on('data', function(data) {
   //console.log('data recd');
   //console.log(data);
 
+  // need something in these fields for script 
   instrec.bid = "";
   instrec.ask = "";
+  instrec.calcmidnetchg = "";
+  instrec.calcmidpctchg = "";
 
   var datalen = data.length;
   //console.log("data length="+data.length);
@@ -254,6 +257,8 @@ conn.on('data', function(data) {
           // re-initialise prices as may be more than one message
           instrec.bid = "";
           instrec.ask = "";
+          instrec.calcmidnetchg = "";
+          instrec.calcmidpctchg = "";
         }
 
         // we have finished a message
@@ -384,10 +389,9 @@ function updateDb(functioncode, instrumentcode, instrec) {
 
   // update price & history
   console.log("updating price..." + instrumentcode);
-  db.eval(common.scriptpriceupdate, 4, instrumentcode, timestamp, instrec.bid, instrec.ask, function(err, ret) {
+  console.log(instrec);
+  db.eval(common.scriptpriceupdate, 6, instrumentcode, timestamp, instrec.bid, instrec.ask, instrec.calcmidnetchg, instrec.calcmidpctchg, function(err, ret) {
     if (err) throw err;
-    //console.log("pricehist updated: " + instrumentcode + ",ts:" + timestamp + ",bid:" + instrec.bid + ",ask:" + instrec.ask);
-    //console.log(ret);
   });
 }
 
