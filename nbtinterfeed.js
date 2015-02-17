@@ -340,7 +340,7 @@ function updateRec(fid, value, instrec) {
 }
 
 function updateDb(functioncode, instrumentcode, instrec) {
-  console.log("updateDb");
+  //console.log("updateDb");
   //console.log(instrec);
   // create a unix timestamp
   var now = new Date();
@@ -391,8 +391,8 @@ function updateDb(functioncode, instrumentcode, instrec) {
   }
 
   // update price & history
-  console.log("updating price..." + instrumentcode);
-  console.log(instrec);
+  //console.log("updating price..." + instrumentcode);
+  //console.log(instrec);
   db.eval(common.scriptpriceupdate, 6, instrumentcode, timestamp, instrec.bid, instrec.ask, instrec.calcmidnetchg, instrec.calcmidpctchg, function(err, ret) {
     if (err) throw err;
   });
