@@ -231,11 +231,9 @@
         margin : 0 auto;
         margin-top: 15px;
         border-collapse: collapse;
-        border-spacing:0;
+        border-spacing: 0;
     }
     .tblprice tr td {
-        padding-left: 15px;
-        padding-right: 15px;
         text-align: center;
         background-color: yellow;
     }
@@ -244,6 +242,19 @@
     }
     .yellowstripsub {
         font-size: 18px;
+    }
+    .pad {
+        padding-left: 25px;
+        padding-right: 25px;
+    }
+    .tickup {
+        color: blue;
+    }
+    .tickdn {
+        color: red;
+    }
+    .ticknc {
+        color: green;
     }
     .signindiv {
         position: absolute;
@@ -370,15 +381,6 @@
     }
     .myquoteinp {
         font-size: 21px;
-    }
-    .tickup {
-        color: blue;
-    }
-    .tickdn {
-        color: red;
-    }
-    .ticknc {
-        color: green;
     }
     </style>
 </head>
@@ -734,11 +736,11 @@
                             .text(function(d) { return formatCurrency(d.value.price, 2); })
                             .attr("class", function(d) {
                                 if (d.value.tick == '+') {
-                                    return "tickup";
+                                    return "tickup pad";
                                 } else if (d.value.tick == '-') {
-                                    return "tickdn";
+                                    return "tickdn pad";
                                 } else {
-                                    return "ticknc";
+                                    return "ticknc pad";
                                 }
                             });
                     } else {
@@ -755,7 +757,8 @@
                     if (d.column == "bid" || d.column == "ask") {
                         if (j == 0) {
                             d3.select(this)
-                                .text(function(d) { return formatCurrency(d.value.price, 2); });
+                                .text(function(d) { return formatCurrency(d.value.price, 2); })
+                                .attr("class", "pad");
                         } else {
                             d3.select(this)
                                 .text(function(d) { return d.value; });                            
