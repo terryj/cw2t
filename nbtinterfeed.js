@@ -288,15 +288,18 @@ conn.on('error', function(error) {
   console.log(error);
 });
 
+//
+// just bid/offer & change requested as real-time loop
+//
 function subscribe(instcode) {
   console.log("subscribe to " + instcode);
   var instcodelen = instcode.length;
-  var buf = new Buffer(25+instcodelen);
+  var buf = new Buffer(31+instcodelen);
 
   buf[0] = 0;
   buf[1] = 0;
   buf[2] = 0;
-  buf[3] = 21+instcodelen;
+  buf[3] = 27+instcodelen;
   buf[4] = 28;
   buf.write("332", 5);
   buf[8] = 31;
@@ -308,10 +311,10 @@ function subscribe(instcode) {
   buf[17+instcodelen] = 30;
   buf.write("25", 18+instcodelen); // offer
   buf[20+instcodelen] = 30;
-  //buf.write("100", 21+instcodelen); // turnover
-  //buf.write("114", 21+instcodelen); // bid net change
-  buf.write("115", 21+instcodelen); // bid tick
-  buf[24+instcodelen] = 28;
+  buf.write("-374", 21+instcodelen); // midnetchg
+  buf[25+instcodelen] = 30;
+  buf.write("-375", 26+instcodelen); // midpctchg
+  buf[30+instcodelen] = 28;
   
   conn.write(buf);
 }

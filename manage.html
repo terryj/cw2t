@@ -70,14 +70,14 @@
             color: #C0C0C0;
             white-space: nowrap;
         }
-        .yellowstrip {
+        /*.yellowstrip {
             background-color: yellow;
             color: inherit;
-            /*width: 620px;*/
+            width: 620px;
             width: 460px;
             white-space: nowrap;
             margin: 3px;
-        }
+        }*/
         a {
             font-size: 18px;
             margin: 10px;
@@ -697,8 +697,16 @@
             border-collapse: collapse;
             border-spacing:0;
         }
-        .tblpricerow {
-            font-size: 33px;
+        .tblprice tr td {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        .yellowstrip {
+            font-size: 36px;
+            background-color: yellow;
+        }
+        .yellowstripsub {
+            font-size: 18px;
             background-color: yellow;
         }
         .tickup {
@@ -709,6 +717,10 @@
         }
         .ticknc {
             color: green;
+        }
+        .greentext {
+            font-size: 21px;
+            color: green;            
         }
         .tblmenu {
             margin : 0 auto;
@@ -2102,10 +2114,21 @@
         }
 
         function initPrice() {
-            var price = {};
-            price.bid = "0.00";
-            price.ask = "0.00";
-            pricedata[0] = price;
+            pricedata = [];
+
+            var p = {};
+            p.bid = "0.00";
+            p.ask = "0.00";
+            p.bidtick = '';
+            p.asktick = '';
+            pricedata.push(p);
+
+            var q = {};
+            q.bid = "0.00";
+            q.ask = "0.00";
+            q.bidtick = '';
+            q.asktick = '';
+            pricedata.push(q);
         }
 
         function getDateString(utcdatetime) {
@@ -2149,71 +2172,110 @@
         // update price array
         function updatePriceData(price) {
             if ("bid" in price) {
-                if (parseFloat(price.bid) > parseFloat(pricedata[0].bid)) {
+                if (price.bidchange > 0) {
                     pricedata[0].bidtick = '+';
-                } else if (parseFloat(price.bid) < parseFloat(pricedata[0].bid)) {
+                } else if (price.bidchange < 0) {
                     pricedata[0].bidtick = '-';
                 } else {
                     pricedata[0].bidtick = '0';                    
                 }
 
                 pricedata[0].bid = price.bid;
-            } else {
-                pricedata[0].bidtick = '';
             }
+
             if ("ask" in price) {
-                if (parseFloat(price.ask) > parseFloat(pricedata[0].ask)) {
+                if (price.askchange > 0) {
                     pricedata[0].asktick = '+';
-                } else if (parseFloat(price.ask) < parseFloat(pricedata[0].ask)) {
+                } else if (price.askchange < 0) {
                     pricedata[0].asktick = '-';
                 } else {
-                    pricedata[0].asktick = '0';
+                    pricedata[0].asktick = '0';                    
                 }
 
                 pricedata[0].ask = price.ask;
-            } else {
-                pricedata[0].asktick = "";
-            }            
-            if ("midnetchg" in price) {
-                pricedata[0].midnetchg = price.midnetchg;
             }
+
+            if ("midnetchg" in price) {
+                pricedata[1].bid = price.midnetchg;
+            }
+
             if ("midpctchg" in price) {
-                pricedata[0].midpctchg = price.midpctchg;
+                pricedata[1].ask = price.midpctchg;
             }
         }
 
         function updatePriceTable(price) {
-            var cols = ["bid", "", "ask", "midnetchg", "midpctchg"];
+            var cols = ["bid", "-", "ask"];
 
             // create a price table if one does not exist
-            var tblpricerow = d3.select("#tblpricerow");
-            if (tblpricerow.empty()) {
-                tblpricerow = createPriceTable(price, cols);
+            var tblprice = d3.select("#tblprice");
+            if (tblprice.empty()) {
+                tblprice = createPriceTable(price, cols);
                 createPriceMenu(price.symbol);
             }
 
-            // update
-            var cells = tblpricerow.selectAll("td")
-                .data(function(row) {
+            // row data
+            var tblpricerows = tblprice.select("tbody").selectAll("tr")
+                .data(pricedata);
+
+            // create rows
+            tblpricerows.enter()
+                .append("tr")
+                .attr("class", function(d, i) {
+                    if (i == 0) {
+                        return "yellowstrip";
+                    } else {
+                        return "yellowstripsub";
+                    }
+                });
+
+            // col data
+            var cells = tblpricerows.selectAll("td")
+                .data(function(row, i) {
                     return cols.map(function(column) {
-                        console.log(column);
-                        console.log(row);
-                        var ret = null;
+                        var ret;
+                        var col;
+
                         if (column == "bid") {
-                            ret = {price: row[column], tick: pricedata[0].bidtick};
+                            if (i == 0) {
+                                col = column;
+                                ret = {price: row[column], tick: pricedata[0].bidtick};
+                            } else {
+                                col = column;
+                                ret = "change on day";
+                            }
                         } else if (column == "ask") {
-                            ret = {price: row[column], tick: pricedata[0].asktick};                            
-                        } else if (column == "midnetchg" || column == "midpctchg") {
-                            ret = row[column];                            
+                            if (i == 0) {
+                                col = column;
+                                ret = {price: row[column], tick: pricedata[0].asktick};
+                            } else {
+                                col = column;
+                                ret = pricedata[1].bid;
+                                if (parseFloat(pricedata[1].bid) > 0) {
+                                    ret += '↑';
+                                } else if (parseFloat(pricedata[1].bid) < 0) {
+                                    ret += '↓';
+                                }
+                                ret += ' (' + pricedata[1].ask + ')';
+                            }
+                        } else if (column == "-") {
+                            if (i == 0) {
+                                col = column;
+                                ret = "-";
+                            } else {
+                                col = column;
+                                ret = "";
+                            }
                         }
-                        return {column: column, value: ret};
+
+                        return {column: col, value: ret};
                     });
                  });
 
-            // update display
-            cells.each(function(d) {
+            // update
+            cells.each(function(d, i, j) {
                 if (d.column == "bid" || d.column == "ask") {
-                    if (d.value.tick != "") {
+                    if (j == 0) {
                         d3.select(this)
                             .text(function(d) { return formatCurrency(d.value.price, 2); })
                             .attr("class", function(d) {
@@ -2225,19 +2287,10 @@
                                     return "ticknc";
                                 }
                             });
+                    } else {
+                        d3.select(this)
+                            .text(function(d) { return d.value; });                        
                     }
-                } else if (d.column == "midnetchg" || d.column == "midpctchg") {
-                    d3.select(this)
-                        .text(function(d) { return d.value; })
-                        .attr("class", function(d) {
-                            if (d.value.tick == '+') {
-                                return "tickup";
-                            } else if (d.value.tick == '-') {
-                                return "tickdn";
-                            } else {
-                                return "ticknc";
-                            }
-                        });
                 }
             });
 
@@ -2245,44 +2298,23 @@
             cells.enter()
                 .append("td")
                 .each(function(d, i, j) {
-                if (d.column == "bid" || d.column == "ask") {
-                    if (d.value.tick != "") {
+                    if (d.column == "bid" || d.column == "ask") {
+                        if (j == 0) {
+                            d3.select(this)
+                                .text(function(d) { return formatCurrency(d.value.price, 2); });
+                        } else {
+                            d3.select(this)
+                                .text(function(d) { return d.value; });                            
+                        }
+                    } else {
                         d3.select(this)
-                            .text(function(d) { return formatCurrency(d.value.price, 2); })
-                            .attr("class", function(d) {
-                                if (d.value.tick == '+') {
-                                    return "tickup";
-                                } else if (d.value.tick == '-') {
-                                    return "tickdn";
-                                } else {
-                                    return "ticknc";
-                                }
-                            });
+                            .text(function(d) { return d.value; });
                     }
-                } else if (d.column == "midnetchg" || d.column == "midpctchg") {
-                    console.log(d);
-                    d3.select(this)
-                        .text(function(d) { return d.value; });
-                        /*.attr("class", function(d) {
-                            if (d.value.tick == '+') {
-                                return "tickup";
-                            } else if (d.value.tick == '-') {
-                                return "tickdn";
-                            } else {
-                                return "ticknc";
-                            }
-                        });*/
-                } else {
-                    d3.select(this)
-                    .text(function(d) { return '-'; });
-                }
                 });
-
-            cells.exit().remove();
         }
 
         function createPriceTable(price, cols) {
-            var hdr = ["bid","ask"];
+            var hdr = ["bid", "ask"];
 
             // create a price div
             var divprice = d3.select("#frmrfq")
@@ -2302,18 +2334,7 @@
             var thead = tblprice.append("thead");
             var tbody = tblprice.append("tbody");
 
-            // create a row
-            var tblpricerow = tbody.selectAll("tr")
-                .data(pricedata);
-
-            tblpricerow.enter()
-                .append("tr")
-                .attr("id", "tblpricerow")
-                .attr("class", "tblpricerow");
-
-            tblpricerow.exit().remove();
-
-            return tblpricerow;
+            return tblprice;
         }
 
         function createPriceMenu(symbol) {
@@ -4384,7 +4405,7 @@
             }
         }
 
-        function priceChange(symbol, y, bidprice, offerprice) {
+        /*function priceChange(symbol, y, bidprice, offerprice) {
             if (y == 0) {
                 // bid
                 if (orderbooks[symbol][y].bidflashcount > 0) {
@@ -4462,7 +4483,7 @@
                     }                            
                 }
             }
-        }
+        }*/
 
         function getQuantityDesc(qtyval) {
             var qtydesc;
