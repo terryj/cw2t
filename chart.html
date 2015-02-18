@@ -1657,15 +1657,6 @@
             return ((finishdt - startdt) / 1000);
         }
 
-        function formatUTCDate(utcdate) {
-            var month = parseInt(utcdate.substr(4, 2));
-            return (utcdate.substr(6, 2) + " " + monthtext[month-1] + " " + utcdate.substr(0, 4));
-        }
-
-        function formatUTCDateTime(utcdatetime) {
-            return (formatUTCDate(utcdatetime) + utcdatetime.substr(8));
-        }
-
         function sendOrder(symbol, side, quantity, price, ordertype, delivertocompid, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
             var order = {};
 
@@ -1774,14 +1765,6 @@
         function tradeConfirm(trade) {
             var tradeconf = [];
 
-            var utcdateformat = d3.time.format("%Y%m%d");
-            var displaydateformat = d3.time.format("%e-%b-%Y");
-            var utcdatetimeformat = d3.time.format("%Y%m%d-%H:%M:%S");
-            var displaydatetimeformat = d3.time.format("%e-%b-%Y %H:%M:%S");
-
-            var futsettdate = utcdateformat.parse(trade.futsettdate);
-            var timestamp = utcdatetimeformat.parse(trade.timestamp);
-
             tradeconf.push({"key":"side", "value": trade.side == 1 ? "Buy" : "Sell"});
             tradeconf.push({"key":"quantity", "value": trade.quantity});
             tradeconf.push({"key":"price", "value": trade.price});
@@ -1790,8 +1773,8 @@
             tradeconf.push({"key":"ptmlevy", "value": trade.ptmlevy});
             tradeconf.push({"key":"stampduty", "value": trade.stampduty});
             tradeconf.push({"key":"contractcharge", "value": trade.contractcharge});
-            tradeconf.push({"key":"futsettdate", "value": displaydateformat(futsettdate)});
-            tradeconf.push({"key":"timestamp", "value": displaydatetimeformat(timestamp)});
+            tradeconf.push({"key":"futsettdate", "value": formatDate(trade.futsettdate)});
+            tradeconf.push({"key":"timestamp", "value": formatDatetime(trade.timestamp)});
             tradeconf.push({"key":"tradeid", "value": trade.tradeid});
 
             updateTradeConfirmTable(tradeconf);
@@ -3559,7 +3542,7 @@
         }
 
         function updatePositionTable() {
-            var cols = ["symbol", "quantity", "cost", "currency", "margin", "costpershare", "mktprice", "unrealisedpandl"];
+            var cols = ["symbol", "futsettdate", "quantity", "cost", "currency", "margin", "costpershare", "mktprice", "unrealisedpandl"];
 
             if (positions.length == 0) {
                 cols = [];
@@ -3656,10 +3639,28 @@
                     return formatCurrency(d.value, 2);
                 } else if (d.col == "costpershare" || d.col == "mktprice") {
                     return formatCurrency(d.value, 4);
+                } else if (d.col == "futsettdate") {
+                    return formatDate(d.value);
                 } else {
                     return d.value;
                 }
             }
+        }
+
+        function formatDate(utcdate) {
+            var utcdateformat = d3.time.format("%Y%m%d");
+            var dt = utcdateformat.parse(utcdate);
+
+            var displaydateformat = d3.time.format("%e-%b-%Y");
+            return displaydateformat(dt);
+        }
+
+        function formatDatetime(utcdatetime) {
+            var utcdatetimeformat = d3.time.format("%Y%m%d-%H:%M:%S");
+            var dt = utcdatetimeformat.parse(utcdatetime);
+
+            var displaydatetimeformat = d3.time.format("%e-%b-%Y %H:%M:%S");
+            return displaydatetimeformat(dt);
         }
 
         function createPositionTable(cols) {

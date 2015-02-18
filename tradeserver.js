@@ -1158,7 +1158,7 @@ function registerScripts() {
       local margin = getmargin(vals[6], vals[1]) \
       --[[ value the position ]] \
       local unrealisedpandl = getunrealisedpandl(vals[6], vals[1], vals[2]) \
-      pos = {clientid=clientid,symbol=vals[6],quantity=vals[1],cost=vals[2],currency=vals[3],margin=margin,positionid=vals[4],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1],futsettdate=vals[5]} \
+      pos = {clientid=clientid,symbol=vals[6],quantity=vals[1],cost=vals[2],currency=vals[3],margin=margin,positionid=vals[4],futsettdate=vals[5],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
     else \
       pos = {clientid=clientid,symbol=vals[6],quantity=0,futsettdate=vals[5]} \
     end \

@@ -1475,14 +1475,14 @@ exports.registerCommonScripts = function () {
   local tblresults = {} \
   local tblsubscribe = {} \
   local positions = redis.call("smembers", KEYS[1] .. ":positions") \
-  local fields = {"clientid","symbol","quantity","cost","currency","positionid"} \
+  local fields = {"clientid","symbol","quantity","cost","currency","positionid","futsettdate"} \
   local vals \
   for index = 1, #positions do \
     vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
     local margin = getmargin(vals[2], vals[3]) \
     --[[ value the position ]] \
     local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
     --[[ subscribe to this symbol, so as to get prices to the f/e for p&l calc ]] \
     local subscribe = subscribesymbolnbt(vals[2], KEYS[1], KEYS[2]) \
     if subscribe[1] == 1 then \
