@@ -1414,14 +1414,14 @@ exports.registerCommonScripts = function () {
   exports.scriptgetpositions = getunrealisedpandl + getmargin + '\
   local tblresults = {} \
   local positions = redis.call("smembers", KEYS[1] .. ":positions") \
-  local fields = {"clientid","symbol","quantity","cost","currency","positionid"} \
+  local fields = {"clientid","symbol","quantity","cost","currency","positionid","futsettdate"} \
   local vals \
   for index = 1, #positions do \
     vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
     local margin = getmargin(vals[2], vals[3]) \
     --[[ value the position ]] \
     local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+    table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
   end \
   return tblresults \
   ';
@@ -1429,7 +1429,7 @@ exports.registerCommonScripts = function () {
   //
   // params: client id, symbol
   //
-  exports.scriptgetposition = getunrealisedpandl + getmargin + '\
+  /*exports.scriptgetposition = getunrealisedpandl + getmargin + '\
   local fields = {"clientid","symbol","quantity","cost","currency","positionid"} \
   local vals = redis.call("hmget", KEYS[1] .. ":position:" .. KEYS[2], unpack(fields)) \
   local pos = {} \
@@ -1440,6 +1440,31 @@ exports.registerCommonScripts = function () {
     pos = {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
   end \
   return cjson.encode(pos) \
+  ';*/
+
+  exports.scriptgetposition = getunrealisedpandl + getmargin + '\
+  local fields = {"clientid","symbol","quantity","cost","currency","positionid","futsettdate"} \
+  local tblresults = {} \
+  local instrumenttype = redis.call("hget", "symbol:" .. KEYS[2], "instrumenttype") \
+  if instrumenttype == "CFD" or instrumenttype == "SPB" then \
+    local positions = redis.call("smembers", KEYS[1] .. ":positions:" .. KEYS[2]) \
+    for index = 1, #positions do \
+      local vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
+      local margin = getmargin(vals[2], vals[3]) \
+      --[[ value the position ]] \
+      local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
+      table.insert(tblresults, {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+    end \
+  else \
+    local vals = redis.call("hmget", KEYS[1] .. ":position:" .. KEYS[2], unpack(fields)) \
+    if vals[1] then \
+      local margin = getmargin(vals[2], vals[3]) \
+      --[[ value the position ]] \
+      local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
+      tblresults = {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
+    end \
+  end \
+  return cjson.encode(tblresults) \
   ';
 
   //
