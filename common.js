@@ -1427,21 +1427,10 @@ exports.registerCommonScripts = function () {
   ';
 
   //
+  // get position(s) for a client for a single symbol
   // params: client id, symbol
+  // may return none/one or a number of positions as may be more than one settlement date
   //
-  /*exports.scriptgetposition = getunrealisedpandl + getmargin + '\
-  local fields = {"clientid","symbol","quantity","cost","currency","positionid"} \
-  local vals = redis.call("hmget", KEYS[1] .. ":position:" .. KEYS[2], unpack(fields)) \
-  local pos = {} \
-  if vals[1] then \
-    local margin = getmargin(vals[2], vals[3]) \
-    --[[ value the position ]] \
-    local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-    pos = {clientid=vals[1],symbol=vals[2],quantity=vals[3],cost=vals[4],currency=vals[5],margin=margin,positionid=vals[6],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
-  end \
-  return cjson.encode(pos) \
-  ';*/
-
   exports.scriptgetposition = getunrealisedpandl + getmargin + '\
   local fields = {"clientid","symbol","quantity","cost","currency","positionid","futsettdate"} \
   local tblresults = {} \

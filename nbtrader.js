@@ -353,10 +353,9 @@ Nbt.prototype.quoteRequest = function(quoterequest) {
 		msg += '152=' + quoterequest.cashorderqty + SOH;			
 	}
 
-	// if price is present, side is required
-	if ('price' in quoterequest) {
-		msg += '54=' + quoterequest.side + SOH
-			+ '44=' + quoterequest.price + SOH;
+	// side, if present
+	if ('side' in quoterequest && (quoterequest.side == 1 || quoterequest.side == 2)) {
+		msg += '54=' + quoterequest.side + SOH;
 	}
 
 	// specify a marketmaker

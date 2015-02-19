@@ -413,7 +413,8 @@
         var MENUACCOUNTSUMMARY = 3;
         var MENUSTATEMENT = 4;
         var MENUTRADES = 5;
-        var MENUQUOTEREQUESTS = 6;
+        var MENULOGOUT = 6;
+        var MENUQUOTEREQUESTS = 7;
 
         var datain = function(msg) {
             //console.log(msg);
@@ -491,7 +492,8 @@
 
             sockjs.onclose = function()  {
                 console.log("connection closed");
-            };
+                newconn();
+             };
 
             sockjs.onheartbeat = function() {
             };
@@ -803,7 +805,7 @@
 
         function createMenu() {
             var data = [""];
-            var cols = ["Request Quotes", "Watchlist", "Portfolio", "Account Summary", "Statement", "Trades", "Live Quote Requests"];
+            var cols = ["Request Quotes", "Watchlist", "Portfolio", "Account Summary", "Statement", "Trades", "Logout"];
 
             // create a table
             var tblmenu = d3.select("#divcontainer")
@@ -875,8 +877,9 @@
                             } else if (d == cols[5]) {
                                 requestTrades();
                             } else if (d == cols[6]) {
-                                alert("Out of hours - the dark side...");
-                                //requestOpenQuoteRequests("");
+                                logout();
+                            } else if (d == cols[7])
+                               //requestOpenQuoteRequests("");
                             }
                         });
         }
@@ -956,6 +959,10 @@
             }
 
             quotes = [];
+        }
+
+        function logout() {
+            sockjs.close();
         }
 
         function singleSymbol(symbol) {
@@ -1548,7 +1555,9 @@
                     qty = "";                    
                 }
 
-                sendRfq(qty, cashorderqty, symbol, "GBP"); // todo: currency
+                var nosettdays = instruments[symbol].instrumenttype == "CFD" ? 10 : -1;
+
+                sendRfq(qty, cashorderqty, symbol, "", "GBP", nosettdays, ""); // todo: currency
 
                 // remove button
                 d3.select(this).remove();
@@ -1559,19 +1568,20 @@
             }
         }
 
-        function sendRfq(quantity, cashorderqty, symbol, currency) {
+        function sendRfq(quantity, cashorderqty, symbol, side, currency, nosettdays, futsettdate) {
             var rfq = {};
 
             rfq.clientid = clientid;
             rfq.symbol = symbol;
             rfq.quantity = quantity;
             rfq.cashorderqty = cashorderqty;
+            rfq.side = side;
             rfq.currency = currency;
             rfq.settlcurrency = currency;
-            rfq.nosettdays = 2;
+            rfq.nosettdays = nosettdays;
+            rfq.futsettdate = futsettdate;
             rfq.operatortype = operatortype;
             rfq.operatorid = clientid;
-            //rfq.futsettdate = this.value;
 
             sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
         }
@@ -3546,6 +3556,9 @@
 
             if (positions.length == 0) {
                 cols = [];
+            } else if (selectedmenu == MENURFQ) {
+                // add option to close position
+                cols.push("close");
             }
 
             // always call create routine as this controls addition & removal of headers
@@ -3628,6 +3641,16 @@
 
                                     requestQuote(positions[j].symbol, positions[j].quantity);
                                 });
+                    } else if (d.col == "close") {
+                        d3.select(this)
+                            .append("input")
+                            .attr("type", "button")
+                            .attr("value", "Close")
+                            .attr("class", "rfqbutton")
+                            .on("click", function() {
+                                var side = positions[i].quantity > 0 ? 2 : 1;
+                                sendRfq(Math.abs(positions[i].quantity), "", positions[i].symbol, side, "GBP", "", positions[i].futsettdate); // todo: currency
+                            });
                     } else {
                         d3.select(this)
                             .text(display(d));

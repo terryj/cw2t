@@ -1115,20 +1115,15 @@ function positionRequest(posreq, clientid, conn) {
   console.log(posreq);
 
   if ('symbol' in posreq && posreq.symbol != "") {
-    console.log("scriptgetposition");
     // single symbol
     db.eval(common.scriptgetposition, 2, clientid, posreq.symbol, function(err, ret) {
       if (err) throw err;
-      console.log(ret);
       conn.write("{\"positions\":" + ret + "}");
-      //conn.write("{\"position\":" + ret + "}");
     });    
   } else {
     // all positions
     db.eval(common.scriptsubscribepositions, 2, clientid, serverid, function(err, ret) {
       if (err) throw err;
-      console.log(ret);
-      console.log('ere');
 
       // send positions
       conn.write("{\"positions\":" + ret[0] + "}");

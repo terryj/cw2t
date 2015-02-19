@@ -55,6 +55,7 @@ if (redisauth) {
     }
     console.log("Redis authenticated at " + redishost + " port " + redisport);
     initialise();
+    tryToConnect();
   });
 } else {
   db.on("connect", function(err) {
@@ -64,6 +65,7 @@ if (redisauth) {
     }
     console.log("Connected to Redis at " + redishost + " port " + redisport);
     initialise();
+    tryToConnect();
   });
 }
 
@@ -101,20 +103,35 @@ function pubsub() {
 //
 // try to connect
 //
-console.log("Trying to connect to host: " + host + ", port:" + messageport);
+function tryToConnect() {
+  console.log("Trying to connect to host: " + host + ", port:" + messageport);
 
-var conn = net.connect(messageport, host, function() {
-  console.log('Connected to: ' + host);
+  conn = net.connect(messageport, host, function() {
+    console.log('Connected to: ' + host);
 
-  subscriptions();
-});
+    subscriptions();
+  });
+
+  conn.on('data', function(data) {
+    parse(data);
+  });
+
+  conn.on('end', function() {
+    console.log('disconnected from: ' + host);
+    tryToConnect();
+  });
+
+  conn.on('error', function(error) {
+    console.log(error);
+  });
+}
 
 //
-// incoming data
+// parse incoming data
 // we need to allow for receiving part-messages
 // and more than one message in a single receive event
 //
-conn.on('data', function(data) {
+function parse(data) {
   var parsestate = 0;
   var fileseparator;
   var unitseparator;
@@ -135,7 +152,7 @@ conn.on('data', function(data) {
   instrec.calcmidnetchg = "";
   instrec.calcmidpctchg = "";
 
-  var datalen = data.length;
+  //var datalen = data.length;
   //console.log("data length="+data.length);
   //console.log("bytestoread="+bytestoread);
 
@@ -278,15 +295,7 @@ conn.on('data', function(data) {
     bufbytesread = 0;
     bytestoread = 0;
   }
-});
-
-conn.on('end', function() {
-  console.log('disconnected from: ' + host);
-});
-
-conn.on('error', function(error) {
-  console.log(error);
-});
+}
 
 //
 // just bid/offer & change requested as real-time loop

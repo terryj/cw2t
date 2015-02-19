@@ -172,11 +172,26 @@ function quoteRequest(quoterequest) {
   var minute = today.getMinutes();
   var day = today.getDay();
 
-  // get settlement date from T+n no. of days
-  quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, quoterequest.nosettdays, holidays));
+  // use settlement date, if specified
+  if (quoterequest.futsettdate != "") {
+    quoterequest.settlmnttyp = 6; // future date
+  } else if (quoterequest.nosettdays == 2) {
+    quoterequest.settlmnttyp = 3;      
+  } else if (quoterequest.nosettdays == 3) {
+    quoterequest.settlmnttyp = 4;      
+  } else if (quoterequest.nosettdays == 4) {
+    quoterequest.settlmnttyp = 5;
+  } else if (quoterequest.nosettdays > 5) {
+    // get settlement date from T+n no. of days
+    quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, quoterequest.nosettdays, holidays));
+    quoterequest.settlmnttyp = 6;
+  } else {
+    // default
+    quoterequest.settlmnttyp = 0;
+  }
 
   // store the quote request & get an id
-  db.eval(scriptquoterequest, 14, quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, day, function(err, ret) {
+  db.eval(scriptquoterequest, 15, quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, day, quoterequest.side, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
@@ -184,34 +199,12 @@ function quoteRequest(quoterequest) {
       console.log("Error in scriptquoterequest:" + common.getReasonDesc(ret[0]));
       return;
     }
-    console.log(ret);
 
     // add the quote request id & symbol details required for fix connection
     quoterequest.quotereqid = ret[1];
     quoterequest.isin = ret[2];
     quoterequest.mnemonic = ret[3];
     quoterequest.exchange = ret[4];
-
-    // match the number of settlement days requested to the default number for this instrument type
-    if (quoterequest.nosettdays == ret[5]) {
-      quoterequest.settlmnttyp = 0;
-    } else if (quoterequest.nosettdays == 2) {
-      quoterequest.settlmnttyp = 3;      
-    } else if (quoterequest.nosettdays == 3) {
-      quoterequest.settlmnttyp = 4;      
-    } else if (quoterequest.nosettdays == 4) {
-      quoterequest.settlmnttyp = 5;
-    } else {
-      quoterequest.settlmnttyp = 6; // future, in which case, settlement date is required
-    }
-
-    // adjust the quote request to the default equity settlement date
-    // the stored settlement date stays as requested
-    // the different settlement will be dealt with using finance
-    if (ret[6] == "CFD") {
-      quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[5], holidays));
-    }
-
     quoterequest.markettype = ret[7];
 
     if (testmode == "1") {
@@ -1976,7 +1969,7 @@ function registerScripts() {
   local quotereqid = redis.call("incr", "quotereqid") \
   if not quotereqid then return 1005 end \
   --[[ store the quote request ]] \
-  redis.call("hmset", "quoterequest:" .. quotereqid, "clientid", KEYS[1], "symbol", KEYS[2], "quantity", KEYS[3], "cashorderqty", KEYS[4], "currency", KEYS[5], "settlcurrency", KEYS[6], "nosettdays", KEYS[7], "futsettdate", KEYS[8], "quotestatus", "", "timestamp", KEYS[9], "quoterejectreason", "", "quotereqid", quotereqid, "operatortype", KEYS[10], "operatorid", KEYS[11]) \
+  redis.call("hmset", "quoterequest:" .. quotereqid, "clientid", KEYS[1], "symbol", KEYS[2], "quantity", KEYS[3], "cashorderqty", KEYS[4], "currency", KEYS[5], "settlcurrency", KEYS[6], "nosettdays", KEYS[7], "futsettdate", KEYS[8], "quotestatus", "", "timestamp", KEYS[9], "quoterejectreason", "", "quotereqid", quotereqid, "operatortype", KEYS[10], "operatorid", KEYS[11], "side", KEYS[15]) \
   --[[ add to set of quoterequests for this client ]] \
   redis.call("sadd", KEYS[1] .. ":quoterequests", quotereqid) \
   redis.call("sadd", "openquoterequests", quotereqid) \
