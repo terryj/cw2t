@@ -328,6 +328,9 @@ function subscribe(instcode) {
   conn.write(buf);
 }
 
+//
+// subscribe to all subscribed to nbtrader symbols
+//
 function subscriptions() {
   db.smembers("nbtsymbols", function(err, nbtsymbols) {
     if (err) {

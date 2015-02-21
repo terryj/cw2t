@@ -878,7 +878,7 @@
                                 requestTrades();
                             } else if (d == cols[6]) {
                                 logout();
-                            } else if (d == cols[7])
+                            } else if (d == cols[7]) {
                                //requestOpenQuoteRequests("");
                             }
                         });
@@ -1452,10 +1452,7 @@
             var qtycashorshares = ["Quantity", "Cash"];
 
             // create a div
-            var divrfq = d3.select("#divcontainer")
-                .append("div")
-                .attr("id", "divrfq")
-                .attr("class", "divrfq");
+            var divrfq = createDiv("divrfq", "divrfq");
 
             // add a table
             var tblrfq = divrfq.append("table")
@@ -1566,6 +1563,18 @@
                 d3.select("#tdrfq")
                     .text("Quote Request Sent");
             }
+        }
+
+        function createDiv(id, cl) {
+            var div = d3.select("#" + id);
+            if (div.empty()) {
+                div = d3.select("#divcontainer")
+                    .append("div")
+                    .attr("id", id)
+                    .attr("class", cl);
+            }
+
+            return div;
         }
 
         function sendRfq(quantity, cashorderqty, symbol, side, currency, nosettdays, futsettdate) {
@@ -1778,6 +1787,7 @@
             tradeconf.push({"key":"side", "value": trade.side == 1 ? "Buy" : "Sell"});
             tradeconf.push({"key":"quantity", "value": trade.quantity});
             tradeconf.push({"key":"price", "value": trade.price});
+            tradeconf.push({"key":"consideration", "value": trade.settlcurramt});
             tradeconf.push({"key":"currency", "value": trade.currency});
             tradeconf.push({"key":"commission", "value": trade.commission});
             tradeconf.push({"key":"ptmlevy", "value": trade.ptmlevy});
@@ -2164,6 +2174,7 @@
         }
 
         function quoteReceived(quote) {
+            console.log("quoteReceived");
             // see if it is my quote
             if (quote.qclientid == clientid) {
                 // calculate the duration of the quote - todo: on the server?
@@ -2241,6 +2252,7 @@
         }
 
         function updateQuoteTable() {
+            console.log("updateQuoteTable");
             var cols = ["bidquote", "offerquote"];
 
             // create a quote table if one does not exist
@@ -2358,8 +2370,8 @@
         }
 
         function createQuoteTable() {
-            // use the rfq div
-            var divrfq = d3.select("#divrfq");
+            // use the rfq div, may not exist
+            var divrfq = createDiv("divrfq", "divrfq");
 
             divrfq.append("header")
                 .attr("class", "divrfqhdr")
@@ -3445,20 +3457,25 @@
         function quoteackReceived(quoteack) {
             console.log("quoteackReceived");
 
-            d3.select("#divrfq")
-                .append("p")
+            var divrfq = createDiv("divrfq", "divrfq");
+
+            divrfq.append("p")
                 .html("Quote request rejected: " + quoteack.text);
         }
 
         function positionsReceived(positionsarr) {
+            console.log("positionsReceived");
+            console.log(positionsarr);
             // empty array
             positions = [];
 
             for (var i = 0; i < positionsarr.length; i++) {
                 positionsarr[i].costpershare = Math.abs(positionsarr[i].cost / positionsarr[i].quantity);
+                console.log("adding pos");
 
                 positions.push(positionsarr[i]);
             }
+            console.log(positions);
 
             updatePositionTable();
         }
@@ -3511,13 +3528,13 @@
                 if (positions[i].symbol == price.symbol) {
                     if (positions[i].quantity < 0) {
                         if ('ask' in price) {
-                            positions[i].mktprice = price.ask / 100; // todo: ok?
+                            positions[i].mktprice = price.ask;
                             updatePandL(i);
                             updateMargin(i);
                         }
                     } else {
                         if ('bid' in price) {
-                            positions[i].mktprice = price.bid / 100; // todo: ok?
+                            positions[i].mktprice = price.bid;
                             updatePandL(i);
                             updateMargin(i);
                         }                        
@@ -3529,9 +3546,9 @@
         function updatePandL(i) {
             var newpandl;
             if (positions[i].quantity > 0) {
-                newpandl = positions[i].quantity * positions[i].mktprice - parseFloat(positions[i].cost);
+                newpandl = positions[i].quantity * positions[i].mktprice / 100 - parseFloat(positions[i].cost);
             } else {
-                newpandl = positions[i].quantity * positions[i].mktprice + parseFloat(positions[i].cost);
+                newpandl = positions[i].quantity * positions[i].mktprice / 100 + parseFloat(positions[i].cost);
             }
 
             if (newpandl > positions[i].unrealisedpandl) {
@@ -3547,16 +3564,18 @@
         function updateMargin(i) {
             // update margin for derivs
             if (instruments[positions[i].symbol].instrumenttype != "DE" && instruments[positions[i].symbol].instrumenttype != "IE") {
-                positions[i].margin = Math.abs(positions[i].quantity) * positions[i].mktprice * instruments[positions[i].symbol].marginpercent / 100;
+                positions[i].margin = Math.abs(positions[i].quantity) * positions[i].mktprice / 100 * instruments[positions[i].symbol].marginpercent / 100;
             }
         }
 
         function updatePositionTable() {
+            console.log("updatePositionTable");
             var cols = ["symbol", "futsettdate", "quantity", "cost", "currency", "margin", "costpershare", "mktprice", "unrealisedpandl"];
-
+console.log(positions.length);
             if (positions.length == 0) {
                 cols = [];
             } else if (selectedmenu == MENURFQ) {
+                console.log("addcol");
                 // add option to close position
                 cols.push("close");
             }
@@ -3571,6 +3590,13 @@
             // enter
             rows.enter()
                 .append("tr");
+                /*.attr("class", function(d, i, j) {
+                    // todo
+                    console.log(d);
+                    console.log(i);
+                    console.log(j);
+                    return null;
+                });*/
 
             // exit
             rows.exit().remove();
@@ -3589,7 +3615,7 @@
                             .html(function (d) { return d.value; })
                             .on("click", function(d) {
                                 // clear quote data
-                                quotes = [];
+                                clearQuotes();
 
                                 // & clear any previous request
                                 d3.select("#divrfq").remove();
@@ -3634,7 +3660,7 @@
                                 .html(function (d) { return d.value; })
                                 .on("click", function(d) {
                                     // clear quote data
-                                    quotes = [];
+                                    clearQuotes();
 
                                     // & clear any previous request
                                     d3.select("#divrfq").remove();
@@ -3648,8 +3674,21 @@
                             .attr("value", "Close")
                             .attr("class", "rfqbutton")
                             .on("click", function() {
-                                var side = positions[i].quantity > 0 ? 2 : 1;
-                                sendRfq(Math.abs(positions[i].quantity), "", positions[i].symbol, side, "GBP", "", positions[i].futsettdate); // todo: currency
+                                // clear quote data
+                                clearQuotes();
+
+                                // & clear any previous request
+                                d3.select("#divrfq").remove();
+
+                                var side = positions[j].quantity > 0 ? 2 : 1;
+
+                                sendRfq(Math.abs(positions[j].quantity), "", positions[j].symbol, side, "GBP", "", positions[j].futsettdate); // todo: currency
+
+                                // disable button & remove the event listener
+                                d3.select(this)
+                                    .style("cursor", "default")
+                                    .attr("disabled", null)
+                                    .on('click', null);
                             });
                     } else {
                         d3.select(this)

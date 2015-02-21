@@ -1004,12 +1004,11 @@ function singleSymbolRequest(clientid, symbol, conn) {
   db.eval(common.scriptsubscribesymbol, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
 
-    console.log(ret);
-
     // see if we need to subscribe
     if (ret[0] == 1) {
       console.log("subscribing to " + symbol);
       dbsub.subscribe("price:" + symbol);
+      // todo - exit here as need to wait for price?
     }
 
     // send the current stored price
