@@ -191,7 +191,7 @@ function quoteRequest(quoterequest) {
   }
 
   // store the quote request & get an id
-  db.eval(scriptquoterequest, 15, quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, day, quoterequest.side, function(err, ret) {
+  db.eval(scriptquoterequest, 4, "quotereqid", "quoterequest:", ":quoterequests", "openquoterequests", quoterequest.clientid, quoterequest.symbol, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currency, quoterequest.settlcurrency, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, day, quoterequest.side, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
@@ -206,6 +206,8 @@ function quoteRequest(quoterequest) {
     quoterequest.mnemonic = ret[3];
     quoterequest.exchange = ret[4];
     quoterequest.markettype = ret[7];
+
+    console.log(quoterequest);
 
     if (testmode == "1") {
       console.log("test response");
@@ -233,9 +235,14 @@ function testQuoteResponse(quoterequest) {
   if (quoterequest.quantity == 99) {
     testQuoteAck(quoterequest);
   } else {
-    // bid & offer
-    testQuote(quoterequest, 1);
-    testQuote(quoterequest, 2);
+    if (quoterequest.side == 1 || quoterequest.side == 2) {
+      // one side
+      testQuote(quoterequest, quoterequest.side);
+    } else {
+      // bid & offer
+      testQuote(quoterequest, 1);
+      testQuote(quoterequest, 2);
+    }
   }
 }
 
@@ -427,7 +434,7 @@ function newOrder(order) {
     }
 
     // set the settlement date to equity default date for cfd orders, in case they are being hedged with the market
-    if (order.instrumenttype == "CFD") {
+    if (order.instrumenttype == "CFD" || order.instrumenttype == "SPB") {
       // commented out as only offering default settlement for the time being
       //order.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[11], holidays));
 
@@ -556,23 +563,28 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid, hedgebookid, h
     matchOrder(order);
   } else {*/
 
-  if (testmode == "1") {
+  // equity orders
+  if (order.instrumenttype == "DE" || order.instrumenttype == "IE") {
+    if (testmode == "1") {
       // test only
       testTradeResponse(order);
-  } else {
-    // equity orders
-    if (order.instrumenttype == "DE" || order.instrumenttype == "IE") {
+    } else {
       console.log("forwarding to nbt");
       // forward order to the market
       nbt.newOrder(order);
-    } else {
-      // if we are hedging, change the order id to that of the hedge & forward
-      if (hedgeorderid != "") {
-        console.log("forwarding hedge order:" + hedgeorderid + " to nbt");
-        order.orderid = hedgeorderid;
-        order.clientid = hedgebookid;
-        order.symbol = hedgesymbol;
+    }
+  } else {
+    // if we are hedging, change the order id to that of the hedge & forward
+    if (hedgeorderid != "") {
+      console.log("forwarding hedge order:" + hedgeorderid + " to nbt");
+      order.orderid = hedgeorderid;
+      order.clientid = hedgebookid;
+      order.symbol = hedgesymbol;
 
+      if (testmode == "1") {
+        // test only
+        testTradeResponse(order);
+      } else {
         nbt.newOrder(order);
       }
     }
@@ -1145,7 +1157,7 @@ function registerScripts() {
   publishposition = common.getunrealisedpandl + common.getmargin + '\
   local publishposition = function(clientid, positionkey, channel) \
     local fields = {"quantity", "cost", "currency", "positionid", "futsettdate", "symbol"} \
-    local vals = redis.call("hmget", clientid .. ":position:" .. positionkey, unpack(fields)) \
+    local vals = redis.call("hmget", positionkey, unpack(fields)) \
     local pos = {} \
     if vals[1] then \
       local margin = getmargin(vals[6], vals[1]) \
@@ -1315,7 +1327,9 @@ function registerScripts() {
     local initialmargin = getinitialmargin(symbol, consid) \
     local costs =  getcosts(clientid, symbol, instrumenttype, side, consid, currency) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
-    local finance = calcfinance(instrumenttype, consid, currency, side, nosettdays) \
+    local finance = 0 \
+    --[[ todo: needs considering ]] \
+    --[[local finance = calcfinance(instrumenttype, consid, currency, side, nosettdays) ]]\
     local symbolsettdatekey = symbol \
     if instrumenttype == "CFD" or instrumenttype == "SPB" then \
       symbolsettdatekey = symbolsettdatekey .. ":" .. settldate \
@@ -1605,7 +1619,7 @@ function registerScripts() {
   --[[ calculate consideration in settlement currency, costs will be added later ]] \
   local settlcurramt = tonumber(KEYS[4]) * tonumber(KEYS[5]) \
   --[[ get instrument values ]] \
-  local fields = {"instrumenttype", "timezone", "hedge"} \
+  local fields = {"instrumenttype", "timezone"} \
   local vals = redis.call("hmget", "symbol:" .. symbol, unpack(fields)) \
   if not vals[2] then \
     rejectorder(orderid, 1007, "") \
@@ -1613,7 +1627,6 @@ function registerScripts() {
     return {0} \
   end \
   local instrumenttype = vals[1] \
-  local hedge = vals[2] \
   local markettype = getmarkettype(symbol, KEYS[24], KEYS[25], KEYS[26]) \
   --[[ do the credit check ]] \
   local cc = creditcheck(orderid, KEYS[1], symbol, side, KEYS[4], KEYS[5], KEYS[18], KEYS[8], instrumenttype, KEYS[21]) \
@@ -1806,15 +1819,17 @@ function registerScripts() {
   local instrumenttype = redis.call("hget", "symbol:" .. vals[2], "instrumenttype") \
   local initialmargin = getinitialmargin(vals[2], consid) \
   local costs = getcosts(vals[1], vals[2], instrumenttype, vals[3], consid, KEYS[17]) \
-  local finance = calcfinance(instrumenttype, consid, KEYS[17], vals[3], vals[8]) \
+  local finance = 0 \
+  --[[ todo: needs considering ]] \
+  --[[ local finance = calcfinance(instrumenttype, consid, KEYS[17], vals[3], vals[8]) ]]\
   --[[ treat the excuting broker as a client ]] \
   local cptyid = redis.call("hget", "broker:" .. KEYS[9], "clientid") \
   if not cptyid then \
     cptyid = 999998 \
   end \
   local rside = reverseside(KEYS[3]) \
-  local tradeid = newtrade(vals[1], orderid, vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, cptyid, "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
-  local cptytradeid = newtrade(cptyid, orderid, vals[2], rside, quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, vals[1], "0", KEYS[10], vals[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
+  local tradeid = newtrade(vals[1], orderid, vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, cptyid, "0", KEYS[10], KEYS[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
+  local cptytradeid = newtrade(cptyid, orderid, vals[2], rside, quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, vals[1], "0", KEYS[10], KEYS[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
   --[[ adjust order related margin/reserve ]] \
   adjustmarginreserve(orderid, vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[17], vals[7], KEYS[15], KEYS[11], vals[8]) \
   --[[ adjust order ]] \
@@ -1966,19 +1981,19 @@ function registerScripts() {
   ';
 
   scriptquoterequest = getproquotesymbol + getmarkettype + '\
-  local quotereqid = redis.call("incr", "quotereqid") \
+  local quotereqid = redis.call("incr", KEYS[1]) \
   if not quotereqid then return 1005 end \
   --[[ store the quote request ]] \
-  redis.call("hmset", "quoterequest:" .. quotereqid, "clientid", KEYS[1], "symbol", KEYS[2], "quantity", KEYS[3], "cashorderqty", KEYS[4], "currency", KEYS[5], "settlcurrency", KEYS[6], "nosettdays", KEYS[7], "futsettdate", KEYS[8], "quotestatus", "", "timestamp", KEYS[9], "quoterejectreason", "", "quotereqid", quotereqid, "operatortype", KEYS[10], "operatorid", KEYS[11], "side", KEYS[15]) \
+  redis.call("hmset", KEYS[2] .. quotereqid, "clientid", ARGV[1], "symbol", ARGV[2], "quantity", ARGV[3], "cashorderqty", ARGV[4], "currency", ARGV[5], "settlcurrency", ARGV[6], "nosettdays", ARGV[7], "futsettdate", ARGV[8], "quotestatus", "", "timestamp", ARGV[9], "quoterejectreason", "", "quotereqid", quotereqid, "operatortype", ARGV[10], "operatorid", ARGV[11], "side", ARGV[15]) \
   --[[ add to set of quoterequests for this client ]] \
-  redis.call("sadd", KEYS[1] .. ":quoterequests", quotereqid) \
-  redis.call("sadd", "openquoterequests", quotereqid) \
+  redis.call("sadd", ARGV[1] .. KEYS[3], quotereqid) \
+  redis.call("sadd", KEYS[4], quotereqid) \
   --[[ get required instrument values for external feed ]] \
-  local proquotesymbol = getproquotesymbol(KEYS[2]) \
+  local proquotesymbol = getproquotesymbol(ARGV[2]) \
   --[[ get in/out of hours ]] \
-  local markettype = getmarkettype(KEYS[2], KEYS[12], KEYS[13], KEYS[14]) \
+  local markettype = getmarkettype(ARGV[2], ARGV[12], ARGV[13], ARGV[14]) \
   --[[ assuming equity buy to get default settlement days ]] \
-  local defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. KEYS[6] .. ":" .. "1", "defaultnosettdays") \
+  local defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. ARGV[6] .. ":" .. "1", "defaultnosettdays") \
   return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], defaultnosettdays, proquotesymbol[5], markettype} \
   ';
 
@@ -2007,7 +2022,8 @@ function registerScripts() {
     else \
       offerquantity = tonumber(vals[4]) \
     end \
-    offerfinance = calcfinance(instrumenttype, offerquantity * offerprice, vals[7], 1, vals[6]) \
+    --[[ this needs revisiting ]]\
+    --[[offerfinance = calcfinance(instrumenttype, offerquantity * offerprice, vals[7], 1, vals[6]) ]]\
   else \
     local bidprice = tonumber(KEYS[3]) \
     if vals[4] == "" then \
@@ -2016,7 +2032,8 @@ function registerScripts() {
     else \
       bidquantity = tonumber(vals[4]) \
     end \
-    bidfinance = calcfinance(instrumenttype, bidquantity * bidprice, vals[7], 2, vals[6]) \
+    --[[ this needs revisiting ]]\
+    --[[bidfinance = calcfinance(instrumenttype, bidquantity * bidprice, vals[7], 2, vals[6]) ]]\
   end \
   --[[ get touch prices - using delayed - todo: may need to look up delayed/live ]] \
   local bestbid = "" \

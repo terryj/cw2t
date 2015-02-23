@@ -1552,7 +1552,7 @@
                     qty = "";                    
                 }
 
-                var nosettdays = instruments[symbol].instrumenttype == "CFD" ? 10 : -1;
+                var nosettdays = instruments[symbol].instrumenttype == "CFD" ? 10 : 2;
 
                 sendRfq(qty, cashorderqty, symbol, "", "GBP", nosettdays, ""); // todo: currency
 
@@ -2252,7 +2252,7 @@
         }
 
         function updateQuoteTable() {
-            console.log("updateQuoteTable");
+            //console.log("updateQuoteTable");
             var cols = ["bidquote", "offerquote"];
 
             // create a quote table if one does not exist
@@ -3487,12 +3487,18 @@
             if (!('symbol' in position)) {
                 return;
             }
+            console.log("ere");
+            console.log(position);
 
             // single symbol/portfolio only
             if (selectedmenu != MENURFQ && selectedmenu != MENUPORTFOLIO) { return; }
+            console.log("ere1");
+            console.log(position.symbol);
+            console.log(selectedsymbol);
 
             // only display position if this is the symbol we are looking at
             if (selectedmenu == MENURFQ && position.symbol != selectedsymbol) { return; }
+            console.log("ere2");
 
             position.costpershare = Math.abs(position.cost / position.quantity);
 
@@ -3503,11 +3509,13 @@
                         positions.splice(i, 1);
                     } else {
                         positions[i] = position;
+            console.log(positions[i]);
                     }
                     posupdated = true;
                     break;
                 }
             }
+            console.log("ere3");
 
             // add to array
             if (!posupdated) {
@@ -3609,7 +3617,7 @@ console.log(positions.length);
                     });
                  })
                 .each(function(d, i, j) {
-                    if (d.col == "symbol") {
+                    if (d.col == "symbol" || d.col == "close") {
                     } else if (d.col == "quantity" && selectedmenu == MENURFQ) {
                         d3.select(this).select("a")
                             .html(function (d) { return d.value; })
@@ -3681,6 +3689,8 @@ console.log(positions.length);
                                 d3.select("#divrfq").remove();
 
                                 var side = positions[j].quantity > 0 ? 2 : 1;
+
+                                // todo: does sett date need to depend on inst type 
 
                                 sendRfq(Math.abs(positions[j].quantity), "", positions[j].symbol, side, "GBP", "", positions[j].futsettdate); // todo: currency
 
