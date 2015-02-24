@@ -1552,7 +1552,7 @@
                     qty = "";                    
                 }
 
-                var nosettdays = instruments[symbol].instrumenttype == "CFD" ? 10 : 2;
+                var nosettdays = instruments[symbol].instrumenttype == "CFD" ? 10 : "";
 
                 sendRfq(qty, cashorderqty, symbol, "", "GBP", nosettdays, ""); // todo: currency
 

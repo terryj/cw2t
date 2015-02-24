@@ -207,8 +207,6 @@ function quoteRequest(quoterequest) {
     quoterequest.exchange = ret[4];
     quoterequest.markettype = ret[7];
 
-    console.log(quoterequest);
-
     if (testmode == "1") {
       console.log("test response");
       testQuoteResponse(quoterequest);
@@ -293,6 +291,7 @@ function testQuote(quoterequest, side) {
   quote.qbroker = "ABC";
   quote.futsettdate = quoterequest.futsettdate;
   quote.externalquoteid = "";
+  quote.settledays = 2;
 
   var today = new Date();
   quote.transacttime = common.getUTCTimeStamp(today);
@@ -304,7 +303,7 @@ function testQuote(quoterequest, side) {
 
   // quote script
   // note: not passing securityid & idsource as proquote symbol should be enough
-  db.eval(scriptquote, 17, quote.quotereqid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.qclientid, quote.cashorderqty, function(err, ret) {
+  db.eval(scriptquote, 18, quote.quotereqid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.qclientid, quote.cashorderqty, quote.settledays, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -723,9 +722,13 @@ function newQuote(quote) {
     quote.qclientid = "";
   }
 
+  if (!('settledays' in quote)) {
+    quote.settledays = "";
+  }
+
   // quote script
   // note: not passing securityid & idsource as proquote symbol should be enough
-  db.eval(scriptquote, 17, quote.quotereqid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.qclientid, quote.cashorderqty, function(err, ret) {
+  db.eval(scriptquote, 18, quote.quotereqid, quote.symbol, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currency, quote.settlcurrency, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.qclientid, quote.cashorderqty, quote.settledays, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -2047,7 +2050,7 @@ function registerScripts() {
   --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
   quoteid = redis.call("incr", "quoteid") \
   --[[ store the quote ]] \
-  redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "clientid", vals[1], "quoteid", quoteid, "symbol", symbol, "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", KEYS[3], "offerpx", KEYS[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", KEYS[5], "offersize", KEYS[6], "validuntiltime", KEYS[7], "transacttime", KEYS[8], "currency", KEYS[9], "settlcurrency", KEYS[10], "qbroker", KEYS[11], "nosettdays", vals[6], "futsettdate", vals[9], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", KEYS[13], "offerquotedepth", KEYS[14], "externalquoteid", KEYS[15], "qclientid", KEYS[16], "cashorderqty", KEYS[17]) \
+  redis.call("hmset", "quote:" .. quoteid, "quotereqid", KEYS[1], "clientid", vals[1], "quoteid", quoteid, "symbol", symbol, "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", KEYS[3], "offerpx", KEYS[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", KEYS[5], "offersize", KEYS[6], "validuntiltime", KEYS[7], "transacttime", KEYS[8], "currency", KEYS[9], "settlcurrency", KEYS[10], "qbroker", KEYS[11], "nosettdays", vals[6], "futsettdate", vals[9], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", KEYS[13], "offerquotedepth", KEYS[14], "externalquoteid", KEYS[15], "qclientid", KEYS[16], "cashorderqty", KEYS[17], "settledays", KEYS[18]) \
   --[[ keep a list of quotes for the quoterequest ]] \
   redis.call("sadd", "quoterequest:" .. KEYS[1] .. ":quotes", quoteid) \
   --[[ quoterequest status - 0=new, 1=quoted, 2=rejected ]] \
