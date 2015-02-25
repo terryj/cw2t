@@ -854,6 +854,7 @@
                             }
 
                             clearData();
+                            clearQuotes();
                             clearScreen();
 
                             // switch off styles
@@ -963,6 +964,9 @@
 
         function logout() {
             sockjs.close();
+
+            d3.select("#stockboxtitle").remove();
+            d3.select("#tblmenu").remove();
         }
 
         function singleSymbol(symbol) {
@@ -2129,6 +2133,7 @@
                                 selectedsymbol = this.innerHTML.substr(lastspace+1);
 
                                 clearData();
+                                clearQuotes();
 
                                 // clear price display in case of a previously selected symbol
                                 d3.select("#divprice").remove();
@@ -3464,8 +3469,6 @@
         }
 
         function positionsReceived(positionsarr) {
-            console.log("positionsReceived");
-            console.log(positionsarr);
             // empty array
             positions = [];
 
@@ -3475,30 +3478,22 @@
 
                 positions.push(positionsarr[i]);
             }
-            console.log(positions);
 
             updatePositionTable();
         }
 
         function positionReceived(position) {
-            console.log("positionReceived");
             var posupdated = false;
 
             if (!('symbol' in position)) {
                 return;
             }
-            console.log("ere");
-            console.log(position);
 
             // single symbol/portfolio only
             if (selectedmenu != MENURFQ && selectedmenu != MENUPORTFOLIO) { return; }
-            console.log("ere1");
-            console.log(position.symbol);
-            console.log(selectedsymbol);
 
             // only display position if this is the symbol we are looking at
             if (selectedmenu == MENURFQ && position.symbol != selectedsymbol) { return; }
-            console.log("ere2");
 
             position.costpershare = Math.abs(position.cost / position.quantity);
 
@@ -3509,13 +3504,11 @@
                         positions.splice(i, 1);
                     } else {
                         positions[i] = position;
-            console.log(positions[i]);
                     }
                     posupdated = true;
                     break;
                 }
             }
-            console.log("ere3");
 
             // add to array
             if (!posupdated) {
@@ -3577,13 +3570,11 @@
         }
 
         function updatePositionTable() {
-            console.log("updatePositionTable");
             var cols = ["symbol", "futsettdate", "quantity", "cost", "currency", "margin", "costpershare", "mktprice", "unrealisedpandl"];
-console.log(positions.length);
+
             if (positions.length == 0) {
                 cols = [];
             } else if (selectedmenu == MENURFQ) {
-                console.log("addcol");
                 // add option to close position
                 cols.push("close");
             }

@@ -266,7 +266,7 @@ function testQuoteAck(quoterequest) {
 function testQuote(quoterequest, side) {
   var quote = {};
 
-  if (side == 1) {
+  if (side == 2) {
     quote.bidpx = "1.23";
     quote.bidsize = quoterequest.quantity;
     quote.bidquotedepth = "1";
@@ -1158,7 +1158,7 @@ function registerScripts() {
   // key may be just a symbol or symbol + settlement date
   //
   publishposition = common.getunrealisedpandl + common.getmargin + '\
-  local publishposition = function(clientid, positionkey, channel) \
+  local publishposition = function(clientid, positionkey, symbol, futsettdate, channel) \
     local fields = {"quantity", "cost", "currency", "positionid", "futsettdate", "symbol"} \
     local vals = redis.call("hmget", positionkey, unpack(fields)) \
     local pos = {} \
@@ -1168,7 +1168,7 @@ function registerScripts() {
       local unrealisedpandl = getunrealisedpandl(vals[6], vals[1], vals[2]) \
       pos = {clientid=clientid,symbol=vals[6],quantity=vals[1],cost=vals[2],currency=vals[3],margin=margin,positionid=vals[4],futsettdate=vals[5],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
     else \
-      pos = {clientid=clientid,symbol=vals[6],quantity=0,futsettdate=vals[5]} \
+      pos = {clientid=clientid,symbol=symbol,quantity=0,futsettdate=futsettdate} \
     end \
     redis.call("publish", channel, "{" .. cjson.encode("position") .. ":" .. cjson.encode(pos) .. "}") \
   end \
@@ -1265,7 +1265,7 @@ function registerScripts() {
       end \
       positionid = createposition(positionkey, positionskey, postradeskey, clientid, symbol, posqty, tradecost, currency, tradeid, futsettdate, symbolsettdatekey, positionskey2) \
     end \
-    publishposition(clientid, positionkey, 10) \
+    publishposition(clientid, positionkey, symbol, futsettdate, 10) \
     return positionid \
   end \
   ';
