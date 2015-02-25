@@ -524,10 +524,6 @@
 
             // single symbol select
             selectSymbol();
-
-            /*function click(d) { 
-                console.log(d); 
-            }*/
         }
 
         //
@@ -965,8 +961,7 @@
         function logout() {
             sockjs.close();
 
-            d3.select("#stockboxtitle").remove();
-            d3.select("#tblmenu").remove();
+            d3.select("#divcontainer").remove();
         }
 
         function singleSymbol(symbol) {
