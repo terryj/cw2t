@@ -36,7 +36,7 @@ var redisport = 6379;
 // globals
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
-var cw2tport = 8080; // listen port
+var cw2tport = 80; // listen port
 var ordertypes = {};
 var defaultnosettdays = 3;
 var servertype = "web";
