@@ -916,17 +916,17 @@ exports.registerCommonScripts = function () {
     if qty > 0 then \
       local bidprice = redis.call("hget", "price:" .. symbol, "bid") \
       if bidprice and tonumber(bidprice) ~= 0 then \
-        price = tonumber(bidprice) / 100 \
+        price = tonumber(bidprice) \
         if price ~= 0 then \
-          unrealisedpandl = round(qty * price - cost, 2) \
+          unrealisedpandl = round(qty * price / 100 - cost, 2) \
         end \
       end \
     else \
       local askprice = redis.call("hget", "price:" .. symbol, "ask") \
       if askprice and tonumber(askprice) ~= 0 then \
-        price = tonumber(askprice) / 100 \
+        price = tonumber(askprice) \
         if price ~= 0 then \
-          unrealisedpandl = round(cost + qty * price, 2) \
+          unrealisedpandl = round(qty * price / 100 + cost, 2) \
         end \
       end \
     end \
@@ -944,12 +944,12 @@ exports.registerCommonScripts = function () {
     if qty > 0 then \
       local bidprice = redis.call("hget", "price:" .. symbol, "bid") \
       if bidprice and tonumber(bidprice) ~= 0 then \
-        price = tonumber(bidprice) / 100 \
+        price = tonumber(bidprice) \
       end \
     else \
       local askprice = redis.call("hget", "price:" .. symbol, "ask") \
       if askprice and tonumber(askprice) ~= 0 then \
-        price = tonumber(askprice) / 100 \
+        price = tonumber(askprice) \
       end \
     end \
     if price ~= 0 then \
@@ -957,7 +957,7 @@ exports.registerCommonScripts = function () {
       if instrumenttype ~= "DE" and instrumenttype ~= "IE" then \
         local marginpercent = redis.call("hget", "symbol:" .. symbol, "marginpercent") \
         if marginpercent then \
-          margin = round(math.abs(qty) * price * tonumber(marginpercent) / 100, 2) \
+          margin = round(math.abs(qty) * price / 100 * tonumber(marginpercent) / 100, 2) \
         end \
       end \
     end \
@@ -1789,6 +1789,7 @@ exports.registerCommonScripts = function () {
   scriptgetwatchlist = subscribesymbolnbt + '\
     local tblresults = {} \
     local tblsubscribe = {} \
+    local fields = {"bid", "ask", "midnetchg", "midpctchg"} \
     local watchlist = redis.call("smembers", KEYS[3] .. ":" .. KEYS[1] .. ":watchlist") \
     for index = 1, #watchlist do \
       --[[ subscribe to this symbol ]] \
@@ -1797,9 +1798,8 @@ exports.registerCommonScripts = function () {
         table.insert(tblsubscribe, watchlist[index]) \
       end \
       --[[ get current prices ]] \
-      local bid = redis.call("hget", "price:" .. watchlist[index], "bid") \
-      local ask = redis.call("hget", "price:" .. watchlist[index], "ask") \
-      table.insert(tblresults, {symbol=watchlist[index], bid=bid, ask=ask}) \
+      local vals = redis.call("hmget", "price:" .. watchlist[index], unpack(fields)) \
+      table.insert(tblresults, {symbol=watchlist[index], bid=vals[1], ask=vals[2], midnetchg=vals[3], midpctchg=vals[4]}) \
     end \
     return {cjson.encode(tblresults), tblsubscribe} \
   ';
@@ -1833,10 +1833,10 @@ exports.registerCommonScripts = function () {
     redis.call("sadd", KEYS[4] .. ":" .. KEYS[2] .. ":watchlist", KEYS[1]) \
     local subscribe = subscribesymbolnbt(KEYS[1], KEYS[2], KEYS[3]) \
     --[[ get current prices ]] \
-    local bid = redis.call("hget", "price:" .. KEYS[1], "bid") \
-    local ask = redis.call("hget", "price:" .. KEYS[1], "ask") \
+    local fields = {"bid", "ask", "midnetchg", "midpctchg"} \
+    local vals = redis.call("hmget", "price:" .. KEYS[1], unpack(fields)) \
     local tblresults = {} \
-    table.insert(tblresults, {symbol=KEYS[1], bid=bid, ask=ask}) \
+    table.insert(tblresults, {symbol=KEYS[1], bid=vals[1], ask=vals[2], midnetchg=vals[3], midpctchg=vals[4]}) \
     return {cjson.encode(tblresults), subscribe[1]} \
   ';
 

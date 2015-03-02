@@ -372,6 +372,7 @@
     }
     .divrfq {
         margin-top: 10px;
+        text-align: center;
     }
     .divrfqhdr {
         margin-top: 20px;
@@ -604,6 +605,22 @@
         function formatCurrency(num, dp) {
             num = num != num || num === '' || num === null ? 0.00 : num;
             return parseFloat(num).toFixed(dp).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+        }
+
+        function formatDate(utcdate) {
+            var utcdateformat = d3.time.format("%Y%m%d");
+            var dt = utcdateformat.parse(utcdate);
+
+            var displaydateformat = d3.time.format("%e-%b-%Y");
+            return displaydateformat(dt);
+        }
+
+        function formatDatetime(utcdatetime) {
+            var utcdatetimeformat = d3.time.format("%Y%m%d-%H:%M:%S");
+            var dt = utcdatetimeformat.parse(utcdatetime);
+
+            var displaydatetimeformat = d3.time.format("%e-%b-%Y %H:%M:%S");
+            return displaydatetimeformat(dt);
         }
 
         function priceReceived(price) {
@@ -1877,6 +1894,8 @@
                     watchlistarr[i].remove = "x";
                     watchlistarr[i].bidtick = '';
                     watchlistarr[i].asktick = '';
+                    watchlistarr[i].midnetchg = '';
+                    watchlistarr[i].midpctchg = '';
 
                     watchlist.push(watchlistarr[i]);
                 }
@@ -1909,9 +1928,9 @@
             for (var i = 0; i < watchlist.length; ++i) {
                 if (price.symbol == watchlist[i].symbol) {
                     if ("bid" in price) {
-                        if (parseFloat(price.bid) > parseFloat(watchlist[i].bid)) {
-                            watchlist[i].bidtick = '+';
-                        } else if (parseFloat(price.bid) < parseFloat(watchlist[i].bid)) {
+                        if (price.bidchange > 0) {
+                           watchlist[i].bidtick = '+';
+                        } else if (price.bidchange < 0) {
                             watchlist[i].bidtick = '-';
                         } else {
                             watchlist[i].bidtick = '0';
@@ -1921,9 +1940,9 @@
                     }
 
                     if ("ask" in price) {
-                        if (parseFloat(price.ask) > parseFloat(watchlist[i].ask)) {
-                            watchlist[i].asktick = '+';
-                        } else if (parseFloat(price.ask) < parseFloat(watchlist[i].ask)) {
+                        if (price.askchange > 0) {
+                           watchlist[i].asktick = '+';
+                        } else if (price.askchange < 0) {
                             watchlist[i].asktick = '-';
                         } else {
                             watchlist[i].asktick = '0';
@@ -1931,13 +1950,22 @@
 
                         watchlist[i].ask = price.ask;
                     }
+
+                    if ("midnetchg" in price) {
+                        watchlist[i].midnetchg = price.midnetchg;
+                    }
+
+                    if ("midpctchg" in price) {
+                        watchlist[i].midpctchg = price.midpctchg;
+                    }
+
                     break;
                 }
             }            
         }
 
         function updateWatchlistTable() {
-            var cols = ["symbol", "bid", "ask", "remove"];
+            var cols = ["symbol", "bid", "ask", "midnetchg", "midpctchg", "remove"];
 
             var tblwatchlist = d3.select("#tblwatchlist");
             if (tblwatchlist.empty()) {
@@ -1994,6 +2022,7 @@
                     d3.select(this)
                         .text(function(d) { return formatCurrency(d.value, 2); })
                         .attr("class", function(d, i, j) {
+                                console.log(d);
                             if (d.col == "bid") {
                                 if (watchlist[j].bidtick == '+') {
                                     return "tickup";
@@ -2010,7 +2039,16 @@
                                 } else if (watchlist[j].asktick == '0') {
                                     return "ticknc";
                                 }
+                            } else if (d.col == "midnetchg" || d.col == "midpctchg") {
+                                if (parseFloat(d.value) > 0) {
+                                    return "tickup";
+                                } else if (parseFloat(d.value) < 0) {
+                                    return "tickdn";
+                                } else {
+                                    return "ticknc";
+                                }
                             }
+
                             return null;
                         });
                 }
@@ -2034,6 +2072,11 @@
                 .append("th")
                     .attr("class", "tblaccounthdr")
                     .text(function(d) {
+                        if (d == "midnetchg") {
+                            return "change";
+                        } else if (d == "midpctchg") {
+                            return "change (%)";
+                        }
                         return d;
                     });
 
@@ -2174,7 +2217,6 @@
         }
 
         function quoteReceived(quote) {
-            console.log("quoteReceived");
             // see if it is my quote
             if (quote.qclientid == clientid) {
                 // calculate the duration of the quote - todo: on the server?
@@ -3455,8 +3497,6 @@
         }
 
         function quoteackReceived(quoteack) {
-            console.log("quoteackReceived");
-
             var divrfq = createDiv("divrfq", "divrfq");
 
             divrfq.append("p")
@@ -3469,7 +3509,6 @@
 
             for (var i = 0; i < positionsarr.length; i++) {
                 positionsarr[i].costpershare = Math.abs(positionsarr[i].cost / positionsarr[i].quantity);
-                console.log("adding pos");
 
                 positions.push(positionsarr[i]);
             }
@@ -3570,8 +3609,13 @@
             if (positions.length == 0) {
                 cols = [];
             } else if (selectedmenu == MENURFQ) {
-                // add option to close position
-                cols.push("close");
+                for (i = 0; i < positions.length; i++) {
+                    if (instruments[positions[i].symbol].instrumenttype == "CFD") {
+                        // add option to close position
+                        cols.push("close");
+                        break;
+                    }
+                }
             }
 
             // always call create routine as this controls addition & removal of headers
@@ -3703,22 +3747,6 @@
                     return d.value;
                 }
             }
-        }
-
-        function formatDate(utcdate) {
-            var utcdateformat = d3.time.format("%Y%m%d");
-            var dt = utcdateformat.parse(utcdate);
-
-            var displaydateformat = d3.time.format("%e-%b-%Y");
-            return displaydateformat(dt);
-        }
-
-        function formatDatetime(utcdatetime) {
-            var utcdatetimeformat = d3.time.format("%Y%m%d-%H:%M:%S");
-            var dt = utcdatetimeformat.parse(utcdatetime);
-
-            var displaydatetimeformat = d3.time.format("%e-%b-%Y %H:%M:%S");
-            return displaydatetimeformat(dt);
         }
 
         function createPositionTable(cols) {
