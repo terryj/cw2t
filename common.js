@@ -1438,7 +1438,7 @@ exports.registerCommonScripts = function () {
   if instrumenttype == "CFD" or instrumenttype == "SPB" then \
     local positions = redis.call("smembers", KEYS[1] .. ":positions:" .. KEYS[2]) \
     for index = 1, #positions do \
-      local vals = redis.call("hmget", KEYS[1] .. ":position:" .. positions[index], unpack(fields)) \
+      local vals = redis.call("hmget", KEYS[1] .. ":position:" .. KEYS[2] .. ":" .. positions[index], unpack(fields)) \
       local margin = getmargin(vals[2], vals[3]) \
       --[[ value the position ]] \
       local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
@@ -1853,4 +1853,11 @@ exports.registerCommonScripts = function () {
   ';
 
   exports.scriptremovewatchlist = scriptremovewatchlist;
+
+  //
+  // update client cash with a dividend payment, for all holdings
+  // params: symbol, dividend
+  //
+  scriptdividend = '\
+  ';  
 };

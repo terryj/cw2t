@@ -2792,7 +2792,7 @@
         }
 
         function updateTradeTable() {
-            var cols = ["timestamp","symbol","tradeid","orderid","side","quantity","price","currency","commission","ptmlevy","stampduty","contractcharge","externaltradeid"];
+            var cols = ["timestamp","clientid","symbol","tradeid","orderid","side","quantity","price","currency","commission","ptmlevy","stampduty","contractcharge","externaltradeid"];
 
             // create a trade table if one does not exist
             var tbltrade = d3.select("#tbltrade");
@@ -2839,13 +2839,15 @@
                     d3.select(this)
                         .text(function(d) {
                             if (d.col == "timestamp") {
-                                return getDateString(d.value);
+                                return formatDatetime(d.value);
                             } else if (d.col == "side") {
                                 if (d.value == "1") {
                                     return "buy";
                                 } else {
                                     return "sell";
                                 }
+                            } else if (d.col == "clientid") {
+                                return clients[d.value].name;
                             } else {
                                 return d.value;
                             }
@@ -2871,7 +2873,7 @@
                 .enter()
                 .append("th")
                     .attr("class", "tbltradehdr")
-                    .text(function(d) { return d; });
+                    .text(function(d) { return d == "clientid" ? "client" : d; });
 
             return tbltrade;
         }
@@ -3770,9 +3772,25 @@
             }
         }
 
-        function formatCurrency(num) {
-            num = isNaN(num) || num === '' || num === null ? 0.00 : num;
-            return parseFloat(num).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+        function formatCurrency(num, dp) {
+            num = num != num || num === '' || num === null ? 0.00 : num;
+            return parseFloat(num).toFixed(dp).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+        }
+
+        function formatDate(utcdate) {
+            var utcdateformat = d3.time.format("%Y%m%d");
+            var dt = utcdateformat.parse(utcdate);
+
+            var displaydateformat = d3.time.format("%e-%b-%Y");
+            return displaydateformat(dt);
+        }
+
+        function formatDatetime(utcdatetime) {
+            var utcdatetimeformat = d3.time.format("%Y%m%d-%H:%M:%S");
+            var dt = utcdatetimeformat.parse(utcdatetime);
+
+            var displaydatetimeformat = d3.time.format("%e-%b-%Y %H:%M:%S");
+            return displaydatetimeformat(dt);
         }
 
         function marginMsg(margin) {

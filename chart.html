@@ -1568,7 +1568,7 @@
                     qty = "";                    
                 }
 
-                var nosettdays = instruments[symbol].instrumenttype == "CFD" ? 10 : "";
+                var nosettdays = instruments[symbol].instrumenttype == "CFD" ? "" : ""; // todo: cfd=10?
 
                 sendRfq(qty, cashorderqty, symbol, "", "GBP", nosettdays, ""); // todo: currency
 
@@ -2519,6 +2519,8 @@
                             .on("click", function(d) {
                                 // create a quote from the quote request
                                 createMyQuote(d.value);
+
+                                d3.select("#tblquoteform" + d.value.quotereqid).remove();
 
                                 // fill it out
                                 updateMyQuoteForm(d.value.quotereqid);
