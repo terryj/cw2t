@@ -216,6 +216,8 @@ function listen() {
             singleSymbolRequest(clientid, obj.singlesymbolrequest, conn);
           } else if ("singlesymbolremoverequest" in obj) {
             singleSymbolRemoveRequest(clientid, obj.singlesymbolremoverequest, conn);
+          } else if ("instrumentrequest" in obj) {
+            instrumentRequest(obj.instrumentrequest, clientid,conn);
           } else if ("positionrequest" in obj) {
             positionRequest(obj.positionrequest, clientid, conn);
           } else if ("cashrequest" in obj) {
@@ -596,7 +598,7 @@ function getValue(trade) {
   }
 }
 
-function sendInstruments(clientid, conn) {
+function instrumentRequest(instreq, clientid, conn) {
   // get sorted subset of instruments for this client
   db.eval(scriptgetinst, 1, clientid, function(err, ret) {
     if (err) {
@@ -906,7 +908,7 @@ function getTimeInForceDesc(timeinforce) {
 
 function start(clientid, conn) {
   //sendOrderTypes(conn);
-  sendInstruments(clientid, conn);
+  //sendInstruments(clientid, conn);
   //sendPositions(clientid, conn);
   //sendOrders(clientid, conn);
   //sendCash(clientid, conn);

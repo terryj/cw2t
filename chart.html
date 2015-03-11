@@ -510,6 +510,11 @@
 
         // things start here
         function start() {
+            var instruments = {};
+
+            // request all instruments
+            sockjs.send("{\"instrumentrequest\":" + JSON.stringify(instruments) + "}");
+
             // create our container div
             var divcontainer = d3.select("body").append("div")
                 .attr("id", "divcontainer")

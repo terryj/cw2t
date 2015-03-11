@@ -1853,11 +1853,4 @@ exports.registerCommonScripts = function () {
   ';
 
   exports.scriptremovewatchlist = scriptremovewatchlist;
-
-  //
-  // update client cash with a dividend payment, for all holdings
-  // params: symbol, dividend
-  //
-  scriptdividend = '\
-  ';  
 };
