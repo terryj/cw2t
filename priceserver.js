@@ -13,7 +13,7 @@ var net = require('net');
 var redis = require('redis');
 
 // cw2t libraries
-var common = require('./common.js');
+var common = require('./commonfo.js');
 
 // globals
 var markettype; // comes from database, 0=normal market, 1=out of hours

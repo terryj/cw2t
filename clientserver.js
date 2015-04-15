@@ -16,7 +16,7 @@ var node_static = require('node-static');
 var redis = require('redis');
 
 // cw2t libraries
-var common = require('./common.js');
+var common = require('./commonfo.js');
 
 // globals
 var connections = {}; // added to if & when a client logs on

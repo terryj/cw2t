@@ -1624,59 +1624,6 @@ exports.registerCommonScripts = function () {
   return cjson.encode(tblresults) \
   ';
 
-  exports.scriptnewclient = stringsplit + '\
-  --[[ check email is unique ]] \
-  local emailexists = redis.call("get", "client:" .. KEYS[3]) \
-  if emailexists then return {1023} end \
-  local clientid = redis.call("incr", "clientid") \
-  if not clientid then return {1005} end \
-  --[[ store the client ]] \
-  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "brokerid", KEYS[1], "name", KEYS[2], "email", KEYS[3], "password", KEYS[3], "mobile", KEYS[4], "address", KEYS[5], "ifaid", KEYS[6], "type", KEYS[7], "hedge", KEYS[9], "brokerclientcode", KEYS[10], "marketext", "D", "commissionpercent", KEYS[11]) \
-  --[[ add to set of clients ]] \
-  redis.call("sadd", "clients", clientid) \
-  --[[ add route to find client from email ]] \
-  redis.call("set", "client:" .. KEYS[3], clientid) \
-  --[[ add tradeable instrument types ]] \
-  if KEYS[8] ~= "" then \
-    local insttypes = stringsplit(KEYS[8], ",") \
-    for i = 1, #insttypes do \
-      redis.call("sadd", clientid .. ":instrumenttypes", insttypes[i]) \
-    end \
-  end \
-  return {0, clientid} \
-  ';
-
-  exports.scriptupdateclient = stringsplit + '\
-  local clientkey = "client:" .. KEYS[1] \
-  --[[ get existing email, in case we need to change email->client link ]] \
-  local email = redis.call("hget", clientkey, "email") \
-  if not email then return 1017 end \
-  --[[ update client ]] \
-  redis.call("hmset", "client:" .. KEYS[1], "clientid", KEYS[1], "brokerid", KEYS[2], "name", KEYS[3], "email", KEYS[4], "mobile", KEYS[5], "address", KEYS[6], "ifaid", KEYS[7], "type", KEYS[8], "hedge", KEYS[10], "brokerclientcode", KEYS[11], "commissionpercent", KEYS[12]) \
-  --[[ remove old email link and add new one ]] \
-  if KEYS[4] ~= email then \
-    redis.call("del", "client:" .. email) \
-    redis.call("set", "client:" .. KEYS[4], KEYS[1]) \
-  end \
-  --[[ add/remove tradeable instrument types ]] \
-  local insttypes = redis.call("smembers", "instrumenttypes") \
-  local clientinsttypes = stringsplit(KEYS[9], ",") \
-  for i = 1, #insttypes do \
-    local found = false \
-    for j = 1, #clientinsttypes do \
-      if clientinsttypes[j] == insttypes[i] then \
-        redis.call("sadd", KEYS[1] .. ":instrumenttypes", insttypes[i]) \
-        found = true \
-        break \
-      end \
-    end \
-    if not found then \
-      redis.call("srem", KEYS[1] .. ":instrumenttypes", insttypes[i]) \
-    end \
-  end \
-  return 0 \
-  ';
-
   exports.scriptgetclienttypes = '\
   local clienttypes = redis.call("sort", "clienttypes:" .. KEYS[1], "ALPHA") \
   local clienttype = {} \

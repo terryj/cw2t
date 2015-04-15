@@ -16,7 +16,7 @@ var node_static = require('node-static');
 var redis = require('redis');
 
 // cw2t libraries
-var common = require('./common.js');
+var common = require('./commonfo.js');
 
 // publish & subscribe channels
 var clientserverchannel = 1;

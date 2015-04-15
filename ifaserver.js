@@ -16,7 +16,7 @@ var node_static = require('node-static');
 var redis = require('redis');
 
 // internal libraries
-var common = require('./common.js');
+var common = require('./commonfo.js');
 
 // redis
 var redishost;

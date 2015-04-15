@@ -13,7 +13,7 @@
 var util = require('util');
 var net = require('net');
 var events = require('events');
-var common = require('./common.js');
+var common = require('./commonfo.js');
 
 var fixver = 'FIX.4.2';
 var pqhost; // ip address

@@ -10,7 +10,7 @@
 var redis = require('redis');
 
 // cw2t libraries
-var common = require('./common.js');
+var common = require('./commonfo.js');
 
 // redis
 var redishost;
