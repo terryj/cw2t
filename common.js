@@ -86,7 +86,7 @@ function getErrorcode(errorcode) {
   return desc;
 }
 
-exports.getErrorcode = getErrorcodea;
+exports.getErrorcode = getErrorcode;
 
 exports.registerCommonScripts = function () {
   //
