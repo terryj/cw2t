@@ -77,7 +77,7 @@ function newClient(client, userid) {
       return;
     }
 
-    // create new client
+    // create new clienta
     db.eval(common.scriptnewclient, 0, brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.clienttype, client.insttypes, client.hedge, client.brokerclientcode, client.commissionpercent, client.active, function(err, ret) {
       if (err) throw err;
 
