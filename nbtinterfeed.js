@@ -8,6 +8,7 @@
 
 // node libraries
 var net = require('net');
+var fs = require('fs');
 
 // external libraries
 var redis = require('redis');
@@ -63,7 +64,7 @@ if (redisauth) {
       console.log(err);
       return;
     }
-    console.log("Connected to Redis at " + redishost + " port " + redisport);
+    console.log("connected to Redis at " + redishost + " port " + redisport);
     initialise();
     tryToConnect();
   });
@@ -75,7 +76,7 @@ db.on("error", function(err) {
 
 function initialise() {
   initDb();
-  common.registerCommonScripts();
+  common.registerScripts();
   registerScripts();
   pubsub();
 }
@@ -93,7 +94,7 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    console.log(message);
+    console.log("received: " + message);
     requestData(message);
   });
 
@@ -104,10 +105,10 @@ function pubsub() {
 // try to connect
 //
 function tryToConnect() {
-  console.log("Trying to connect to host: " + host + ", port:" + messageport);
+  console.log("trying to connect to host: " + host + ", port:" + messageport);
 
   conn = net.connect(messageport, host, function() {
-    console.log('Connected to: ' + host);
+    console.log('connected to: ' + host);
 
     subscriptions();
   });
@@ -149,8 +150,8 @@ function parse(data) {
   // need something in these fields for script 
   instrec.bid = "";
   instrec.ask = "";
-  instrec.calcmidnetchg = "";
-  instrec.calcmidpctchg = "";
+  instrec.midnetchange = "";
+  instrec.midpercentchange = "";
 
   //var datalen = data.length;
   //console.log("data length="+data.length);
@@ -173,7 +174,6 @@ function parse(data) {
         msglen = buf.readUInt32BE(i-4);
 
         if (bytestoread - i < msglen) {
-          console.log("incomplete message");
           return;
         }
 
@@ -209,7 +209,11 @@ function parse(data) {
       } else if (buf[i] == 30) { // <RS>
         var errorcode = buf.toString('utf8', groupseparator+1, i);
         var err = getError(errorcode);
-        console.log("error: " + err);
+        if (errorcode < 0) {
+          console.log("status: " + errorcode + " - " + err);
+        } else {
+          console.log("error: " + errorcode + " - " + err);
+        }
         rtlseparator = i;
         parsestate = 7;
       }
@@ -261,7 +265,7 @@ function parse(data) {
       } else if (buf[i] == 28) { // <FS>
         if (functioncode == "407") {
           var msg = buf.toString('utf8', rtlseparator+1, i);
-          console.log("error msg="+msg);
+          console.log("status msg: " + msg);
         } else {
           var value = buf.toString('utf8', unitseparator+1, i);
 
@@ -274,8 +278,8 @@ function parse(data) {
           // re-initialise prices as may be more than one message
           instrec.bid = "";
           instrec.ask = "";
-          instrec.calcmidnetchg = "";
-          instrec.calcmidpctchg = "";
+          instrec.midnetchange = "";
+          instrec.midpercentchange = "";
         }
 
         // we have finished a message
@@ -291,7 +295,6 @@ function parse(data) {
 
   // see if we have caught up, if so reset
   if (bufbytesread == bytestoread) {
-    //console.log("read the lot");
     bufbytesread = 0;
     bytestoread = 0;
   }
@@ -320,9 +323,9 @@ function subscribe(instcode) {
   buf[17+instcodelen] = 30;
   buf.write("25", 18+instcodelen); // offer
   buf[20+instcodelen] = 30;
-  buf.write("-374", 21+instcodelen); // midnetchg
+  buf.write("-374", 21+instcodelen); // midnetchange
   buf[25+instcodelen] = 30;
-  buf.write("-375", 26+instcodelen); // midpctchg
+  buf.write("-375", 26+instcodelen); // midpercentchange
   buf[30+instcodelen] = 28;
   
   conn.write(buf);
@@ -352,41 +355,14 @@ function updateRec(fid, value, instrec) {
 }
 
 function updateDb(functioncode, instrumentcode, instrec) {
-  //console.log("updateDb");
-  //console.log(instrec);
+  console.log("updateDb: " + instrumentcode);
+  console.log(instrec);
   // create a unix timestamp
   var now = new Date();
-  var timestamp = +now;
+  instrec.timestamp = common.getUTCTimeStamp(now);
 
   // store a complete record for a symbol
   if (functioncode == "340") {
-    // add nbtrader symbol code - same as symbol for equities
-    instrec.nbtsymbol = instrumentcode;
-
-    // add our own instrument type
-    if ("insttype" in instrec) {
-      if (instrec.insttype == 1) {
-        instrec.instrumenttype = "DE";
-        instrec.hedgesymbol = "";
-        instrec.marginpercent = "100";
-      } else if (instrec.insttype == 9) {
-        instrec.instrumenttype = "IE";
-        instrec.hedgesymbol = "";
-        instrec.marginpercent = "100";
-      } else {
-        console.log("unknown insttype: " + instrec.insttype);
-      }
-    }
-
-    // add an exchange - used in FIX messages
-    if ("countryofissue" in  instrec) {
-      if (instrec.countryofissue == "GB") {
-        instrec.exchange = "L";
-      } else {
-        console.log("unknown countryofissue: " + instrec.countryofissue);
-      }
-    }
-
     // currency
     if (instrec.currency == "GBX") {
       instrec.currency = "GBP";
@@ -396,18 +372,134 @@ function updateDb(functioncode, instrumentcode, instrec) {
     if ("insttype" in instrec) {
       console.log("creating..." + instrumentcode);
 
-      db.hmset("symbol:" + instrumentcode, instrec);
-      db.sadd("instruments", instrumentcode);
-      db.sadd("nbtsymbol:" + instrec.nbtsymbol + ":instruments", instrumentcode);
+      // we only want to store part of the instrument record
+      var dbinstrec = getDbInstrec(instrumentcode, instrec);
+
+      db.hmset("symbol:" + instrumentcode, dbinstrec);
+      db.sadd("symbols", instrumentcode);
+      db.sadd("nbtsymbol:" + dbinstrec.nbtsymbol + ":symbols", instrumentcode);
+
+      // create tab delimitted text
+      var txt = dbinstrec.ask + "\t"
+        + dbinstrec.bid + "\t"
+        + dbinstrec.currency + "\t"
+        + dbinstrec.exchange + "\t"
+        + dbinstrec.hedge + "\t"
+        + dbinstrec.hedgesymbolid + "\t"
+        + dbinstrec.instrumenttypeid + "\t"
+        + dbinstrec.isin + "\t"
+        + dbinstrec.longname + "\t"
+        + dbinstrec.marginpercent + "\t"
+        + dbinstrec.midnetchange + "\t"
+        + dbinstrec.midpercentchange + "\t"
+        + dbinstrec.mnemonic + "\t"
+        + dbinstrec.nbtsymbol + "\t"
+        + dbinstrec.shortname + "\t"
+        + dbinstrec.symbolid + "\t"
+        + dbinstrec.timestamp + "\t"
+        + dbinstrec.timezoneid + "\n";
+
+      // & write to a file
+      fs.appendFile('symbols.txt', txt, function (err) {
+        if (err) return console.log(err);
+      });
     }
   }
 
-  // update price & history
-  //console.log("updating price..." + instrumentcode);
-  //console.log(instrec);
-  db.eval(common.scriptpriceupdate, 6, instrumentcode, timestamp, instrec.bid, instrec.ask, instrec.calcmidnetchg, instrec.calcmidpctchg, function(err, ret) {
+  // update price
+  db.eval(common.scriptpriceupdate, 0, instrumentcode, instrec.timestamp, instrec.bid, instrec.ask, instrec.midnetchange, instrec.midpercentchange, function(err, ret) {
     if (err) throw err;
   });
+}
+
+function getDbInstrec(instrumentcode, instrec) {
+  var dbinstrec = {};
+
+  dbinstrec.ask = instrec.ask;
+  dbinstrec.bid = instrec.bid;
+  dbinstrec.currency = instrec.currency;
+  dbinstrec.isin = instrec.isin;
+  dbinstrec.longname = instrec.longname;
+  dbinstrec.midnetchange = instrec.midnetchange;
+  dbinstrec.midpercentchange = instrec.midpercentchange;
+  dbinstrec.mnemonic = instrec.mnemonic;
+  dbinstrec.shortname = instrec.shortname;
+  dbinstrec.timestamp = instrec.timestamp;
+  dbinstrec.timezoneid = instrec.timezoneid;
+
+  // add additional values we need
+  dbinstrec.symbolid = instrumentcode;
+  dbinstrec.nbtsymbol = instrumentcode;
+  dbinstrec.hedge = '0';
+  dbinstrec.hedgesymbolid = "";
+  dbinstrec.marginpercent = '100';
+  dbinstrec.exchange = "L";
+
+  // add our own instrument type, as we use text not numeric
+  if ("insttype" in instrec) {
+    dbinstrec.instrumenttypeid = getInstrumentType(instrec.insttype);
+  }
+
+  return dbinstrec;
+}
+
+function getInstrumentType(nbinsttype) {
+  var insttype;
+
+  nbinsttype = parseInt(nbinsttype);
+
+  switch (nbinsttype) {
+    case 1:
+      insttype = "DE";
+      break;
+    case 2:
+      insttype = "GT";
+      break;
+    case 7:
+      insttype = "DR";
+      break;
+    case 9:
+      insttype = "IE";
+      break;
+    case 10:
+      insttype = "EW";
+      break;
+    case 13:
+      insttype = "BG";
+      break;
+    case 14:
+      insttype = "FB";
+      break;
+    case 15:
+      insttype = "DB";
+      break;
+    case 16:
+      insttype = "LS";
+      break;
+    case 17:
+      insttype = "CN";
+      break;
+    case 20:
+      insttype = "ML";
+      break;
+    case 21:
+      insttype = "BO";
+      break;
+    case 22:
+      insttype = "PR";
+      break;
+    case 23:
+      insttype = "PU";
+      break;
+    case 24:
+      insttype = "CW";
+      break;
+    default:
+      insttype = "unknown insttype: " + nbinsttype;
+      break;
+  }
+
+  return insttype;
 }
 
 function loginReceived(message) {
@@ -420,7 +512,7 @@ function loginReceived(message) {
 
 function requestData(msg) {
   if (msg.substr(0, 2) == "rp") {
-    // real-time partial record i.e. "<FS>332<US>mtag<GS>BARC.L<RS>FID<RS>FID<FS>"
+    // real-time partial record i.e. "publish 7 rp:BARC.L"
 
     var instcode = msg.substr(3);
     subscribe(instcode);
@@ -445,7 +537,7 @@ function requestData(msg) {
   
     conn.write(buf);*/
   } else if (msg.substr(0, 2) == "rf") {
-    // real-time full record i.e. "<FS>332<US>mtag<GS>BARC.L<FS>"
+    // real-time full record i.e. "publish 7 rf:BARC.L"
 
     var instcode = msg.substr(3);
     var instcodelen = instcode.length;
@@ -465,7 +557,7 @@ function requestData(msg) {
 
     conn.write(buf);
   } else if (msg.substr(0, 4) == "snap") {
-    // snap full record i.e. "<FS>333<US>mtag<GS>BARC.L<FS>"
+    // snap full record i.e. "publish 7 snap:L.B***"
 
     var instcode = msg.substr(5);
     var instcodelen = instcode.length;
@@ -630,13 +722,16 @@ function getFid(field) {
       desc = "tradetype";
       break;
     case -32:
-      desc = "asknetchg"
+      desc = "asknetchange"
       break;
     case -33:
       desc = "maxorderdays";
       break;
     case -34:
       desc = "updatetime";
+      break;
+    case -49:
+      desc = "suspensionprice";
       break;
     case -51:
       desc = "midhigh";
@@ -654,13 +749,13 @@ function getFid(field) {
       desc = "midtime";
       break;
     case -56:
-      desc = "bidpctchg";
+      desc = "bidpercentchange";
       break;
     case -57:
-      desc = "askpctchg";
+      desc = "askpercentchange";
       break;
     case -58:
-      desc = "midpctchg";
+      desc = "midpercentchange";
       break;
     case -59:
       desc = "vwapalltrd";
@@ -671,17 +766,32 @@ function getFid(field) {
     case -61:
       desc = "midtick";
       break;
+    case -64:
+      desc = "*";
+      break;
+    case -65:
+      desc = "*";
+      break;
     case -80:
-      desc = "firstaucprice";
+      desc = "firstauctionprice";
       break;
     case -81:
-      desc = "firstauctime";
+      desc = "firstauctiontime";
       break;
     case -82:
-      desc = "firstaucvol";
+      desc = "firstauctionvol";
+      break;
+    case -81:
+      desc = "firstauctiontime";
+      break;
+    case -91:
+      desc = "secondauctionprice";
+      break;
+    case -92:
+      desc = "secondauctiontime";
       break;
     case -97:
-      desc = "timezone";
+      desc = "timezoneid";
       break;
     case -98:
       desc = "soldvol";
@@ -712,6 +822,18 @@ function getFid(field) {
       break;
     case -135:
       desc = "accrueddays";
+      break;
+    case -136:
+      desc = "accruedinterest";
+      break;
+    case -284:
+      desc = "*";
+      break;
+    case -308:
+      desc = "*";
+      break;
+    case -337:
+      desc = "*";
       break;
     case -338:
       desc = "icbsectornum";
@@ -765,10 +887,10 @@ function getFid(field) {
       desc = "yieldincadv";
       break;
     case -374:
-      desc = "calcmidnetchg";
+      desc = "midnetchange";
       break;
     case -375:
-      desc = "calcmidpctchg";
+      desc = "midpercentchange";
       break;
     case -376:
       desc = "midtime";
@@ -781,6 +903,24 @@ function getFid(field) {
       break;
     case -384:
       desc = "xdivdate";
+      break;
+    case -385:
+      desc = "adjnetchange";
+      break;
+    case -386:
+      desc = "adjpercentchange";
+      break;
+    case -387:
+      desc = "*";
+      break;
+    case -388:
+      desc = "divincproposed";
+      break;
+    case -389:
+      desc = "yieldincproposed";
+      break;
+    case 1:
+      desc = "*";
       break;
     case 6:
       desc = "tradeprice1";
@@ -827,6 +967,9 @@ function getFid(field) {
     case 36:
       desc = "midclose";
       break;
+    case 54:
+      desc = "*";
+      break;
     case 57:
       desc = "openbid";
       break;
@@ -861,7 +1004,7 @@ function getFid(field) {
       desc = "dayturnover";
       break;
     case 114:
-      desc = "bidnetchg";
+      desc = "bidnetchange";
       break;
     case 115:
       desc = "bidtick";

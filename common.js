@@ -88,7 +88,7 @@ function getErrorcode(errorcode) {
 
 exports.getErrorcode = getErrorcode;
 
-exports.registerCommonScripts = function () {
+exports.registerScripts = function () {
   //
   // function to split a string into an array of substrings, based on a character
   // parameters are the string & character
@@ -110,7 +110,7 @@ exports.registerCommonScripts = function () {
   ';
 
   /*
-  * scriptnewclient
+  * scriptnewclient - creates a new client
   * params: brokerid, name, email, mobile, address, ifaid, clienttype, insttypes, hedge, brokerclientcode, commissionpercent, active
   * returns: {errorcode, clientid}, errorcode=0 is ok, otherwise error
   */
@@ -137,7 +137,7 @@ exports.registerCommonScripts = function () {
   ';
 
   /*
-  * scriptupdateclient
+  * scriptupdateclient - updates an existing client
   * params: clientid, brokerid, name, email, mobile, address, ifaid, clienttype, insttypes, hedge, brokerclientcode, commissionpercent, active
   * returns: errorcode, 0=ok, otherwise error
   */

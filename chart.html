@@ -3,8 +3,8 @@
 <head>
     <meta http-equiv="content-type" content="text/html;charset=utf-8"/>
     <title>TG-Online v0.9</title>
-    <script src="https://d1fxtkz8shb9d2.cloudfront.net/sockjs-0.3.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.4.13/d3.js"></script>
+    <script src="http://cdn.jsdelivr.net/sockjs/0.3.4/sockjs.min.js"></script>
+    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
 <style>
     .axis path,
     .axis line {
@@ -346,16 +346,16 @@
         font-size: 15px;
         color: darkgray;
     }
-    .tblaccount {
+    .tblaccountsummary {
         margin : 0 auto;        
         margin-top: 15px;
     }
-    .tblaccount tr td {
+    .tblaccountsummary tr td {
         padding: 15px;
         text-align: center;
         font-size: 21px;
     }
-    .tblaccounthdr {
+    .tblaccountsummaryhdr {
         color: darkgray;
     }
     .tbltrade {
@@ -391,7 +391,7 @@
         var sockjs;
         var ukx = [];
         var pricehist = [];
-        var instruments = {};
+        var symbols = {};
         var pricedata = [];
         var quotes = [];
         var quoterequests = [];
@@ -399,7 +399,7 @@
         var myquotes = [];
         var positions = [];
         var trades = [];
-        var account = [];
+        var accountsummary = [];
         var statement = [];
         var watchlist = [];
         var qbroker = "TGRANT";
@@ -418,7 +418,7 @@
         var MENULOGOUT = 7;
 
         var datain = function(msg) {
-            //console.log(msg);
+            console.log(msg);
             try {
                 var obj = JSON.parse(msg);
 
@@ -446,8 +446,8 @@
                     //updatePricehistory(obj.pricehistory);
                     pricehist = obj.pricehistory.prices;
                     createChart();
-                } else if ("instruments" in obj) {
-                    loadInstruments(obj.instruments);
+                } else if ("symbols" in obj) {
+                    loadSymbols(obj.symbols);
                 } else if ("quoterequest" in obj) {
                     quoterequestReceived(obj.quoterequest);
                 } else if ("quoterequests" in obj) {
@@ -460,8 +460,8 @@
                     replySignin(obj.signinreply);
                 } else if ("status" in obj) {
                     statusReceived(obj.status);
-                } else if ("account" in obj) {
-                    accountReceived(obj.account);                    
+                } else if ("accountsummary" in obj) {
+                    accountSummaryReceived(obj.accountsummary);                    
                 } else if ("statement" in obj) {
                     statementReceived(obj.statement);
                 } else if ("watchlist" in obj) {
@@ -510,10 +510,12 @@
 
         // things start here
         function start() {
+            // request all instruments
             var instruments = {};
+            instruments.symbolid = "*";
 
             // request all instruments
-            sockjs.send("{\"instrumentrequest\":" + JSON.stringify(instruments) + "}");
+            sockjs.send("{\"symbolrequest\":" + JSON.stringify(instruments) + "}");
 
             // create our container div
             var divcontainer = d3.select("body").append("div")
@@ -535,9 +537,9 @@
         //
         // request single position or all positions - symbol = ""
         //
-        function requestPosition(symbol) {
+        function requestPosition(symbolid) {
             var positionrequest = {};
-            positionrequest.symbol = symbol;
+            positionrequest.symbolid = symbolid;
 
             // request position
             sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
@@ -550,11 +552,11 @@
             sockjs.send("{\"unsubscribepositionsrequest\":" + JSON.stringify(unsubscribepositionsrequest) + "}");            
         }
 
-        function requestAccount() {
-            var accountrequest = {};
+        function requestAccountSummary() {
+            var accountsummrequest = {};
 
             // request account
-            sockjs.send("{\"accountrequest\":" + JSON.stringify(accountrequest) + "}");
+            sockjs.send("{\"accountsummaryrequest\":" + JSON.stringify(accountsummrequest) + "}");
         }
 
         function cheat() {
@@ -564,9 +566,10 @@
             sockjs.send("{\"signin\":" + JSON.stringify(signin) + "}");
         }
 
-        function loadInstruments(instrumentarr) {
-            for (var i = 0; i < instrumentarr.length; ++i) {
-                instruments[instrumentarr[i].symbol] = instrumentarr[i];
+        function loadSymbols(symbolarr) {
+            console.log("loadSymbols");
+            for (var i = 0; i < symbolarr.length; ++i) {
+                symbols[symbolarr[i].symbolid] = symbolarr[i];
             }
         }
 
@@ -584,7 +587,7 @@
                 var node = {};
                 node.name = index.symbols[i].shortname;
                 node.parent = "FTSE 100";
-                node.symbol = index.symbols[i].symbol;
+                node.symbolid = index.symbols[i].symbolid;
                 ukx[0].children.push(node);
             }
         }
@@ -631,7 +634,7 @@
         function priceReceived(price) {
             // only update price stuff for single symbol view
             if (selectedmenu == MENURFQ) {
-                if (price.symbol == selectedsymbol) {
+                if (price.symbolid == selectedsymbol) {
                     // update price data
                     updatePriceData(price);
 
@@ -694,7 +697,7 @@
             var tblprice = d3.select("#tblprice");
             if (tblprice.empty()) {
                 tblprice = createPriceTable(price, cols);
-                createPriceMenu(price.symbol);
+                createPriceMenu(price.symbolid);
             }
 
             // row data
@@ -807,7 +810,7 @@
                 .attr("class", "divprice");
 
             divprice.append("header")
-                .text(instruments[price.symbol].shortname + " - " + price.symbol);
+                .text(symbols[price.symbolid].shortname + " - " + price.symbolid);
 
             // create a table
             var tblprice = divprice.append("table")
@@ -867,7 +870,7 @@
 
                             // unsubscribe current symbol
                             if (selectedsymbol != "") {
-                                requestRemoveSingleSymbol(selectedsymbol);
+                                requestUnsubscribeSymbol(selectedsymbol);
                                 selectedsymbol = "";
                             }
 
@@ -888,9 +891,9 @@
                             } else if (d == cols[1]) {
                                 requestWatchlist();
                             } else if (d == cols[2]) {
-                                requestPosition("");
+                                requestPosition("*");
                             } else if (d == cols[3]) {
-                                requestAccount();
+                                requestAccountSummary();
                             } else if (d == cols[4]) {
                                 requestStatement();
                             } else if (d == cols[5]) {
@@ -903,7 +906,7 @@
                         });
         }
 
-        function createPriceMenu(symbol) {
+        function createPriceMenu(symbolid) {
             var data = [""];
             var cols = ["Request A Quote"];
 
@@ -940,7 +943,7 @@
                             // & clear any previous request & trade
                             d3.select("#divrfq").remove();
 
-                            requestQuote(symbol, "");
+                            requestQuote(symbolid, "");
                         });            
         }
 
@@ -953,7 +956,7 @@
             d3.select("#tblmenuprice").remove();
             d3.select("#stockboxdiv").remove();
             d3.select("#tbltrade").remove();
-            d3.select("#tblaccount").remove();
+            d3.select("#tblaccountsummary").remove();
             d3.select("#tblstatement").remove();
             d3.select("#tblwatchlist").remove();
         }
@@ -986,14 +989,14 @@
             d3.select("#divcontainer").remove();
         }
 
-        function singleSymbol(symbol) {
+        function singleSymbol(symbolid) {
             selectedmenu = MENURFQ;
-            selectedsymbol = symbol;
+            selectedsymbol = symbolid;
             clearData();
             clearScreen();
             selectSymbol();
-            requestSingleSymbol(symbol);
-            requestPosition(symbol);
+            requestSubscribeSymbol(symbolid);
+            requestPosition(symbolid);
 
             // switch off styles
             d3.select("#tblmenu").selectAll("a")
@@ -1018,7 +1021,7 @@
         }
 
         function updateTradeTable() {
-            var cols = ["timestamp","symbol","tradeid","orderid","side","quantity","price","currency","commission","ptmlevy","stampduty","contractcharge","externaltradeid"];
+            var cols = ["timestamp","symbolid","tradeid","orderid","side","quantity","price","currencyid","commission","ptmlevy","stampduty","contractcharge","externaltradeid"];
 
             // create a trade table if one does not exist
             var tbltrade = d3.select("#tbltrade");
@@ -1048,7 +1051,7 @@
 
             // columns enter & update
             cells.each(function(d) {
-                if (d.col == "symbol") {
+                if (d.col == "symbolid") {
                     var lnk = d3.select(this).select("a");
                     if (lnk.empty()) {
                         // add a link for this symbol
@@ -1102,12 +1105,18 @@
             return tbltrade;
         }
 
-        function requestSingleSymbol(symbol) {
-            sockjs.send("{\"singlesymbolrequest\":" + JSON.stringify(symbol) + "}");
+        function requestSubscribeSymbol(symbolid) {
+            var symbol = {}
+            symbol.symbolid = symbolid;
+
+            sockjs.send("{\"subscribepricerequest\":" + JSON.stringify(symbol) + "}");
         }
 
-        function requestRemoveSingleSymbol(symbol) {
-            sockjs.send("{\"singlesymbolremoverequest\":" + JSON.stringify(symbol) + "}");
+        function requestUnsubscribeSymbol(symbolid) {
+            var symbol = {}
+            symbol.symbolid = symbolid;
+
+            sockjs.send("{\"unsubscribepricerequest\":" + JSON.stringify(symbol) + "}");
         }
 
         function requestIndex(index) {
@@ -1115,7 +1124,7 @@
         }
 
         // assumes today
-        function requestPricehistory(symbol) {
+        function requestPricehistory(symbolid) {
             var pricehistoryrequest = {};
 
             var today = new Date();
@@ -1128,7 +1137,7 @@
             console.log(startofday.getTime());
             console.log(today.getTime());
 
-            pricehistoryrequest.symbol = symbol;
+            pricehistoryrequest.symbolid = symbolid;
             pricehistoryrequest.startperiod = startofday.getTime();
             pricehistoryrequest.endperiod = today.getTime();
 
@@ -1269,7 +1278,7 @@
                     d.children = d._children;
                     d._children = null;
 
-                    requestPricehistory(d.symbol);
+                    requestPricehistory(d.symbolid);
                 }
 
                 update(d);
@@ -1466,7 +1475,7 @@
             //console.log(line);
         }
 
-        function requestQuote(symbol, quantity) {
+        function requestQuote(symbolid, quantity) {
             var fields = ["Quantity"]; // one per row
 
             var cashorshares = ["Number of shares", "Cash amount"];
@@ -1573,9 +1582,9 @@
                     qty = "";                    
                 }
 
-                var nosettdays = instruments[symbol].instrumenttype == "CFD" ? "" : ""; // todo: cfd=10?
+                var nosettdays = symbols[symbolid].instrumenttypeid == "CFD" ? "" : ""; // todo: cfd=10?
 
-                sendRfq(qty, cashorderqty, symbol, "", "GBP", nosettdays, ""); // todo: currency
+                sendRfq(qty, cashorderqty, symbolid, "", "GBP", nosettdays, ""); // todo: currency
 
                 // remove button
                 d3.select(this).remove();
@@ -1598,16 +1607,16 @@
             return div;
         }
 
-        function sendRfq(quantity, cashorderqty, symbol, side, currency, nosettdays, futsettdate) {
+        function sendRfq(quantity, cashorderqty, symbolid, side, currencyid, nosettdays, futsettdate) {
             var rfq = {};
 
             rfq.clientid = clientid;
-            rfq.symbol = symbol;
+            rfq.symbolid = symbolid;
             rfq.quantity = quantity;
             rfq.cashorderqty = cashorderqty;
             rfq.side = side;
-            rfq.currency = currency;
-            rfq.settlcurrency = currency;
+            rfq.currencyid = currencyid;
+            rfq.settlcurrencyid = currencyid;
             rfq.nosettdays = nosettdays;
             rfq.futsettdate = futsettdate;
             rfq.operatortype = operatortype;
@@ -1626,11 +1635,11 @@
             sockjs.send("{\"quoterequestclose\":" + JSON.stringify(rfqclose) + "}");
         }*/
 
-        function displayForm(symbol) {
+        function displayForm(symbolid) {
             var data = [11, 22, 33, 44];
             /*var labeldata = ["test1", "test2"];
 
-            console.log("displayForm:" + symbol);
+            console.log("displayForm:" + symbolid);
 
             var form = d3.select("body")
                 .append("form");
@@ -1697,18 +1706,18 @@
             return tbody;
         }
 
-        function sendOrder(symbol, side, quantity, price, ordertype, delivertocompid, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
+        function sendOrder(symbolid, side, quantity, price, ordertype, delivertocompid, settlcurrencyid, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
             var order = {};
 
             order.clientid = clientid;
             order.side = side;
-            order.symbol = symbol;
+            order.symbolid = symbolid;
             order.quantity = quantity;
             order.price = price;
-            order.currency = "GBP"; // todo - use quote currency? instruments[symbol].currency;
+            order.currencyid = "GBP"; // todo - use quote currency? symbols[symbolid].currency;
             order.ordertype = ordertype;
             order.delivertocompid = delivertocompid;
-            order.settlcurrency = settlcurrency;
+            order.settlcurrencyid = settlcurrencyid;
             order.nosettdays = nosettdays;
             order.futsettdate = settdate;
             order.quoteid = quoteid;
@@ -1809,7 +1818,7 @@
             tradeconf.push({"key":"quantity", "value": trade.quantity});
             tradeconf.push({"key":"price", "value": trade.price});
             tradeconf.push({"key":"consideration", "value": trade.settlcurramt});
-            tradeconf.push({"key":"currency", "value": trade.currency});
+            tradeconf.push({"key":"currency", "value": trade.currencyid});
             tradeconf.push({"key":"commission", "value": trade.commission});
             tradeconf.push({"key":"ptmlevy", "value": trade.ptmlevy});
             tradeconf.push({"key":"stampduty", "value": trade.stampduty});
@@ -1869,25 +1878,25 @@
             selectSymbol();
         }
 
-        function requestUnwatchlist(symbol) {
+        function requestUnwatchlist(symbolid) {
             var uwl = {};
 
-            if (symbol != "") {
-                uwl.symbol = symbol;
+            if (symbolid != "") {
+                uwl.symbolid = symbolid;
             }
 
             sockjs.send("{\"unwatchlistrequest\":" + JSON.stringify(uwl) + "}");            
         }
 
-        function watchlistRequest(symbol) {
+        function watchlistRequest(symbolid) {
             var wl = {};
 
-            if (symbol != "") {
-                if (inWatchlist(symbol)) {
-                    alert("Symbol: " + symbol + " is already in your watchlist");
+            if (symbolid != "") {
+                if (inWatchlist(symbolid)) {
+                    alert("Symbol: " + symbolid + " is already in your watchlist");
                     return;
                 }
-                wl.symbol = symbol;
+                wl.symbolid = symbolid;
             }
 
             sockjs.send("{\"watchlistrequest\":" + JSON.stringify(wl) + "}");
@@ -1895,7 +1904,7 @@
 
         function watchlistReceived(watchlistarr) {
             for (var i = 0; i < watchlistarr.length; ++i) {
-                if (!(inWatchlist(watchlistarr[i].symbol))) {
+                if (!(inWatchlist(watchlistarr[i].symbolid))) {
                     watchlistarr[i].remove = "x";
                     watchlistarr[i].bidtick = '';
                     watchlistarr[i].asktick = '';
@@ -1909,9 +1918,9 @@
             updateWatchlistTable();
         }
 
-        function unwatchlistReceived(symbol) {
+        function unwatchlistReceived(symbolid) {
             for (var i = 0; i < watchlist.length; ++i) {
-                if (symbol == watchlist[i].symbol) {
+                if (symbolid == watchlist[i].symbolid) {
                     watchlist.splice(i, 1);
                     break;
                 }
@@ -1920,9 +1929,9 @@
             updateWatchlistTable();   
         }
 
-        function inWatchlist(symbol) {
+        function inWatchlist(symbolid) {
             for (i = 0; i < watchlist.length; i++) {
-                if (symbol == watchlist[i].symbol) {
+                if (symbolid == watchlist[i].symbolid) {
                     return true;
                 }
             }
@@ -1931,7 +1940,7 @@
 
         function updateWatchlist(price) {
             for (var i = 0; i < watchlist.length; ++i) {
-                if (price.symbol == watchlist[i].symbol) {
+                if (price.symbolid == watchlist[i].symbolid) {
                     if ("bid" in price) {
                         if (price.bidchange > 0) {
                            watchlist[i].bidtick = '+';
@@ -1970,7 +1979,7 @@
         }
 
         function updateWatchlistTable() {
-            var cols = ["symbol", "bid", "ask", "midnetchg", "midpctchg", "remove"];
+            var cols = ["symbolid", "bid", "ask", "midnetchg", "midpctchg", "remove"];
 
             var tblwatchlist = d3.select("#tblwatchlist");
             if (tblwatchlist.empty()) {
@@ -1996,7 +2005,7 @@
             cells.enter()
                 .append("td")
                 .each(function(d, i, j) {
-                    if (d.col == "symbol") {
+                    if (d.col == "symbolid") {
                         // display a link for this symbol
                         d3.select(this)
                             .append("a")
@@ -2012,13 +2021,13 @@
                                 .attr("href", "#")
                                 .text(function (d) { return d.value; })
                                 .on("click", function(d) {
-                                    requestUnwatchlist(watchlist[j].symbol);
+                                    requestUnwatchlist(watchlist[j].symbolid);
                                 });
                     }
                 });
 
             cells.each(function(d) {
-                if (d.col == "symbol") {
+                if (d.col == "symbolid") {
                     // update text for link as symbol may have changed
                     d3.select(this).select("a")
                         .text(function (d) { return d.value; });
@@ -2064,7 +2073,7 @@
             var tblwatchlist = d3.select("#divcontainer")
                 .append("table")
                 .attr("id", "tblwatchlist")
-                .attr("class", "tblaccount");
+                .attr("class", "tblaccountsummary");
 
             // add header & body
             var thead = tblwatchlist.append("thead");
@@ -2075,7 +2084,7 @@
                 .data(cols)
                 .enter()
                 .append("th")
-                    .attr("class", "tblaccounthdr")
+                    .attr("class", "tblaccountsummaryhdr")
                     .text(function(d) {
                         if (d == "midnetchg") {
                             return "change";
@@ -2125,10 +2134,10 @@
                 var searchtextlen = searchtext.length;
 
                 // match with instruments
-                for (var i in instruments) {
-                    if (instruments[i].shortname.toLowerCase().substr(0, searchtextlen) == searchtext) {
+                for (var i in symbols) {
+                    if (symbols[i].shortname.toLowerCase().substr(0, searchtextlen) == searchtext) {
                         var elem = {};
-                        elem.name = instruments[i].shortname + " - " + instruments[i].symbol;
+                        elem.name = symbols[i].shortname + " - " + symbols[i].symbolid;
                         symboldata.push(elem);
                     }
                 }
@@ -2170,7 +2179,7 @@
                             if (selectedmenu == MENURFQ) {
                                 // unsubscribe current symbol
                                 if (selectedsymbol != "") {
-                                    requestRemoveSingleSymbol(selectedsymbol);
+                                    requestUnsubscribeSymbol(selectedsymbol);
                                 }
 
                                 selectedsymbol = this.innerHTML.substr(lastspace+1);
@@ -2183,8 +2192,8 @@
                                 d3.select("#tblmenuprice").remove();
                                 d3.select("#divrfq").remove();
 
-                                // request a symbol
-                                requestSingleSymbol(selectedsymbol);
+                                // subscribe to a symbol
+                                requestSubscribeSymbol(selectedsymbol);
                                 requestPosition(selectedsymbol);
                             } else {
                                 watchlistRequest(this.innerHTML.substr(lastspace+1));
@@ -2317,10 +2326,10 @@
                     .on("click", function(d, i, j) { // d=data, i=col, j=row
                         if (d.col == "bidquote") {
                             // we are selling
-                            sendOrder(d.value.symbol, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+                            sendOrder(d.value.symbolid, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
                         } else {
                             // we are buying
-                            sendOrder(d.value.symbol, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+                            sendOrder(d.value.symbolid, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
                         }
 
                         // stop timer
@@ -2455,8 +2464,8 @@
             console.log(quoterequest);
 
             // todo: get from price
-            quoterequest.bidpx = 1.23; //prices[quoterequest.symbol].bid;
-            quoterequest.offerpx = 1.25; //prices[quoterequest.symbol].ask;
+            quoterequest.bidpx = 1.23; //prices[quoterequest.symbolid].bid;
+            quoterequest.offerpx = 1.25; //prices[quoterequest.symbolid].ask;
             //quoterequest.quoted = false;
 
             // add quote request to global array
@@ -2472,7 +2481,7 @@
         // display one table per quote request, allowing for a table of any related quotes in between
         function updateQuoterequestTables() {
             console.log("updateQuoterequestTables");
-            var cols = ["timestamp", "symbol", "quantity", "quote"];
+            var cols = ["timestamp", "symbolid", "quantity", "quote"];
 
             var divquoterequest = d3.select("#divquoterequest");
             if (divquoterequest.empty()) {
@@ -2553,18 +2562,6 @@
             tblquoterequests.exit().remove();
         }
 
-                            /*var myquote = {};
-                            myquote.symbol = d.value.symbol;
-                            myquote.price = 1.23;
-                            myquote.quantity = d.value.quantity;
-                            myquote.currency
-                            myquote.settlcurrency
-                            myquote.quotereqid = d.value.quotereqid;
-                            myquote.myquoteid = nextquoteid;
-                            nextquoteid++;
-
-                            myquotes[myquote.quotereqid].push(myquote);*/
-
         function createQuoterequestDiv() {
             divquoterequest = d3.select("#divcontainer")
                 .append("div")
@@ -2583,11 +2580,11 @@
         function createMyQuote(quoterequest) {
             var myquote = {};
 
-            myquote.symbol = quoterequest.symbol;
+            myquote.symbolid = quoterequest.symbolid;
             myquote.price = 1.23;
             myquote.quantity = quoterequest.quantity;
-            myquote.currency = quoterequest.currency;
-            myquote.settlcurrency = quoterequest.settlcurrency;
+            myquote.currencyid = quoterequest.currencyid;
+            myquote.settlcurrencyid = quoterequest.settlcurrencyid;
             myquote.quotereqid = quoterequest.quotereqid;
 
             updateMyQuote(myquote);
@@ -2731,9 +2728,9 @@
                     quote.offersize = quantity                    
                 }
 
-                quote.symbol = quoterequests[j].symbol;
-                quote.currency = "GBP"; // todo - use quote currency? instruments[symbol].currency;
-                quote.settlcurrency = quoterequests[j].settlcurrency;
+                quote.symbolid = quoterequests[j].symbolid;
+                quote.currencyid = "GBP"; // todo - use quote currencyid? symbols[symbolid].currencyid;
+                quote.settlcurrencyid = quoterequests[j].settlcurrencyid;
                 quote.futsettdate = quoterequests[j].futsettdate;
                 quote.noseconds = 30;
                 quote.operatortype = operatortype;
@@ -3500,7 +3497,8 @@
         function positionReceived(position) {
             var posupdated = false;
 
-            if (!('symbol' in position)) {
+            // todo - check this
+            if (!('symbolid' in position)) {
                 return;
             }
 
@@ -3508,13 +3506,13 @@
             if (selectedmenu != MENURFQ && selectedmenu != MENUPORTFOLIO) { return; }
 
             // only display position if this is the symbol we are looking at
-            if (selectedmenu == MENURFQ && position.symbol != selectedsymbol) { return; }
+            if (selectedmenu == MENURFQ && position.symbolid != selectedsymbol) { return; }
 
             position.costpershare = Math.abs(position.cost / position.quantity);
 
             // update or remove position
             for (var i = 0; i < positions.length; i++) {
-                if (positions[i].symbol == position.symbol) {
+                if (positions[i].symbolid == position.symbolid) {
                     if (position.quantity == 0) {
                         positions.splice(i, 1);
                     } else {
@@ -3531,7 +3529,7 @@
 
                 // position has been created by someone else's actions, so request prices
                 if (selectedmenu == MENUPORTFOLIO) {
-                    requestSingleSymbol(position.symbol);
+                    requestSubscribeSymbol(position.symbolid);
                 }
             }
 
@@ -3541,7 +3539,7 @@
         function updatePositionData(price) {
             // see if a position for this product exists &, if so, update p&l
             for (var i = 0; i < positions.length; i++) {
-                if (positions[i].symbol == price.symbol) {
+                if (positions[i].symbolid == price.symbolid) {
                     if (positions[i].quantity < 0) {
                         if ('ask' in price) {
                             positions[i].mktprice = price.ask;
@@ -3579,19 +3577,19 @@
 
         function updateMargin(i) {
             // update margin for derivs
-            if (instruments[positions[i].symbol].instrumenttype != "DE" && instruments[positions[i].symbol].instrumenttype != "IE") {
-                positions[i].margin = Math.abs(positions[i].quantity) * positions[i].mktprice / 100 * instruments[positions[i].symbol].marginpercent / 100;
+            if (symbols[positions[i].symbolid].instrumenttypeid != "DE" && symbols[positions[i].symbolid].instrumenttypeid != "IE") {
+                positions[i].margin = Math.abs(positions[i].quantity) * positions[i].mktprice / 100 * symbols[positions[i].symbolid].marginpercent / 100;
             }
         }
 
         function updatePositionTable() {
-            var cols = ["symbol", "futsettdate", "quantity", "cost", "currency", "margin", "costpershare", "mktprice", "unrealisedpandl"];
+            var cols = ["symbolid", "futsettdate", "quantity", "cost", "currencyid", "margin", "costpershare", "mktprice", "unrealisedpandl"];
 
             if (positions.length == 0) {
                 cols = [];
             } else if (selectedmenu == MENURFQ) {
                 for (i = 0; i < positions.length; i++) {
-                    if (instruments[positions[i].symbol].instrumenttype == "CFD") {
+                    if (symbols[positions[i].symbolid].instrumenttypeid == "CFD") {
                         // add option to close position
                         cols.push("close");
                         break;
@@ -3628,7 +3626,7 @@
                     });
                  })
                 .each(function(d, i, j) {
-                    if (d.col == "symbol" || d.col == "close") {
+                    if (d.col == "symbolid" || d.col == "close") {
                     } else if (d.col == "quantity" && selectedmenu == MENURFQ) {
                         d3.select(this).select("a")
                             .html(function (d) { return d.value; })
@@ -3639,7 +3637,7 @@
                                 // & clear any previous request
                                 d3.select("#divrfq").remove();
 
-                                requestQuote(positions[j].symbol, positions[j].quantity);
+                                requestQuote(positions[j].symbolid, positions[j].quantity);
                             });
                     } else {
                         d3.select(this)
@@ -3662,7 +3660,7 @@
             cells.enter()
                 .append("td")
                 .each(function(d, i, j) {
-                    if (d.col == "symbol" && selectedmenu != MENURFQ) {
+                    if (d.col == "symbolid" && selectedmenu != MENURFQ) {
                         // display a link for this symbol
                         d3.select(this)
                             .append("a")
@@ -3684,7 +3682,7 @@
                                     // & clear any previous request
                                     d3.select("#divrfq").remove();
 
-                                    requestQuote(positions[j].symbol, positions[j].quantity);
+                                    requestQuote(positions[j].symbolid, positions[j].quantity);
                                 });
                     } else if (d.col == "close") {
                         d3.select(this)
@@ -3703,7 +3701,7 @@
 
                                 // todo: does sett date need to depend on inst type 
 
-                                sendRfq(Math.abs(positions[j].quantity), "", positions[j].symbol, side, "GBP", "", positions[j].futsettdate); // todo: currency
+                                sendRfq(Math.abs(positions[j].quantity), "", positions[j].symbolid, side, "GBP", "", positions[j].futsettdate); // todo: currency
 
                                 // disable button & remove the event listener
                                 d3.select(this)
@@ -3785,10 +3783,10 @@
             return tblposition;
         }
 
-        function requestOpenQuoteRequests(symbol) {
+        function requestOpenQuoteRequests(symbolid) {
             var requestrfq = {};
 
-            requestrfq.symbol = symbol;
+            requestrfq.symbolid = symbolid;
 
             sockjs.send("{\"openquoterequestrequest\":" + JSON.stringify(requestrfq) + "}");
         }
@@ -3810,7 +3808,7 @@
         function requestStatement() {
             var statementrequest = {};
 
-            statementrequest.currency = "GBP";
+            statementrequest.currencyid = "GBP";
 
             sockjs.send("{\"statementrequest\":" + JSON.stringify(statementrequest) + "}");            
         }
@@ -3871,7 +3869,7 @@
             var tblstatement = d3.select("#divcontainer")
                 .append("table")
                 .attr("id", "tblstatement")
-                .attr("class", "tblaccount");
+                .attr("class", "tblaccountsummary");
 
             // add header & body
             var thead = tblstatement.append("thead");
@@ -3882,7 +3880,7 @@
                 .data(cols)
                 .enter()
                 .append("th")
-                    .attr("class", "tblaccounthdr")
+                    .attr("class", "tblaccountsummaryhdr")
                     .text(function(d) {
                         return d;
                     });
@@ -3890,28 +3888,28 @@
             return tblstatement;
         }
 
-        function accountReceived(acctarr) {
-            account = [];
+        function accountSummaryReceived(acctarr) {
+            accountsummary = [];
 
             // account per currency
             for (var i = 0; i < acctarr.length; ++i) {
-                account.push(acctarr[i]);
+                accountsummary.push(acctarr[i]);
             }
 
-            updateAccountTable();
+            updateAccountSummaryTable();
         }
 
-        function updateAccountTable() {
-            var cols = ["currency", "cash", "balance", "unrealisedpandl", "margin", "freemargin"];
+        function updateAccountSummaryTable() {
+            var cols = ["currencyid", "cash", "balance", "unrealisedpandl", "margin", "freemargin"];
 
-            var tblaccount = d3.select("#tblaccount");
-            if (tblaccount.empty()) {
-                tblaccount = createAccountTable(cols);
+            var tblaccountsummary = d3.select("#tblaccountsummary");
+            if (tblaccountsummary.empty()) {
+                tblaccountsummary = createAccountSummaryTable(cols);
             }
 
             // base the table on the account array
-            var rows = tblaccount.select("tbody").selectAll("tr")
-                .data(account);
+            var rows = tblaccountsummary.select("tbody").selectAll("tr")
+                .data(accountsummary);
 
             // enter
             rows.enter()
@@ -3927,7 +3925,7 @@
                 .enter()
                 .append("td")
                     .text(function(d) {
-                        if (d.col == "currency") {
+                        if (d.col == "currencyid") {
                             return d.value;
                         } else {
                             return formatCurrency(d.value, 2);
@@ -3935,22 +3933,22 @@
                     });
         }
 
-        function createAccountTable(cols) {
-            var tblaccount = d3.select("#divcontainer")
+        function createAccountSummaryTable(cols) {
+            var tblaccountsummary = d3.select("#divcontainer")
                 .append("table")
-                .attr("id", "tblaccount")
-                .attr("class", "tblaccount");
+                .attr("id", "tblaccountsummary")
+                .attr("class", "tblaccountsummary");
 
             // add header & body
-            var thead = tblaccount.append("thead");
-            var tbody = tblaccount.append("tbody");
+            var thead = tblaccountsummary.append("thead");
+            var tbody = tblaccountsummary.append("tbody");
 
             // add the column headings
             thead.selectAll("th")
                 .data(cols)
                 .enter()
                 .append("th")
-                    .attr("class", "tblaccounthdr")
+                    .attr("class", "tblaccountsummaryhdr")
                     .text(function(d) {
                         if (d == "unrealisedpandl") {
                             return "unrealised p&l";
@@ -3961,7 +3959,7 @@
                         }
                     });
 
-            return tblaccount;
+            return tblaccountsummary;
         }
 
         function getOrderReasonDesc(reason) {

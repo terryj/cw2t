@@ -115,8 +115,8 @@ db.on("error", function(err) {
 });
 
 function initialise() {
-  commonfo.registerCommonScripts();
-  common.registerCommonScripts();
+  commonfo.registerScripts();
+  common.registerScripts();
   registerScripts();
   initDb();
   clearSubscriptions();
@@ -256,8 +256,8 @@ function listen() {
             positionRequest(obj.positionrequest, conn);
           } else if ("cashrequest" in obj) {
             cashRequest(obj.cashrequest, conn);
-          } else if ("accountrequest" in obj) {
-            accountRequest(obj.accountrequest, conn);
+          } else if ("accountsummaryrequest" in obj) {
+            accountSummaryRequest(obj.accountsummaryrequest, conn);
           } else if ("index" in obj) {
             sendIndex(obj.index, conn);        
           } else if ("newclient" in obj) {
@@ -414,7 +414,7 @@ function tidy(userid, conn) {
 }
 
 function unsubscribeConnection(id) {
-  db.eval(commonfo.scriptunsubscribeid, 3, id, serverid, feedtype, function(err, ret) {
+  db.eval(commonfo.scriptunsubscribeid, 0, id, serverid, feedtype, function(err, ret) {
     if (err) throw err;
 
     // unsubscribe returned topics
@@ -429,7 +429,7 @@ function unsubscribeConnection(id) {
 //
 function singleSymbolRequest(symbol, userid, conn) {
   console.log("singleSymbolRequest");
-  db.eval(commonfo.scriptsubscribesymbol, 4, symbol, userid, serverid, feedtype, function(err, ret) {
+  db.eval(commonfo.scriptsubscribesymbol, 0, symbol, userid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
 
     // see if we need to subscribe
@@ -453,7 +453,7 @@ function singleSymbolRequest(symbol, userid, conn) {
 }
 
 function singleSymbolRemoveRequest(symbol, userid, conn) {
-  db.eval(commonfo.scriptunsubscribesymbol, 4, symbol, userid, serverid, feedtype, function(err, ret) {
+  db.eval(commonfo.scriptunsubscribesymbol, 0, symbol, userid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
@@ -466,6 +466,7 @@ function singleSymbolRemoveRequest(symbol, userid, conn) {
 }
 
 function newClient(client, userid, conn) {
+  console.log(client);
   // get the broker for this client
   db.hget(servertype + ":" + userid, "brokerid", function(err, brokerid) {
     if (err) {
@@ -494,6 +495,7 @@ function newClient(client, userid, conn) {
           console.log("Error in scriptupdateclient:" + common.getErrorcode(ret));
           return;
         }
+        console.log(ret);
 
         getSendClient(client.clientid, conn);
       });
@@ -526,7 +528,7 @@ function getSendIfa(ifaid, conn) {
 function cashTrans(cashtrans, userid, conn) {
   cashtrans.timestamp = commonfo.getUTCTimeStamp(new Date());
 
-  db.eval(commonfo.scriptcashtrans, 11, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.settldate, operatortype, userid, function(err, ret) {
+  db.eval(commonfo.scriptcashtrans, 0, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.settldate, operatortype, userid, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
@@ -595,7 +597,7 @@ function getSendClient(clientid, conn) {
     }
 
     // add instrument types this client can trade
-    db.smembers(clientid + ":instrumenttypes", function(err, insttypes) {
+    db.smembers("client:" + clientid + ":instrumenttypes", function(err, insttypes) {
       if (err) {
         console.log("Error in getSendClient:" + err);
         return;
@@ -637,7 +639,7 @@ function getSendInst(symbol, conn) {
       return;
     }
 
-    conn.write("{\"instrument\":" + JSON.stringify(inst) + "}");
+    conn.write("{\"symbol\":" + JSON.stringify(inst) + "}");
   });
 }
 
@@ -916,7 +918,7 @@ function getValue(trade) {
 function sendInstruments(conn) {
   // get sorted subset of instruments for this client
   db.eval(scriptgetinst, 0, function(err, ret) {
-    conn.write("{\"instruments\":" + ret + "}");
+    conn.write("{\"symbols\":" + ret + "}");
   });
 }
 
@@ -978,8 +980,8 @@ function sendIndex(orgclientkey, index, conn) {
       return;
     }
 
-    replies.forEach(function(symbol, j) {
-      db.hgetall("symbol:" + symbol, function(err, inst) {
+    replies.forEach(function(symbolid, j) {
+      db.hgetall("symbol:" + symbolid, function(err, inst) {
         var instrument = {};
         if (err) {
           console.log(err);
@@ -987,12 +989,12 @@ function sendIndex(orgclientkey, index, conn) {
         }
 
         if (inst == null) {
-          console.log("Symbol " + symbol + " not found");
+          console.log("Symbol " + symbolid + " not found");
           count--;
           return;
         }
 
-        instrument.symbol = symbol;
+        instrument.symbolid = symbolid;
 
         // add the order to the array
         i.symbols.push(instrument);
@@ -1008,14 +1010,14 @@ function sendIndex(orgclientkey, index, conn) {
 }
 
 function quoteRequestHistory(req, conn) {
-  db.eval(commonfo.scriptgetquoterequests, 1, req.clientid, function(err, ret) {
+  db.eval(commonfo.scriptgetquoterequests, 0, req.clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"quoterequests\":" + ret + "}");
   });
 }
 
 function quoteHistory(req, conn) {
-  db.eval(commonfo.scriptgetquotes, 1, req.clientid, function(err, ret) {
+  db.eval(commonfo.scriptgetquotes, 0, req.clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"quotes\":" + ret + "}");
   });
@@ -1028,7 +1030,7 @@ function sendOrder(order, conn) {
 }
 
 function orderHistory(req, conn) {
-  db.eval(commonfo.scriptgetorders, 1, req.clientid, function(err, ret) {
+  db.eval(commonfo.scriptgetorders, 0, req.clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"orders\":" + ret + "}");
   });
@@ -1101,7 +1103,7 @@ function tradeHistory(req, conn) {
   }
 
   if ("positionkey" in req) {
-    db.eval(commonfo.scriptgetpostrades, 2, req.clientid, req.positionkey, function(err, ret) {
+    db.eval(commonfo.scriptgetpostrades, 0, req.clientid, req.positionkey, function(err, ret) {
       if (err) throw err;
       conn.write("{\"trades\":" + ret + "}");
     });
@@ -1111,7 +1113,7 @@ function tradeHistory(req, conn) {
       conn.write("{\"trades\":" + ret + "}");
     });
   } else {
-    db.eval(commonfo.scriptgettrades, 1, req.clientid, function(err, ret) {
+    db.eval(commonfo.scriptgettrades, 0, req.clientid, function(err, ret) {
       if (err) throw err;
       conn.write("{\"trades\":" + ret + "}");
     });
@@ -1119,7 +1121,7 @@ function tradeHistory(req, conn) {
 }
 
 function cashHistory(req, conn) {
-  db.eval(commonfo.scriptgetcashhistory, 2, req.clientid, req.currency, function(err, ret) {
+  db.eval(commonfo.scriptgetcashhistory, 0, req.clientid, req.currency, function(err, ret) {
     if (err) throw err;
     conn.write("{\"cashhistory\":" + ret + "}");
   });  
@@ -1171,23 +1173,23 @@ function sendPositions(orgclientkey, conn) {
 }
 
 function positionRequest(posreq, conn) {
-  db.eval(commonfo.scriptgetpositions, 1, posreq.clientid, function(err, ret) {
+  db.eval(commonfo.scriptgetpositions, 0, posreq.clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"positions\":" + JSON.stringify(ret) + "}");
   });
 }
 
 function cashRequest(cashreq, conn) {
-  db.eval(commonfo.scriptgetcash, 1, cashreq.clientid, function(err, ret) {
+  db.eval(commonfo.scriptgetcash, 0, cashreq.clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"cash\":" + ret + "}");
   });  
 }
 
-function accountRequest(acctreq, conn) {
-  db.eval(commonfo.scriptgetaccount, 1, acctreq.clientid, function(err, ret) {
+function accountSummaryRequest(acctreq, conn) {
+  db.eval(commonfo.scriptgetaccountsummary, 0, acctreq.clientid, function(err, ret) {
     if (err) throw err;
-    conn.write("{\"account\":" + ret + "}");
+    conn.write("{\"accountsummary\":" + ret + "}");
   });
 }
 
@@ -1388,7 +1390,7 @@ function initDb() {
 
 function clearSubscriptions() {
   // clears connections & subscriptions
-  db.eval(commonfo.scriptunsubscribeserver, 1, serverid, function(err, ret) {
+  db.eval(commonfo.scriptunsubscribeserver, 0, serverid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -1512,7 +1514,7 @@ function sendCurrencies(conn) {
 }
 
 function sendClientTypes(conn) {
-  db.eval(commonfo.scriptgetclienttypes, 1, servertype, function(err, ret) {
+  db.eval(commonfo.scriptgetclienttypes, 0, servertype, function(err, ret) {
     if (err) throw err;
     conn.write("{\"clienttypes\":" + ret + "}");
   });    
@@ -1695,7 +1697,7 @@ function pendingChatRequest(req, conn) {
 function sendHolidays(req, conn) {
   console.log(req);
 
-  db.eval(commonfo.scriptgetholidays, 1, req.market, function(err, ret) {
+  db.eval(commonfo.scriptgetholidays, 0, req.market, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
@@ -1785,7 +1787,7 @@ function registerScripts() {
     vals = redis.call("hmget", "client:" .. clients[index], unpack(fields)) \
     --[[ only interested in clients for the specified broker ]] \
     if vals[1] == KEYS[1] then \
-      tblinsttype = redis.call("smembers", vals[2] .. ":instrumenttypes") \
+      tblinsttype = redis.call("smembers", "client:" .. vals[2] .. ":instrumenttypes") \
       table.insert(tblclient, {brokerid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype, type = vals[8], hedge = vals[9], brokerclientcode = vals[10], commissionpercent = vals[11]}) \
     end \
   end \
@@ -1850,20 +1852,20 @@ function registerScripts() {
   // get alpha sorted list of instruments based on set of valid instrument types
   //
   scriptgetinst = '\
-  local instruments = redis.call("sort", "instruments", "ALPHA") \
-  local fields = {"instrumenttype", "shortname", "currency", "marginpercent", "exchange", "isin", "hedge", "ptmexempt"} \
+  local symbols = redis.call("sort", "symbols", "ALPHA") \
+  local fields = {"instrumenttypeid", "shortname", "currency", "marginpercent", "exchange", "isin", "hedge", "ptmexempt"} \
   local vals \
   local inst = {} \
   local marginpc \
-  for index = 1, #instruments do \
-    vals = redis.call("hmget", "symbol:" .. instruments[index], unpack(fields)) \
+  for index = 1, #symbols do \
+    vals = redis.call("hmget", "symbol:" .. symbols[index], unpack(fields)) \
     if redis.call("sismember", "instrumenttypes", vals[1]) == 1 then \
       if vals[4] then \
         marginpc = vals[4] \
       else \
         marginpc = 100 \
       end \
-      table.insert(inst, {symbol = instruments[index], shortname = vals[2], currency = vals[3], instrumenttype = vals[1], marginpercent = marginpc, exchange = vals[5], isin = vals[6], hedge = vals[7], ptmexempt=vals[8]}) \
+      table.insert(inst, {symbol = symbols[index], shortname = vals[2], currency = vals[3], instrumenttypeid = vals[1], marginpercent = marginpc, exchange = vals[5], isin = vals[6], hedge = vals[7], ptmexempt=vals[8]}) \
     end \
   end \
   return cjson.encode(inst) \
@@ -2068,8 +2070,8 @@ function registerScripts() {
     for index = 1, #positions do \
       local vals = redis.call("hmget", clientid .. ":position:" .. positions[index], unpack(fields)) \
       if vals[1] then \
-        local instrumenttype = redis.call("hget", "symbol:" .. vals[1], "instrumenttype") \
-        local finance = calcfinance(instrumenttype, vals[4], vals[5], vals[2], 1) \
+        local instrumenttypeid = redis.call("hget", "symbol:" .. vals[1], "instrumenttypeid") \
+        local finance = calcfinance(instrumenttypeid, vals[4], vals[5], vals[2], 1) \
         if finance ~= 0 then \
           local drcr \
           local desc \

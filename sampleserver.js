@@ -39,7 +39,7 @@ db.on("error", function(err) {
 
 function initialise() {
   console.log("initialising...");
-  common.registerCommonScripts();
+  common.registerScripts();
   registerScripts();
 }
 

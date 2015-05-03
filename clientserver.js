@@ -7,7 +7,13 @@
 ****************/
 
 // node libraries
-var https = require('https');
+
+// http or https
+var http = require('http');
+var cw2tport = 8080; // client listen port
+//var https = require('https');
+//var cw2tport = 443; // client listen port
+
 var fs = require("fs");
 
 // external libraries
@@ -21,7 +27,6 @@ var common = require('./commonfo.js');
 // globals
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
-var cw2tport = 443; // client listen port
 var ordertypes = {};
 var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;
@@ -80,7 +85,7 @@ db.on("error", function(err) {
 });
 
 function initialise() {
-  common.registerCommonScripts();
+  common.registerScripts();
   registerScripts();
   initDb();
   clearSubscriptions();
@@ -101,7 +106,7 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    //console.log("channel: " + channel + ", message: " + message);
+    console.log("channel: " + channel + ", message: " + message);
 
     if (channel.substr(0, 6) == "price:") {
       common.newPrice(channel.substr(6), serverid, message, connections, feedtype);
@@ -161,7 +166,10 @@ function pubsub() {
 }
 
 // sockjs server
+// http
 var sockjs_opts = {sockjs_url: "http://cdn.sockjs.org/sockjs-0.3.min.js"};
+// https
+//var sockjs_opts = {sockjs_url: "https://d1fxtkz8shb9d2.cloudfront.net/sockjs-0.3.js"};
 var sockjs_svr = sockjs.createServer(sockjs_opts);
 
 // options for https server
@@ -172,7 +180,10 @@ var options = {
 
 // https server
 function listen() {
-  var server = https.createServer(options);
+  // http
+  var server = http.createServer();
+  // https
+  //var server = https.createServer(options);
  
   server.addListener('request', function(req, res) {
     static_directory.serve(req, res);
@@ -188,6 +199,7 @@ function listen() {
   });
  
   sockjs_svr.on('connection', function(conn) {
+    console.log(conn);
     // this will be overwritten if & when a client logs on
     var clientid = "0";
 
@@ -212,18 +224,18 @@ function listen() {
         try {
           var obj = JSON.parse(msg);
 
-          if ("singlesymbolrequest" in obj) {
-            singleSymbolRequest(clientid, obj.singlesymbolrequest, conn);
-          } else if ("singlesymbolremoverequest" in obj) {
-            singleSymbolRemoveRequest(clientid, obj.singlesymbolremoverequest, conn);
-          } else if ("instrumentrequest" in obj) {
-            instrumentRequest(obj.instrumentrequest, clientid,conn);
+          if ("subscribepricerequest" in obj) {
+            subscribePriceRequest(clientid, obj.subscribepricerequest, conn);
+          } else if ("unsubscribepricerequest" in obj) {
+            unsubscribePriceRequest(clientid, obj.unsubscribepricerequest, conn);
+          } else if ("symbolrequest" in obj) {
+            symbolRequest(obj.symbolrequest, clientid, conn);
           } else if ("positionrequest" in obj) {
             positionRequest(obj.positionrequest, clientid, conn);
           } else if ("cashrequest" in obj) {
             cashRequest(obj.cashrequest, clientid, conn);
-          } else if ("accountrequest" in obj) {
-            accountRequest(obj.accountrequest, clientid, conn);
+          } else if ("accountsummaryrequest" in obj) {
+            accountSummaryRequest(obj.accountsummaryrequest, clientid, conn);
           } else if ("quoterequesthistoryrequest" in obj) {
             quoteRequestHistory(obj.quoterequesthistoryrequest, clientid, conn);
           } else if ("openquoterequestrequest" in obj) {
@@ -363,7 +375,7 @@ function tidy(clientid, conn) {
 }
 
 function unsubscribeConnection(id) {
-  db.eval(common.scriptunsubscribeid, 3, id, serverid, feedtype, function(err, ret) {
+  db.eval(common.scriptunsubscribeid, 0, id, serverid, feedtype, function(err, ret) {
     if (err) throw err;
 
     // unsubscribe returned topics
@@ -421,7 +433,7 @@ function getFixDate(date) {
 
   // send a quote with bid & offer size set to 0 to imply rejection
   quote.quotereqid = quoterequest.quotereqid;
-  quote.symbol = quoterequest.symbol;
+  quote.symbolid = quoterequest.symbolid;
   quote.bidsize = 0;
   quote.offersize = 0;
   quote.quoterejectreason = reason;
@@ -456,12 +468,12 @@ function getSideDesc(side) {
     }
 
     if (sendmarginreserve) {
-      getSendMargin(order.clientid, order.currency);
-      getSendReserve(order.clientid, order.symbol, order.settlcurrency);
+      getSendMargin(order.clientid, order.currencyid);
+      getSendReserve(order.clientid, order.symbolid, order.settlcurrencyid);
     }
 
     if (sendcash) {
-      getSendCash(order.clientid, order.settlcurrency);
+      getSendCash(order.clientid, order.settlcurrencyid);
     }
   });
 }*/
@@ -503,8 +515,8 @@ function getSendPosition(positionid, orgclientid) {
       position.positionid = positionid;
       position.quantity = "0";
       position.cost = "0";
-      //position.symbol = symbol;
-      //position.currency = currency;
+      //position.symbolid = symbolid;
+      //position.currencyid = currencyid;
     } else {
       position = pos;
     }
@@ -516,10 +528,10 @@ function getSendPosition(positionid, orgclientid) {
   });
 }
 
-function getSendCash(clientid, currency) {
+function getSendCash(clientid, currencyid) {
   var cash = {};
 
-  db.get(clientid + ":cash:" + currency, function(err, amount) {
+  db.get(clientid + ":cash:" + currencyid, function(err, amount) {
     if (err) {
       console.log(err);
       return;
@@ -532,7 +544,7 @@ function getSendCash(clientid, currency) {
       cash.amount = amount;
     }
 
-    cash.currency = currency;
+    cash.currencyid = currencyid;
 
     // send to client, if connected
     if (clientid in connections) {
@@ -541,10 +553,10 @@ function getSendCash(clientid, currency) {
   });
 }
 
-function getSendMargin(clientid, currency) {
+function getSendMargin(clientid, currencyid) {
   var margin = {};
 
-  db.get(clientid + ":margin:" + currency, function(err, amount) {
+  db.get(clientid + ":margin:" + currencyid, function(err, amount) {
     if (err) {
       console.log(err);
       return;
@@ -557,7 +569,7 @@ function getSendMargin(clientid, currency) {
       margin.amount = amount;
     }
 
-    margin.currency = currency;
+    margin.currencyid = currencyid;
 
     if (clientid in connections) {
       sendMargin(margin, connections[clientid]);
@@ -565,10 +577,10 @@ function getSendMargin(clientid, currency) {
   });
 }
 
-function getSendReserve(clientid, symbol, currency) {
+function getSendReserve(clientid, symbolid, currencyid) {
   var reserve = {};
 
-  db.get(clientid + ":reserve:" + symbol + ":" + currency, function(err, res) {
+  db.get(clientid + ":reserve:" + symbolid + ":" + currencyid, function(err, res) {
     if (err) {
       console.log(err);
       return;
@@ -581,8 +593,8 @@ function getSendReserve(clientid, symbol, currency) {
       reserve.quantity = res;
     }
 
-    reserve.symbol = symbol;
-    reserve.currency = currency;
+    reserve.symbolid = symbolid;
+    reserve.currencyid = currencyid;
 
     if (clientid in connections) {
       sendReserve(reserve, connections[clientid]);
@@ -598,15 +610,19 @@ function getValue(trade) {
   }
 }
 
-function instrumentRequest(instreq, clientid, conn) {
-  // get sorted subset of instruments for this client
-  db.eval(scriptgetinst, 1, clientid, function(err, ret) {
+function symbolRequest(instreq, clientid, conn) {
+  console.log("symbolRequest");
+  console.log(instreq);
+
+
+  // get alpha sorted set of instruments for this client
+  db.eval(scriptgetinst, 0, clientid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
     }
 
-    conn.write("{\"instruments\":" + ret + "}");
+    conn.write("{\"symbols\":" + ret + "}");
   });
 }
 
@@ -777,15 +793,15 @@ function sendCash(clientid, conn) {
       return;
     }
 
-    replies.forEach(function (currency, i) {
-      db.get(clientid + ":cash:" + currency, function(err, amount) {
+    replies.forEach(function (currencyid, i) {
+      db.get(clientid + ":cash:" + currencyid, function(err, amount) {
         if (err) {
           console.log(err);
           return;
         }
 
         var cash = {};
-        cash.currency = currency;
+        cash.currencyid = currencyid;
         cash.amount = amount;
 
         arr.cash.push(cash);
@@ -819,20 +835,20 @@ function sendMargins(clientid, conn) {
       return;
     }
 
-    replies.forEach(function (currency, i) {
-      db.get(clientid + ":margin:" + currency, function(err, amount) {
+    replies.forEach(function (currencyid, i) {
+      db.get(clientid + ":margin:" + currencyid, function(err, amount) {
         if (err) {
           console.log(err);
           return;
         }
 
         if (amount == null) {
-          console.log("Margin not found:" + clientid + ":margin:" + currency);
+          console.log("Margin not found:" + clientid + ":margin:" + currencyid);
           return;
         }
 
         var margin = {};
-        margin.currency = currency;
+        margin.currencyid = currencyid;
         margin.amount = amount;
 
         arr.margins.push(margin);
@@ -933,7 +949,7 @@ function replySignIn(reply, conn) {
 
 function clearSubscriptions() {
   // clears connections & subscriptions
-  db.eval(common.scriptunsubscribeserver, 1, serverid, function(err, ret) {
+  db.eval(common.scriptunsubscribeserver, 0, serverid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -1002,20 +1018,22 @@ function registerClient(reg, conn) {
 //
 // request for a new symbol subscription
 //
-function singleSymbolRequest(clientid, symbol, conn) {
-  db.eval(common.scriptsubscribesymbol, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
+function subscribePriceRequest(clientid, symbol, conn) {
+  console.log(symbol);
+  db.eval(common.scriptsubscribesymbol, 0, symbol.symbolid, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
 
     // see if we need to subscribe
     if (ret[0] == 1) {
-      console.log("subscribing to " + symbol);
-      dbsub.subscribe("price:" + symbol);
+      console.log("subscribing to " + symbol.symbolid);
+      dbsub.subscribe("price:" + symbol.symbolid);
       // todo - exit here as need to wait for price?
     }
 
     // send the current stored price
     var price = {};
-    price.symbol = symbol;
+    price.symbolid = symbol.symbolid;
     price.bid = ret[1];
     price.ask = ret[2];
     price.timestamp = ret[3];
@@ -1024,25 +1042,25 @@ function singleSymbolRequest(clientid, symbol, conn) {
   });
 }
 
-function singleSymbolRemoveRequest(clientid, symbol, conn) {
-  db.eval(common.scriptunsubscribesymbol, 4, symbol, clientid, serverid, feedtype, function(err, ret) {
+function unsubscribePriceRequest(clientid, symbolid, conn) {
+  db.eval(common.scriptunsubscribesymbol, 0, symbolid, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
     // the script will tell us if we need to unsubscribe from the symbol
     if (ret[0] == 1) {
-      console.log("unsubscribing from " + symbol);
+      console.log("unsubscribing from " + symbolid);
       dbsub.unsubscribe("price:" + ret[1]);
     }
   });
 }
 
-/*function positionHistory(clientid, symbol, conn) {
+/*function positionHistory(clientid, currencyid, conn) {
   // todo: remove
   clientid = 5020;
-  symbol = "LOOK";
+  symbolid = "LOOK";
 
-  //bo.getPositionHistory(clientid, symbol);
+  //bo.getPositionHistory(clientid, symbolid);
 }*/
 
 //
@@ -1050,7 +1068,7 @@ function singleSymbolRemoveRequest(clientid, symbol, conn) {
 //
 function openQuoteRequestRequest(req, conn) {
   console.log("openQuoteRequestRequest");
-  db.eval(common.scriptgetopenquoterequests, 1, req.symbol, function(err, ret) {
+  db.eval(common.scriptgetopenquoterequests, 0, req.symbolid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"quoterequests\":" + ret + "}");
   });
@@ -1062,28 +1080,28 @@ function openQuoteRequestRequest(req, conn) {
 function myQuotesRequest(req, clientid, conn) {
   console.log("myQuotesRequest");
   console.log(req);
-  db.eval(common.scriptgetmyquotes, 2, req.quotereqid, clientid, function(err, ret) {
+  db.eval(common.scriptgetmyquotes, 0, req.quotereqid, clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"myquotes\":" + ret + "}");
   });
 }
 
 function quoteRequestHistory(req, clientid, conn) {
-  db.eval(common.scriptgetquoterequests, 1, clientid, function(err, ret) {
+  db.eval(common.scriptgetquoterequests, 0, clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"quoterequesthistory\":" + ret + "}");
   });
 }
 
 function quoteHistory(req, clientid, conn) {
-  db.eval(common.scriptgetquotes, 1, clientid, function(err, ret) {
+  db.eval(common.scriptgetquotes, 0, clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"quotes\":" + ret + "}");
   });
 }
 
 function orderHistory(req, clientid, conn) {
-  db.eval(common.scriptgetorders, 1, clientid, function(err, ret) {
+  db.eval(common.scriptgetorders, 0, clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"orders\":" + ret + "}");
   });
@@ -1091,12 +1109,12 @@ function orderHistory(req, clientid, conn) {
 
 function tradeHistory(req, clientid, conn) {
   if ("positionkey" in req) {
-    db.eval(common.scriptgetpostrades, 2, clientid, req.positionkey, function(err, ret) {
+    db.eval(common.scriptgetpostrades, 0, clientid, req.positionkey, function(err, ret) {
       if (err) throw err;
       conn.write("{\"trades\":" + ret + "}");
     });
   } else {
-    db.eval(common.scriptgettrades, 1, clientid, function(err, ret) {
+    db.eval(common.scriptgettrades, 0, clientid, function(err, ret) {
       if (err) throw err;
       conn.write("{\"trades\":" + ret + "}");
     });
@@ -1104,7 +1122,7 @@ function tradeHistory(req, clientid, conn) {
 }
 
 function cashHistory(req, clientid, conn) {
-  db.eval(common.scriptgetcashhistory, 2, clientid, req.currency, function(err, ret) {
+  db.eval(common.scriptgetcashhistory, 0, clientid, req.currencyid, function(err, ret) {
     console.log(ret);
     if (err) throw err;
     conn.write("{\"cashhistory\":" + ret + "}");
@@ -1115,15 +1133,9 @@ function positionRequest(posreq, clientid, conn) {
   console.log("positionRequest");
   console.log(posreq);
 
-  if ('symbol' in posreq && posreq.symbol != "") {
-    // single symbol
-    db.eval(common.scriptgetposition, 2, clientid, posreq.symbol, function(err, ret) {
-      if (err) throw err;
-      conn.write("{\"positions\":" + ret + "}");
-    });    
-  } else {
+  if ('symbolid' in posreq && posreq.symbolid == "*") {
     // all positions
-    db.eval(common.scriptsubscribepositions, 2, clientid, serverid, function(err, ret) {
+    db.eval(common.scriptsubscribepositions, 0, clientid, serverid, function(err, ret) {
       if (err) throw err;
 
       // send positions
@@ -1134,6 +1146,12 @@ function positionRequest(posreq, clientid, conn) {
         dbsub.subscribe("price:" + ret[1][i]);
       }
     });
+  } else {
+    // single symbol
+    db.eval(common.scriptgetposition, 0, clientid, posreq.symbolid, function(err, ret) {
+      if (err) throw err;
+      conn.write("{\"positions\":" + ret + "}");
+    });    
   }
 }
 
@@ -1142,7 +1160,7 @@ function unsubscribePositionsRequest(unsubposreq, clientid, conn) {
   console.log(unsubposreq);
 
   // all positions
-  db.eval(common.scriptunsubscribepositions, 2, clientid, serverid, function(err, ret) {
+  db.eval(common.scriptunsubscribepositions, 0, clientid, serverid, function(err, ret) {
     if (err) throw err;
 
     // unsubscribe to prices
@@ -1153,21 +1171,21 @@ function unsubscribePositionsRequest(unsubposreq, clientid, conn) {
 }
 
 function cashRequest(cashreq, clientid, conn) {
-  db.eval(common.scriptgetcash, 1, clientid, function(err, ret) {
+  db.eval(common.scriptgetcash, 0, clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"cash\":" + ret + "}");
   });  
 }
 
-function accountRequest(acctreq, clientid, conn) {
-  db.eval(common.scriptgetaccount, 1, clientid, function(err, ret) {
+function accountSummaryRequest(acctreq, clientid, conn) {
+  db.eval(common.scriptgetaccountsummary, 0, clientid, function(err, ret) {
     if (err) throw err;
-    conn.write("{\"account\":" + ret + "}");
+    conn.write("{\"accountsummary\":" + ret + "}");
   });
 }
 
 function statementRequest(statementreq, clientid, conn) {
-  db.eval(common.scriptgetcashhistory, 2, clientid, statementreq.currency, function(err, ret) {
+  db.eval(common.scriptgetcashhistory, 0, clientid, statementreq.currencyid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"statement\":" + ret + "}");
   });  
@@ -1197,7 +1215,7 @@ function sendQuoteack(quoteack) {
 
     //quoteack.quotereqid = quoterequest.quotereqid;
     quoteack.clientid = quoterequest.clientid;
-    quoteack.symbol = quoterequest.symbol;
+    quoteack.symbolid = quoterequest.symbolid;
     quoteack.quoterejectreasondesc = common.getPTPQuoteRejectReason(quoterequest.quoterejectreason);
     if ('text' in quoterequest) {
       quoteack.text = quoterequest.text;
@@ -1332,9 +1350,9 @@ function watchlistRequest(watchlist, clientid, conn) {
   console.log("watchlistRequest");
   console.log(watchlist);
 
-  if ("symbol" in watchlist) {
+  if ("symbolid" in watchlist) {
     // add a symbol to the watchlist for this client
-    db.eval(common.scriptaddtowatchlist, 4, watchlist.symbol, clientid, serverid, servertype, function(err, ret) {
+    db.eval(common.scriptaddtowatchlist, 0, watchlist.symbolid, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1344,12 +1362,12 @@ function watchlistRequest(watchlist, clientid, conn) {
       conn.write("{\"watchlist\":" + ret[0] + "}");
 
       if (ret[1] == 1) {
-        dbsub.subscribe("price:" + watchlist.symbol);
+        dbsub.subscribe("price:" + watchlist.symbolid);
       }
     });
   } else {
     // get the watchlist for this client
-    db.eval(common.scriptgetwatchlist, 3, clientid, serverid, servertype, function(err, ret) {
+    db.eval(common.scriptunwatchlist, 0, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1369,9 +1387,9 @@ function watchlistRequest(watchlist, clientid, conn) {
 function unwatchlistrequest(uwl, clientid, conn) {
   console.log("unwatchlistrequest");
 
-  if ("symbol" in uwl) {
+  if ("symbolid" in uwl) {
     // unsubscribe from the watchlist for this client
-    db.eval(common.scriptremovewatchlist, 4, uwl.symbol, clientid, serverid, servertype, function(err, ret) {
+    db.eval(common.scriptremovewatchlist, 0, uwl.symbolid, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1379,14 +1397,14 @@ function unwatchlistrequest(uwl, clientid, conn) {
 
       // unsubscribe from symbol
       if (ret == 1) {
-        dbsub.unsubscribe("price:" + uwl.symbol);
+        dbsub.unsubscribe("price:" + uwl.symbolid);
       }
 
-      conn.write("{\"unwatchlist\":[\"" + uwl.symbol + "\"]}");
+      conn.write("{\"unwatchlist\":[\"" + uwl.symbolid + "\"]}");
     });
   } else {
     // unsubscribe from the watchlist for this client
-    db.eval(common.scriptunwatchlist, 2, clientid, serverid, servertype, function(err, ret) {
+    db.eval(common.scriptunwatchlist, 0, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1403,17 +1421,17 @@ function unwatchlistrequest(uwl, clientid, conn) {
 function registerScripts() {
   //
   // get alpha sorted list of instruments for a specified client
-  // uses set of valid instrument types per client i.e. 1:instrumenttypes CFD
+  // uses set of valid instrument types per client i.e. client:1:instrumenttypes CFD
   //
   scriptgetinst = '\
-  local instruments = redis.call("sort", "instruments", "ALPHA") \
-  local fields = {"instrumenttype", "shortname", "marginpercent"} \
+  local symbols = redis.call("sort", "symbols", "ALPHA") \
+  local fields = {"instrumenttypeid", "shortname", "currencyid", "marginpercent"} \
   local vals \
   local inst = {} \
-  for index = 1, #instruments do \
-    vals = redis.call("hmget", "symbol:" .. instruments[index], unpack(fields)) \
-    if redis.call("sismember", KEYS[1] .. ":instrumenttypes", vals[1]) == 1 then \
-      table.insert(inst, {symbol = instruments[index], instrumenttype = vals[1], shortname = vals[2], marginpercent = vals[3]}) \
+  for index = 1, #symbols do \
+    vals = redis.call("hmget", "symbol:" .. symbols[index], unpack(fields)) \
+    if redis.call("sismember", "client:" .. ARGV[1] .. ":instrumenttypes", vals[1]) == 1 then \
+      table.insert(inst, {symbolid = symbols[index], instrumenttypeid = vals[1], shortname = vals[2], currencyid = vals[3], marginpercent = vals[4]}) \
     end \
   end \
   return cjson.encode(inst) \

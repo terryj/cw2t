@@ -846,7 +846,7 @@
         var margins = {};
         //var trades = {};
         var trades = [];
-        var instruments = {};
+        var symbols = {};
         var obdisplay = {};
         var ordervol = {};
         var ordertypes = {};
@@ -980,10 +980,10 @@
                     displayCash();
                 } else if ("instrumenttypes" in obj) {
                     loadInstrumenttypes(obj.instrumenttypes);
-                } else if ("instruments" in obj) {
-                    loadInstruments(obj.instruments);
-                } else if ("instrument" in obj) {
-                    updateInstrument(obj.instrument);
+                } else if ("symbols" in obj) {
+                    loadSymbols(obj.symbols);
+                } else if ("symbol" in obj) {
+                    updateSymbol(obj.symbol);
                 } else if ("margins" in obj) {
                     clearMargins();
                     loadMargins(obj.margins);
@@ -1073,19 +1073,19 @@
 
         function loadCash(casharr) {
             for (var i = 0; i < casharr.length; ++i) {
-                cash[casharr[i].currency] = casharr[i];
+                cash[casharr[i].currencyid] = casharr[i];
             }                        
         }
 
         function loadAccount(acctarr) {
             for (var i = 0; i < acctarr.length; ++i) {
-                account[acctarr[i].currency] = acctarr[i];
+                account[acctarr[i].currencyid] = acctarr[i];
             }
         }
 
         function loadMargins(marginarr) {
             for (var i = 0; i < marginarr.length; ++i) {
-                margins[marginarr[i].currency] = marginarr[i];
+                margins[marginarr[i].currencyid] = marginarr[i];
             }                        
         }
 
@@ -1093,7 +1093,7 @@
             var reskey;
 
             for (var i = 0; i < reservearr.length; ++i) {
-                reskey = reservearr[i].symbol + ":" + reservearr[i].currency + ":" + reservearr.settldate;
+                reskey = reservearr[i].symbolid + ":" + reservearr[i].currencyid + ":" + reservearr.settldate;
                 reserves[reskey] = reservearr[i];
             }                        
         }
@@ -1104,9 +1104,9 @@
             }                                    
         }*/
         
-        function loadInstruments(instrumentarr) {
-            for (var i = 0; i < instrumentarr.length; ++i) {
-                instruments[instrumentarr[i].symbol] = instrumentarr[i];
+        function loadSymbols(symbolarr) {
+            for (var i = 0; i < symbolarr.length; ++i) {
+                symbols[symbolarr[i].symbolid] = symbolarr[i];
             }
         }
 
@@ -1314,32 +1314,32 @@
             var msg;
 
             if (cashitem.amount == 0) {
-                delete cash[cashitem.currency];
+                delete cash[cashitem.currencyid];
 
                 if (selectedmenu == MENUCASH) {
-                    removeElementFromList(cashitem.currency, list1);
+                    removeElementFromList(cashitem.currencyid, list1);
                 }
             } else {
-                cash[cashitem.currency] = cashitem;
+                cash[cashitem.currencyid] = cashitem;
 
                 // display if we are looking at cash
                 if (selectedmenu == MENUCASH) {
                     msg = JSON.stringify(cashitem);
-                    if (updateElement(msg, list1, cashitem.currency) == null) {
-                        addElement(msg, list1, cashitem.currency);
+                    if (updateElement(msg, list1, cashitem.currencyid) == null) {
+                        addElement(msg, list1, cashitem.currencyid);
                     }
                 }                
             }
         }
 
-        function updateInstrument(instrument) {
+        function updateSymbol(symbol) {
             var lblinstconf;
 
-            instruments[instrument.symbol] = instrument;
+            symbols[symbol.symbolid] = symbol;
 
             lblinstconf = document.getElementById("lblinstconf");
             if (lblinstconf != null) {
-                lblinstconf.innerHTML = instrument.symbol + " updated ok";
+                lblinstconf.innerHTML = symbol.symbolid + " updated ok";
             }
         }
 
@@ -1404,7 +1404,7 @@
             var msg = "";
 
             msg += cashtranstypes[cashtrans.transtype].description;
-            msg += " of " + cashtrans.amount + " " + cashtrans.currency;
+            msg += " of " + cashtrans.amount + " " + cashtrans.currencyid;
             if (cashtrans.drcr == "1") {
                 msg += " added to ";
             } else {
@@ -1450,7 +1450,7 @@
             }
 
             if (selectedmenu == MENURFQ) {
-                addMessageToDiv(msg, "orderdiv:" + order.symbol + ":" + order.orderdivnum);
+                addMessageToDiv(msg, "orderdiv:" + order.symbolid + ":" + order.orderdivnum);
             } else if (selectedmenu == MENUORDERS) {
                 removeElementFromList(order.orderid, list1);
                 if (list1.childNodes.length == 0) {
@@ -1480,7 +1480,7 @@
         }
 
         function updateOrderVol(order) {
-            var key = order.symbol + order.side + order.price;
+            var key = order.symbolid + order.side + order.price;
  
             if (order.status == "0" || order.status == "1") {
                 if (order.orderid in orders) {
@@ -1757,14 +1757,14 @@
             }
         }
 
-        function clearSymbolDiv(symbol) {
-            var orderdivnum = getOrderDivNum(symbol);
+        function clearSymbolDiv(symbolid) {
+            var orderdivnum = getOrderDivNum(symbolid);
 
             for (var i = 1; i <= orderdivnum; i++) {
-                clearDiv("orderdiv:" + symbol + ":" + i);
+                clearDiv("orderdiv:" + symbolid + ":" + i);
             }
 
-            delete orderdivnumarr[symbol];
+            delete orderdivnumarr[symbolid];
         }
 
         function clearStrip(stripid) {
@@ -1780,11 +1780,11 @@
         function clearStrips() {
             clearStrip("headingstrip");
 
-            for (var symbol in orderbooks) {
-                for (var i = 0; i < orderbooks[symbol].length; ++i) {
-                    clearStrip("strip:" + symbol + ":" + i);
-                    if (symbol in obdisplay) {
-                        if (!obdisplay[symbol].level2) {
+            for (var symbolid in orderbooks) {
+                for (var i = 0; i < orderbooks[symbolid].length; ++i) {
+                    clearStrip("strip:" + symbolid + ":" + i);
+                    if (symbolid in obdisplay) {
+                        if (!obdisplay[symbolid].level2) {
                             break;
                         }
                     }
@@ -1792,17 +1792,17 @@
             }
         }
 
-        function clearAllStrips(symbol) {
+        function clearAllStrips(symbolid) {
             var depth;
 
-            if (obdisplay[symbol].level2) {
-                depth = orderbooks[symbol].length;
+            if (obdisplay[symbolid].level2) {
+                depth = orderbooks[symbolid].length;
             } else {
                 depth = 1;
             }
 
             for (var i = 0; i < depth; ++i) {
-                clearStrip("strip:" + symbol + ":" + i);
+                clearStrip("strip:" + symbolid + ":" + i);
             }
         }
 
@@ -1917,7 +1917,7 @@
             msg = "Cancel order #" + orderid;
             msg += " to " + getSideDesc(orders[orderid].side);
             msg += " " + orders[orderid].remquantity;
-            msg += " " + orders[orderid].symbol;
+            msg += " " + orders[orderid].symbolid;
             if ('price' in orders[orderid]) {
                 msg += " @ " + orders[orderid].price;
             }
@@ -1941,7 +1941,7 @@
             msg = "Fill order #" + orderid;
             msg += " to " + getSideDesc(orders[orderid].side);
             msg += " " + orders[orderid].remquantity;
-            msg += " " + orders[orderid].symbol;
+            msg += " " + orders[orderid].symbolid;
             if ('price' in orders[orderid]) {
                 msg += " @ " + orders[orderid].price;
             }
@@ -1991,9 +1991,9 @@
 
                 searchtext = stockboxinput.value.toLowerCase();
 
-                for (var i in instruments) {
-                    if (i.toLowerCase().indexOf(searchtext) == 0 || instruments[i].shortname.toLowerCase().indexOf(searchtext) == 0) {
-                        addElement(i + " " + instruments[i].shortname, stocklist, i);
+                for (var i in symbols) {
+                    if (i.toLowerCase().indexOf(searchtext) == 0 || symbols[i].shortname.toLowerCase().indexOf(searchtext) == 0) {
+                        addElement(i + " " + symbols[i].shortname, stocklist, i);
                     }
                 }
 
@@ -2011,38 +2011,38 @@
 
             stocklist.onclick = function(e) {
                 var firstspace;
-                var symbol;
+                var symbolid;
                 var element;
                 
                 if (!e) e = window.event;
                 element = e.target || e.srcElement;
 
                 firstspace = element.innerHTML.indexOf(' ');
-                symbol = element.innerHTML.substr(0, firstspace);
+                symbolid = element.innerHTML.substr(0, firstspace);
 
                 if (selectedmenu == MENUWATCHLIST) { // todo: not implemented
-                    if (symbol in obdisplay) {
-                        alert(symbol + " already in Watch List");
+                    if (symbolid in obdisplay) {
+                        alert(symbolid + " already in Watch List");
                         e.stopPropagation();
                     } else {
-                        watchlistRequest(symbol);
+                        watchlistRequest(symbolid);
                         stocklist.style.visibility = "hidden";
                         stockboxinput.value = "";
                         stockboxinput.focus();
                     }
                 } else if (selectedmenu == MENUPRODUCTS) {
-                    displayProduct(instruments[symbol]);
+                    displayProduct(symbols[symbolid]);
                 } else if (frm == "orderdiv") {
-                    inpsymboldesc.value = instruments[symbol].shortname;
+                    inpsymboldesc.value = symbols[symbolid].shortname;
                     inpsymbol = document.getElementById("inpsymbol");
-                    inpsymbol.value = symbol;
+                    inpsymbol.value = symbolid;
                 } else if (selectedmenu == MENURFQ) {
                     // unsubscribe current symbol
                     if (selectedsymbol != "") {
                         requestRemoveSingleSymbol(selectedsymbol);
                     }
 
-                    selectedsymbol = symbol;
+                    selectedsymbol = symbolid;
 
                     clearData();
 
@@ -2141,18 +2141,18 @@
             return ((finishdt - startdt) / 1000);
         }
 
-        function requestSingleSymbol(symbol) {
-            sockjs.send("{\"singlesymbolrequest\":" + JSON.stringify(symbol) + "}");
+        function requestSingleSymbol(symbolid) {
+            sockjs.send("{\"singlesymbolrequest\":" + JSON.stringify(symbolid) + "}");
         }
 
-        function requestRemoveSingleSymbol(symbol) {
-            sockjs.send("{\"singlesymbolremoverequest\":" + JSON.stringify(symbol) + "}");
+        function requestRemoveSingleSymbol(symbolid) {
+            sockjs.send("{\"singlesymbolremoverequest\":" + JSON.stringify(symbolid) + "}");
         }
 
         function priceReceived(price) {
             // only update price stuff for single symbol view
             if (selectedmenu == MENURFQ) {
-                if (price.symbol == selectedsymbol) {
+                if (price.symbolid == selectedsymbol) {
                     // update price data
                     updatePriceData(price);
 
@@ -2211,7 +2211,7 @@
             var tblprice = d3.select("#tblprice");
             if (tblprice.empty()) {
                 tblprice = createPriceTable(price, cols);
-                createPriceMenu(price.symbol);
+                createPriceMenu(price.symbolid);
             }
 
             // row data
@@ -2323,7 +2323,7 @@
                 .attr("class", "divprice");
 
             divprice.append("header")
-                .text(instruments[price.symbol].shortname + " - " + price.symbol);
+                .text(symbols[price.symbolid].shortname + " - " + price.symbolid);
 
             // create a table
             var tblprice = divprice.append("table")
@@ -2337,7 +2337,7 @@
             return tblprice;
         }
 
-        function createPriceMenu(symbol) {
+        function createPriceMenu(symbolid) {
             var data = [""];
             var cols = ["Request A Quote"];
 
@@ -2374,11 +2374,11 @@
                             // & clear any previous request
                             d3.select("#divrfq").remove();
 
-                            requestQuote(symbol, "");
+                            requestQuote(symbolid, "");
                         });            
         }
 
-        function requestQuote(symbol, quantity) {
+        function requestQuote(symbolid, quantity) {
             var fields = ["Quantity"]; // one per row
 
             var cashorshares = ["Number of shares", "Cash amount"];
@@ -2494,7 +2494,7 @@
                     qty = "";                    
                 }
 
-                sendRfq(clientid, qty, cashorderqty, symbol, "GBP"); // todo: currency
+                sendRfq(clientid, qty, cashorderqty, symbolid, "GBP"); // todo: currency
 
                 // remove button
                 d3.select(this).remove();
@@ -2610,10 +2610,10 @@
 
                         if (d.col == "bidquote") {
                             // we are selling
-                            sendOrder(clientid, d.value.symbol, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+                            sendOrder(clientid, d.value.symbolid, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
                         } else {
                             // we are buying
-                            sendOrder(clientid, d.value.symbol, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrency, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+                            sendOrder(clientid, d.value.symbolid, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
                         }
 
                         // stop timer
@@ -2792,7 +2792,7 @@
         }
 
         function updateTradeTable() {
-            var cols = ["timestamp","clientid","symbol","tradeid","orderid","side","quantity","price","currency","commission","ptmlevy","stampduty","contractcharge","externaltradeid"];
+            var cols = ["timestamp","clientid","symbolid","tradeid","orderid","side","quantity","price","currencyid","commission","ptmlevy","stampduty","contractcharge","externaltradeid"];
 
             // create a trade table if one does not exist
             var tbltrade = d3.select("#tbltrade");
@@ -2822,7 +2822,7 @@
 
             // columns enter & update
             cells.each(function(d) {
-                if (d.col == "symbol") {
+                if (d.col == "symbolid") {
                     var lnk = d3.select(this).select("a");
                     if (lnk.empty()) {
                         // add a link for this symbol
@@ -2974,10 +2974,10 @@
 
                     switch (i) {
                     case 0:
-                        col.innerHTML = positions[x].symbol;
+                        col.innerHTML = positions[x].symbolid;
                         break;
                     case 1:
-                        col.innerHTML = positions[x].currency;
+                        col.innerHTML = positions[x].currencyid;
                         break;
                     case 2:
                         if (positions[x].side == 1) {
@@ -3031,7 +3031,7 @@
             function displayPostrades(col) {
                 var tradehistoryrequest = {};
 
-                var lnktrades = newlink(positions[x].symbol + ":" + positions[x].currency, "trades", "", col);
+                var lnktrades = newlink(positions[x].symbolid + ":" + positions[x].currencyid, "trades", "", col);
 
                 lnktrades.onclick = function() {
                     clearElementById("emptyline:2");
@@ -3089,7 +3089,7 @@
                 var headingrow = document.createElement("tr");
 
                 var col = document.createElement("td");
-                col.innerHTML = account[x].currency;
+                col.innerHTML = account[x].currencyid;
                 col.className = "colleftalign";
 
                 headingrow.appendChild(col);
@@ -3316,15 +3316,15 @@
 
         function displayIndex(index) {
             var s;
-            var sym;
+            var symbolid;
 
             if (!(index in indices)) {return};
 
             for (var i = 0; i < indices[index].length; ++i) {
-                sym = indices[index][i].symbol;
-                if (sym in instruments) {
-                    s = instruments[sym].symbol + ' ' + instruments[sym].shortname;
-                    addElement(s, list1, sym);
+                symbolid = indices[index][i].symbolid;
+                if (symbolid in symbols) {
+                    s = symbols[symbolid].symbolid + ' ' + symbols[symbolid].shortname;
+                    addElement(s, list1, symbolid);
                 }
             }
         }
@@ -3463,7 +3463,7 @@
                     col.innerHTML = trade.brokerclientcode;
                     break;
                 case 2:
-                    col.innerHTML = trade.symbol;
+                    col.innerHTML = trade.symbolid;
                     break;
                 case 3:
                     col.innerHTML = getSideDesc(trade.side);
@@ -3487,7 +3487,7 @@
                     col.innerHTML = formatUTCDate(trade.futsettdate);
                     break;
                 case 9:
-                    col.innerHTML = trade.settlcurrency;
+                    col.innerHTML = trade.settlcurrencyid;
                     break;
                 case 10:
                     col.innerHTML = trade.commission;
@@ -3534,7 +3534,7 @@
             var msg;
 
             if (selectedmenu == MENURFQ) {
-                addMessageToDiv(msg, "orderdiv:" + trade.symbol + ":" + trade.orderdivnum);
+                addMessageToDiv(msg, "orderdiv:" + trade.symbolid + ":" + trade.orderdivnum);
             } else if (selectedmenu == MENUTRADES) {
                 displayATrade(trade);
             }
@@ -3728,7 +3728,7 @@
                         col.innerHTML = formatUTCDateTime(cashhistory[x].timestamp);
                         break;
                     case 1:
-                        col.innerHTML = cashhistory[x].currency;
+                        col.innerHTML = cashhistory[x].currencyid;
                         break;
                     case 2:
                         col.innerHTML = cashhistory[x].transtype;
@@ -3794,7 +3794,7 @@
         }
 
         function marginMsg(margin) {
-            return parseFloat(margin.amount).toFixed(2) + " " + margin.currency;            
+            return parseFloat(margin.amount).toFixed(2) + " " + margin.currencyid;            
         }
 
         function displayCash() {
@@ -3808,7 +3808,7 @@
             var i = 0;
             for (var x in cash) {
                 addElement(cashMsg(cash[x]), list, i);
-                tmpcasharr[i] = cash[x].currency;
+                tmpcasharr[i] = cash[x].currencyid;
                 i++;
                 firstCash = false;
             }
@@ -3824,7 +3824,7 @@
                     element = e.target || e.srcElement;
 
                     historyrequest.clientid = inpclientid.value;
-                    historyrequest.currency = tmpcasharr[element.value];
+                    historyrequest.currencyid = tmpcasharr[element.value];
                     sockjs.send("{\"cashhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
                 }
             }
@@ -3843,7 +3843,7 @@
             var list = getList("list1");
 
             for (var x in margins) {
-                addElement(marginMsg(margins[x]), list, margins[x].currency);
+                addElement(marginMsg(margins[x]), list, margins[x].currencyid);
                 firstMargin = false;
             }
 
@@ -3867,7 +3867,7 @@
             var list = getList("list1");
 
             for (var x in reserves) {
-                reskey = reserves[x].symbol + ":" + reserves[x].currency + ":" + reserves[x].settldate;
+                reskey = reserves[x].symbolid + ":" + reserves[x].currencyid + ":" + reserves[x].settldate;
                 msg = reserveMsg(reserves[x]);
                 addElement(msg, list, reskey);
                 firstReserve = false;
@@ -4226,7 +4226,7 @@
                 msg = quoterequest.cashorderqty + " (value)";                
             }
 
-            msg += " " + quoterequest.symbol + " requested in " + quoterequest.settlcurrency + ", T+" + quoterequest.nosettdays + " at " + formatUTCDateTime(quoterequest.timestamp);
+            msg += " " + quoterequest.symbolid + " requested in " + quoterequest.settlcurrencyid + ", T+" + quoterequest.nosettdays + " at " + formatUTCDateTime(quoterequest.timestamp);
 
             return msg;
         }
@@ -4234,7 +4234,7 @@
         function quoteMsg(quote) {
             var msg;
 
-            msg = quote.symbol + " in " + quote.settlcurrency + ", T+" + quote.nosettdays + ", quoted " + quote.bidpx + " to Sell, " + quote.offerpx + " to Buy, at " + formatUTCDateTime(quote.transacttime) + ", quote id " + quote.quoteid;
+            msg = quote.symbolid + " in " + quote.settlcurrencyid + ", T+" + quote.nosettdays + ", quoted " + quote.bidpx + " to Sell, " + quote.offerpx + " to Buy, at " + formatUTCDateTime(quote.transacttime) + ", quote id " + quote.quoteid;
 
             if ('orderid' in quote) {
                 msg += ", order id " + quote.orderid;
@@ -4246,7 +4246,7 @@
         }
 
         function orderNewMsg(order) {
-            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbol;
+            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbolid;
 
             if ('price' in order) {
                 msg += " @ " + order.price;
@@ -4257,7 +4257,7 @@
         }
 
         function orderFillMsg(order) {
-            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbol;
+            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbolid;
 
             if ('price' in order) {
                 msg += " @ " + order.price;
@@ -4273,7 +4273,7 @@
         }
 
         function orderRejectMsg(order) {
-            var msg = getSideDesc(order.side) + " " + order.remquantity + " " + order.symbol;
+            var msg = getSideDesc(order.side) + " " + order.remquantity + " " + order.symbolid;
 
             if ('price' in order) {
                 msg += " @ " + order.price;
@@ -4291,7 +4291,7 @@
         }
 
         function orderCancelMsg(order) {
-            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbol + ", " + order.remquantity + " remaining";
+            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbolid + ", " + order.remquantity + " remaining";
 
             if ('price' in order) {
                 msg += " @ " + order.price;
@@ -4303,7 +4303,7 @@
         }
 
         function orderExpireMsg(order) {
-            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbol + ", " + order.remquantity + " remaining";
+            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbolid + ", " + order.remquantity + " remaining";
 
             if ('price' in order) {
                 msg += " @ " + order.price;
@@ -4317,10 +4317,10 @@
         function tradeMsg(trade) {
             var msg;
 
-            msg = getSideDescTrade(trade.side) + " " + trade.quantity + " " + trade.symbol + " @ " + trade.price;
+            msg = getSideDescTrade(trade.side) + " " + trade.quantity + " " + trade.symbolid + " @ " + trade.price;
 
-            if (trade.settlcurrency != "GBP" || trade.settlcurrency != trade.currency) {
-                msg += " (" + trade.settlcurrency + ")"
+            if (trade.settlcurrencyid != "GBP" || trade.settlcurrencyid != trade.currencyid) {
+                msg += " (" + trade.settlcurrencyid + ")"
             }
 
             msg += ", T+" + trade.nosettdays + ", trade id: " + trade.tradeid + ", order id: " + trade.orderid + ", executed " + formatUTCDateTime(trade.timestamp);
@@ -4335,13 +4335,13 @@
         function cashHistoryMsg(cashhist) {
             var msg;
 
-            msg = cashhist.timestamp + " " + cashtranstypes[cashhist.transtype].description + " " + cashhist.amount + " " + cashhist.currency;
+            msg = cashhist.timestamp + " " + cashtranstypes[cashhist.transtype].description + " " + cashhist.amount + " " + cashhist.currencyid;
 
             return msg;
         }
 
         function cashMsg(cash) {
-            return formatCurrency(cash.amount) + " " + cash.currency;
+            return formatCurrency(cash.amount) + " " + cash.currencyid;
         }
 
         function getSideDescTrade(side) {
@@ -4360,13 +4360,13 @@
             } else {
                 msg = "Short ";
             }
-            msg += position.quantity + " " + position.symbol + ", cost " + parseFloat(position.cost).toFixed(2) + " " + position.currency;
+            msg += position.quantity + " " + position.symbolid + ", cost " + parseFloat(position.cost).toFixed(2) + " " + position.currencyid;
 
             return msg;
         }
 
         function reserveMsg(reserve) {
-            return reserve.quantity + " " + reserve.symbol + " " + reserve.currency + " " + reserve.settldate;
+            return reserve.quantity + " " + reserve.symbolid + " " + reserve.currencyid + " " + reserve.settldate;
         }
 
         function orderCancelReject(ordercancelreject) {
@@ -4396,15 +4396,15 @@
             selectStock("frmrfq", frmrfq, false, false, null);
         }
 
-        function sendRfq(clientid, quantity, cashorderqty, symbol, currency) {
+        function sendRfq(clientid, quantity, cashorderqty, symbolid, currencyid) {
             var rfq = {};
 
             rfq.clientid = clientid;
-            rfq.symbol = symbol;
+            rfq.symbolid = symbolid;
             rfq.quantity = quantity;
             rfq.cashorderqty = cashorderqty;
-            rfq.currency = currency;
-            rfq.settlcurrency = currency;
+            rfq.currencyid = currencyid;
+            rfq.settlcurrencyid = currencyid;
             rfq.nosettdays = 2;
             rfq.operatortype = operatortype;
             rfq.operatorid = clientid;
@@ -4423,21 +4423,21 @@
             }
         }
 
-        /*function priceChange(symbol, y, bidprice, offerprice) {
+        /*function priceChange(symbolid, y, bidprice, offerprice) {
             if (y == 0) {
                 // bid
-                if (orderbooks[symbol][y].bidflashcount > 0) {
-                    if (orderbooks[symbol][y].lastbidchange == 1) {
+                if (orderbooks[symbolid][y].bidflashcount > 0) {
+                    if (orderbooks[symbolid][y].lastbidchange == 1) {
                         bidprice.className = "yellowstripbidflashup";
-                    } else if (orderbooks[symbol][y].lastbidchange == 2) {
+                    } else if (orderbooks[symbolid][y].lastbidchange == 2) {
                         bidprice.className = "yellowstripbidflashdn";
                     } else {
                         bidprice.className = "yellowstripbidflashnochange";
                     }
                 } else {
-                    if (orderbooks[symbol][y].lastbidchange == 1) {
+                    if (orderbooks[symbolid][y].lastbidchange == 1) {
                         bidprice.className = "yellowstripbidup";
-                    } else if (orderbooks[symbol][y].lastbidchange == 2) {
+                    } else if (orderbooks[symbolid][y].lastbidchange == 2) {
                         bidprice.className = "yellowstripbiddn";
                     } else {
                         bidprice.className = "yellowstripbidnochange";
@@ -4445,18 +4445,18 @@
                 }
 
                 // offer
-                if (orderbooks[symbol][y].offerflashcount > 0) {
-                    if (orderbooks[symbol][y].lastofferchange == 1) {
+                if (orderbooks[symbolid][y].offerflashcount > 0) {
+                    if (orderbooks[symbolid][y].lastofferchange == 1) {
                         offerprice.className = "yellowstripofferflashup";
-                    } else if (orderbooks[symbol][y].lastofferchange == 2) {
+                    } else if (orderbooks[symbolid][y].lastofferchange == 2) {
                         offerprice.className = "yellowstripofferflashdn";
                     } else {
                         offerprice.className = "yellowstripofferflashnochange";
                     }
                 } else {
-                    if (orderbooks[symbol][y].lastofferchange == 1) {
+                    if (orderbooks[symbolid][y].lastofferchange == 1) {
                         offerprice.className = "yellowstripofferup";
-                    } else if (orderbooks[symbol][y].lastofferchange == 2) {
+                    } else if (orderbooks[symbolid][y].lastofferchange == 2) {
                         offerprice.className = "yellowstripofferdn";
                     } else {
                         offerprice.className = "yellowstripoffernochange";
@@ -4464,18 +4464,18 @@
                 }
             } else {
                 // bid
-                if (orderbooks[symbol][y].bidflashcount > 0) {
-                    if (orderbooks[symbol][y].lastbidchange == 1) {
+                if (orderbooks[symbolid][y].bidflashcount > 0) {
+                    if (orderbooks[symbolid][y].lastbidchange == 1) {
                         bidprice.className = "bidflashup";
-                    } else if (orderbooks[symbol][y].lastbidchange == 2) {
+                    } else if (orderbooks[symbolid][y].lastbidchange == 2) {
                         bidprice.className = "bidflashdn";
                     } else {
                         bidprice.className = "bidflashnochange";
                     }
                 } else {
-                    if (orderbooks[symbol][y].lastbidchange == 1) {
+                    if (orderbooks[symbolid][y].lastbidchange == 1) {
                         bidprice.className = "bidup";
-                    } else if (orderbooks[symbol][y].lastbidchange == 2) {
+                    } else if (orderbooks[symbolid][y].lastbidchange == 2) {
                         bidprice.className = "biddn";
                     } else {
                         bidprice.className = "bidnochange";
@@ -4483,18 +4483,18 @@
                 }
 
                 // offer
-                if (orderbooks[symbol][y].offerflashcount > 0) {
-                    if (orderbooks[symbol][y].lastofferchange == 1) {
+                if (orderbooks[symbolid][y].offerflashcount > 0) {
+                    if (orderbooks[symbolid][y].lastofferchange == 1) {
                         offerprice.className = "offerflashup";
-                    } else if (orderbooks[symbol][y].lastofferchange == 2) {
+                    } else if (orderbooks[symbolid][y].lastofferchange == 2) {
                         offerprice.className = "offerflashdn";
                     } else {
                         offerprice.className = "offerflashnochange";
                     }
                 } else {
-                    if (orderbooks[symbol][y].lastofferchange == 1) {
+                    if (orderbooks[symbolid][y].lastofferchange == 1) {
                         offerprice.className = "offerup";
-                    } else if (orderbooks[symbol][y].lastofferchange == 2) {
+                    } else if (orderbooks[symbolid][y].lastofferchange == 2) {
                         offerprice.className = "offerdn";
                     } else {
                         offerprice.className = "offernochange";
@@ -4600,7 +4600,7 @@
             }
 
             if (selectedmenu == MENURFQ) {
-                //addMessageToDiv(msg, "orderdiv:" + quoteack.symbol + ":" + quoteack.orderdivnum);
+                //addMessageToDiv(msg, "orderdiv:" + quoteack.symbolid + ":" + quoteack.orderdivnum);
             }
         }*/
 
@@ -4612,10 +4612,10 @@
                 .html("Quote request rejected: " + quoteack.text);
         }
 
-        function populateSettlPeriod(settlperiod, instrumenttype) {
+        function populateSettlPeriod(settlperiod, instrumenttypeid) {
             settlperiod.options.length = 0;
 
-            if (instrumenttype == "DE" || instrumenttype == "IE") {
+            if (instrumenttypeid == "DE" || instrumenttypeid == "IE") {
                 for (var i = 0; i < 10; i++) {
                     var s = i + 1;
                     if (s == 3) {
@@ -4624,25 +4624,25 @@
                         settlperiod[i] = new Option("T+" + s, s, false, false);
                     }
                 }
-            } else if (instrumenttype == "CCFD") {
+            } else if (instrumenttypeid == "CCFD") {
                 settlperiod[0] = new Option("T+10", 10, true, true);
             } else {
                 settlperiod[0] = new Option("T+0 (Rolling)", 0, true, true);
             }
         }
 
-        function sendOrder(clientid, symbol, side, quantity, price, ordertype, delivertocompid, settlcurrency, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
+        function sendOrder(clientid, symbolid, side, quantity, price, ordertype, delivertocompid, settlcurrencyid, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
             var order = {};
 
             order.clientid = clientid;
             order.side = side;
-            order.symbol = symbol;
+            order.symbolid = symbolid;
             order.quantity = quantity;
             order.price = price;
-            order.currency = "GBP"; // todo - use quote currency? instruments[symbol].currency;
+            order.currencyid = "GBP"; // todo - use quote currency? symbols[symbolid].currencyid;
             order.ordertype = ordertype;
             order.delivertocompid = delivertocompid;
-            order.settlcurrency = settlcurrency;
+            order.settlcurrencyid = settlcurrencyid;
             order.nosettdays = nosettdays;
             order.futsettdate = settdate;
             order.quoteid = quoteid;
@@ -4679,23 +4679,23 @@
             }
         }
 
-        function setOrderPrice(elem, side, symbol) {
+        function setOrderPrice(elem, side, symbolid) {
             var priceelem = document.getElementById(elem.id);
-            placeOrder(symbol, side, 0, priceelem.innerHTML);
+            placeOrder(symbolid, side, 0, priceelem.innerHTML);
         }
 
-        function setOrderQuantity(elem, side, symbol) {
+        function setOrderQuantity(elem, side, symbolid) {
             var cumqty = 0;
             var price = 0;
             var quantityelemid;
             var quantityelem;
             var priceelem;
 
-            for (var i = 0; i < orderbooks[symbol].length; ++i) {
+            for (var i = 0; i < orderbooks[symbolid].length; ++i) {
                 if (side == "1") {
-                    quantityelemid = "offerquantity:" + symbol + ":" + i;
+                    quantityelemid = "offerquantity:" + symbolid + ":" + i;
                 } else {
-                    quantityelemid = "bidquantity:" + symbol + ":" + i;                    
+                    quantityelemid = "bidquantity:" + symbolid + ":" + i;                    
                 }
 
                 quantityelem = document.getElementById(quantityelemid);
@@ -4703,37 +4703,37 @@
 
                 if (quantityelemid == elem.id) {
                     if (side == "1") {
-                        priceelem = document.getElementById("offerprice:" + symbol + ":" + i);
+                        priceelem = document.getElementById("offerprice:" + symbolid + ":" + i);
                     } else {
-                        priceelem = document.getElementById("bidprice:" + symbol + ":" + i);                    
+                        priceelem = document.getElementById("bidprice:" + symbolid + ":" + i);                    
                     }
                     price = priceelem.innerHTML;
                     break;
                 }
             }
 
-            placeOrder(symbol, side, cumqty, price);
+            placeOrder(symbolid, side, cumqty, price);
         }
 
-        function cancelOrderQuantity(elem, side, symbol) {
+        function cancelOrderQuantity(elem, side, symbolid) {
             var price;
 
             // todo: fix
 
             //var quantity = document.getElementById(elem.id);
 
-            /*for (var i = 0; i < orderbooks[symbol].length; ++i) {
+            /*for (var i = 0; i < orderbooks[symbolid].length; ++i) {
                 if (side == "1") {
-                    quantityelem = document.getElementById("mybidquantity:" + symbol + ":" + i);
+                    quantityelem = document.getElementById("mybidquantity:" + symbolid + ":" + i);
                 } else {
-                    quantityelem = document.getElementById("myofferquantity:" + symbol + ":" + i);                    
+                    quantityelem = document.getElementById("myofferquantity:" + symbolid + ":" + i);                    
                 }
 
                 if (quantityelem == quantity) {
                     if (side == "1") {
-                        priceelem = document.getElementById("bidprice:" + symbol + ":" + i);
+                        priceelem = document.getElementById("bidprice:" + symbolid + ":" + i);
                     } else {
-                        priceelem = document.getElementById("offerprice:" + symbol + ":" + i);                    
+                        priceelem = document.getElementById("offerprice:" + symbolid + ":" + i);                    
                     }
                     price = priceelem.innerHTML;
                     break;                    
@@ -4861,7 +4861,7 @@
             loggedout = true;
         }
 
-        function selectClient(frm, clientbox, symbol, displayname, namefld, idfld, focusfldstr, allclientopt) {
+        function selectClient(frm, clientbox, symbolid, displayname, namefld, idfld, focusfldstr, allclientopt) {
             var clientboxinput;
             var clientlist;
             var searchtext;
@@ -4933,9 +4933,9 @@
             clientlist.className = "clientlist";
             clientlist.style.visibility = "hidden";
 
-            if (symbol != null) {
-                clientboxinput.id = "clientboxinput:" + symbol;
-                clientlist.id = "clientlist:" + symbol;
+            if (symbolid != null) {
+                clientboxinput.id = "clientboxinput:" + symbolid;
+                clientlist.id = "clientlist:" + symbolid;
             } else {
                 clientboxinput.id = "clientboxinput";
                 clientlist.id = "clientlist";
@@ -4976,8 +4976,8 @@
             clientbox.appendChild(clientboxinput);
 
             if (displayname) {
-                if (symbol != null) {
-                    inpclient = newinput("inpclient:" + symbol, "forminput", clientbox, true);
+                if (symbolid != null) {
+                    inpclient = newinput("inpclient:" + symbolid, "forminput", clientbox, true);
                 } else {
                     inpclient = newinput("inpclient", "forminput", clientbox, true);
                 }
@@ -5337,18 +5337,18 @@
             }
         }
 
-        function displaySymbol(symbol) {
+        function displaySymbol(symbolid) {
             var inpsymbol;
             var settlperiod;
 
             inpsymbol = document.getElementById("inpsymbol");
             if (inpsymbol != null) {
-                inpsymbol.value = symbol;
+                inpsymbol.value = symbolid;
             }
 
             settlperiod = document.getElementById("settlperiod");
             if (settlperiod != null) {
-                populateSettlPeriod(settlperiod, instruments[symbol].instrumenttype);
+                populateSettlPeriod(settlperiod, symbols[symbolid].instrumenttypeid);
             }
         }
 
@@ -5458,7 +5458,7 @@
                 }
 
                 cashtrans.clientid = inpclientid.value;
-                cashtrans.currency = selcurrency[selcurrency.selectedIndex].value;
+                cashtrans.currencyid = selcurrency[selcurrency.selectedIndex].value;
                 cashtrans.transtype = seltranstype[seltranstype.selectedIndex].value;
                 cashtrans.amount = inpamount.value;
                 cashtrans.description = inpdesc.value;
@@ -5607,7 +5607,7 @@
                     return;
                 }
 
-                inst.symbol = inpsymbol.value;
+                inst.symbolid = inpsymbol.value;
                 inst.marginpercent = inpmargin.value;
 
                 if (opthedgeyes.checked) {
@@ -5641,13 +5641,13 @@
             var optptmexempt = document.getElementById("optptmexempt");
             var optptmnotexempt = document.getElementById("optptmnotexempt");
 
-            inpsymbol.value = inst.symbol;
+            inpsymbol.value = inst.symbolid;
             inpdesc.value = inst.shortname;
             inpisin.value = inst.isin;
-            inpinsttype.value = inst.instrumenttype;
+            inpinsttype.value = inst.instrumenttypeid;
             inpmargin.value = inst.marginpercent;
-            inpcurrency.value = inst.currency;
-            inpexchange.value = inst.exchange;
+            inpcurrency.value = inst.currencyid;
+            inpexchange.value = inst.exchangeid;
 
             if (parseInt(inst.hedge)) {
                 opthedgeyes.checked = true;
@@ -5666,7 +5666,7 @@
 
         function maintainHedgebooks() {
             var insttype = "CFD";
-            var currency = "GBP";
+            var currencyid = "GBP";
 
             var frmhedge = getForm("frmhedge");
 
@@ -5684,7 +5684,7 @@
             var lblhedgeconf = newlabel("lblhedgeconf", "", "", frmhedge);
 
             populateInstrumentTypes(selinsttype, insttype);
-            populateCurrencies(selcurrency, currency);
+            populateCurrencies(selcurrency, currencyid);
 
             selinsttype.onchange = function() {
                 insttype = selinsttype[selinsttype.selectedIndex].value;
@@ -5692,7 +5692,7 @@
             }
 
             selcurrency.onchange = function() {
-                currency = selcurrency[selcurrency.selectedIndex].value;
+                currencyid = selcurrency[selcurrency.selectedIndex].value;
                 repopulateHedgebooks();
             }
 
@@ -5700,14 +5700,14 @@
                 var hedgebook = {};
 
                 hedgebook.insttype = selinsttype[selinsttype.selectedIndex].value;
-                hedgebook.currency = selcurrency[selcurrency.selectedIndex].value;
+                hedgebook.currencyid = selcurrency[selcurrency.selectedIndex].value;
                 hedgebook.hedgebookid = selhedgebook[selhedgebook.selectedIndex].value;
 
                 sockjs.send("{\"hedgebookupdate\":" + JSON.stringify(hedgebook) + "}");
             }
 
             function repopulateHedgebooks() {
-                var hedgebookkey = insttype + ":" + currency;
+                var hedgebookkey = insttype + ":" + currencyid;
                 if (hedgebookkey in hedgebooks) {
                     populateHedgebooks(selhedgebook, hedgebooks[hedgebookkey].hedgebookid);                    
                 } else {
@@ -5723,7 +5723,7 @@
 
         function maintainCosts() {
             var insttype = "DE";
-            var currency = "GBP";
+            var currencyid = "GBP";
             var side = 1;
 
             var frmcosts = getForm("frmcosts");
@@ -5774,7 +5774,7 @@
             }
 
             selcurrency.onchange = function() {
-                currency = selcurrency[selcurrency.selectedIndex].value;
+                currencyid = selcurrency[selcurrency.selectedIndex].value;
                 repopulateCosts();
             }
 
@@ -5787,7 +5787,7 @@
                 var cost = {};
 
                 cost.insttype = selinsttype[selinsttype.selectedIndex].value;
-                cost.currency = selcurrency[selcurrency.selectedIndex].value;
+                cost.currencyid = selcurrency[selcurrency.selectedIndex].value;
                 cost.side = selside[selside.selectedIndex].value;
                 cost.commissionpercent = inpcommissionpercent.value;
                 cost.commissionmin = inpcommissionmin.value;
@@ -5809,7 +5809,7 @@
             }
 
             populateInstrumentTypes(selinsttype, insttype);
-            populateCurrencies(selcurrency, currency);
+            populateCurrencies(selcurrency, currencyid);
             populateSide(selside, side);
 
             main.appendChild(frmcosts);
@@ -5817,8 +5817,8 @@
             repopulateCosts();
         }
 
-        function displayCosts(insttype, currency, side) {
-            var costkey = insttype + ":" + currency + ":" + side;
+        function displayCosts(insttype, currencyid, side) {
+            var costkey = insttype + ":" + currencyid + ":" + side;
 
             var inpcommissionpercent = document.getElementById("inpcommissionpercent");
             var inpcommissionmin = document.getElementById("inpcommissionmin");
@@ -6209,7 +6209,7 @@
                 tidy();
                 setSelected(lnkcash);
                 historyrequest.clientid = inpclientid.value;
-                historyrequest.currency = "GBP";
+                historyrequest.currencyid = "GBP";
                 sockjs.send("{\"cashhistoryrequest\":" + JSON.stringify(historyrequest) + "}");
             }
 

@@ -336,9 +336,9 @@ Nbt.prototype.quoteRequest = function(quoterequest) {
 		+ '22=' + idsource + SOH
 		//+ '167=' + securitytype + SOH
 		+ '63=' + quoterequest.settlmnttyp + SOH
-		+ '207=' + quoterequest.exchange + SOH
-		+ '15=' + quoterequest.currency + SOH
-		+ '120=' + quoterequest.settlcurrency + SOH
+		+ '207=' + quoterequest.exchangeid + SOH
+		+ '15=' + quoterequest.currencyid + SOH
+		+ '120=' + quoterequest.settlcurrencyid + SOH
 		+ '60=' + quoterequest.timestamp + SOH;
 
 	// add settlement date if future settlement type specified
@@ -375,14 +375,14 @@ Nbt.prototype.newOrder = function(order) {
 		+ '48=' + order.isin + SOH
 		+ '22=' + idsource + SOH
 		//+ '167=' + securitytype + SOH
-		+ '207=' + order.exchange + SOH
+		+ '207=' + order.exchangeid + SOH
 		+ '54=' + order.side + SOH
 		+ '60=' + order.timestamp + SOH
 		+ '63=' + settlmnttyp + SOH
 		+ '64=' + order.futsettdate + SOH
 		+ '59=' + order.timeinforce + SOH
-		+ '120=' + order.settlcurrency + SOH
-		+ '15=' + order.currency + SOH
+		+ '120=' + order.settlcurrencyid + SOH
+		+ '15=' + order.currencyid + SOH
 		+ '40=' + order.ordertype + SOH;
 
 	if (order.ordertype == 'D') { // previously quoted
@@ -830,7 +830,7 @@ function getBody(msgtype, tagvalarr) {
 				body.externalquoteid = tagvalarr[i].value;
 				break;
 			case 55:
-			 	body.symbol = tagvalarr[i].value;
+			 	body.symbolid = tagvalarr[i].value;
 			 	break;
 			case 48:
 				body.securityid = tagvalarr[i].value;
@@ -863,7 +863,7 @@ function getBody(msgtype, tagvalarr) {
 				body.transacttime = tagvalarr[i].value;
 				break;
 			case 15:
-				body.currency = tagvalarr[i].value;
+				body.currencyid = tagvalarr[i].value;
 				break;
 			case 30:
 				body.lastmkt + tagvalarr[i].value;
@@ -875,7 +875,7 @@ function getBody(msgtype, tagvalarr) {
 				body.cashorderqty = tagvalarr[i].value;
 				break;
 			case 120:
-				body.settlcurrency = tagvalarr[i].value;
+				body.settlcurrencyid = tagvalarr[i].value;
 				break;
 			case 167:
 				body.securitytype = tagvalarr[i].value;
@@ -955,7 +955,7 @@ function getBody(msgtype, tagvalarr) {
 				body.ordrejreason = tagvalarr[i].value;
 				break;
 			case 55:
-				body.symbol = tagvalarr[i].value;
+				body.symbolid = tagvalarr[i].value;
 				break;
 			case 48:
 				body.securityid = tagvalarr[i].value;
@@ -982,7 +982,7 @@ function getBody(msgtype, tagvalarr) {
 				body.price = tagvalarr[i].value;
 				break;
 			case 15:
-				body.currency = tagvalarr[i].value;
+				body.currencyid = tagvalarr[i].value;
 				break;
 			case 151:
 				body.leavesqty = tagvalarr[i].value;
@@ -1000,7 +1000,7 @@ function getBody(msgtype, tagvalarr) {
 				body.settlcurramt = tagvalarr[i].value;
 				break;
 			case 120:
-				body.settlcurrency = tagvalarr[i].value;
+				body.settlcurrencyid = tagvalarr[i].value;
 				break;
 			case 32:
 				body.lastshares = tagvalarr[i].value;
