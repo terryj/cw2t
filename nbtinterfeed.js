@@ -1,6 +1,6 @@
 /****************
 * nbtinterfeed.js
-* Netbuilder NBTrader Market data link
+* NBTrader Interfeed Market data link
 * Cantwaittotrade Limited
 * Terry Johnston
 * August 2014
@@ -209,11 +209,9 @@ function parse(data) {
       } else if (buf[i] == 30) { // <RS>
         var errorcode = buf.toString('utf8', groupseparator+1, i);
         var err = getError(errorcode);
-        if (errorcode < 0) {
-          console.log("status: " + errorcode + " - " + err);
-        } else {
-          console.log("error: " + errorcode + " - " + err);
-        }
+        console.log("status: " + errorcode + " - " + err);
+        // removed error message - todo - ok?
+        //console.log("error: " + errorcode + " - " + err);
         rtlseparator = i;
         parsestate = 7;
       }
@@ -364,8 +362,8 @@ function updateDb(functioncode, instrumentcode, instrec) {
   // store a complete record for a symbol
   if (functioncode == "340") {
     // currency
-    if (instrec.currency == "GBX") {
-      instrec.currency = "GBP";
+    if (instrec.currencyid == "GBX") {
+      instrec.currencyid = "GBP";
     }
 
     // create symbol & add to lists
@@ -377,13 +375,13 @@ function updateDb(functioncode, instrumentcode, instrec) {
 
       db.hmset("symbol:" + instrumentcode, dbinstrec);
       db.sadd("symbols", instrumentcode);
-      db.sadd("nbtsymbol:" + dbinstrec.nbtsymbol + ":symbols", instrumentcode);
+      db.sadd("nbtsymbol:" + dbinstrec.nbtsymbol + ":symbolids", instrumentcode);
 
       // create tab delimitted text
       var txt = dbinstrec.ask + "\t"
         + dbinstrec.bid + "\t"
-        + dbinstrec.currency + "\t"
-        + dbinstrec.exchange + "\t"
+        + dbinstrec.currencyid + "\t"
+        + dbinstrec.exchangeid + "\t"
         + dbinstrec.hedge + "\t"
         + dbinstrec.hedgesymbolid + "\t"
         + dbinstrec.instrumenttypeid + "\t"
@@ -417,7 +415,7 @@ function getDbInstrec(instrumentcode, instrec) {
 
   dbinstrec.ask = instrec.ask;
   dbinstrec.bid = instrec.bid;
-  dbinstrec.currency = instrec.currency;
+  dbinstrec.currencyid = instrec.currencyid;
   dbinstrec.isin = instrec.isin;
   dbinstrec.longname = instrec.longname;
   dbinstrec.midnetchange = instrec.midnetchange;
@@ -433,7 +431,7 @@ function getDbInstrec(instrumentcode, instrec) {
   dbinstrec.hedge = '0';
   dbinstrec.hedgesymbolid = "";
   dbinstrec.marginpercent = '100';
-  dbinstrec.exchange = "L";
+  dbinstrec.exchangeid = "L";
 
   // add our own instrument type, as we use text not numeric
   if ("insttype" in instrec) {
@@ -935,7 +933,7 @@ function getFid(field) {
       desc = "tradetick";
       break;
     case 15:
-      desc = "currency";
+      desc = "currencyid";
       break;
     case 16:
       desc = "tradedate";

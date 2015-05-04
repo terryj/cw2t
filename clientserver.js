@@ -199,7 +199,6 @@ function listen() {
   });
  
   sockjs_svr.on('connection', function(conn) {
-    console.log(conn);
     // this will be overwritten if & when a client logs on
     var clientid = "0";
 
@@ -356,12 +355,14 @@ function listen() {
 }
 
 function tidy(clientid, conn) {
+  console.log("tidy");
   if (clientid != "0") {
     if (clientid in connections) {
       var timestamp = common.getUTCTimeStamp(new Date());
       console.log(timestamp + " - client:" + clientid + " logged off");
 
       if (connections[clientid] == conn) {
+        console.log("removing");
         // remove from list
         delete connections[clientid];
 
@@ -375,8 +376,10 @@ function tidy(clientid, conn) {
 }
 
 function unsubscribeConnection(id) {
+  console.log("unsubscribeConnection");
   db.eval(common.scriptunsubscribeid, 0, id, serverid, feedtype, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
 
     // unsubscribe returned topics
     for (var i = 0; i < ret.length; i++) {
@@ -531,7 +534,7 @@ function getSendPosition(positionid, orgclientid) {
 function getSendCash(clientid, currencyid) {
   var cash = {};
 
-  db.get(clientid + ":cash:" + currencyid, function(err, amount) {
+  db.get("client:" + clientid + ":cash:" + currencyid, function(err, amount) {
     if (err) {
       console.log(err);
       return;
@@ -613,7 +616,6 @@ function getValue(trade) {
 function symbolRequest(instreq, clientid, conn) {
   console.log("symbolRequest");
   console.log(instreq);
-
 
   // get alpha sorted set of instruments for this client
   db.eval(scriptgetinst, 0, clientid, function(err, ret) {
@@ -782,7 +784,7 @@ function sendCash(clientid, conn) {
   var arr = {cash: []};
   var count;
 
-  db.smembers(clientid + ":cash", function(err, replies) {
+  db.smembers("client:" + clientid + ":cash", function(err, replies) {
     if (err) {
       console.log("sendCash:" + err);
       return;
@@ -794,7 +796,7 @@ function sendCash(clientid, conn) {
     }
 
     replies.forEach(function (currencyid, i) {
-      db.get(clientid + ":cash:" + currencyid, function(err, amount) {
+      db.get("client:" + clientid + ":cash:" + currencyid, function(err, amount) {
         if (err) {
           console.log(err);
           return;
@@ -948,6 +950,7 @@ function replySignIn(reply, conn) {
 }
 
 function clearSubscriptions() {
+  console.log("clearSubscriptions");
   // clears connections & subscriptions
   db.eval(common.scriptunsubscribeserver, 0, serverid, function(err, ret) {
     if (err) {
@@ -1042,14 +1045,14 @@ function subscribePriceRequest(clientid, symbol, conn) {
   });
 }
 
-function unsubscribePriceRequest(clientid, symbolid, conn) {
-  db.eval(common.scriptunsubscribesymbol, 0, symbolid, clientid, serverid, feedtype, function(err, ret) {
+function unsubscribePriceRequest(clientid, symbol, conn) {
+  db.eval(common.scriptunsubscribesymbol, 0, symbol.symbolid, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
     // the script will tell us if we need to unsubscribe from the symbol
     if (ret[0] == 1) {
-      console.log("unsubscribing from " + symbolid);
+      console.log("unsubscribing from " + symbol.symbolid);
       dbsub.unsubscribe("price:" + ret[1]);
     }
   });

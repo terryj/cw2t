@@ -309,7 +309,7 @@ exports.sendErrorMsg = sendErrorMsg;
 function newPrice(feedsymbol, serverid, msg, connections, feedtype) {
   if (feedtype == "proquote") {
     // which symbols are subscribed to for this topic (may be more than 1 as covers derivatives)
-    db.smembers("topic:" + feedsymbol + ":" + serverid + ":symbols", function(err, symbols) {
+    db.smembers("topic:" + feedsymbol + ":" + serverid + ":symbolids", function(err, symbols) {
       if (err) throw err;
 
       symbols.forEach(function(symbolid, i) {
@@ -331,7 +331,7 @@ function newPrice(feedsymbol, serverid, msg, connections, feedtype) {
     });
   } else if (feedtype == "digitallook") {
     // which symbols are subscribed to for this topic (may be more than 1 as covers derivatives)
-    db.smembers(feedsymbol + ":" + serverid + ":symbols", function(err, symbols) {
+    db.smembers(feedsymbol + ":" + serverid + ":symbolids", function(err, symbols) {
       if (err) throw err;
 
       symbols.forEach(function(symbolid, i) {
@@ -778,9 +778,9 @@ exports.registerScripts = function () {
     local cashtransid = redis.call("incr", "cashtransid") \
     if not cashtransid then return {1005} end \
     redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currencyid", currencyid, "transtype", transtype, "amount", amount, "drcr", drcr, "description", desc, "reference", reference, "timestamp", timestamp, "settldate", settldate, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
-    redis.call("sadd", clientid .. ":cashtrans", cashtransid) \
-    local cashkey = clientid .. ":cash:" .. currencyid \
-    local cashsetkey = clientid .. ":cash" \
+    redis.call("sadd", "client:" .. clientid .. ":cashtrans", cashtransid) \
+    local cashkey = "client:" .. clientid .. ":cash:" .. currencyid \
+    local cashsetkey = "client:" .. clientid .. ":cash" \
     local cash = redis.call("get", cashkey) \
     --[[ adjust for credit]] \
     if tonumber(drcr) == 2 then \
@@ -798,33 +798,33 @@ exports.registerScripts = function () {
         redis.call("set", cashkey, adjamount) \
       end \
     end \
-    local key \
+    local key = "client:" .. clientid \
     if transtype == "ST" then \
-      key = clientid .. ":selltrades:" .. currencyid \
+      key = key .. ":selltrades:" .. currencyid \
     elseif transtype == "BT" then \
-      key = clientid .. ":buytrades:" .. currencyid \
+      key = key .. ":buytrades:" .. currencyid \
     elseif transtype == "CO" then \
-      key = clientid .. ":commission:" .. currencyid \
+      key = key .. ":commission:" .. currencyid \
     elseif transtype == "PL" then \
-      key = clientid .. ":ptmlevy:" .. currencyid \
+      key = key .. ":ptmlevy:" .. currencyid \
     elseif transtype == "CC" then \
-      key = clientid .. ":contractcharge:" .. currencyid \
+      key = key .. ":contractcharge:" .. currencyid \
     elseif transtype == "SD" then \
-      key = clientid .. ":stampduty:" .. currencyid \
+      key = key .. ":stampduty:" .. currencyid \
     elseif transtype == "DI" then \
-      key = clientid .. ":dividend:" .. currencyid \
+      key = key .. ":dividend:" .. currencyid \
     elseif transtype == "FI" then \
-      key = clientid .. ":finance:" .. currencyid \
+      key = key .. ":finance:" .. currencyid \
     elseif transtype == "IN" then \
-      key = clientid .. ":interest:" .. currencyid \
+      key = key .. ":interest:" .. currencyid \
     elseif transtype == "CD" then \
-      key = clientid .. ":deposits:" .. currencyid \
+      key = key .. ":deposits:" .. currencyid \
     elseif transtype == "CW" then \
-      key = clientid .. ":withdrawals:" .. currencyid \
+      key = key .. ":withdrawals:" .. currencyid \
     elseif transtype == "OT" then \
-      key = clientid .. ":other:" .. currencyid \
+      key = key .. ":other:" .. currencyid \
     else \
-      key = clientid .. ":unknown:" .. currencyid \
+      key = key .. ":unknown:" .. currencyid \
     end \
     local val = redis.call("get", key) \
     if not val then val = 0 end \
@@ -837,7 +837,7 @@ exports.registerScripts = function () {
 
   getcash = '\
   local getcash = function(clientid, currencyid) \
-    local cash = redis.call("get", clientid .. ":cash:" .. currencyid) \
+    local cash = redis.call("get", "client:" .. clientid .. ":cash:" .. currencyid) \
     if not cash then \
       cash = 0 \
     end \
@@ -1091,9 +1091,9 @@ exports.registerScripts = function () {
     elseif marketext ~= nil then \
       topic = topic .. marketext \
     end \
-    redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbolid) \
+    redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbolids", symbolid) \
     redis.call("sadd", "topic:" .. topic .. ":symbolid:" .. symbolid .. ":" .. servertype, id) \
-    redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":symbols", symbolid) \
+    redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":symbolids", symbolid) \
     local needtosubscribe = 0 \
     if redis.call("scard", "topic:" .. topic .. ":" .. servertype) == 0 then \
       redis.call("sadd", "topic:" .. topic .. ":" .. servertype, id) \
@@ -1116,6 +1116,15 @@ exports.registerScripts = function () {
   // subscribe to an instrument with nbtrader
   // any number of symbols can subscribe to a nbtsymbol to support derivatives
   //
+  // keys:
+  // "symbol:"" .. symbolid
+  // "symbolid:" .. symbolid .. ":serverid:" .. serverid .. ":ids"
+  // "symbolid:" .. symbolid .. ":serverids"
+  // "nbtsymbol:" .. nbtsymbol .. ":symbolids"
+  // "nbtsymbols"
+  // "serverid:" .. serverid .. ":id:" .. id .. ":symbolids"
+  // "serverid:" .. serverid .. ":ids"
+  //
   subscribesymbolnbt = '\
   local subscribesymbolnbt = function(symbolid, id, serverid) \
     --[[ get nbtsymbol & latest price ]] \
@@ -1133,19 +1142,16 @@ exports.registerScripts = function () {
       --[[ this server needs to subscribe to this symbol - subscribing will be done on a separate connection ]] \
       subscribe = 1 \
     end \
-    redis.call("sadd", "nbtsymbol:" .. nbtsymbol .. ":symbols", symbolid) \
+    redis.call("sadd", "nbtsymbol:" .. nbtsymbol .. ":symbolids", symbolid) \
     if redis.call("sismember", "nbtsymbols", nbtsymbol) == 0 then \
       redis.call("sadd", "nbtsymbols", nbtsymbol) \
       --[[ tell the price server to subscribe ]] \
        redis.call("publish", 7, "rp:" .. nbtsymbol) \
     end \
-    if redis.call("sismember", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbolid) == 0 then \
-      redis.call("sadd", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbolid) \
+    if redis.call("sismember", "serverid:" .. serverid .. ":id:" .. id .. ":symbolids", symbolid) == 0 then \
+      redis.call("sadd", "serverid:" .. serverid .. ":id:" .. id .. ":symbolids", symbolid) \
       redis.call("sadd", "serverid:" .. serverid .. ":ids", id) \
     end \
-    --[[ get latest price ]] \
-    --[[local fields = {"bid", "ask", "timestamp", "midnetchg", "midpctchg"} ]]\
-    --[[local vals = redis.call("hmget", "price:" .. symbolid, unpack(fields)) ]]\
     return {subscribe, vals[1], vals[2], vals[3], vals[4], vals[5]} \
   end \
   ';
@@ -1154,6 +1160,15 @@ exports.registerScripts = function () {
 
   //
   // unsubscribe an instrument from the nbtrader feed
+  //
+  // keys
+  // "symbol:" .. symbolid
+  // "symbolid:" .. symbolid .. ":serverid:" .. serverid .. ":ids"
+  // "symbolid:" .. symbolid .. ":serverids"
+  // "nbtsymbol:" .. nbtsymbol .. ":symbolids"
+  // "nbtsymbols"
+  // "serverid:" .. serverid .. ":id:" .. id .. ":symbolids"
+  // "serverid:" .. serverid .. ":ids"
   //
   unsubscribesymbolnbt = '\
   local unsubscribesymbolnbt = function(symbolid, id, serverid) \
@@ -1167,8 +1182,8 @@ exports.registerScripts = function () {
     if redis.call("scard", "symbolid:" .. symbolid .. ":serverid:" .. serverid .. ":ids") == 0 then \
       redis.call("srem", "symbolid:" .. symbolid .. ":serverids", serverid) \
       if redis.call("scard", "symbolid:" .. symbolid .. ":serverids") == 0 then \
-        redis.call("srem", "nbtsymbol:" .. nbtsymbol .. ":symbols", symbolid) \
-        if redis.call("scard", "nbtsymbol:" .. nbtsymbol .. ":symbols") == 0 then \
+        redis.call("srem", "nbtsymbol:" .. nbtsymbol .. ":symbolids", symbolid) \
+        if redis.call("scard", "nbtsymbol:" .. nbtsymbol .. ":symbolids") == 0 then \
           redis.call("srem", "nbtsymbols", nbtsymbol) \
           --[[ tell the price server to unsubscribe ]] \
           redis.call("publish", 7, "halt:" .. nbtsymbol) \
@@ -1178,8 +1193,8 @@ exports.registerScripts = function () {
       unsubscribe = 1 \
     end \
     --[[ deal with symbols/ids required by servers ]] \
-    redis.call("srem", "serverid:" .. serverid .. ":id:" .. id .. ":symbols", symbolid) \
-    if redis.call("scard", "serverid:" .. serverid .. ":id:" .. id .. ":symbols") == 0 then \
+    redis.call("srem", "serverid:" .. serverid .. ":id:" .. id .. ":symbolids", symbolid) \
+    if redis.call("scard", "serverid:" .. serverid .. ":id:" .. id .. ":symbolids") == 0 then \
       redis.call("srem", "serverid:" .. serverid .. ":ids", id) \
     end \
     return {unsubscribe, nbtsymbol} \
@@ -1197,9 +1212,9 @@ exports.registerScripts = function () {
     if not ticker then \
       return {0, "", 0, ""} \
     end \
-    redis.call("sadd", "ticker:" .. ticker .. ":" .. servertype .. ":" .. id .. ":symbols", symbolid) \
+    redis.call("sadd", "ticker:" .. ticker .. ":" .. servertype .. ":" .. id .. ":symbolids", symbolid) \
     redis.call("sadd", "ticker:" .. ticker .. ":symbolid:" .. symbolid .. ":" .. servertype, id) \
-    redis.call("sadd", "ticker:" .. ticker .. ":" .. servertype .. ":symbols", symbolid) \
+    redis.call("sadd", "ticker:" .. ticker .. ":" .. servertype .. ":symbolids", symbolid) \
     local needtosubscribe = 0 \
     local needtopublish = 0 \
     local tickers = {} \
@@ -1234,12 +1249,12 @@ exports.registerScripts = function () {
       topic = topic .. marketext \
     end \
     redis.call("srem", "topic:" .. topic .. ":symbolid:" .. symbolid .. ":" .. servertype, id) \
-    redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbolid) \
+    redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbolids", symbolid) \
     if redis.call("scard", "topic:" .. topic .. ":symbolid:" .. symbolid .. ":" .. servertype) == 0 then \
-    	redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":symbols", symbolid) \
+    	redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":symbolids", symbolid) \
     end \
     local needtounsubscribe = 0 \
-   	if redis.call("scard", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols") == 0 then \
+   	if redis.call("scard", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbolids") == 0 then \
       redis.call("srem", servertype .. ":" .. id .. ":topics", topic) \
       redis.call("srem", "topic:" .. topic .. ":" .. servertype, id) \
       if redis.call("scard", "topic:" .. topic .. ":" .. servertype) == 0 then \
@@ -1266,14 +1281,14 @@ exports.registerScripts = function () {
       return {0, "", 0, ""} \
     end \
     redis.call("srem", "ticker:" .. ticker .. ":symbolid:" .. symbolid .. ":" .. servertype, id) \
-    redis.call("srem", "ticker:" .. ticker .. ":" .. servertype .. ":" .. id .. ":symbols", symbolid) \
+    redis.call("srem", "ticker:" .. ticker .. ":" .. servertype .. ":" .. id .. ":symbolids", symbolid) \
     if redis.call("scard", "ticker:" .. ticker .. ":symbolid:" .. symbolid .. ":" .. servertype) == 0 then \
-      redis.call("srem", "ticker:" .. ticker .. ":" .. servertype .. ":symbols", symbolid) \
+      redis.call("srem", "ticker:" .. ticker .. ":" .. servertype .. ":symbolids", symbolid) \
     end \
     local needtounsubscribe = 0 \
     local needtopublish = 0 \
     local tickers = {} \
-    if redis.call("scard", "ticker:" .. ticker .. ":" .. servertype .. ":" .. id .. ":symbols") == 0 then \
+    if redis.call("scard", "ticker:" .. ticker .. ":" .. servertype .. ":" .. id .. ":symbolids") == 0 then \
       redis.call("srem", servertype .. ":" .. id .. ":tickers", ticker) \
       redis.call("srem", "ticker:" .. ticker .. ":" .. servertype, id) \
       if redis.call("scard", "ticker:" .. ticker .. ":" .. servertype) == 0 then \
@@ -1390,7 +1405,7 @@ exports.registerScripts = function () {
   // todo: need to guarantee order
   exports.scriptgetcashhistory = '\
   local tblresults = {} \
-  local cashhistory = redis.call("sort", ARGV[1] .. ":cashtrans") \
+  local cashhistory = redis.call("sort", "client:" .. ARGV[1] .. ":cashtrans") \
   local fields = {"clientid","currencyid","amount","transtype","drcr","description","reference","timestamp","settldate","cashtransid"} \
   local vals \
   local balance = 0 \
@@ -1506,9 +1521,9 @@ exports.registerScripts = function () {
   //
   exports.scriptgetcash = '\
   local tblresults = {} \
-  local cash = redis.call("smembers", ARGV[1] .. ":cash") \
+  local cash = redis.call("smembers", "client:" .. ARGV[1] .. ":cash") \
   for index = 1, #cash do \
-    local amount = redis.call("get", ARGV[1] .. ":cash:" .. cash[index]) \
+    local amount = redis.call("get", "client:" .. ARGV[1] .. ":cash:" .. cash[index]) \
     table.insert(tblresults, {currencyid=cash[index],amount=amount}) \
   end \
   return cjson.encode(tblresults) \
@@ -1578,7 +1593,7 @@ exports.registerScripts = function () {
   exports.scriptunsubscribeid = unsubscribesymbolpq + unsubscribesymboldl + unsubscribesymbolnbt + '\
   local id = ARGV[1] \
   local serverid = ARGV[2] \
-  local symbols = redis.call("smembers", "serverid:" .. serverid .. ":id:" .. id .. ":symbols") \
+  local symbols = redis.call("smembers", "serverid:" .. serverid .. ":id:" .. id .. ":symbolids") \
   local unsubscribetopics = {} \
   for i = 1, #symbols do \
     local ret = {0, ""} \
@@ -1605,7 +1620,7 @@ exports.registerScripts = function () {
   local unsubscribetopics = {} \
   local ids = redis.call("smembers", "serverid:" .. serverid .. ":ids") \
   for i = 1, #ids do \
-    local symbols = redis.call("smembers", "serverid:" .. serverid .. ":id:" .. ids[i] .. ":symbols") \
+    local symbols = redis.call("smembers", "serverid:" .. serverid .. ":id:" .. ids[i] .. ":symbolids") \
     for j = 1, #symbols do \
       local ret = unsubscribesymbolnbt(symbols[j], ids[i], serverid) \
       if ret[1] == 1 then \
@@ -1649,7 +1664,7 @@ exports.registerScripts = function () {
   local bid = ARGV[3] \
   local ask = ARGV[4] \
   local publish = false \
-  local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbols") \
+  local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbolids") \
   for index = 1, #symbols do \
     local pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbolid") .. ":" .. cjson.encode(symbols[index]) \
     --[[ may get all or none of params ]] \
@@ -1717,7 +1732,7 @@ exports.registerScripts = function () {
     end \
   end \
   --[[ publish a price message, store latest price & history for any symbols subscribed to that use this nbtsymbol ]] \
-  local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbols") \
+  local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbolids") \
   for index = 1, #symbols do \
     pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbolid") .. ":" .. cjson.encode(symbols[index]) .. "," .. pricemsg .. "}}" \
     --[[ publish price ]] \

@@ -407,7 +407,6 @@
         var operatortype = 1; // client
         var clientid;
         var selectedsymbol = "";
-        var selectedmenu = 0;
         var MENURFQ = 0;
         var MENUWATCH = 1;
         var MENUPORTFOLIO = 2;
@@ -416,6 +415,7 @@
         var MENUTRADES = 5;
         var MENUQUOTEREQUESTS = 6;
         var MENULOGOUT = 7;
+        var selectedmenu = MENURFQ;
 
         var datain = function(msg) {
             console.log(msg);
@@ -526,6 +526,9 @@
             divcontainer.append("header")
                 .attr("id", "stockboxtitle")
                 .text("TG Online - " + email);
+
+            // default menu selection
+            selectedmenu = MENURFQ;
 
             // display main menu
             createMenu();
@@ -1183,7 +1186,6 @@
             d3.select(self.frameElement).style("height", "700px");
 
             function update(source) {
-                console.log("update");
                 // Compute the new tree layout.
                 var nodes = tree.nodes(root).reverse(),
                     links = tree.links(nodes);
@@ -2036,7 +2038,6 @@
                     d3.select(this)
                         .text(function(d) { return formatCurrency(d.value, 2); })
                         .attr("class", function(d, i, j) {
-                                console.log(d);
                             if (d.col == "bid") {
                                 if (watchlist[j].bidtick == '+') {
                                     return "tickup";
@@ -2287,7 +2288,6 @@
         }
 
         function updateQuoteTable() {
-            //console.log("updateQuoteTable");
             var cols = ["bidquote", "offerquote"];
 
             // create a quote table if one does not exist
@@ -2444,8 +2444,6 @@
 
         // open quote requests
         function quoterequestsReceived(quoterequestarr) {
-            console.log("quoterequestsReceived");
-
             // we have requested all open quote requests, so we need to clear our global array
             quoterequests = [];
 
@@ -2460,9 +2458,6 @@
 
         // single quote request
         function quoterequestReceived(quoterequest) {
-            console.log("quoterequestReceived");
-            console.log(quoterequest);
-
             // todo: get from price
             quoterequest.bidpx = 1.23; //prices[quoterequest.symbolid].bid;
             quoterequest.offerpx = 1.25; //prices[quoterequest.symbolid].ask;
@@ -2480,7 +2475,6 @@
 
         // display one table per quote request, allowing for a table of any related quotes in between
         function updateQuoterequestTables() {
-            console.log("updateQuoterequestTables");
             var cols = ["timestamp", "symbolid", "quantity", "quote"];
 
             var divquoterequest = d3.select("#divquoterequest");
