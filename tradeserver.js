@@ -105,7 +105,7 @@ function pubsub() {
 
   dbsub.on("message", function(channel, message) {
     try {
-      //console.log("channel:" + channel + " " + message);
+      console.log("channel:" + channel + " " + message);
       var obj = JSON.parse(message);
 
       if ("quoterequest" in obj) {
@@ -226,9 +226,6 @@ function quoteRequest(quoterequest) {
     quoterequest.mnemonic = ret[3];
     quoterequest.exchangeid = ret[4];
     quoterequest.markettype = ret[7];
-
-    /// todo: remove
-    //quoterequest.markettype = 1;
 
     if (testmode == "1") {
       console.log("test response");
@@ -668,7 +665,7 @@ function displayOrderBook(symbolid, lowerbound, upperbound) {
 }
 
 function initDb() {
-  common.registerCommonScripts();
+  common.registerScripts();
   registerScripts();
   loadHolidays();
   getTestmode();
@@ -676,7 +673,7 @@ function initDb() {
 
 function loadHolidays() {
   // we are assuming "L"=London
-  db.eval(common.scriptgetholidays, 1, "L", function(err, ret) {
+  db.eval(common.scriptgetholidays, 0, "L", function(err, ret) {
     if (err) throw err;
 
     for (var i = 0; i < ret.length; ++i) {
@@ -2023,8 +2020,9 @@ function registerScripts() {
   redis.call("sadd", KEYS[4], quotereqid) \
   --[[ get required instrument values for external feed ]] \
   local proquotesymbol = getproquotesymbol(ARGV[2]) \
-  --[[ get in/out of hours ]] \
-  local markettype = getmarkettype(ARGV[2], ARGV[12], ARGV[13], ARGV[14]) \
+  --[[ get in/out of hours - assume in-hours for now]] \
+  local markettype = 0 \
+  --[[ local markettype = getmarkettype(ARGV[2], ARGV[12], ARGV[13], ARGV[14]) ]] \
   --[[ assuming equity buy to get default settlement days ]] \
   local defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. ARGV[6] .. ":" .. "1", "defaultnosettdays") \
   return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], defaultnosettdays, proquotesymbol[5], markettype} \

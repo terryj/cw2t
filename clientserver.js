@@ -1370,7 +1370,7 @@ function watchlistRequest(watchlist, clientid, conn) {
     });
   } else {
     // get the watchlist for this client
-    db.eval(common.scriptunwatchlist, 0, clientid, serverid, servertype, function(err, ret) {
+    db.eval(common.scriptgetwatchlist, 0, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;

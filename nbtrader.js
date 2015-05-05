@@ -6,9 +6,15 @@
 * August 2014
 ****************/
 
+// avoids DEPTH_ZERO_SELF_SIGNED_CERT error for self-signed certs
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 var util = require('util');
-var net = require('net');
+//var net = require('net');
+var tls = require('tls');
 var events = require('events');
+var fs = require("fs");
+
 var common = require('./commonfo.js');
 
 var fixver = 'FIX.4.2';
@@ -45,11 +51,10 @@ var connectstatusint = 30;
 var connectstatusinterval = 30;
 var datareceivedsinceheartbeat = false; // indicates whether data has been received since the last heartbeat
 
-/// performance test ///
-//var count = 0;
-//var start;
-//var first=true;
-////////////////////////
+var options = {
+  key: fs.readFileSync('key.pem'),
+  cert: fs.readFileSync('cert.pem'),
+};
 
 function Nbt() {
 	if (false === (this instanceof Nbt)) {
@@ -75,7 +80,7 @@ function tryToConnect(self) {
 
 	restarttimer = null;
 
-	nbconn = net.connect({port: nbport, host: nbhost}, function() {
+	nbconn = tls.connect(nbport, nbhost, options, function() {
 		// connected
 		self.emit("connected");
 
@@ -96,12 +101,6 @@ function tryToConnect(self) {
 
 			// parse it
 			parseData(self);
-
-    		/*if (count == 20000) {
-    			console.log("nummsg="+count);
-    			var end = new Date();
-    			console.log(end-start);
-    		}*/
 
     		datareceivedsinceheartbeat = true;
 		});
@@ -1765,7 +1764,7 @@ Nbt.prototype.getBusinessRejectReason = function(reason) {
 			desc = "Other";
 			break;
 		case 1:
-			desc = "Unkown ID";
+			desc = "Unknown ID";
 			break;
 		case 2:
 			desc = "Unknown Security";

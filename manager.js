@@ -528,7 +528,7 @@ function getSendIfa(ifaid, conn) {
 function cashTrans(cashtrans, userid, conn) {
   cashtrans.timestamp = commonfo.getUTCTimeStamp(new Date());
 
-  db.eval(commonfo.scriptcashtrans, 0, cashtrans.clientid, cashtrans.currency, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.settldate, operatortype, userid, function(err, ret) {
+  db.eval(commonfo.scriptcashtrans, 0, cashtrans.clientid, cashtrans.currencyid, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.settldate, operatortype, userid, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {

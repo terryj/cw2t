@@ -353,8 +353,8 @@ function updateRec(fid, value, instrec) {
 }
 
 function updateDb(functioncode, instrumentcode, instrec) {
-  console.log("updateDb: " + instrumentcode);
-  console.log(instrec);
+  //console.log("updateDb: " + instrumentcode);
+  //console.log(instrec);
   // create a unix timestamp
   var now = new Date();
   instrec.timestamp = common.getUTCTimeStamp(now);
@@ -404,10 +404,16 @@ function updateDb(functioncode, instrumentcode, instrec) {
     }
   }
 
+  // test - todo - remove
+  var start = +new Date();
+  for (i=0; i<100; i++) {
   // update price
   db.eval(common.scriptpriceupdate, 0, instrumentcode, instrec.timestamp, instrec.bid, instrec.ask, instrec.midnetchange, instrec.midpercentchange, function(err, ret) {
     if (err) throw err;
   });
+}
+  var end = +new Date();
+  console.log("test took " + (end-start) + " ms");
 }
 
 function getDbInstrec(instrumentcode, instrec) {
