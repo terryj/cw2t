@@ -405,15 +405,16 @@ function updateDb(functioncode, instrumentcode, instrec) {
   }
 
   // test - todo - remove
-  var start = +new Date();
-  for (i=0; i<100; i++) {
+  //var start = +new Date();
+  //for (i=0; i<10000; i++) {
   // update price
   db.eval(common.scriptpriceupdate, 0, instrumentcode, instrec.timestamp, instrec.bid, instrec.ask, instrec.midnetchange, instrec.midpercentchange, function(err, ret) {
     if (err) throw err;
+  //var end = +new Date();
+  //console.log("test took " + (end-start) + " ms");
+    //console.log(ret);
   });
-}
-  var end = +new Date();
-  console.log("test took " + (end-start) + " ms");
+//}
 }
 
 function getDbInstrec(instrumentcode, instrec) {

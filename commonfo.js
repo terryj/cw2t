@@ -914,7 +914,7 @@ exports.registerScripts = function () {
     local price = 0 \
     local qty = tonumber(quantity) \
     if qty > 0 then \
-      local bidprice = redis.call("hget", "price:" .. symbolid, "bid") \
+      local bidprice = redis.call("hget", "symbol:" .. symbolid, "bid") \
       if bidprice and tonumber(bidprice) ~= 0 then \
         price = tonumber(bidprice) \
         if price ~= 0 then \
@@ -922,7 +922,7 @@ exports.registerScripts = function () {
         end \
       end \
     else \
-      local askprice = redis.call("hget", "price:" .. symbolid, "ask") \
+      local askprice = redis.call("hget", "symbol:" .. symbolid, "ask") \
       if askprice and tonumber(askprice) ~= 0 then \
         price = tonumber(askprice) \
         if price ~= 0 then \
@@ -942,12 +942,12 @@ exports.registerScripts = function () {
     local price = 0 \
     local qty = tonumber(quantity) \
     if qty > 0 then \
-      local bidprice = redis.call("hget", "price:" .. symbolid, "bid") \
+      local bidprice = redis.call("hget", "symbol:" .. symbolid, "bid") \
       if bidprice and tonumber(bidprice) ~= 0 then \
         price = tonumber(bidprice) \
       end \
     else \
-      local askprice = redis.call("hget", "price:" .. symbolid, "ask") \
+      local askprice = redis.call("hget", "symbol:" .. symbolid, "ask") \
       if askprice and tonumber(askprice) ~= 0 then \
         price = tonumber(askprice) \
       end \
@@ -1129,7 +1129,6 @@ exports.registerScripts = function () {
   local subscribesymbolnbt = function(symbolid, id, serverid) \
     --[[ get nbtsymbol & latest price ]] \
     local fields = {"bid", "ask", "timestamp", "midnetchg", "midpctchg", "nbtsymbol"} \
-    --[[local vals = redis.call("hmget", "price:" .. symbolid, unpack(fields)) ]]\
     local vals = redis.call("hmget", "symbol:" .. symbolid, unpack(fields)) \
     if not vals[6] then \
       return {0, ""} \
@@ -1487,14 +1486,17 @@ exports.registerScripts = function () {
   local vals \
   for index = 1, #positions do \
     vals = redis.call("hmget", "client:" .. ARGV[1] .. ":position:" .. positions[index], unpack(fields)) \
-    local margin = getmargin(vals[2], vals[3]) \
-    --[[ value the position ]] \
-    local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-    table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],currencyid=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
-    --[[ subscribe to this symbol, so as to get prices to the f/e for p&l calc ]] \
-    local subscribe = subscribesymbolnbt(vals[2], ARGV[1], ARGV[2]) \
-    if subscribe[1] == 1 then \
-      table.insert(tblsubscribe, vals[2]) \
+    --[[ todo: error msg ]] \
+    if vals[1] then \
+      local margin = getmargin(vals[2], vals[3]) \
+      --[[ value the position ]] \
+      local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
+      table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],currencyid=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+      --[[ subscribe to this symbol, so as to get prices to the f/e for p&l calc ]] \
+      local subscribe = subscribesymbolnbt(vals[2], ARGV[1], ARGV[2]) \
+      if subscribe[1] == 1 then \
+        table.insert(tblsubscribe, vals[2]) \
+      end \
     end \
   end \
   return {cjson.encode(tblresults), tblsubscribe} \
@@ -1708,6 +1710,7 @@ exports.registerScripts = function () {
   // update the latest price & add a tick to price history
   // params: symbol, timestamp, bid, offer
   // todo: needs updating for devivs
+  // todo - symbolid?
   scriptpricehistoryupdate = '\
   --[[ get an id for this tick ]] \
   local pricehistoryid = redis.call("incr", "pricehistoryid") \
@@ -1717,7 +1720,7 @@ exports.registerScripts = function () {
   local ask = KEYS[4] \
   local pricemsg = "" \
   if bid == "" then \
-    bid = redis.call("hget", "price:" .. nbtsymbol, "bid") \
+    bid = redis.call("hget", "symbol:" .. nbtsymbol, "bid") \
     if ask == "" then \
       return \
     else \
@@ -1725,7 +1728,7 @@ exports.registerScripts = function () {
     end \
   else \
     if ask == "" then \
-      ask = redis.call("hget", "price:" .. nbtsymbol, "ask") \
+      ask = redis.call("hget", "symbol:" .. nbtsymbol, "ask") \
       pricemsg = cjson.encode("bid") .. ":" .. bid \
     else \
       pricemsg = cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("ask") .. ":" .. ask \
@@ -1738,7 +1741,7 @@ exports.registerScripts = function () {
     --[[ publish price ]] \
     redis.call("publish", "price:" .. symbols[index], pricemsg) \
     --[[ store latest price ]] \
-    redis.call("hmset", "price:" .. symbols[index], "bid", bid, "ask", ask, "timestamp", KEYS[2]) \
+    redis.call("hmset", "symbol:" .. symbols[index], "bid", bid, "ask", ask, "timestamp", KEYS[2]) \
     --[[ add id to sorted set, indexed on timestamp ]] \
     redis.call("zadd", "pricehistory:" .. symbols[index], KEYS[2], pricehistoryid) \
     redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbolid", symbols[index], "bid", bid, "ask", ask, "id", pricehistoryid) \
@@ -1764,7 +1767,7 @@ exports.registerScripts = function () {
         table.insert(tblsubscribe, watchlist[index]) \
       end \
       --[[ get current prices ]] \
-      local vals = redis.call("hmget", "price:" .. watchlist[index], unpack(fields)) \
+      local vals = redis.call("hmget", "symbol:" .. watchlist[index], unpack(fields)) \
       table.insert(tblresults, {symbolid=watchlist[index], bid=vals[1], ask=vals[2], midnetchg=vals[3], midpctchg=vals[4]}) \
     end \
     return {cjson.encode(tblresults), tblsubscribe} \
@@ -1800,7 +1803,7 @@ exports.registerScripts = function () {
     local subscribe = subscribesymbolnbt(ARGV[1], ARGV[2], ARGV[3]) \
     --[[ get current prices ]] \
     local fields = {"bid", "ask", "midnetchg", "midpctchg"} \
-    local vals = redis.call("hmget", "price:" .. ARGV[1], unpack(fields)) \
+    local vals = redis.call("hmget", "symbol:" .. ARGV[1], unpack(fields)) \
     local tblresults = {} \
     table.insert(tblresults, {symbolid=ARGV[1], bid=vals[1], ask=vals[2], midnetchg=vals[3], midpctchg=vals[4]}) \
     return {cjson.encode(tblresults), subscribe[1]} \

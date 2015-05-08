@@ -388,7 +388,7 @@ function getFixDate(date) {
 }
 
 function newOrder(order) {
-  var currencyratetoorg = 1; // product currency to org curreny rate
+  var currencyratetoorg = 1; // product currency to org currency rate
   var currencyindtoorg = 1;
   var settlcurrfxrate = 1; // settlement currency to product currency rate
   var settlcurrfxratecalc = 1;
@@ -1540,7 +1540,7 @@ function registerScripts() {
     local tradekey = "trade:" .. tradeid \
     redis.call("hmset", tradekey, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "finance", finance, "margin", initialmargin) \
     redis.call("sadd", "trades", tradeid) \
-    redis.call("sadd", clientid .. ":trades", tradeid) \
+    redis.call("sadd", "client:" .. clientid .. ":trades", tradeid) \
     redis.call("sadd", "order:" .. orderid .. ":trades", tradeid) \
     redis.call("zadd", "tradesbydate", milliseconds, tradeid) \
     local transtype \
@@ -1587,7 +1587,7 @@ function registerScripts() {
     local orderid = redis.call("incr", "orderid") \
     redis.call("hmset", "order:" .. orderid, "clientid", clientid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "ordertype", ordertype, "remquantity", remquantity, "status", status, "markettype", markettype, "futsettdate", futsettdate, "partfill", partfill, "quoteid", quoteid, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "timestamp", timestamp, "margin", margin, "timeinforce", timeinforce, "expiredate", expiredate, "expiretime", expiretime, "settlcurrencyid", settlcurrencyid, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "orderid", orderid, "externalorderid", externalorderid, "execid", execid, "nosettdays", nosettdays, "operatortype", operatortype, "operatorid", operatorid, "hedgeorderid", hedgeorderid) \
     --[[ add to set of orders for this client ]] \
-    redis.call("sadd", clientid .. ":orders", orderid) \
+    redis.call("sadd", "client:" .. clientid .. ":orders", orderid) \
     --[[ add order id to associated quote, if there is one ]] \
     if quoteid ~= "" then \
       redis.call("hset", "quote:" .. quoteid, "orderid", orderid) \
@@ -2016,7 +2016,8 @@ function registerScripts() {
   --[[ store the quote request ]] \
   redis.call("hmset", KEYS[2] .. quotereqid, "clientid", ARGV[1], "symbolid", ARGV[2], "quantity", ARGV[3], "cashorderqty", ARGV[4], "currencyid", ARGV[5], "settlcurrencyid", ARGV[6], "nosettdays", ARGV[7], "futsettdate", ARGV[8], "quotestatus", "", "timestamp", ARGV[9], "quoterejectreason", "", "quotereqid", quotereqid, "operatortype", ARGV[10], "operatorid", ARGV[11], "side", ARGV[15]) \
   --[[ add to set of quoterequests for this client ]] \
-  redis.call("sadd", ARGV[1] .. KEYS[3], quotereqid) \
+  redis.call("sadd", "client:" .. ARGV[1] .. KEYS[3], quotereqid) \
+  --[[ open quote requests ]] \
   redis.call("sadd", KEYS[4], quotereqid) \
   --[[ get required instrument values for external feed ]] \
   local proquotesymbol = getproquotesymbol(ARGV[2]) \
@@ -2038,8 +2039,13 @@ function registerScripts() {
     errorcode = 1014 \
     return errorcode \
   end \
+  --[[ get touch prices - using delayed - todo: may need to look up delayed/live ]] \
   local symbolid = vals[3] \
-  local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
+  local symbolfields = {"bid", "ask", "instrumenttypeid"} \
+  local symbolvals = redis.call("hmget", "symbol:" .. symbolid, unpack(symbolfields)) \
+  local bestbid = symbolvals[1] \
+  local bestoffer = symbolvals[2] \
+  local instrumenttypeid = symbolvals[3] \
   local bidquantity = "" \
   local offerquantity = "" \
   local bidfinance = 0 \
@@ -2065,15 +2071,6 @@ function registerScripts() {
     end \
     --[[ this needs revisiting ]]\
     --[[bidfinance = calcfinance(instrumenttypeid, bidquantity * bidprice, vals[7], 2, vals[6]) ]]\
-  end \
-  --[[ get touch prices - using delayed - todo: may need to look up delayed/live ]] \
-  local bestbid = "" \
-  local bestoffer = "" \
-  local pricefields = {"bid", "ask"} \
-  local pricevals = redis.call("hmget", "price:" .. symbolid, unpack(pricefields)) \
-  if pricevals[1] then \
-    bestbid = pricevals[1] \
-    bestoffer = pricevals[2] \
   end \
   --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
   quoteid = redis.call("incr", "quoteid") \
