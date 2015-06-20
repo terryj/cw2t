@@ -1612,7 +1612,7 @@
         function sendRfq(quantity, cashorderqty, symbolid, side, currencyid, nosettdays, futsettdate) {
             var rfq = {};
 
-            rfq.clientid = clientid;
+            //rfq.clientid = clientid;
             rfq.symbolid = symbolid;
             rfq.quantity = quantity;
             rfq.cashorderqty = cashorderqty;
@@ -1621,8 +1621,8 @@
             rfq.settlcurrencyid = currencyid;
             rfq.nosettdays = nosettdays;
             rfq.futsettdate = futsettdate;
-            rfq.operatortype = operatortype;
-            rfq.operatorid = clientid;
+            //rfq.operatortype = operatortype;
+            //rfq.operatorid = clientid;
 
             sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
         }

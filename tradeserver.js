@@ -268,6 +268,7 @@ function testQuoteResponse(quoterequest) {
 // publish a test quote rejection
 //
 function testQuoteAck(quoterequest) {
+  console.log("testQuoteAck");
   var quoteack = {};
 
   quoteack.quotereqid = quoterequest.quotereqid;
@@ -275,7 +276,7 @@ function testQuoteAck(quoterequest) {
   quoteack.quoterejectreason = "";
   quoteack.text = "too much toblerone";
 
-  db.eval(scriptquoteack, 4, quoteack.quotereqid, quoteack.quoteackstatus, quoteack.quoterejectreason, quoteack.text, function(err, ret) {
+  db.eval(scriptquoteack, 0, quoteack.quotereqid, quoteack.quoteackstatus, quoteack.quoterejectreason, quoteack.text, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -328,6 +329,7 @@ function testQuote(quoterequest, side) {
       console.log(err);
       return;
     }
+    console.log(ret);
 
     if (ret != 0) {
       // can't find quote request, so don't know which client to inform
@@ -1498,9 +1500,9 @@ function registerScripts() {
 
   publishquoteack = '\
   local publishquoteack = function(quotereqid) \
-    local fields = {"clientid", "symbolid", "operatortype", "quotestatus", "quoterejectreason", "text", "operatorid"} \
+    local fields = {"clientid", "symbolid", "operatortype", "quotestatusid", "quoterejectreasonid", "text", "operatorid"} \
     local vals = redis.call("hmget", "quoterequest:" .. quotereqid, unpack(fields)) \
-    local quoteack = {quotereqid=quotereqid, clientid=vals[1], symbolid=vals[2], quotestatus=vals[4], quoterejectreason=vals[5], text=vals[6], operatorid=vals[7]} \
+    local quoteack = {quotereqid=quotereqid, clientid=vals[1], symbolid=vals[2], quotestatusid=vals[4], quoterejectreasonid=vals[5], text=vals[6], operatorid=vals[7]} \
     redis.call("publish", vals[3], "{" .. cjson.encode("quoteack") .. ":" .. cjson.encode(quoteack) .. "}") \
     end \
   ';
@@ -2014,7 +2016,7 @@ function registerScripts() {
   local quotereqid = redis.call("incr", KEYS[1]) \
   if not quotereqid then return 1005 end \
   --[[ store the quote request ]] \
-  redis.call("hmset", KEYS[2] .. quotereqid, "clientid", ARGV[1], "symbolid", ARGV[2], "quantity", ARGV[3], "cashorderqty", ARGV[4], "currencyid", ARGV[5], "settlcurrencyid", ARGV[6], "nosettdays", ARGV[7], "futsettdate", ARGV[8], "quotestatus", "", "timestamp", ARGV[9], "quoterejectreason", "", "quotereqid", quotereqid, "operatortype", ARGV[10], "operatorid", ARGV[11], "side", ARGV[15]) \
+  redis.call("hmset", KEYS[2] .. quotereqid, "clientid", ARGV[1], "symbolid", ARGV[2], "quantity", ARGV[3], "cashorderqty", ARGV[4], "currencyid", ARGV[5], "settlcurrencyid", ARGV[6], "nosettdays", ARGV[7], "futsettdate", ARGV[8], "quotestatusid", "", "timestamp", ARGV[9], "quoterejectreasonid", "", "quotereqid", quotereqid, "operatortype", ARGV[10], "operatorid", ARGV[11], "side", ARGV[15]) \
   --[[ add to set of quoterequests for this client ]] \
   redis.call("sadd", "client:" .. ARGV[1] .. KEYS[3], quotereqid) \
   --[[ open quote requests ]] \
@@ -2089,7 +2091,7 @@ function registerScripts() {
     status = "0" \
   end \
   --[[ add status to stored quoterequest ]] \
-  redis.call("hmset", "quoterequest:" .. ARGV[1], "quotestatus", status) \
+  redis.call("hmset", "quoterequest:" .. ARGV[1], "quotestatusid", status) \
   --[[ publish quote to operator type, with operator id, so can be forwarded as appropriate ]] \
   publishquote(quoteid, vals[8], vals[10]) \
   return errorcode \
@@ -2097,9 +2099,9 @@ function registerScripts() {
 
   scriptquoteack = publishquoteack + '\
   --[[ update quote request ]] \
-  redis.call("hmset", "quoterequest:" .. ARGV[1], "quotestatus", ARGV[2], "quoterejectreason", ARGV[3], "text", ARGV[4]) \
+  redis.call("hmset", "quoterequest:" .. ARGV[1], "quotestatusid", ARGV[2], "quoterejectreasonid", ARGV[3], "text", ARGV[4]) \
   --[[ publish to operator type ]] \
-  publishquoteack(KEYS[1]) \
+  publishquoteack(ARGV[1]) \
   return \
   ';
 

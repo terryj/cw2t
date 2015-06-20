@@ -33,6 +33,7 @@ var defaultnosettdays = 3;
 var serverid = 1; // must be unique, use .ini file?
 var servertype = "client";
 var feedtype = "nbtrader";
+var operatortype = 1;
 
 // redis
 var redishost;
@@ -106,7 +107,7 @@ function pubsub() {
   });
 
   dbsub.on("message", function(channel, message) {
-    console.log("channel: " + channel + ", message: " + message);
+    //console.log("channel: " + channel + ", message: " + message);
 
     if (channel.substr(0, 6) == "price:") {
       common.newPrice(channel.substr(6), serverid, message, connections, feedtype);
@@ -209,7 +210,7 @@ function listen() {
       console.log('recd:' + msg);
 
       // just forward to trade server
-      if (msg.substr(2, 18) == "ordercancelrequest") {
+      /*if (msg.substr(2, 18) == "ordercancelrequest") {
         db.publish(common.tradeserverchannel, msg);
       } else if (msg.substr(2, 6) == "order\"") {
         db.publish(common.tradeserverchannel, msg);
@@ -219,7 +220,7 @@ function listen() {
         db.publish(common.tradeserverchannel, msg);
       } else if (msg.substr(2, 4) == "chat") {
         db.publish(common.userserverchannel, msg);
-      } else {
+      } else {*/
         try {
           var obj = JSON.parse(msg);
 
@@ -227,6 +228,10 @@ function listen() {
             subscribePriceRequest(clientid, obj.subscribepricerequest, conn);
           } else if ("unsubscribepricerequest" in obj) {
             unsubscribePriceRequest(clientid, obj.unsubscribepricerequest, conn);
+          } else if ("order" in obj) {
+            newOrder(obj.order, clientid, conn);
+          } else if ("quoterequest" in obj) {
+            quoteRequest(obj.quoterequest, clientid, conn);
           } else if ("symbolrequest" in obj) {
             symbolRequest(obj.symbolrequest, clientid, conn);
           } else if ("positionrequest" in obj) {
@@ -274,7 +279,7 @@ function listen() {
           console.log(e);
           return;
         }
-      }
+      //}
     });
 
     conn.on('close', function() {
@@ -1378,6 +1383,7 @@ function watchlistRequest(watchlist, clientid, conn) {
       console.log(ret);
 
       conn.write("{\"watchlist\":" + ret[0] + "}");
+      console.log("{\"watchlist\":" + ret[0] + "}");
 
       // subscribe to symbols
       for (var i = 0; i < ret[1].length; i++) {
@@ -1419,6 +1425,32 @@ function unwatchlistrequest(uwl, clientid, conn) {
       }
     });
   }
+}
+
+function quoteRequest(rfq, clientid, conn) {
+  console.log("quoteRequest");
+  console.log(rfq);
+
+  // add clientid & operator
+  rfq.clientid = clientid;
+  rfq.operatorid = clientid;
+  rfq.operatortype = operatortype;
+
+  // send to tradeserver
+  db.publish(common.tradeserverchannel, "{\"quoterequest\":" + JSON.stringify(rfq) + "}");
+}
+
+function newOrder(order, clientid, conn) {
+  console.log("newOrder");
+  console.log(order);
+
+  // add clientid & operator
+  order.clientid = clientid;
+  order.operatorid = clientid;
+  order.operatortype = operatortype;
+
+  // send to tradeserver
+  db.publish(common.tradeserverchannel, "{\"order\":" + JSON.stringify(order) + "}");
 }
 
 function registerScripts() {
