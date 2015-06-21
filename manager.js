@@ -1746,6 +1746,11 @@ function endOfDay(userid) {
   });
 }
 
+function test() {
+  scriptnewclientfundstransfer(amount, brokerid, currencyid, fromaccountid, localamount, nominalaccountid, note, rate, reference, timestamp, toaccountid, transactiontypeid)
+
+}
+
 function registerScripts() {
   var stringsplit;
   var gettotalpositions = commonfo.gettotalpositions;
