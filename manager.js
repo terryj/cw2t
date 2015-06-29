@@ -17,6 +17,7 @@ var redis = require('redis');
 
 // internal libraries
 var commonfo = require('./commonfo.js');
+var commonbo = require('./commonbo.js');
 var common = require('./common.js');
 
 // redis
@@ -116,6 +117,7 @@ db.on("error", function(err) {
 
 function initialise() {
   commonfo.registerScripts();
+  commonbo.registerScripts();
   common.registerScripts();
   registerScripts();
   initDb();
@@ -220,6 +222,9 @@ function listen() {
     var userid = "0";
 
     console.log('new connection');
+
+    //test();
+    testtrade();
 
     // data callback
     // todo: multiple messages in one data event
@@ -1747,8 +1752,47 @@ function endOfDay(userid) {
 }
 
 function test() {
-  scriptnewclientfundstransfer(amount, brokerid, currencyid, fromaccountid, localamount, nominalaccountid, note, rate, reference, timestamp, toaccountid, transactiontypeid)
+  console.log("test");
 
+  var amount = 10;
+  var brokerid = 1;
+  var currencyid = "GBP";
+  var clientaccountid = 1;
+  var localamount = 10;
+  var note = "first cash receipt";
+  var rate = 1;
+  var reference = "ABC123";
+  var timestamp = "";
+  var bankaccountid = 999988;
+  var transactiontypeid = "BR";
+
+  db.eval(commonbo.scriptnewclientfundstransfer, 0, amount, brokerid, currencyid, clientaccountid, localamount, note, rate, reference, timestamp, bankaccountid, transactiontypeid, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+  });
+}
+
+function testtrade() {
+  console.log("testtrade");
+
+  var consideration = 1234;
+  var commission = 12.34;
+  var ptmlevy = 10;
+  var stampduty = 1.23;
+  var brokerid = 1;
+  var clientaccountid = 1;
+  var currencyid = "GBP";
+  var localamount = 1234;
+  var note = "Bought 100 BARC.L";
+  var rate = 1;
+  var timestamp = "";
+  var tradeid = 1;
+  var side = 1;
+
+  db.eval(commonbo.scripttesttrade, 0, consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+  });
 }
 
 function registerScripts() {

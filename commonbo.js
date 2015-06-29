@@ -12,10 +12,9 @@ exports.registerScripts = function () {
   * returns account balance & local currency balance
   */
   getaccountbalance = '\
-  local getaccountbalance(accountid, brokerid) \
-    local accountkey = "broker:" .. brokerid .. ":account:" .. accountid \
+  local getaccountbalance = function(accountid, brokerid) \
     local fields = {"balance", "localbalance"} \
-    local vals = redis.call("hmget", accountkey, unpack(fields)) \
+    local vals = redis.call("hmget", "broker:" .. brokerid .. ":account:" .. accountid, unpack(fields)) \
     return vals[1], vals[2] \
   end \
   ';
@@ -26,28 +25,26 @@ exports.registerScripts = function () {
   * amount & localamount can be -ve
   */
   updateaccountbalance = '\
-  local updateaccountbalance(accountid, brokerid, amount, localamount) \
+  local updateaccountbalance = function(accountid, brokerid, amount, localamount) \
     local accountkey = "broker:" .. brokerid .. ":account:" .. accountid \
-    hincrbyfloat(accountkey, "balance", amount) \
-    hincrbyfloat(accountkey, "localbalance", localamount) \
+    redis.call("hincrbyfloat", accountkey, "balance", amount) \
+    redis.call("hincrbyfloat", accountkey, "localbalance", localamount) \
   end \
   ';
-
-/* alternative method - todo: remove one or other
-    local vals = getaccountbalance(brokerid, accountid) \
-    redis.call("hmset", accountkey, "balance", tonumber(vals[1]) + tonumber(amount), "localbalance", tonumber(vals[2]) + tonumber(localamount)) \
-*/
 
   /*
   * newposting()
   * creates a posting record & updates balances for an account
   */
   newposting = updateaccountbalance + '\
-  local newposting(accountid, brokerid, amount, localamount, transactionid) \
+  local newposting = function(accountid, brokerid, amount, localamount, transactionid) \
     local postingid = redis.call("hincrby", "broker:" .. brokerid, "lastpostingid", 1) \
     redis.call("hmset", "broker:" .. brokerid .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", amount, "localamount", localamount, "postingid", postingid, "transactionid", transactionid) \
-    redis.call("sadd", "broker:" .. brokerid .. ":account:" .. accountid .. ":postings", postingid) \
+    redis.call("sadd", "broker:" .. brokerid .. ":transaction:" .. transactionid .. ":postings", postingid) \
+    --[[redis.call("sadd", "broker:" .. brokerid .. ":account:" .. accountid .. ":postings", postingid) ]]\
+    --[[ todo: add date based key, will need to pass timestamp ]] \
     updateaccountbalance(accountid, brokerid, amount, localamount) \
+    return postingid \
   end \
   ';
 
@@ -56,7 +53,7 @@ exports.registerScripts = function () {
   * creates a transaction record
   */
   newtransaction = '\
-  local newtransaction(amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid) \
+  local newtransaction = function(amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid) \
     local transactionid = redis.call("hincrby", "broker:" .. brokerid, "lasttransactionid", 1) \
     redis.call("hmset", "broker:" .. brokerid .. ":transaction:" .. transactionid, "amount", amount, "brokerid", brokerid, "currencyid", currencyid, "localamount", localamount, "note", note, "rate", rate, "reference", reference, "timestamp", timestamp, "transactiontypeid", transactiontypeid, "transactionid", transactionid) \
     return transactionid \
@@ -64,24 +61,85 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * newtradeaccounttransaction()
+  * create transaction & postings for the cash side of a trade
+  * params: amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype
+  */
+  newtradeaccounttransaction = newtransaction + newposting + '\
+  local newtradeaccounttransaction = function(amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype) \
+    local clientcontrolaccountid = redis.call("hget", "broker:" .. brokerid, "clientcontrolaccountid") \
+    local transactionid = newtransaction(amount, brokerid, currencyid, localamount, note, rate, "trade:" .. tradeid, timestamp, transactiontype) \
+    local postingid \
+    if transactiontype == "TR" then \
+      --[[ receipt from broker point of view ]] \
+      newposting(clientaccountid, brokerid, -amount, -localamount, transactionid) \
+      newposting(clientcontrolaccountid, brokerid, -amount, -localamount, transactionid) \
+      newposting(nominalaccountid, brokerid, amount, localamount, transactionid) \
+    else \
+      --[[ pay from broker point of view ]] \
+      newposting(clientaccountid, brokerid, amount, localamount, transactionid) \
+      newposting(clientcontrolaccountid, brokerid, amount, localamount, transactionid) \
+      newposting(nominalaccountid, brokerid, -amount, -localamount, transactionid) \
+    end \
+  end \
+  ';
+
+  /*
   * scriptnewclientfundstransfer
   * script to handle bank receipts & payments
-  * parameters - amount, brokerid, currencyid, fromaccountid, localamount, nominalaccountid, note, rate, reference, timestamp, toaccountid, transactiontypeid
+  * params: amount, brokerid, currencyid, fromaccountid, localamount, note, rate, reference, timestamp, toaccountid, transactiontypeid
   */
-  scriptnewclientfundstransfer = newtransaction + newposting + '\
-    local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[12]) \
-    local clientcontrolaccountid = redis.call("hget", "broker:" .. brokerid, "clientcontrolaccountid") \
-    local bankcontrolaccountid = redis.call("hget", "broker:" .. brokerid, "bankcontrolaccountid") \
-    if ARGV[12] == "BR" then \
-      newposting(ARGV[4], ARGV[2], ARGV[1], ARGV[5], transactionid) \
-      newposting(clientcontrolaccountid, ARGV[2], ARGV[1], ARGV[5], transactionid) \
-      newposting(ARGV[11], ARGV[2], ARGV[1], ARGV[5], transactionid) \
-      newposting(bankcontrolaccountid, ARGV[2], ARGV[1], ARGV[5], transactionid) \
+  exports.scriptnewclientfundstransfer = newtransaction + newposting + '\
+    local brokerkey = "broker:" .. ARGV[2] \
+    local clientcontrolaccountid = redis.call("hget", brokerkey, "clientcontrolaccountid") \
+    local bankcontrolaccountid = redis.call("hget", brokerkey, "bankcontrolaccountid") \
+    local amount \
+    local localamount \
+    if ARGV[11] == "BR" then \
+      amount = tonumber(ARGV[1]) \
+      localamount = tonumber(ARGV[5]) \
     else \
-      newposting(ARGV[4], ARGV[2], -ARGV[1], -ARGV[5], transactionid) \
-      newposting(clientcontrolaccountid, ARGV[2], -ARGV[1], -ARGV[5], transactionid) \
-      newposting(ARGV[11], ARGV[2], -ARGV[1], -ARGV[5], transactionid) \
-      newposting(bankcontrolaccountid, ARGV[2], -ARGV[1], -ARGV[5], transactionid) \
+      amount = -tonumber(amount) \
+      localamount = -tonumber(localamount) \
     end \
+    local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[11]) \
+    newposting(ARGV[4], ARGV[2], amount, localamount, transactionid) \
+    newposting(clientcontrolaccountid, ARGV[2], amount, localamount, transactionid) \
+    newposting(ARGV[10], ARGV[2], amount, localamount, transactionid) \
+    newposting(bankcontrolaccountid, ARGV[2], amount, localamount, transactionid) \
+    return 0 \
   ';
-};
+
+  /*
+  * newtradeaccounttransactions()
+  * cash side of a client trade
+  * creates a separate transaction for the consideration & each of the cost items
+  * todo: costs as a table?
+  */
+  newtradeaccounttransactions = newtradeaccounttransaction + '\
+  local newtradeaccounttransactions = function(consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side) \
+    local brokerkey = "broker:" .. brokerid \
+    local nominaltradeaccountid = redis.call("hget", brokerkey, "nominaltradeaccountid") \
+    local nominalcommissionaccountid = redis.call("hget", brokerkey, "nominalcommissionaccountid") \
+    local nominalptmaccountid = redis.call("hget", brokerkey, "nominalptmaccountid") \
+    local nominalstampdutyaccountid = redis.call("hget", brokerkey, "nominalstampdutyaccountid") \
+    --[[ side determines pay / receive ]] \
+    if tonumber(side) == 1 then \
+      --[[ client buy, so cash received from broker point of view ]] \
+      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominaltradeaccountid, note, rate, timestamp, tradeid, "TR") \
+    else \
+      --[[ cash paid from broker point of view ]] \
+      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominaltradeaccountid, note, rate, timestamp, tradeid, "TP") \
+    end \
+    --[[ broker always receives costs ]] \
+    newtradeaccounttransaction(commission, brokerid, clientaccountid, currencyid, localamount, nominalcommissionaccountid, note .. " Commission", rate, timestamp, tradeid, "TR") \
+    newtradeaccounttransaction(ptmlevy, brokerid, clientaccountid, currencyid, localamount, nominalptmaccountid, note .. " PTM Levy", rate, timestamp, tradeid, "TR") \
+    newtradeaccounttransaction(stampduty, brokerid, clientaccountid, currencyid, localamount, nominalstampdutyaccountid, note .. " Stamp Duty", rate, timestamp, tradeid, "TR") \
+  end \
+  ';
+
+  exports.scripttesttrade = newtradeaccounttransactions + '\
+    newtradeaccounttransactions(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13]) \
+    return 0 \
+  ';
+}
