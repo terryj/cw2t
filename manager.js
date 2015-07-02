@@ -223,8 +223,8 @@ function listen() {
 
     console.log('new connection');
 
-    //test();
-    testtrade();
+    test();
+    //testtrade();
 
     // data callback
     // todo: multiple messages in one data event
@@ -1755,18 +1755,19 @@ function test() {
   console.log("test");
 
   var amount = 10;
+  var bankaccountid = 999988;
   var brokerid = 1;
-  var currencyid = "GBP";
   var clientaccountid = 1;
+  var currencyid = "GBP";
   var localamount = 10;
   var note = "first cash receipt";
   var rate = 1;
   var reference = "ABC123";
   var timestamp = "";
-  var bankaccountid = 999988;
-  var transactiontypeid = "BR";
+  var transactiontypeid = "CD";
 
-  db.eval(commonbo.scriptnewclientfundstransfer, 0, amount, brokerid, currencyid, clientaccountid, localamount, note, rate, reference, timestamp, bankaccountid, transactiontypeid, function(err, ret) {
+  // note we are passing the key in, so as to facilitate clustering
+  db.eval(commonbo.scriptnewclientfundstransfer, 1, "broker:" + brokerid, amount, bankaccountid, brokerid, clientaccountid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });

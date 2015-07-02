@@ -16,7 +16,8 @@ var redis = require('redis');
 //var ptpclient = require('./ptpclient.js'); // Proquote API connection
 var externalconn = "NBTrader";
 var nbtrader = require('./nbtrader.js'); // NBTrader API connection 
-var common = require('./commonfo.js');
+var commonfo = require('./commonfo.js');
+var commonbo = require('./commonbo.js');
 
 // redis
 var redishost;
@@ -126,7 +127,7 @@ function pubsub() {
   });
 
   // listen for trade related messages
-  dbsub.subscribe(common.tradeserverchannel);
+  dbsub.subscribe(commonfo.tradeserverchannel);
 }
 
 // connection to Winner
@@ -185,7 +186,7 @@ function quoteRequest(quoterequest) {
 
   var today = new Date();
 
-  quoterequest.timestamp = common.getUTCTimeStamp(today);
+  quoterequest.timestamp = commonfo.getUTCTimeStamp(today);
 
   // get hour & minute for comparison with timezone to determine in/out of hours
   var hour = today.getHours();
@@ -203,7 +204,7 @@ function quoteRequest(quoterequest) {
     quoterequest.settlmnttyp = 5;
   } else if (quoterequest.nosettdays > 5) {
     // get settlement date from T+n no. of days
-    quoterequest.futsettdate = common.getUTCDateString(common.getSettDate(today, quoterequest.nosettdays, holidays));
+    quoterequest.futsettdate = commonfo.getUTCDateString(commonfo.getSettDate(today, quoterequest.nosettdays, holidays));
     quoterequest.settlmnttyp = 6;
   } else {
     // default
@@ -216,7 +217,7 @@ function quoteRequest(quoterequest) {
 
     if (ret[0] != 0) {
       // todo: send a quote ack to client
-      console.log("Error in scriptquoterequest:" + common.getReasonDesc(ret[0]));
+      console.log("Error in scriptquoterequest:" + commonfo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -240,7 +241,7 @@ function quoteRequest(quoterequest) {
       } else {
         console.log("publishing");
         // publish it to other clients
-        db.publish(common.quoterequestchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
+        db.publish(commonfo.quoterequestchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
       }
     }
   });
@@ -315,12 +316,12 @@ function testQuote(quoterequest, side) {
   quote.settledays = 2;
 
   var today = new Date();
-  quote.transacttime = common.getUTCTimeStamp(today);
+  quote.transacttime = commonfo.getUTCTimeStamp(today);
 
   var validuntiltime = today;
   quote.noseconds = 30;
   validuntiltime.setSeconds(today.getSeconds() + quote.noseconds);
-  quote.validuntiltime = common.getUTCTimeStamp(validuntiltime);
+  quote.validuntiltime = commonfo.getUTCTimeStamp(validuntiltime);
 
   // quote script
   // note: not passing securityid & idsource as proquote symbol should be enough
@@ -333,7 +334,7 @@ function testQuote(quoterequest, side) {
 
     if (ret != 0) {
       // can't find quote request, so don't know which client to inform
-      console.log("Error in scriptquote:" + common.getReasonDesc(ret[0]));
+      console.log("Error in scriptquote:" + commonfo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -400,7 +401,7 @@ function newOrder(order) {
 
   var today = new Date();
 
-  order.timestamp = common.getUTCTimeStamp(today);
+  order.timestamp = commonfo.getUTCTimeStamp(today);
   order.partfill = 1; // accept part-fill
 
   // get hour & minute for comparison with timezone to determine in/out of hours
@@ -420,7 +421,7 @@ function newOrder(order) {
 
   // get settlement date from T+n no. of days
   if (order.futsettdate == "") {
-    order.futsettdate = common.getUTCDateString(common.getSettDate(today, order.nosettdays, holidays));
+    order.futsettdate = commonfo.getUTCDateString(commonfo.getSettDate(today, order.nosettdays, holidays));
   }
 
   // store the order, get an id & credit check it
@@ -462,7 +463,7 @@ function newOrder(order) {
     // set the settlement date to equity default date for cfd orders, in case they are being hedged with the market
     if (order.instrumenttypeid == "CFD" || order.instrumenttypeid == "SPB") {
       // commented out as only offering default settlement for the time being
-      //order.futsettdate = common.getUTCDateString(common.getSettDate(today, ret[11], holidays));
+      //order.futsettdate = commonfo.getUTCDateString(commonfo.getSettDate(today, ret[11], holidays));
 
       // update the stored order settlement details if it is a hedge - todo: req'd?
       if (hedgeorderid != "") {
@@ -509,7 +510,7 @@ function matchOrder(order) {
 function orderCancelRequest(ocr) {
   console.log("Order cancel request received for order#" + ocr.orderid);
 
-  ocr.timestamp = common.getUTCTimeStamp(new Date());
+  ocr.timestamp = commonfo.getUTCTimeStamp(new Date());
 
   db.eval(scriptordercancelrequest, 5, ocr.clientid, ocr.orderid, ocr.timestamp, ocr.operatortype, ocr.operatorid, function(err, ret) {
     if (err) throw err;
@@ -549,14 +550,14 @@ function orderFillRequest(ofr) {
 
   var today = new Date();
 
-  ofr.timestamp = common.getUTCTimeStamp(today);
+  ofr.timestamp = commonfo.getUTCTimeStamp(today);
 
   if (!('price' in ofr)) {
     ofr.price = "";
   }
 
   // calculate a settlement date from the nosettdays
-  ofr.futsettdate = common.getUTCDateString(common.getSettDate(today, ofr.nosettdays, holidays));
+  ofr.futsettdate = commonfo.getUTCDateString(commonfo.getSettDate(today, ofr.nosettdays, holidays));
 
   db.eval(scriptorderfillrequest, 7, ofr.clientid, ofr.orderid, ofr.timestamp, ofr.operatortype, ofr.operatorid, ofr.price, ofr.futsettdate, function(err, ret) {
     if (err) throw err;
@@ -571,7 +572,7 @@ function orderFillRequest(ofr) {
     db.publish(ofr.operatortype, "order:" + ofr.orderid);
 
     // publish the trade
-    db.publish(common.tradechannel, "trade:" + ret[1]);
+    db.publish(commonfo.tradechannel, "trade:" + ret[1]);
   });
 }
 
@@ -667,7 +668,7 @@ function displayOrderBook(symbolid, lowerbound, upperbound) {
 }
 
 function initDb() {
-  common.registerScripts();
+  commonfo.registerScripts();
   registerScripts();
   loadHolidays();
   getTestmode();
@@ -675,7 +676,7 @@ function initDb() {
 
 function loadHolidays() {
   // we are assuming "L"=London
-  db.eval(common.scriptgetholidays, 0, "L", function(err, ret) {
+  db.eval(commonfo.scriptgetholidays, 0, "L", function(err, ret) {
     if (err) throw err;
 
     for (var i = 0; i < ret.length; ++i) {
@@ -736,15 +737,15 @@ function newQuote(quote) {
 
   if (!('transacttime' in quote)) {
     var today = new Date();
-    quote.transacttime = common.getUTCTimeStamp(today);
+    quote.transacttime = commonfo.getUTCTimeStamp(today);
 
     if (!('validuntiltime' in quote)) {
       var validuntiltime = today;
       validuntiltime.setSeconds(today.getSeconds() + quote.noseconds);
-      quote.validuntiltime = common.getUTCTimeStamp(validuntiltime);
+      quote.validuntiltime = commonfo.getUTCTimeStamp(validuntiltime);
     }
   } else {
-    quote.noseconds = common.getSeconds(quote.transacttime, quote.validuntiltime);
+    quote.noseconds = commonfo.getSeconds(quote.transacttime, quote.validuntiltime);
   }
 
   if (!('qclientid' in quote)) {
@@ -765,7 +766,7 @@ function newQuote(quote) {
 
     if (ret != 0) {
       // can't find quote request, so don't know which client to inform
-      console.log("Error in scriptquote:" + common.getReasonDesc(ret[0]));
+      console.log("Error in scriptquote:" + commonfo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -797,7 +798,7 @@ nbt.on("orderReject", function(exereport) {
 
     if (ret != 0) {
       // todo: message to operator
-      console.log("Error in scriptrejectorder, reason:" + common.getReasonDesc(ret));
+      console.log("Error in scriptrejectorder, reason:" + commonfo.getReasonDesc(ret));
       return;
     }
 
@@ -833,7 +834,7 @@ nbt.on("orderCancel", function(exereport) {
 
     if (ret[0] != 0) {
       // todo: send to client
-      console.log("Error in scriptordercancel, reason:" + common.getReasonDesc(ret[0]));
+      console.log("Error in scriptordercancel, reason:" + commonfo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -854,7 +855,7 @@ nbt.on("orderExpired", function(exereport) {
 
     if (ret[0] != 0) {
       // todo: send to client
-      console.log("Error in scriptorderexpire, reason:" + common.getReasonDesc(ret[0]));
+      console.log("Error in scriptorderexpire, reason:" + commonfo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -925,8 +926,8 @@ nbt.on("quote", function(quote, header) {
   // - todo: inform client & limit as parameter?
   if ('possdupflag' in header) {
     if (header.possdupflag == 'Y') {
-      var sendingtime = new Date(common.getDateString(header.sendingtime));
-      var validuntiltime = new Date(common.getDateString(quote.validuntiltime));
+      var sendingtime = new Date(commonfo.getDateString(header.sendingtime));
+      var validuntiltime = new Date(commonfo.getDateString(quote.validuntiltime));
       if (validuntiltime < sendingtime) {
         console.log("Quote received is past valid until time, discarding");
         return;
@@ -992,10 +993,10 @@ nbt.on("businessReject", function(businessreject) {
 });
 
 function registerScripts() {
-  var updatecash = common.updatecash;
-  var getfreemargin = common.getfreemargin;
-  var round = common.round;
-  var calcfinance = common.calcfinance;
+  //var updatecash = commonfo.updatecash;
+  var getfreemargin = commonfo.getfreemargin;
+  var round = commonfo.round;
+  var calcfinance = commonfo.calcfinance;
   var updateposition;
   var updateordermargin;
   var updatereserve;
@@ -1186,7 +1187,7 @@ function registerScripts() {
   // publish a position
   // key may be just a symbol or symbol + settlement date
   //
-  publishposition = common.getunrealisedpandl + common.getmargin + '\
+  publishposition = commonfo.getunrealisedpandl + commonfo.getmargin + '\
   local publishposition = function(clientid, positionkey, symbolid, futsettdate, channel) \
     local fields = {"quantity", "cost", "currencyid", "positionid", "futsettdate", "symbolid"} \
     local vals = redis.call("hmget", positionkey, unpack(fields)) \
@@ -1535,28 +1536,34 @@ function registerScripts() {
   end \
   ';
 
-  newtrade = updateposition + updatecash + publishtrade + '\
-  local newtrade = function(clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, operatortype, operatorid, finance, milliseconds) \
-    local tradeid = redis.call("incr", "tradeid") \
+  //newtrade = updateposition + updatecash + publishtrade + '\
+  newtrade = updateposition + newtradeaccounttransactions + publishtrade + '\
+  local newtrade = function(brokerid, accountid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, operatortype, operatorid, finance, milliseconds) \
+    local brokerkey = "broker:" .. brokerid \
+    local tradeid = redis.call("hincrby", brokerkey, "tradeid", 1) \
     if not tradeid then return 0 end \
-    local tradekey = "trade:" .. tradeid \
-    redis.call("hmset", tradekey, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "finance", finance, "margin", initialmargin) \
-    redis.call("sadd", "trades", tradeid) \
-    redis.call("sadd", "client:" .. clientid .. ":trades", tradeid) \
-    redis.call("sadd", "order:" .. orderid .. ":trades", tradeid) \
-    redis.call("zadd", "tradesbydate", milliseconds, tradeid) \
+    local tradekey = brokerkey .. ":trade:" .. tradeid \
+    redis.call("hmset", tradekey, "broker", brokerid, "account", accountid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "finance", finance, "margin", initialmargin) \
+    redis.call("sadd", brokerkey .. ":trades", tradeid) \
+    redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
+    redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":tradesbydate", milliseconds, tradeid) \
+    local note \
+    if tonumber(side) == 1 then \
+      note = "Bought " .. quantity .. " " .. symbolid .. " @ " .. price \
+    else \
+      note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
+    end \
+    newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side) \
+    local positionid = updateposition(clientid, symbolid, side, quantity, price, settlcurramt, settlcurrencyid, tradeid, futsettdate) \
+    redis.call("hset", tradekey, "positionid", positionid) \
+    publishtrade(tradeid, 6) \
+    return tradeid \
+  end \
+  ';
+
+/*
     local transtype \
     local drcr \
-    local desc \
-    if tonumber(side) == 1 then \
-      transtype = "BT" \
-      drcr = 2 \
-      desc = "Bought " .. quantity .. " " .. symbolid .. " @ " .. price \
-    else \
-      transtype = "ST" \
-      drcr = 1 \
-      desc = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
-    end \
     --[[ cash transaction for the trade consideration ]] \
     updatecash(clientid, settlcurrencyid, transtype, settlcurramt, drcr, desc, "trade id: " .. tradeid, timestamp, "", operatortype, operatorid) \
     --[[ cash transactions for any costs ]] \
@@ -1576,12 +1583,7 @@ function registerScripts() {
     if tonumber(finance) > 0 then \
       updatecash(clientid, settlcurrencyid, "FI", finance, 2, "trade finance", "trade id: " .. tradeid, timestamp, "", operatortype, operatorid) \
     end \
-    local positionid = updateposition(clientid, symbolid, side, quantity, price, settlcurramt, settlcurrencyid, tradeid, futsettdate) \
-    redis.call("hset", tradekey, "positionid", positionid) \
-    publishtrade(tradeid, 6) \
-    return tradeid \
-  end \
-  ';
+*/
 
   neworder = '\
   local neworder = function(clientid, symbolid, side, quantity, price, ordertype, remquantity, status, markettype, futsettdate, partfill, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, nosettdays, operatortype, operatorid, hedgeorderid) \
@@ -1841,29 +1843,30 @@ function registerScripts() {
   //
   // fill from the market
   //
-  scriptnewtrade = newtrade + getinitialmargin + getcosts + calcfinance + adjustmarginreserve + publishorder + reverseside + '\
+  //scriptnewtrade = newtrade + getinitialmargin + getcosts + calcfinance + adjustmarginreserve + publishorder + reverseside + '\
+  scriptnewtrade = newtrade + getcosts + '\
   local orderid = KEYS[1] \
-  local fields = {"clientid", "symbolid", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "operatortype", "hedgeorderid", "futsettdate", "operatorid"} \
+  local fields = {"clientid", "symbolid", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "operatortype", "hedgeorderid", "futsettdate", "operatorid", "accountid", "brokerid"} \
   local vals = redis.call("hmget", "order:" .. orderid, unpack(fields)) \
   local quantity = tonumber(KEYS[4]) \
   local price = tonumber(KEYS[5]) \
   local consid = quantity * price \
   local instrumenttypeid = redis.call("hget", "symbol:" .. vals[2], "instrumenttypeid") \
-  local initialmargin = getinitialmargin(vals[2], consid) \
+  --[[local initialmargin = getinitialmargin(vals[2], consid) ]]\
   local costs = getcosts(vals[1], vals[2], instrumenttypeid, vals[3], consid, KEYS[17]) \
   local finance = 0 \
   --[[ todo: needs considering ]] \
   --[[ local finance = calcfinance(instrumenttypeid, consid, KEYS[17], vals[3], vals[8]) ]]\
   --[[ treat the excuting broker as a client ]] \
-  local cptyid = redis.call("hget", "broker:" .. KEYS[9], "clientid") \
+  local cptyid = redis.call("hget", "counterparty:" .. KEYS[9], "clientid") \
   if not cptyid then \
     cptyid = 999998 \
   end \
-  local rside = reverseside(KEYS[3]) \
-  local tradeid = newtrade(vals[1], orderid, vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, cptyid, "0", KEYS[10], KEYS[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
-  local cptytradeid = newtrade(cptyid, orderid, vals[2], rside, quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, vals[1], "0", KEYS[10], KEYS[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
+  --[[ local rside = reverseside(KEYS[3]) ]]\
+  local tradeid = newtrade(vals[13], vals[14], vals[1], orderid, vals[2], KEYS[3], quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, cptyid, "0", KEYS[10], KEYS[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) \
+  --[[local cptytradeid = newtrade(cptyid, orderid, vals[2], rside, quantity, price, KEYS[6], KEYS[7], KEYS[8], costs, vals[1], "0", KEYS[10], KEYS[11], KEYS[12], KEYS[14], KEYS[16], KEYS[17], KEYS[18], KEYS[19], KEYS[20], vals[8], initialmargin, vals[9], vals[12], finance, KEYS[21]) ]]\
   --[[ adjust order related margin/reserve ]] \
-  adjustmarginreserve(orderid, vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[17], vals[7], KEYS[15], KEYS[11], vals[8]) \
+  --[[ adjustmarginreserve(orderid, vals[1], vals[2], vals[3], vals[5], vals[6], KEYS[17], vals[7], KEYS[15], KEYS[11], vals[8]) ]]\
   --[[ adjust order ]] \
   redis.call("hmset", "order:" .. orderid, "remquantity", KEYS[15], "status", KEYS[13]) \
   --[[ todo: adjust trade related margin ]] \
