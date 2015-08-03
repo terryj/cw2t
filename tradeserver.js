@@ -47,7 +47,7 @@ if (redislocal) {
 }
 
 // redis scripts
-var scriptquoterequest;
+var scriptQuoteRequest;
 var scriptneworder;
 var scriptmatchorder;
 var scriptordercancelrequest;
@@ -184,17 +184,27 @@ function quoteRequest(quoterequest) {
   console.log("quoterequest");
   console.log(quoterequest);
 
+  // create timestamp
   var today = new Date();
-
   quoterequest.timestamp = commonfo.getUTCTimeStamp(today);
 
   // get hour & minute for comparison with timezone to determine in/out of hours
-  var hour = today.getHours();
-  var minute = today.getMinutes();
-  var day = today.getDay();
+  //var hour = today.getHours();
+  //var minute = today.getMinutes();
+  //var day = today.getDay();
+
+  // if there is no settlement type, set to standard
+  if (!("settlmnttyp" in quoterequest)) {
+    quoterequest.settlmnttyp = 0;
+  }
+
+  if (!("side" in quoterequest)) {
+    quoterequest.side = "";
+  }
+
 
   // use settlement date, if specified
-  if (quoterequest.futsettdate != "") {
+  /*if (quoterequest.futsettdate != "") {
     quoterequest.settlmnttyp = 6; // future date
   } else if (quoterequest.nosettdays == 2) {
     quoterequest.settlmnttyp = 3;      
@@ -209,17 +219,22 @@ function quoteRequest(quoterequest) {
   } else {
     // default
     quoterequest.settlmnttyp = 0;
-  }
+  }*/
+//quoterequest.clientid, quoterequest.symbolid, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currencyid, quoterequest.settlcurrencyid, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, day, quoterequest.side, function(err, ret) {
 
   // store the quote request & get an id
-  db.eval(scriptquoterequest, 4, "quotereqid", "quoterequest:", ":quoterequests", "openquoterequests", quoterequest.clientid, quoterequest.symbolid, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currencyid, quoterequest.settlcurrencyid, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, day, quoterequest.side, function(err, ret) {
+  //db.eval(scriptquoterequest, 4, "quotereqid", "quoterequest:", ":quoterequests", "openquoterequests", quoterequest.clientid, quoterequest.symbolid, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currencyid, quoterequest.settlcurrencyid, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, day, quoterequest.side, function(err, ret) {
+  db.eval(scriptQuoteRequest, 1, "broker:" + quoterequest.brokerid, quoterequest.accountid, quoterequest.brokerid, quoterequest.cashorderqty, quoterequest.clientid, quoterequest.currencyid, quoterequest.futsettdate, quoterequest.operatorid, quoterequest.operatortype, quoterequest.quantity, quoterequest.settlmnttypid, quoterequest.side, quoterequest.symbolid, quoterequest.timestamp, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
       // todo: send a quote ack to client
-      console.log("Error in scriptquoterequest:" + commonfo.getReasonDesc(ret[0]));
+      console.log("Error in scriptQuoteRequest:" + commonfo.getReasonDesc(ret[0]));
       return;
     }
+
+    console.log(ret);
+    return;
 
     // add the quote request id & symbol details required for fix connection
     quoterequest.quotereqid = ret[1];
@@ -1537,7 +1552,7 @@ function registerScripts() {
   ';
 
   //newtrade = updateposition + updatecash + publishtrade + '\
-  newtrade = updateposition + newtradeaccounttransactions + publishtrade + '\
+  newtrade = updateposition + commonbo.newtradeaccounttransactions + publishtrade + '\
   local newtrade = function(brokerid, accountid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, initialmargin, operatortype, operatorid, finance, milliseconds) \
     local brokerkey = "broker:" .. brokerid \
     local tradeid = redis.call("hincrby", brokerkey, "tradeid", 1) \
@@ -2014,25 +2029,35 @@ function registerScripts() {
   local operatortype = redis.call("hget", "order:" .. KEYS[1], "operatortype") \
   return {ret, operatortype} \
   ';
+  //db.eval(scriptQuoteRequest, 0, quoterequest.accountid, quoterequest.brokerid, quoterequest.cashorderqty, quoterequest.clientid, quoterequest.currencyid, quoterequest.futsettdate, quoterequest.operatorid, quoterequest.operatortype, quoterequest.quantity, quoterequest.settlmnttypid, quoterequest.side, quoterequest.symbolid, quoterequest.timestamp, function(err, ret) {
 
-  scriptquoterequest = getproquotesymbol + getmarkettype + '\
-  local quotereqid = redis.call("incr", KEYS[1]) \
-  if not quotereqid then return 1005 end \
+  scriptQuoteRequest = getproquotesymbol + '\
+  local quoterequestid = redis.call("hincrby", KEYS[1], "lastquoterequestid", 1) \
+  if not quoterequestid then return 1005 end \
+  --[[ get accountid if not specified ]] \
+  local accountid \
+  if ARGV[1] == "" then \
+    accountid = redis.call("hget", KEYS[1] .. ARGV[4], "tradeaccountid") \
+  else \
+    accountid = ARGV[1] \
+  end \
   --[[ store the quote request ]] \
-  redis.call("hmset", KEYS[2] .. quotereqid, "clientid", ARGV[1], "symbolid", ARGV[2], "quantity", ARGV[3], "cashorderqty", ARGV[4], "currencyid", ARGV[5], "settlcurrencyid", ARGV[6], "nosettdays", ARGV[7], "futsettdate", ARGV[8], "quotestatusid", "", "timestamp", ARGV[9], "quoterejectreasonid", "", "quotereqid", quotereqid, "operatortype", ARGV[10], "operatorid", ARGV[11], "side", ARGV[15]) \
-  --[[ add to set of quoterequests for this client ]] \
-  redis.call("sadd", "client:" .. ARGV[1] .. KEYS[3], quotereqid) \
-  --[[ open quote requests ]] \
-  redis.call("sadd", KEYS[4], quotereqid) \
+  redis.call("hmset", KEYS[1] .. ":quoterequestid:" .. quoterequestid, "accountid", accountid, "brokerid", ARGV[2], "cashorderqty", ARGV[3], "clientid", ARGV[4], "currencyid", ARGV[5], "futsettdate", ARGV[6], "operatorid", ARGV[7], "operatortype", ARGV[8], "quantity", ARGV[9], "quoterejectreasonid", "", "quoterequestid", quoterequestid, "quotestatusid", 0, "settlmnttypid", ARGV[10], "side", ARGV[11], "symbolid", ARGV[12], "timestamp", ARGV[13]) \
+  --[[ add to set of quoterequests for this account ]] \
+  redis.call("sadd", KEYS[1] .. ":accountid:" .. accountid .. ":quoterequests", quoterequestid) \
   --[[ get required instrument values for external feed ]] \
-  local proquotesymbol = getproquotesymbol(ARGV[2]) \
-  --[[ get in/out of hours - assume in-hours for now]] \
+  local proquotesymbol = getproquotesymbol(ARGV[12]) \
+  --[[ return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], defaultnosettdays, proquotesymbol[5], markettype} ]]\
+  return {0, quoterequestid, proquotesymbol} \
+  ';
+
+  /*
   local markettype = 0 \
   --[[ local markettype = getmarkettype(ARGV[2], ARGV[12], ARGV[13], ARGV[14]) ]] \
   --[[ assuming equity buy to get default settlement days ]] \
   local defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. ARGV[6] .. ":" .. "1", "defaultnosettdays") \
-  return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], defaultnosettdays, proquotesymbol[5], markettype} \
-  ';
+  --[[ get in/out of hours - assume in-hours for now ]]\
+  */
 
   scriptquote = calcfinance + publishquote + '\
   local errorcode = 0 \

@@ -44,22 +44,42 @@ function initdb() {
   db.set("fixseqnumin", 0);
   db.set("fixseqnumout", 0); // first out will be 1
 
+  // a broker
+  db.hmset("broker:1", "name", "Thomas Grant & Company", "brokerid", 1);
+
+  // broker last ids
+  db.hset("broker:1", "lasttransactionid", 0);
+  db.hset("broker:1", "lastpostingid", 0);
+  db.hset("broker:1", "lastquoterequestid", 0);
+  db.hset("broker:1", "lastquoteid", 0);
+  db.hset("broker:1", "lastorderid", 0);
+  db.hset("broker:1", "lasttradeid", 0);
+  db.hset("broker:1", "lastclientid", 0);
+
+  // broker account ids
+  db.hset("broker:1", "clientcontrolaccountid", 1);
+  db.hset("broker:1", "bankcontrolaccountid", 2);
+  db.hset("broker:1", "nominaltradeaccountid", 3);
+  db.hset("broker:1", "nominalcommissionaccountid", 4);
+  db.hset("broker:1", "nominalptmaccountid", 5);
+  db.hset("broker:1", "nominalstampdutyaccountid", 6);
+
   // re-set sequential ids
-  db.set("quotereqid", 0);
+  /*db.set("quotereqid", 0);
   db.set("quoteid", 0);
   db.set("orderid", 0);
   db.set("tradeid", 0);
-  db.set("clientid", 0);
+  db.set("clientid", 0);*/
   //db.set("wffixseqnumout", 0); // used by winterflood test server
-  db.set("ordercancelreqid", 0);
+  /*db.set("ordercancelreqid", 0);
   db.set("fobomsgid", 0);
   db.set("cashtransid", 0);
   db.set("ifaid", 0);
   db.set("positionid", 0);
-  db.set("chatid", 0);
+  db.set("chatid", 0);*/
 
   // brokers
-  db.hmset("broker:TGRANT", "clientid", 999999, "name", "Thomas Grant & Company", "brokerid", "TGRANT");
+  /*db.hmset("broker:TGRANT", "clientid", 999999, "name", "Thomas Grant & Company", "brokerid", "TGRANT");
   db.sadd("brokers", "TGRANT");
   db.hmset("broker:UNKNOWN", "clientid", 999998, "name", "Unknown Counterparty", "brokerid", "UNKNOWN");
   db.sadd("brokers", "UNKNOWN");
@@ -124,10 +144,10 @@ function initdb() {
   db.hmset("broker:WHISGBMM", "clientid", 999968, "name", "WH Ireland", "brokerid", "WHISGBMM");
   db.sadd("brokers", "WHISGBMM");
   db.hmset("broker:CAPXGB21", "clientid", 999967, "name", "XCAP", "brokerid", "CAPXGB21");
-  db.sadd("brokers", "CAPXGB21");
+  db.sadd("brokers", "CAPXGB21");*/
 
   // clients
-  db.sadd("clients", 999999);
+  /*db.sadd("clients", 999999);
   db.hmset("client:999999", "email", "999999@thomasgrant.co.uk", "password", "999999", "brokerid", "TGRANT", "clientid", 999999, "name", "Thomas Grant & Company", "address", "", "mobile", "", "hedge", 0, "type", 2, "brokerclientcode", 999999, "commpercent", 0);
   db.set("client:999999@thomasgrant.co.uk", 999999);
   db.sadd("clients", 999998);
@@ -225,47 +245,47 @@ function initdb() {
   db.set("client:999968@thomasgrant.co.uk", 999968);
   db.sadd("clients", 999967);
   db.hmset("client:999967", "email", "999967@thomasgrant.co.uk", "password", "999967", "brokerid", "CAPXGB21", "clientid", 999967, "name", "XCAP", "address", "", "mobile", "", "hedge", 0, "type", 2, "brokerclientcode", 999967, "commpercent", 0);
-  db.set("client:999967@thomasgrant.co.uk", 999967);
+  db.set("client:999967@thomasgrant.co.uk", 999967);*/
 
   // instruments types hedge client can trade
-  db.sadd("999999:instrumenttypes", "CFD");
+  /*db.sadd("999999:instrumenttypes", "CFD");
   db.sadd("999999:instrumenttypes", "SPB");
   db.sadd("999999:instrumenttypes", "DE");
-  db.sadd("999999:instrumenttypes", "IE");
+  db.sadd("999999:instrumenttypes", "IE");*/
 
   // GBP cash record for hedge book, required for summary
-  db.sadd("999999:cash", "GBP");
-  db.set("999999:cash:GBP", 0);
+  /*db.sadd("999999:cash", "GBP");
+  db.set("999999:cash:GBP", 0);*/
 
   // set of users
-  db.sadd("users", "1");
-  db.sadd("users", "2");
+  db.sadd("broker:1:users", "1");
+  /*db.sadd("users", "2");
   db.sadd("users", "3");
   db.sadd("users", "4");
   db.sadd("users", "5");
   db.sadd("users", "6");
   db.sadd("users", "7");
-  db.sadd("users", "8");
+  db.sadd("users", "8");*/
 
   // user hash
-  db.hmset("user:1", "email", "terry@cw2t.com", "password", "terry", "brokerid", 1, "userid", 1, "name", "Terry Johnston", "marketext", "D");
-  db.hmset("user:2", "email", "grant@thomasgrant.co.uk", "password", "grant", "brokerid", 1, "userid", 2, "name", "Grant Oliver", "marketext", "D");
+  db.hmset("broker:1:user:1", "email", "terry@cw2t.com", "password", "terry", "brokerid", 1, "userid", 1, "name", "Terry Johnston");
+  /*db.hmset("user:2", "email", "grant@thomasgrant.co.uk", "password", "grant", "brokerid", 1, "userid", 2, "name", "Grant Oliver", "marketext", "D");
   db.hmset("user:3", "email", "tina@thomasgrant.co.uk", "password", "tina", "brokerid", 1, "userid", 3, "name", "Tina Tyers", "marketext", "D");
   db.hmset("user:4", "email", "patrick@thomasgrant.co.uk", "password", "patrick", "brokerid", 1, "userid", 4, "name", "Patrick Waldron", "marketext", "D");
   db.hmset("user:5", "email", "sheila@thomasgrant.co.uk", "password", "sheila", "brokerid", 1, "userid", 5, "name", "Sheila", "marketext", "D");
   db.hmset("user:6", "email", "kevin@thomasgrant.co.uk", "password", "kevin", "brokerid", 1, "userid", 6, "name", "Kevin", "marketext", "D");
   db.hmset("user:7", "email", "louisa@thomasgrant.co.uk", "password", "louisa", "brokerid", 1, "userid", 7, "name", "Louisa", "marketext", "D");
-  db.hmset("user:8", "email", "info@yearstretch.com", "password", "paul", "brokerid", 1, "userid", 8, "name", "Paul", "marketext", "D");
+  db.hmset("user:8", "email", "info@yearstretch.com", "password", "paul", "brokerid", 1, "userid", 8, "name", "Paul", "marketext", "D");*/
 
   // link between user email & id
-  db.set("user:terry@cw2t.com", "1");
-  db.set("user:grant@thomasgrant.co.uk", "2");
+  db.set("broker:1:user:terry@cw2t.com", "1");
+  /*db.set("user:grant@thomasgrant.co.uk", "2");
   db.set("user:tina@thomasgrant.co.uk", "3");
   db.set("user:patrick@thomasgrant.co.uk", "4");
   db.set("user:sheila@thomasgrant.co.uk", "5");
   db.set("user:kevin@thomasgrant.co.uk", "6");
   db.set("user:louisa@thomasgrant.co.uk", "7");
-  db.set("user:info@yearstretch.com", "8");
+  db.set("user:info@yearstretch.com", "8");*/
 
   // instrument types
   db.sadd("instrumenttypes", "DE");
@@ -285,7 +305,7 @@ function initdb() {
   db.sadd("index:UKX", "BARC.L");
 
   // cash transaction types
-  db.sadd("cashtranstypes", "CD");
+  /*db.sadd("cashtranstypes", "CD");
   db.sadd("cashtranstypes", "CW");
   db.sadd("cashtranstypes", "BT");
   db.sadd("cashtranstypes", "ST");
@@ -296,9 +316,9 @@ function initdb() {
   db.sadd("cashtranstypes", "PL");
   db.sadd("cashtranstypes", "CC");
   db.sadd("cashtranstypes", "SD");
-  db.sadd("cashtranstypes", "OT");
+  db.sadd("cashtranstypes", "OT");*/
 
-  db.set("cashtranstype:CD", "Cash Deposit");
+  /*db.set("cashtranstype:CD", "Cash Deposit");
   db.set("cashtranstype:CW", "Cash Withdrawal");
   db.set("cashtranstype:BT", "Buy Trade");
   db.set("cashtranstype:ST", "Sell Trade");
@@ -309,7 +329,7 @@ function initdb() {
   db.set("cashtranstype:PL", "PTM Levy");
   db.set("cashtranstype:CC", "Contract Charge");
   db.set("cashtranstype:SD", "Stamp Duty");
-  db.set("cashtranstype:OT", "Other");
+  db.set("cashtranstype:OT", "Other");*/
 
   // currencies
   db.sadd("currencies", "GBP");
@@ -317,11 +337,11 @@ function initdb() {
   db.sadd("currencies", "USD");
 
   // client types
-  db.sadd("clienttypes:user", "1");
+  /*db.sadd("clienttypes:user", "1");
   db.sadd("clienttypes:user", "2");
   db.sadd("clienttypes:user", "3");
   db.sadd("clienttypes:ifa", "1");
-  db.sadd("clienttypes:ifa", "3");
+  db.sadd("clienttypes:ifa", "3");*/
 
   db.set("clienttype:1", "Retail");
   db.set("clienttype:2", "Hedge");

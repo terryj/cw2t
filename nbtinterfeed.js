@@ -4,6 +4,11 @@
 * Cantwaittotrade Limited
 * Terry Johnston
 * August 2014
+*
+* real-time partial record i.e. "publish 7 rp:BARC.L"
+* real-time full record i.e. "publish 7 rf:BARC.L"
+* snap full record i.e. "publish 7 snap:L.B***"
+*
 ****************/
 
 // node libraries
@@ -375,7 +380,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
 
       db.hmset("symbol:" + instrumentcode, dbinstrec);
       db.sadd("symbols", instrumentcode);
-      db.sadd("nbtsymbol:" + dbinstrec.nbtsymbol + ":symbolids", instrumentcode);
+      db.sadd("nbtsymbol:" + dbinstrec.nbtsymbol + ":symbols", instrumentcode);
 
       // create tab delimitted text
       var txt = dbinstrec.ask + "\t"

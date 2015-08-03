@@ -49,7 +49,7 @@ function initialise() {
 function start() {
   var userid = 1;
 
-  // from the front-end
+  // this would normally come from the front-end
   var client = {};
   client.name = "john smith";
   client.email = "johnsmith@test.com"

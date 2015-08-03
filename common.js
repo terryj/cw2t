@@ -115,22 +115,19 @@ exports.registerScripts = function () {
   * returns: {errorcode, clientid}, errorcode=0 is ok, otherwise error
   */
   exports.scriptnewclient = stringsplit + '\
-  --[[ check email is unique ]] \
-  local emailexists = redis.call("get", "client:" .. ARGV[3]) \
-  if emailexists then return {1023} end \
-  local clientid = redis.call("incr", "clientid") \
+  local clientid = redis.call("hincrby", KEYS[1], "lastclientid", 1) \
   if not clientid then return {1005} end \
   --[[ store the client ]] \
-  redis.call("hmset", "client:" .. clientid, "clientid", clientid, "brokerid", ARGV[1], "name", ARGV[2], "email", ARGV[3], "password", ARGV[3], "mobile", ARGV[4], "address", ARGV[5], "ifaid", ARGV[6], "clienttype", ARGV[7], "hedge", ARGV[9], "brokerclientcode", ARGV[10], "commissionpercent", ARGV[11], "active", ARGV[12]) \
+  redis.call("hmset", KEYS[1] .. ":client:" .. clientid, "clientid", clientid, "brokerid", ARGV[1], "name", ARGV[2], "email", ARGV[3], "password", ARGV[3], "mobile", ARGV[4], "address", ARGV[5], "ifaid", ARGV[6], "clienttype", ARGV[7], "hedge", ARGV[9], "brokerclientcode", ARGV[10], "commissionpercent", ARGV[11], "active", ARGV[12]) \
   --[[ add to set of clients ]] \
-  redis.call("sadd", "clients", clientid) \
+  redis.call("sadd", KEYS[1] .. ":clients", clientid) \
   --[[ add route to find client from email ]] \
-  redis.call("set", "client:" .. ARGV[3], clientid) \
+  redis.call("set", KEYS[1] .. ":client:" .. ARGV[3], clientid) \
   --[[ add tradeable instrument types ]] \
   if ARGV[8] ~= "" then \
     local insttypes = stringsplit(ARGV[8], ",") \
     for i = 1, #insttypes do \
-      redis.call("sadd", "client:" .. clientid .. ":instrumenttypes", insttypes[i]) \
+      redis.call("sadd", KEYS[1] .. ":client:" .. clientid .. ":instrumenttypes", insttypes[i]) \
     end \
   end \
   return {0, clientid} \

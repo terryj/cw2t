@@ -220,10 +220,11 @@ function listen() {
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
     var userid = "0";
+    var brokerid = 1;
 
     console.log('new connection');
 
-    test();
+    //test();
     //testtrade();
 
     // data callback
@@ -325,7 +326,7 @@ function listen() {
 
       // todo: replace with script
 
-      db.get(servertype + ":" + signin.email, function(err, emailuserid) {
+      db.get("broker:" + brokerid + ":" + servertype + ":" + signin.email, function(err, emailuserid) {
         if (err) {
           console.log("Error in signIn:" + err);
           return;
@@ -339,7 +340,7 @@ function listen() {
         }
 
         // validate email/password
-        db.hgetall(servertype + ":" + emailuserid, function(err, user) {
+        db.hgetall("broker:" + brokerid + ":" + servertype + ":" + emailuserid, function(err, user) {
           if (err) {
             console.log("Error in signIn:" + err);
             return;
@@ -436,6 +437,7 @@ function singleSymbolRequest(symbol, userid, conn) {
   console.log("singleSymbolRequest");
   db.eval(commonfo.scriptsubscribesymbol, 0, symbol, userid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
 
     // see if we need to subscribe
     if (ret[0] == 1) {
@@ -445,7 +447,7 @@ function singleSymbolRequest(symbol, userid, conn) {
 
     // send the current stored price
     var price = {};
-    price.symbol = symbol;
+    price.symbolid = symbol;
     price.bid = ret[1];
     price.ask = ret[2];
     price.timestamp = ret[3];
@@ -472,16 +474,18 @@ function singleSymbolRemoveRequest(symbol, userid, conn) {
 
 function newClient(client, userid, conn) {
   console.log(client);
+  client.active = 1;
+
   // get the broker for this client
-  db.hget(servertype + ":" + userid, "brokerid", function(err, brokerid) {
+  /*db.hget(servertype + ":" + userid, "brokerid", function(err, brokerid) {
     if (err) {
       console.log(err);
       return;
-    }
+    }*/
 
     // maybe a new client or an updated client
     if (client.clientid == "") {
-       db.eval(common.scriptnewclient, 0, brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, client.commissionpercent, client.active, function(err, ret) {
+       db.eval(common.scriptnewclient, 1, "broker:" + brokerid, brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, client.commissionpercent, client.active, function(err, ret) {
         if (err) throw err;
 
         if (ret[0] != 0) {
@@ -490,7 +494,7 @@ function newClient(client, userid, conn) {
           return;
         }
 
-        getSendClient(ret[1], conn);
+        getSendClient(brokerid, ret[1], conn);
       });
     } else {
       db.eval(common.scriptupdateclient, 0, client.clientid, brokerid, client.name, client.email, client.mobile, client.address, client.ifaid, client.type, client.insttypes, client.hedge, client.brokerclientcode, client.commissionpercent, client.active, function(err, ret) {
@@ -505,7 +509,7 @@ function newClient(client, userid, conn) {
         getSendClient(client.clientid, conn);
       });
     }
-  });
+  //});
 }
 
 function newIfa(ifa, userid, conn) {
@@ -533,7 +537,24 @@ function getSendIfa(ifaid, conn) {
 function cashTrans(cashtrans, userid, conn) {
   cashtrans.timestamp = commonfo.getUTCTimeStamp(new Date());
 
-  db.eval(commonfo.scriptcashtrans, 0, cashtrans.clientid, cashtrans.currencyid, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.settldate, operatortype, userid, function(err, ret) {
+  console.log(cashtrans);
+
+  cashtrans.bankaccountid = 999988;
+  cashtrans.clientaccountid = 2;
+  cashtrans.currencyid = "GBP";
+  cashtrans.localamount = cashtrans.amount;
+  cashtrans.note = "first cash receipt";
+  cashtrans.rate = 1;
+  cashtrans.reference = "ABC123";
+  cashtrans.transactiontypeid = "CD";
+
+  // note we are passing the key in, so as to facilitate clustering
+  db.eval(commonbo.scriptnewclientfundstransfer, 1, "broker:" + brokerid, cashtrans.amount, cashtrans.bankaccountid, brokerid, cashtrans.clientaccountid, cashtrans.currencyid, cashtrans.localamount, cashtrans.note, cashtrans.rate, cashtrans.reference, cashtrans.timestamp, cashtrans.transactiontypeid, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+  });
+
+  /*db.eval(commonfo.scriptcashtrans, 0, cashtrans.clientid, cashtrans.currencyid, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.settldate, operatortype, userid, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
@@ -542,7 +563,7 @@ function cashTrans(cashtrans, userid, conn) {
     }
 
     getSendCashtrans(ret[1], conn);
-  });
+  });*/
 }
 
 function instUpdate(inst, userid, conn) {
@@ -588,8 +609,8 @@ function getSendCost(insttype, currency, side, conn) {
     })
 }
 
-function getSendClient(clientid, conn) {
-  db.hgetall("client:" + clientid, function(err, client) {
+function getSendClient(brokerid, clientid, conn) {
+  db.hgetall("broker:" + brokerid + ":client:" + clientid, function(err, client) {
     if (err) {
       console.log(err);
       return;
@@ -602,7 +623,7 @@ function getSendClient(clientid, conn) {
     }
 
     // add instrument types this client can trade
-    db.smembers("client:" + clientid + ":instrumenttypes", function(err, insttypes) {
+    db.smembers("broker:" + brokerid + ":client:" + clientid + ":instrumenttypes", function(err, insttypes) {
       if (err) {
         console.log("Error in getSendClient:" + err);
         return;
@@ -1475,7 +1496,7 @@ function registerClient(reg, conn) {
 
 function sendClients(brokerid, conn) {
   // get sorted set of clients for specified broker
-  db.eval(scriptgetclients, 1, brokerid, function(err, ret) {
+  db.eval(scriptgetclients, 0, brokerid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"clients\":" + ret + "}");
   });
@@ -1754,16 +1775,16 @@ function endOfDay(userid) {
 function test() {
   console.log("test");
 
-  var amount = 10;
+  var amount = 1000;
   var bankaccountid = 999988;
   var brokerid = 1;
-  var clientaccountid = 1;
+  var clientaccountid = 2;
   var currencyid = "GBP";
-  var localamount = 10;
+  var localamount = 1000;
   var note = "first cash receipt";
   var rate = 1;
   var reference = "ABC123";
-  var timestamp = "";
+  var timestamp = commonfo.getUTCTimeStamp(new Date());
   var transactiontypeid = "CD";
 
   // note we are passing the key in, so as to facilitate clustering
@@ -1790,7 +1811,8 @@ function testtrade() {
   var tradeid = 1;
   var side = 1;
 
-  db.eval(commonbo.scripttesttrade, 0, consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side, function(err, ret) {
+  // note we are passing a key
+  db.eval(commonbo.scripttesttrade, 1, "broker:" + brokerid, consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });
@@ -1828,18 +1850,15 @@ function registerScripts() {
   // get alpha sorted list of clients for a specified broker
   //
   scriptgetclients = '\
-  local clients = redis.call("sort", "clients", "ALPHA") \
+  local clients = redis.call("sort", "broker:" .. ARGV[1] .. ":clients", "ALPHA") \
   local fields = {"brokerid", "clientid", "email", "name", "address", "mobile", "ifaid", "type", "hedge", "brokerclientcode", "commissionpercent"} \
   local vals \
   local tblclient = {} \
   local tblinsttype = {} \
   for index = 1, #clients do \
-    vals = redis.call("hmget", "client:" .. clients[index], unpack(fields)) \
-    --[[ only interested in clients for the specified broker ]] \
-    if vals[1] == KEYS[1] then \
-      tblinsttype = redis.call("smembers", "client:" .. vals[2] .. ":instrumenttypes") \
-      table.insert(tblclient, {brokerid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype, type = vals[8], hedge = vals[9], brokerclientcode = vals[10], commissionpercent = vals[11]}) \
-    end \
+    vals = redis.call("hmget", "broker:" .. ARGV[1] .. ":client:" .. clients[index], unpack(fields)) \
+    tblinsttype = redis.call("smembers", "broker:" .. ARGV[1] .. "client:" .. vals[2] .. ":instrumenttypes") \
+    table.insert(tblclient, {brokerid = vals[1], clientid = vals[2], email = vals[3], name = vals[4], address = vals[5], mobile = vals[6], ifaid = vals[7], insttypes = tblinsttype, type = vals[8], hedge = vals[9], brokerclientcode = vals[10], commissionpercent = vals[11]}) \
   end \
   return cjson.encode(tblclient) \
   ';
@@ -1903,7 +1922,7 @@ function registerScripts() {
   //
   scriptgetinst = '\
   local symbols = redis.call("sort", "symbols", "ALPHA") \
-  local fields = {"instrumenttypeid", "shortname", "currency", "marginpercent", "exchange", "isin", "hedge", "ptmexempt"} \
+  local fields = {"instrumenttypeid", "shortname", "currencyid", "marginpercent", "exchangeid", "isin", "hedge", "ptmexempt"} \
   local vals \
   local inst = {} \
   local marginpc \
@@ -1915,7 +1934,7 @@ function registerScripts() {
       else \
         marginpc = 100 \
       end \
-      table.insert(inst, {symbol = symbols[index], shortname = vals[2], currency = vals[3], instrumenttypeid = vals[1], marginpercent = marginpc, exchange = vals[5], isin = vals[6], hedge = vals[7], ptmexempt=vals[8]}) \
+      table.insert(inst, {symbolid = symbols[index], shortname = vals[2], currencyid = vals[3], instrumenttypeid = vals[1], marginpercent = marginpc, exchangeid = vals[5], isin = vals[6], hedge = vals[7], ptmexempt=vals[8]}) \
     end \
   end \
   return cjson.encode(inst) \

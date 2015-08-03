@@ -2150,6 +2150,7 @@
         }
 
         function priceReceived(price) {
+            console.log("priceReceived");
             // only update price stuff for single symbol view
             if (selectedmenu == MENURFQ) {
                 if (price.symbolid == selectedsymbol) {
@@ -4404,10 +4405,11 @@
             rfq.quantity = quantity;
             rfq.cashorderqty = cashorderqty;
             rfq.currencyid = currencyid;
-            rfq.settlcurrencyid = currencyid;
-            rfq.nosettdays = 2;
-            rfq.operatortype = operatortype;
-            rfq.operatorid = clientid;
+            //rfq.settlcurrencyid = currencyid;
+            rfq.settlmnttyp = 0;
+            //rfq.nosettdays = 2;
+            //rfq.operatortype = operatortype;
+            //rfq.operatorid = clientid;
             //rfq.futsettdate = this.value;
 
             sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
