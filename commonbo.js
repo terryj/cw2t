@@ -138,6 +138,29 @@ exports.registerScripts = function () {
   end \
   ';
 
+  /*
+  * getclientaccount()
+  * gets the account of a designated type for a client
+  * params: brokerid, clientid, accounttypeid
+  * returns the first account id found for the account type, else 0
+  */
+  getclientaccount = '\
+  local getclientaccount = function(brokerid, clientid, accounttypeid) \
+    local acctid = 0 \
+    local clientaccounts = redis.call("smembers", "broker:" .. brokerid .. ":client:" .. clientid .. ":clientaccounts") \
+    for index = 1, #clientaccounts do \
+      local accttypeid = redis.call("hget", "broker:" .. brokerid .. ":account:" .. clientaccounts[index], "accounttypeid") \
+      if tonumber(accttypeid) == tonumber(accounttypeid) then \
+        acctid = clientaccounts[index] \
+        break \
+      end \
+    end \
+    return acctid \
+  end \
+  ';
+
+  exports.getclientaccount = getclientaccount;
+
   /*** Scripts ***/
 
   /*
@@ -177,10 +200,10 @@ exports.registerScripts = function () {
   * script to handle settlement of trades
   * params: amount, brokerid, currencyid, localamount, note, rate, timestamp, tradeid, transactiontype
   */
-  exports.scriptnewtradesettlement = newtradesettlementtransaction + '\
+  /*exports.scriptnewtradesettlement = newtradesettlementtransaction + '\
     local nominaltradeaccountid = getbrokeraccountid(brokerid, currencyid, "nominaltradeaccount") \
     local bankbrokeraccountid = getbrokeraccountid(brokerid, currencyid, "bankbrokerfunds") \
     local bankclientaccountid = getbrokeraccountid(brokerid, currencyid, "bankclientfunds") \
     newtradesettlementtransaction = function(amount, brokerid, currencyid, bankbrokeraccountid, localamount, nominaltradeaccountid, note, rate, timestamp, bankclientaccountid, tradeid, transactiontype) \
-  ';
+  ';*/
 }

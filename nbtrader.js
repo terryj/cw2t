@@ -328,7 +328,7 @@ function setStatus(status) {
 }
 
 Nbt.prototype.quoteRequest = function(quoterequest) {
-	var msg = '131=' + quoterequest.quotereqid + SOH
+	var msg = '131=' + quoterequest.brokerid + ":" + quoterequest.quoterequestid + SOH
 		+ '146=' + norelatedsym + SOH
 		+ '55=' + quoterequest.mnemonic + SOH
 		+ '48=' + quoterequest.isin + SOH
@@ -337,7 +337,7 @@ Nbt.prototype.quoteRequest = function(quoterequest) {
 		+ '63=' + quoterequest.settlmnttyp + SOH
 		+ '207=' + quoterequest.exchangeid + SOH
 		+ '15=' + quoterequest.currencyid + SOH
-		+ '120=' + quoterequest.settlcurrencyid + SOH
+		//+ '120=' + quoterequest.settlcurrencyid + SOH
 		+ '60=' + quoterequest.timestamp + SOH;
 
 	// add settlement date if future settlement type specified
@@ -353,7 +353,7 @@ Nbt.prototype.quoteRequest = function(quoterequest) {
 	}
 
 	// side, if present
-	if ('side' in quoterequest && (quoterequest.side == 1 || quoterequest.side == 2)) {
+	if (quoterequest.side != "") {
 		msg += '54=' + quoterequest.side + SOH;
 	}
 
@@ -823,7 +823,7 @@ function getBody(msgtype, tagvalarr) {
 		for (var i = 0; i < tagarrlen; i++) {
 			switch (tagvalarr[i].tag) {
 			case 131:
-				body.quotereqid = tagvalarr[i].value;
+				body.quoterequestid = tagvalarr[i].value;
 				break;
 			case 117:
 				body.externalquoteid = tagvalarr[i].value;
@@ -1087,7 +1087,7 @@ function getBody(msgtype, tagvalarr) {
 				body.text = tagvalarr[i].value;
 				break;
 			case 131:
-				body.quotereqid = tagvalarr[i].value;				
+				body.quoterequestid = tagvalarr[i].value;				
 				break;
 			case 297:
 				body.quoteackstatus = tagvalarr[i].value;

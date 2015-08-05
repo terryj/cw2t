@@ -47,15 +47,14 @@ if (redislocal) {
 }
 
 // redis scripts
-var scriptQuoteRequest;
 var scriptneworder;
 var scriptmatchorder;
 var scriptordercancelrequest;
 var scriptordercancel;
 var scriptorderack;
 var scriptnewtrade;
-var scriptquote;
-var scriptquoteack;
+//var scriptQuote;
+//var scriptquoteack;
 var scriptrejectorder;
 var scriptgetinst;
 //var scriptgetholidays;
@@ -193,9 +192,17 @@ function quoteRequest(quoterequest) {
   //var minute = today.getMinutes();
   //var day = today.getDay();
 
+  if (!("accountid" in quoterequest)) {
+    quoterequest.accountid = "";
+  }
+
   // if there is no settlement type, set to standard
-  if (!("settlmnttyp" in quoterequest)) {
-    quoterequest.settlmnttyp = 0;
+  if (!("settlmnttypid" in quoterequest)) {
+    quoterequest.settlmnttypid = 0;
+  }
+
+  if (!("futsettdate" in quoterequest)) {
+    quoterequest.futsettdate = "";
   }
 
   if (!("side" in quoterequest)) {
@@ -220,10 +227,8 @@ function quoteRequest(quoterequest) {
     // default
     quoterequest.settlmnttyp = 0;
   }*/
-//quoterequest.clientid, quoterequest.symbolid, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currencyid, quoterequest.settlcurrencyid, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, day, quoterequest.side, function(err, ret) {
 
   // store the quote request & get an id
-  //db.eval(scriptquoterequest, 4, "quotereqid", "quoterequest:", ":quoterequests", "openquoterequests", quoterequest.clientid, quoterequest.symbolid, quoterequest.quantity, quoterequest.cashorderqty, quoterequest.currencyid, quoterequest.settlcurrencyid, quoterequest.nosettdays, quoterequest.futsettdate, quoterequest.timestamp, quoterequest.operatortype, quoterequest.operatorid, hour, minute, day, quoterequest.side, function(err, ret) {
   db.eval(scriptQuoteRequest, 1, "broker:" + quoterequest.brokerid, quoterequest.accountid, quoterequest.brokerid, quoterequest.cashorderqty, quoterequest.clientid, quoterequest.currencyid, quoterequest.futsettdate, quoterequest.operatorid, quoterequest.operatortype, quoterequest.quantity, quoterequest.settlmnttypid, quoterequest.side, quoterequest.symbolid, quoterequest.timestamp, function(err, ret) {
     if (err) throw err;
 
@@ -234,15 +239,26 @@ function quoteRequest(quoterequest) {
     }
 
     console.log(ret);
-    return;
 
     // add the quote request id & symbol details required for fix connection
-    quoterequest.quotereqid = ret[1];
-    quoterequest.isin = ret[2];
-    quoterequest.mnemonic = ret[3];
-    quoterequest.exchangeid = ret[4];
-    quoterequest.markettype = ret[7];
+    quoterequest.quoterequestid = ret[1];
+    quoterequest.isin = ret[2][2];
+    quoterequest.mnemonic = ret[2][3];
+    quoterequest.exchangeid = ret[2][4];
 
+    if (testmode == "1") {
+      console.log("test response");
+      testQuoteResponse(quoterequest);
+    } else {
+      console.log("forwarding to nbt");
+
+      // forward the request
+      nbt.quoteRequest(quoterequest);
+    }
+  });
+}
+
+    /*quoterequest.markettype = ret[7];
     if (testmode == "1") {
       console.log("test response");
       testQuoteResponse(quoterequest);
@@ -258,9 +274,7 @@ function quoteRequest(quoterequest) {
         // publish it to other clients
         db.publish(commonfo.quoterequestchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
       }
-    }
-  });
-}
+    }*/
 
 //
 // just testing
@@ -287,12 +301,14 @@ function testQuoteAck(quoterequest) {
   console.log("testQuoteAck");
   var quoteack = {};
 
-  quoteack.quotereqid = quoterequest.quotereqid;
-  quoteack.quoteackstatus = "";
-  quoteack.quoterejectreason = "";
+  console.log(quoterequest);
+
+  quoteack.quoterequestid = quoterequest.quoterequestid;
+  quoteack.quoteackstatusid = "";
+  quoteack.quoterejectreasonid = "";
   quoteack.text = "too much toblerone";
 
-  db.eval(scriptquoteack, 0, quoteack.quotereqid, quoteack.quoteackstatus, quoteack.quoterejectreason, quoteack.text, function(err, ret) {
+  db.eval(scriptQuoteAck, 0, quoterequest.brokerid, quoteack.quoterequestid, quoteack.quoteackstatusid, quoteack.quoterejectreasonid, quoteack.text, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -320,12 +336,12 @@ function testQuote(quoterequest, side) {
   }
 
   quote.cashorderqty = quoterequest.cashorderqty;
-  quote.quotereqid = quoterequest.quotereqid;
-  quote.qclientid = "";
+  quote.quoterequestid = quoterequest.quoterequestid;
   quote.symbolid = quoterequest.symbolid;
   quote.currencyid = "GBP";
   quote.settlcurrencyid = "GBP";
-  quote.qbroker = "ABC";
+  quote.quoterid = "ABC";
+  quote.quotertype = 1;
   quote.futsettdate = quoterequest.futsettdate;
   quote.externalquoteid = "";
   quote.settledays = 2;
@@ -338,9 +354,12 @@ function testQuote(quoterequest, side) {
   validuntiltime.setSeconds(today.getSeconds() + quote.noseconds);
   quote.validuntiltime = commonfo.getUTCTimeStamp(validuntiltime);
 
+  console.log("about to script");
+  console.log(quote);
+
   // quote script
   // note: not passing securityid & idsource as proquote symbol should be enough
-  db.eval(scriptquote, 0, quote.quotereqid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.qclientid, quote.cashorderqty, quote.settledays, quote.noseconds, function(err, ret) {
+  db.eval(scriptQuote, 0, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quoterequest.brokerid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -684,6 +703,7 @@ function displayOrderBook(symbolid, lowerbound, upperbound) {
 
 function initDb() {
   commonfo.registerScripts();
+  commonbo.registerScripts();
   registerScripts();
   loadHolidays();
   getTestmode();
@@ -763,17 +783,17 @@ function newQuote(quote) {
     quote.noseconds = commonfo.getSeconds(quote.transacttime, quote.validuntiltime);
   }
 
-  if (!('qclientid' in quote)) {
-    quote.qclientid = "";
-  }
-
   if (!('settledays' in quote)) {
     quote.settledays = "";
   }
 
+  if ('qbroker' in quote) {
+    quote.quotertype = 1;
+    quote.quoterid = quote.qbroker;
+  }
+
   // quote script
-  // note: not passing securityid & idsource as proquote symbol should be enough
-  db.eval(scriptquote, 0, quote.quotereqid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.qclientid, quote.cashorderqty, quote.settledays, quote.noseconds, function(err, ret) {
+  db.eval(scriptQuote, 0, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -967,10 +987,10 @@ nbt.on("quote", function(quote, header) {
 // quote rejection
 //
 nbt.on("quoteack", function(quoteack) {
-  console.log("quote ack, request id " + quoteack.quotereqid);
+  console.log("quote ack, request id " + quoteack.quoterequestid);
   console.log(quoteack);
 
-  db.eval(scriptquoteack, 0, quoteack.quotereqid, quoteack.quoteackstatus, quoteack.quoterejectreason, quoteack.text, function(err, ret) {
+  db.eval(scriptQuoteAck, 0, quoteack.quoterequestid, quoteack.quoteackstatus, quoteack.quoterejectreason, quoteack.text, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -1515,19 +1535,19 @@ function registerScripts() {
   ';
 
   publishquoteack = '\
-  local publishquoteack = function(quotereqid) \
-    local fields = {"clientid", "symbolid", "operatortype", "quotestatusid", "quoterejectreasonid", "text", "operatorid"} \
-    local vals = redis.call("hmget", "quoterequest:" .. quotereqid, unpack(fields)) \
-    local quoteack = {quotereqid=quotereqid, clientid=vals[1], symbolid=vals[2], quotestatusid=vals[4], quoterejectreasonid=vals[5], text=vals[6], operatorid=vals[7]} \
-    redis.call("publish", vals[3], "{" .. cjson.encode("quoteack") .. ":" .. cjson.encode(quoteack) .. "}") \
+  local publishquoteack = function(brokerid, quoterequestid) \
+    local fields = {"accountid", "clientid", "symbolid", "operatortype", "quotestatusid", "quoterejectreasonid", "text", "operatorid"} \
+    local vals = redis.call("hmget", "broker:" .. brokerid .. ":quoterequest:" .. quoterequestid, unpack(fields)) \
+    local quoteack = {brokerid=brokerid, quoterequestid=quoterequestid, accountid=vals[1], clientid=vals[2], symbolid=vals[3], quotestatusid=vals[5], quoterejectreasonid=vals[6], text=vals[7], operatorid=vals[8]} \
+    redis.call("publish", vals[4], "{" .. cjson.encode("quoteack") .. ":" .. cjson.encode(quoteack) .. "}") \
     end \
   ';
 
   publishquote = '\
-  local publishquote = function(quoteid, channel, operatorid) \
-    local fields = {"quotereqid","clientid","quoteid","symbolid","bidpx","offerpx","bidquantity","offerquantity","validuntiltime","transacttime","settlcurrencyid","nosettdays","futsettdate","bidsize","offersize","qclientid","noseconds"} \
-    local vals = redis.call("hmget", "quote:" .. quoteid, unpack(fields)) \
-    local quote = {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],symbolid=vals[4],bidpx=vals[5],offerpx=vals[6],bidquantity=vals[7],offerquantity=vals[8],validuntiltime=vals[9],transacttime=vals[10],settlcurrencyid=vals[11],nosettdays=vals[12],futsettdate=vals[13],bidsize=vals[14],offersize=vals[15],qclientid=vals[16],operatorid=operatorid,noseconds=vals[17]} \
+  local publishquote = function(brokerid, quoteid, channel, operatorid) \
+    local fields = {"quoterequestid","accountid","clientid","quoteid","symbolid","bidpx","offerpx","bidquantity","offerquantity","validuntiltime","transacttime","settlcurrencyid","futsettdate","bidsize","offersize","quoterid","quotertype","noseconds"} \
+    local vals = redis.call("hmget", "broker:" .. brokerid .. ":quote:" .. quoteid, unpack(fields)) \
+    local quote = {brokerid=brokerid,quoterequestid=vals[1],accountid=vals[2],clientid=vals[3],quoteid=vals[4],symbolid=vals[5],bidpx=vals[6],offerpx=vals[7],bidquantity=vals[8],offerquantity=vals[9],validuntiltime=vals[10],transacttime=vals[11],settlcurrencyid=vals[12],futsettdate=vals[13],bidsize=vals[14],offersize=vals[15],quoterid=vals[16],quotertype=vals[17],operatorid=operatorid,noseconds=vals[18]} \
     redis.call("publish", channel, "{" .. cjson.encode("quote") .. ":" .. cjson.encode(quote) .. "}") \
   end \
   ';
@@ -2029,25 +2049,25 @@ function registerScripts() {
   local operatortype = redis.call("hget", "order:" .. KEYS[1], "operatortype") \
   return {ret, operatortype} \
   ';
-  //db.eval(scriptQuoteRequest, 0, quoterequest.accountid, quoterequest.brokerid, quoterequest.cashorderqty, quoterequest.clientid, quoterequest.currencyid, quoterequest.futsettdate, quoterequest.operatorid, quoterequest.operatortype, quoterequest.quantity, quoterequest.settlmnttypid, quoterequest.side, quoterequest.symbolid, quoterequest.timestamp, function(err, ret) {
 
-  scriptQuoteRequest = getproquotesymbol + '\
+  scriptQuoteRequest = getproquotesymbol + commonbo.getclientaccount + '\
   local quoterequestid = redis.call("hincrby", KEYS[1], "lastquoterequestid", 1) \
   if not quoterequestid then return 1005 end \
-  --[[ get accountid if not specified ]] \
-  local accountid \
+  --[[ get trading accountid if not specified ]] \
+  local accountid = 0 \
   if ARGV[1] == "" then \
-    accountid = redis.call("hget", KEYS[1] .. ARGV[4], "tradeaccountid") \
+    accountid = getclientaccount(ARGV[2], ARGV[4], 1) \
   else \
     accountid = ARGV[1] \
   end \
   --[[ store the quote request ]] \
-  redis.call("hmset", KEYS[1] .. ":quoterequestid:" .. quoterequestid, "accountid", accountid, "brokerid", ARGV[2], "cashorderqty", ARGV[3], "clientid", ARGV[4], "currencyid", ARGV[5], "futsettdate", ARGV[6], "operatorid", ARGV[7], "operatortype", ARGV[8], "quantity", ARGV[9], "quoterejectreasonid", "", "quoterequestid", quoterequestid, "quotestatusid", 0, "settlmnttypid", ARGV[10], "side", ARGV[11], "symbolid", ARGV[12], "timestamp", ARGV[13]) \
+  redis.call("hmset", KEYS[1] .. ":quoterequest:" .. quoterequestid, "accountid", accountid, "brokerid", ARGV[2], "cashorderqty", ARGV[3], "clientid", ARGV[4], "currencyid", ARGV[5], "futsettdate", ARGV[6], "operatorid", ARGV[7], "operatortype", ARGV[8], "quantity", ARGV[9], "quoterejectreasonid", "", "quoterequestid", quoterequestid, "quotestatusid", 0, "settlmnttypid", ARGV[10], "side", ARGV[11], "symbolid", ARGV[12], "timestamp", ARGV[13]) \
+  --[[ add to set of quoterequests ]] \
+  redis.call("sadd", KEYS[1] .. ":quoterequests", quoterequestid) \
   --[[ add to set of quoterequests for this account ]] \
   redis.call("sadd", KEYS[1] .. ":accountid:" .. accountid .. ":quoterequests", quoterequestid) \
   --[[ get required instrument values for external feed ]] \
   local proquotesymbol = getproquotesymbol(ARGV[12]) \
-  --[[ return {0, quotereqid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], defaultnosettdays, proquotesymbol[5], markettype} ]]\
   return {0, quoterequestid, proquotesymbol} \
   ';
 
@@ -2058,24 +2078,72 @@ function registerScripts() {
   local defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. ARGV[6] .. ":" .. "1", "defaultnosettdays") \
   --[[ get in/out of hours - assume in-hours for now ]]\
   */
+  //db.eval(scriptQuote, 0, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.qclientid, quote.cashorderqty, quote.settledays, quote.noseconds, function(err, ret) {
 
-  scriptquote = calcfinance + publishquote + '\
+  scriptQuote = publishquote + round + '\
   local errorcode = 0 \
-  local quoteid = "" \
+  local brokerkey = "broker:" .. ARGV[20] \
   --[[ get the quote request ]] \
-  local fields = {"clientid", "quoteid", "symbolid", "quantity", "cashorderqty", "nosettdays", "settlcurrencyid", "operatortype", "futsettdate", "operatorid"} \
-  local vals = redis.call("hmget", "quoterequest:" .. ARGV[1], unpack(fields)) \
+  local fields = {"accountid", "clientid", "symbolid", "quantity", "cashorderqty", "operatortype", "operatorid"} \
+  local vals = redis.call("hmget", brokerkey .. ":quoterequest:" .. ARGV[1], unpack(fields)) \
   if not vals[1] then \
     errorcode = 1014 \
     return errorcode \
   end \
   --[[ get touch prices - using delayed - todo: may need to look up delayed/live ]] \
-  local symbolid = vals[3] \
-  local symbolfields = {"bid", "ask", "instrumenttypeid"} \
-  local symbolvals = redis.call("hmget", "symbol:" .. symbolid, unpack(symbolfields)) \
-  local bestbid = symbolvals[1] \
-  local bestoffer = symbolvals[2] \
-  local instrumenttypeid = symbolvals[3] \
+  local bestbid = 0 \
+  local bestoffer = 0 \
+  local symbolfields = {"bid", "ask"} \
+  local symbolvals = redis.call("hmget", "symbol:" .. vals[3], unpack(symbolfields)) \
+  if symbolvals[1] then \
+    bestbid = symbolvals[1] \
+    bestoffer = symbolvals[2] \
+  end \
+  local bidquantity = "" \
+  local offerquantity = "" \
+  local bidfinance = 0 \
+  local offerfinance = 0 \
+  --[[ calculate the quantity from the cashorderqty, if necessary ]] \
+  if ARGV[3] == "" then \
+    local offerprice = tonumber(ARGV[4]) \
+    if vals[4] == "" then \
+      offerquantity = round(tonumber(vals[5]) / offerprice, 0) \
+    else \
+      offerquantity = tonumber(vals[4]) \
+    end \
+  else \
+    local bidprice = tonumber(ARGV[3]) \
+    if vals[4] == "" then \
+      bidquantity = round(tonumber(vals[5]) / bidprice, 0) \
+    else \
+      bidquantity = tonumber(vals[4]) \
+    end \
+  end \
+  --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
+  local quoteid = redis.call("hincrby", brokerkey, "lastquoteid", 1) \
+  redis.log(redis.LOG_WARNING, quoteid) \
+  --[[ store the quote ]] \
+  redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", ARGV[20], "accountid", vals[1], "clientid", vals[2], "quoteid", quoteid, "symbolid", vals[3], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", ARGV[17], "settledays", ARGV[18], "noseconds", ARGV[19]) \
+  --[[ add to set of quotes ]] \
+  redis.call("sadd", brokerkey .. ":quotes", quoteid) \
+  --[[ keep a list of quotes for the quoterequest ]] \
+  redis.call("sadd", brokerkey .. ":quoterequest:" .. ARGV[1] .. ":quotes", quoteid) \
+  --[[ quoterequest status - 0=new, 1=quoted, 2=rejected ]] \
+  local status \
+  --[[ bid or offer size needs to be non-zero ]] \
+  if ARGV[5] == 0 and ARGV[6] == 0 then \
+    status = "5" \
+  else \
+    status = "0" \
+  end \
+  --[[ add status to stored quoterequest ]] \
+  redis.call("hmset", brokerkey .. ":quoterequest:" .. ARGV[1], "quotestatusid", status) \
+  --[[ publish quote to operator type, with operator id, so can be forwarded as appropriate ]] \
+  publishquote(ARGV[20], quoteid, vals[6], vals[7]) \
+  return errorcode \
+  ';
+
+  /* finance
   local bidquantity = "" \
   local offerquantity = "" \
   local bidfinance = 0 \
@@ -2102,34 +2170,17 @@ function registerScripts() {
     --[[ this needs revisiting ]]\
     --[[bidfinance = calcfinance(instrumenttypeid, bidquantity * bidprice, vals[7], 2, vals[6]) ]]\
   end \
-  --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
-  quoteid = redis.call("incr", "quoteid") \
-  --[[ store the quote ]] \
-  redis.call("hmset", "quote:" .. quoteid, "quotereqid", ARGV[1], "clientid", vals[1], "quoteid", quoteid, "symbolid", symbolid, "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "qbroker", ARGV[11], "nosettdays", vals[6], "futsettdate", vals[9], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[13], "offerquotedepth", ARGV[14], "externalquoteid", ARGV[15], "qclientid", ARGV[16], "cashorderqty", ARGV[17], "settledays", ARGV[18], "noseconds", ARGV[19]) \
-  --[[ set of open quotes ]] \
-  redis.call("sadd", "openquotes", quoteid) \
-  --[[ keep a list of quotes for the quoterequest ]] \
-  redis.call("sadd", "quoterequest:" .. ARGV[1] .. ":quotes", quoteid) \
-  --[[ quoterequest status - 0=new, 1=quoted, 2=rejected ]] \
-  local status \
-  --[[ bid or offer size needs to be non-zero ]] \
-  if ARGV[5] == 0 and ARGV[6] == 0 then \
-    status = "5" \
-  else \
-    status = "0" \
-  end \
-  --[[ add status to stored quoterequest ]] \
-  redis.call("hmset", "quoterequest:" .. ARGV[1], "quotestatusid", status) \
-  --[[ publish quote to operator type, with operator id, so can be forwarded as appropriate ]] \
-  publishquote(quoteid, vals[8], vals[10]) \
-  return errorcode \
-  ';
+    --[[ this needs revisiting ]]\
+    --[[offerfinance = calcfinance(instrumenttypeid, offerquantity * offerprice, vals[7], 1, vals[6]) ]]\
+    --[[ this needs revisiting ]]\
+    --[[bidfinance = calcfinance(instrumenttypeid, bidquantity * bidprice, vals[7], 2, vals[6]) ]]\
+  */
 
-  scriptquoteack = publishquoteack + '\
+  scriptQuoteAck = publishquoteack + '\
   --[[ update quote request ]] \
-  redis.call("hmset", "quoterequest:" .. ARGV[1], "quotestatusid", ARGV[2], "quoterejectreasonid", ARGV[3], "text", ARGV[4]) \
+  redis.call("hmset", "broker:" .. ARGV[1] .. ":quoterequest:" .. ARGV[2], "quotestatusid", ARGV[3], "quoterejectreasonid", ARGV[4], "text", ARGV[5]) \
   --[[ publish to operator type ]] \
-  publishquoteack(ARGV[1]) \
+  publishquoteack(ARGV[1], ARGV[2]) \
   return \
   ';
 

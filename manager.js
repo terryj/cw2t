@@ -126,7 +126,7 @@ function initialise() {
   listen();
 }
 
-// pubsub connections
+// pubsub connection
 function pubsub() {
   dbsub = redis.createClient(redisport, redishost);
 
@@ -233,9 +233,9 @@ function listen() {
       console.log('recd:' + msg);
 
       // just forward to trade server
-      if (msg.substr(2, 13) == "quoterequest\"") {
-        db.publish(commonfo.tradeserverchannel, msg);
-      } else if (msg.substr(2, 18) == "ordercancelrequest") {
+      /*if (msg.substr(2, 13) == "quoterequest\"") {
+        db.publish(commonfo.tradeserverchannel, msg);*/
+      if (msg.substr(2, 18) == "ordercancelrequest") {
         db.publish(commonfo.tradeserverchannel, msg);
       } else if (msg.substr(2, 16) == "orderfillrequest") {
         db.publish(commonfo.tradeserverchannel, msg);
@@ -246,7 +246,9 @@ function listen() {
         try {
           var obj = JSON.parse(msg);
 
-          if ("singlesymbolrequest" in obj) {
+          if ("quoterequest" in  obj) {
+            quoteRequestReceived(obj.quoterequest, userid);
+          } else if ("singlesymbolrequest" in obj) {
             singleSymbolRequest(obj.singlesymbolrequest, userid, conn);
           } else if ("singlesymbolremoverequest" in obj) {
             singleSymbolRemoveRequest(obj.singlesymbolremoverequest, userid, conn);
@@ -1816,6 +1818,14 @@ function testtrade() {
     if (err) throw err;
     console.log(ret);
   });
+}
+
+function quoteRequestReceived(quoterequest, userid) {
+  quoterequest.brokerid = brokerid;
+  quoterequest.operatortype = operatortype;
+  quoterequest.operatorid = userid;
+
+  db.publish(commonfo.tradeserverchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
 }
 
 function registerScripts() {
