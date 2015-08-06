@@ -16,7 +16,6 @@ var redis = require('redis');
 //var ptpclient = require('./ptpclient.js'); // Proquote API connection
 var externalconn = "NBTrader";
 var nbtrader = require('./nbtrader.js'); // NBTrader API connection 
-var commonfo = require('./commonfo.js');
 var commonbo = require('./commonbo.js');
 
 // redis
@@ -126,7 +125,7 @@ function pubsub() {
   });
 
   // listen for trade related messages
-  dbsub.subscribe(commonfo.tradeserverchannel);
+  dbsub.subscribe(commonbo.tradeserverchannel);
 }
 
 // connection to Winner
@@ -185,7 +184,7 @@ function quoteRequest(quoterequest) {
 
   // create timestamp
   var today = new Date();
-  quoterequest.timestamp = commonfo.getUTCTimeStamp(today);
+  quoterequest.timestamp = commonbo.getUTCTimeStamp(today);
 
   // get hour & minute for comparison with timezone to determine in/out of hours
   //var hour = today.getHours();
@@ -221,7 +220,7 @@ function quoteRequest(quoterequest) {
     quoterequest.settlmnttyp = 5;
   } else if (quoterequest.nosettdays > 5) {
     // get settlement date from T+n no. of days
-    quoterequest.futsettdate = commonfo.getUTCDateString(commonfo.getSettDate(today, quoterequest.nosettdays, holidays));
+    quoterequest.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, quoterequest.nosettdays, holidays));
     quoterequest.settlmnttyp = 6;
   } else {
     // default
@@ -234,7 +233,7 @@ function quoteRequest(quoterequest) {
 
     if (ret[0] != 0) {
       // todo: send a quote ack to client
-      console.log("Error in scriptQuoteRequest:" + commonfo.getReasonDesc(ret[0]));
+      console.log("Error in scriptQuoteRequest:" + commonbo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -272,7 +271,7 @@ function quoteRequest(quoterequest) {
       } else {
         console.log("publishing");
         // publish it to other clients
-        db.publish(commonfo.quoterequestchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
+        db.publish(commonbo.quoterequestchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
       }
     }*/
 
@@ -347,12 +346,12 @@ function testQuote(quoterequest, side) {
   quote.settledays = 2;
 
   var today = new Date();
-  quote.transacttime = commonfo.getUTCTimeStamp(today);
+  quote.transacttime = commonbo.getUTCTimeStamp(today);
 
   var validuntiltime = today;
   quote.noseconds = 30;
   validuntiltime.setSeconds(today.getSeconds() + quote.noseconds);
-  quote.validuntiltime = commonfo.getUTCTimeStamp(validuntiltime);
+  quote.validuntiltime = commonbo.getUTCTimeStamp(validuntiltime);
 
   console.log("about to script");
   console.log(quote);
@@ -368,7 +367,7 @@ function testQuote(quoterequest, side) {
 
     if (ret != 0) {
       // can't find quote request, so don't know which client to inform
-      console.log("Error in scriptquote:" + commonfo.getReasonDesc(ret[0]));
+      console.log("Error in scriptquote:" + commonbo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -435,7 +434,7 @@ function newOrder(order) {
 
   var today = new Date();
 
-  order.timestamp = commonfo.getUTCTimeStamp(today);
+  order.timestamp = commonbo.getUTCTimeStamp(today);
   order.partfill = 1; // accept part-fill
 
   // get hour & minute for comparison with timezone to determine in/out of hours
@@ -455,7 +454,7 @@ function newOrder(order) {
 
   // get settlement date from T+n no. of days
   if (order.futsettdate == "") {
-    order.futsettdate = commonfo.getUTCDateString(commonfo.getSettDate(today, order.nosettdays, holidays));
+    order.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, order.nosettdays, holidays));
   }
 
   // store the order, get an id & credit check it
@@ -497,7 +496,7 @@ function newOrder(order) {
     // set the settlement date to equity default date for cfd orders, in case they are being hedged with the market
     if (order.instrumenttypeid == "CFD" || order.instrumenttypeid == "SPB") {
       // commented out as only offering default settlement for the time being
-      //order.futsettdate = commonfo.getUTCDateString(commonfo.getSettDate(today, ret[11], holidays));
+      //order.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, ret[11], holidays));
 
       // update the stored order settlement details if it is a hedge - todo: req'd?
       if (hedgeorderid != "") {
@@ -544,7 +543,7 @@ function matchOrder(order) {
 function orderCancelRequest(ocr) {
   console.log("Order cancel request received for order#" + ocr.orderid);
 
-  ocr.timestamp = commonfo.getUTCTimeStamp(new Date());
+  ocr.timestamp = commonbo.getUTCTimeStamp(new Date());
 
   db.eval(scriptordercancelrequest, 5, ocr.clientid, ocr.orderid, ocr.timestamp, ocr.operatortype, ocr.operatorid, function(err, ret) {
     if (err) throw err;
@@ -584,14 +583,14 @@ function orderFillRequest(ofr) {
 
   var today = new Date();
 
-  ofr.timestamp = commonfo.getUTCTimeStamp(today);
+  ofr.timestamp = commonbo.getUTCTimeStamp(today);
 
   if (!('price' in ofr)) {
     ofr.price = "";
   }
 
   // calculate a settlement date from the nosettdays
-  ofr.futsettdate = commonfo.getUTCDateString(commonfo.getSettDate(today, ofr.nosettdays, holidays));
+  ofr.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, ofr.nosettdays, holidays));
 
   db.eval(scriptorderfillrequest, 7, ofr.clientid, ofr.orderid, ofr.timestamp, ofr.operatortype, ofr.operatorid, ofr.price, ofr.futsettdate, function(err, ret) {
     if (err) throw err;
@@ -606,7 +605,7 @@ function orderFillRequest(ofr) {
     db.publish(ofr.operatortype, "order:" + ofr.orderid);
 
     // publish the trade
-    db.publish(commonfo.tradechannel, "trade:" + ret[1]);
+    db.publish(commonbo.tradechannel, "trade:" + ret[1]);
   });
 }
 
@@ -702,7 +701,6 @@ function displayOrderBook(symbolid, lowerbound, upperbound) {
 }
 
 function initDb() {
-  commonfo.registerScripts();
   commonbo.registerScripts();
   registerScripts();
   loadHolidays();
@@ -711,7 +709,7 @@ function initDb() {
 
 function loadHolidays() {
   // we are assuming "L"=London
-  db.eval(commonfo.scriptgetholidays, 0, "L", function(err, ret) {
+  db.eval(commonbo.scriptgetholidays, 0, "L", function(err, ret) {
     if (err) throw err;
 
     for (var i = 0; i < ret.length; ++i) {
@@ -772,15 +770,15 @@ function newQuote(quote) {
 
   if (!('transacttime' in quote)) {
     var today = new Date();
-    quote.transacttime = commonfo.getUTCTimeStamp(today);
+    quote.transacttime = commonbo.getUTCTimeStamp(today);
 
     if (!('validuntiltime' in quote)) {
       var validuntiltime = today;
       validuntiltime.setSeconds(today.getSeconds() + quote.noseconds);
-      quote.validuntiltime = commonfo.getUTCTimeStamp(validuntiltime);
+      quote.validuntiltime = commonbo.getUTCTimeStamp(validuntiltime);
     }
   } else {
-    quote.noseconds = commonfo.getSeconds(quote.transacttime, quote.validuntiltime);
+    quote.noseconds = commonbo.getSeconds(quote.transacttime, quote.validuntiltime);
   }
 
   if (!('settledays' in quote)) {
@@ -801,7 +799,7 @@ function newQuote(quote) {
 
     if (ret != 0) {
       // can't find quote request, so don't know which client to inform
-      console.log("Error in scriptquote:" + commonfo.getReasonDesc(ret[0]));
+      console.log("Error in scriptquote:" + commonbo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -833,7 +831,7 @@ nbt.on("orderReject", function(exereport) {
 
     if (ret != 0) {
       // todo: message to operator
-      console.log("Error in scriptrejectorder, reason:" + commonfo.getReasonDesc(ret));
+      console.log("Error in scriptrejectorder, reason:" + commonbo.getReasonDesc(ret));
       return;
     }
 
@@ -869,7 +867,7 @@ nbt.on("orderCancel", function(exereport) {
 
     if (ret[0] != 0) {
       // todo: send to client
-      console.log("Error in scriptordercancel, reason:" + commonfo.getReasonDesc(ret[0]));
+      console.log("Error in scriptordercancel, reason:" + commonbo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -890,7 +888,7 @@ nbt.on("orderExpired", function(exereport) {
 
     if (ret[0] != 0) {
       // todo: send to client
-      console.log("Error in scriptorderexpire, reason:" + commonfo.getReasonDesc(ret[0]));
+      console.log("Error in scriptorderexpire, reason:" + commonbo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -961,8 +959,8 @@ nbt.on("quote", function(quote, header) {
   // - todo: inform client & limit as parameter?
   if ('possdupflag' in header) {
     if (header.possdupflag == 'Y') {
-      var sendingtime = new Date(commonfo.getDateString(header.sendingtime));
-      var validuntiltime = new Date(commonfo.getDateString(quote.validuntiltime));
+      var sendingtime = new Date(commonbo.getDateString(header.sendingtime));
+      var validuntiltime = new Date(commonbo.getDateString(quote.validuntiltime));
       if (validuntiltime < sendingtime) {
         console.log("Quote received is past valid until time, discarding");
         return;
@@ -1028,10 +1026,6 @@ nbt.on("businessReject", function(businessreject) {
 });
 
 function registerScripts() {
-  //var updatecash = commonfo.updatecash;
-  var getfreemargin = commonfo.getfreemargin;
-  var round = commonfo.round;
-  var calcfinance = commonfo.calcfinance;
   var updateposition;
   var updateordermargin;
   var updatereserve;
@@ -1051,7 +1045,7 @@ function registerScripts() {
   var closeposition;
   var createposition;
 
-  getcosts = round + '\
+  getcosts = commonbo.round + '\
   local getcosts = function(clientid, symbolid, instrumenttypeid, side, consid, currencyid) \
     local fields = {"commissionpercent", "commissionmin", "ptmlevylimit", "ptmlevy", "stampdutylimit", "stampdutypercent", "contractcharge"} \
     local vals = redis.call("hmget", "cost:" .. instrumenttypeid .. ":" .. currencyid .. ":" .. side, unpack(fields)) \
@@ -1222,7 +1216,7 @@ function registerScripts() {
   // publish a position
   // key may be just a symbol or symbol + settlement date
   //
-  publishposition = commonfo.getunrealisedpandl + commonfo.getmargin + '\
+  publishposition = commonbo.getunrealisedpandl + commonbo.getmargin + '\
   local publishposition = function(clientid, positionkey, symbolid, futsettdate, channel) \
     local fields = {"quantity", "cost", "currencyid", "positionid", "futsettdate", "symbolid"} \
     local vals = redis.call("hmget", positionkey, unpack(fields)) \
@@ -1244,7 +1238,7 @@ function registerScripts() {
   // they are linked to a list of trade ids to provide further information, such as settlement date, if required
   // a position id is allocated against a position and stored against the trade
   //
-  updateposition = round + closeposition + createposition + publishposition + '\
+  updateposition = commonbo.round + closeposition + createposition + publishposition + '\
   local updateposition = function(clientid, symbolid, side, tradequantity, tradeprice, tradecost, currencyid, tradeid, futsettdate) \
     local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
     local positionkey = clientid .. ":position:" .. symbolid \
@@ -1380,7 +1374,7 @@ function registerScripts() {
   end \
   ';
 
-  creditcheck = rejectorder + getinitialmargin + getcosts + calcfinance + getposition + getfreemargin + getreserve + updateordermargin + '\
+  creditcheck = rejectorder + getinitialmargin + getcosts + calcfinance + getposition + commonbo.getfreemargin + getreserve + updateordermargin + '\
   local creditcheck = function(orderid, clientid, symbolid, side, quantity, price, currencyid, settldate, instrumenttypeid, nosettdays) \
      --[[ see if client is allowed to trade this product ]] \
     if redis.call("sismember", "client:" .. clientid .. ":instrumenttypes", instrumenttypeid) == 0 then \
@@ -1681,7 +1675,7 @@ function registerScripts() {
   ';
 
   // note: param #7, markettype, not used - getmarkettype() used instead
-  scriptneworder = neworder + creditcheck + newtrade + getproquotesymbol + getproquotequote + publishorder + getmarkettype + reverseside + '\
+  scriptneworder = neworder + creditcheck + newtrade + getproquotesymbol + getproquotequote + publishorder + commonbo.getmarkettype + reverseside + '\
   local orderid = neworder(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[4], "0", ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], 0, ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], "", "", ARGV[21], ARGV[22], ARGV[23], "") \
   local symbolid = ARGV[2] \
   local side = tonumber(ARGV[3]) \
@@ -2080,7 +2074,7 @@ function registerScripts() {
   */
   //db.eval(scriptQuote, 0, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.qbroker, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.qclientid, quote.cashorderqty, quote.settledays, quote.noseconds, function(err, ret) {
 
-  scriptQuote = publishquote + round + '\
+  scriptQuote = publishquote + commonbo.round + '\
   local errorcode = 0 \
   local brokerkey = "broker:" .. ARGV[20] \
   --[[ get the quote request ]] \

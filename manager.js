@@ -190,10 +190,10 @@ function pubsub() {
   });
 
   // listen for user related messages
-  dbsub.subscribe(commonfo.userserverchannel);
+  dbsub.subscribe(commonbo.userserverchannel);
 
   // listen for trading messages
-  dbsub.subscribe(commonfo.tradechannel);
+  dbsub.subscribe(commonbo.tradechannel);
 }
 
 // sockjs server
@@ -234,13 +234,13 @@ function listen() {
 
       // just forward to trade server
       /*if (msg.substr(2, 13) == "quoterequest\"") {
-        db.publish(commonfo.tradeserverchannel, msg);*/
+        db.publish(commonbo.tradeserverchannel, msg);*/
       if (msg.substr(2, 18) == "ordercancelrequest") {
-        db.publish(commonfo.tradeserverchannel, msg);
+        db.publish(commonbo.tradeserverchannel, msg);
       } else if (msg.substr(2, 16) == "orderfillrequest") {
-        db.publish(commonfo.tradeserverchannel, msg);
+        db.publish(commonbo.tradeserverchannel, msg);
       } else if (msg.substr(2, 6) == "order\"") {
-        db.publish(commonfo.tradeserverchannel, msg);
+        db.publish(commonbo.tradeserverchannel, msg);
       } else {
         // need to parse
         try {
@@ -519,7 +519,7 @@ function newIfa(ifa, userid, conn) {
     if (err) throw err;
 
     if (ret[0] != 0) {
-      console.log("Error in scriptifa:" + commonfo.getReasonDesc(ret[0]));
+      console.log("Error in scriptifa:" + commonbo.getReasonDesc(ret[0]));
       commonfo.sendErrorMsg(ret[0], conn);
       return;
     }
@@ -537,7 +537,7 @@ function getSendIfa(ifaid, conn) {
 }
 
 function cashTrans(cashtrans, userid, conn) {
-  cashtrans.timestamp = commonfo.getUTCTimeStamp(new Date());
+  cashtrans.timestamp = commonbo.getUTCTimeStamp(new Date());
 
   console.log(cashtrans);
 
@@ -1659,7 +1659,7 @@ function sendConnections(connectionreq, conn) {
 // chat from a user
 //
 function newChat(chat, userid) {
-  chat.timestamp = commonfo.getUTCTimeStamp(new Date());
+  chat.timestamp = commonbo.getUTCTimeStamp(new Date());
 
   db.eval(scriptnewchat, 5, chat.clientid, chat.text, chat.timestamp, chat.chatid, userid, function(err, ret) {
     if (err) throw err;
@@ -1668,7 +1668,7 @@ function newChat(chat, userid) {
     chat.chatid = ret[0];
 
     // send it to the client server to forward to client
-    db.publish(commonfo.clientserverchannel, "{\"chat\":" + JSON.stringify(chat) + "}");
+    db.publish(commonbo.clientserverchannel, "{\"chat\":" + JSON.stringify(chat) + "}");
   });      
 }
 
@@ -1681,7 +1681,7 @@ function newChatClient(msg) {
   try {    
     var chatobj = JSON.parse(msg);
 
-    chatobj.chat.timestamp = commonfo.getUTCTimeStamp(new Date());
+    chatobj.chat.timestamp = commonbo.getUTCTimeStamp(new Date());
 
     db.eval(scriptnewchat, 5, chatobj.chat.clientid, chatobj.chat.text, chatobj.chat.timestamp, chatobj.chat.chatid, userid, function(err, ret) {
       if (err) throw err;
@@ -1725,7 +1725,7 @@ function pendingChatRequest(req, conn) {
 function sendHolidays(req, conn) {
   console.log(req);
 
-  db.eval(commonfo.scriptgetholidays, 0, req.market, function(err, ret) {
+  db.eval(commonbo.scriptgetholidays, 0, req.market, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
@@ -1757,7 +1757,7 @@ function endOfDay(userid) {
     if (err) throw err;
     console.log(eoddatestr);
 
-    eoddate = commonfo.dateFromUTCString(eoddatestr);
+    eoddate = commonbo.dateFromUTCString(eoddatestr);
     console.log(eoddate);
 
     //nexteoddate = getUTCDateString(commonfo.getSettDate(eoddate, 1));
@@ -1786,7 +1786,7 @@ function test() {
   var note = "first cash receipt";
   var rate = 1;
   var reference = "ABC123";
-  var timestamp = commonfo.getUTCTimeStamp(new Date());
+  var timestamp = commonbo.getUTCTimeStamp(new Date());
   var transactiontypeid = "CD";
 
   // note we are passing the key in, so as to facilitate clustering
@@ -1825,16 +1825,16 @@ function quoteRequestReceived(quoterequest, userid) {
   quoterequest.operatortype = operatortype;
   quoterequest.operatorid = userid;
 
-  db.publish(commonfo.tradeserverchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
+  db.publish(commonbo.tradeserverchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
 }
 
 function registerScripts() {
   var stringsplit;
-  var gettotalpositions = commonfo.gettotalpositions;
-  var getcash = commonfo.getcash;
-  var getunrealisedpandl = commonfo.getunrealisedpandl;
-  var calcfinance = commonfo.calcfinance;
-  var gettrades = commonfo.gettrades;
+  //var gettotalpositions = commonfo.gettotalpositions;
+  //var getcash = commonfo.getcash;
+  //var getunrealisedpandl = commonfo.getunrealisedpandl;
+  //var calcfinance = commonfo.calcfinance;
+  //var gettrades = commonfo.gettrades;
 
   //
   // function to split a string into an array of substrings, based on a character
@@ -2025,7 +2025,7 @@ function registerScripts() {
   //
   // get trades between a start & end date
   //
-  scriptgetalltrades = gettrades + '\
+  scriptgetalltrades = commonbo.gettrades + '\
   local trades = redis.call("zrangebyscore", "tradesbydate", KEYS[1], KEYS[2]) \
   local tblresults = gettrades(trades) \
   return cjson.encode(tblresults) \
@@ -2141,7 +2141,7 @@ function registerScripts() {
   //
   // pass client id, end of day date, user id
   //
-  scriptendofday = '\
+  scriptendofday = commonbo.calcfinance + '\
     local clientid = KEYS[1] \
     local positions = redis.call("smembers", clientid .. ":positions") \
     local fields = {"symbol","side","quantity","cost","currency"} \

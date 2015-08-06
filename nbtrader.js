@@ -15,7 +15,7 @@ var tls = require('tls');
 var events = require('events');
 var fs = require("fs");
 
-var common = require('./commonfo.js');
+var commonbo = require('./commonbo.js');
 
 var fixver = 'FIX.4.2';
 var nbhost; // ip address
@@ -281,7 +281,7 @@ function sendTestRequest(self) {
 	console.log('sending test request');
 
 	// string we expect to receive back
-	matchtestreqid = getUTCTimeStamp();
+	matchtestreqid = commonbo.getUTCTimeStamp(new Date());
 
 	msg = '112=' + matchtestreqid + SOH;
 
@@ -317,7 +317,7 @@ function disconnect(self) {
 	// prepare to restart
 	restartTimer(self);
 
-	var timestamp = common.getUTCTimeStamp(new Date());
+	var timestamp = commonbo.getUTCTimeStamp(new Date());
   	console.log(timestamp + " - disconnected from NBTrader");
 }
 
@@ -434,7 +434,7 @@ Nbt.prototype.orderCancelRequest = function(ocr) {
 // 
 function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, origtimestamp) {
 	// we need our own fix timestamp - todo: can we use that of message or vice versa?
-	var timestamp = getUTCTimeStamp();
+	var timestamp = commonbo.getUTCTimeStamp(new Date());
 
 	if (resend) {
 		console.log('resending message #' + msgseqnum);
@@ -1230,7 +1230,7 @@ function logonReplyReceived(logonreply, self) {
 	// we are connected
 	setStatus(1);
 
-	var timestamp = common.getUTCTimeStamp(new Date());
+	var timestamp = commonbo.getUTCTimeStamp(new Date());
 	console.log(timestamp + ' - logon reply received');
 
 	if (logonreply.resetseqnumflag) {
@@ -1342,7 +1342,7 @@ function heartbeatReceived(heartbeat, self) {
 			// re-set status & tell everyone
 			setStatus(1);
 
-			var timestamp = common.getUTCTimeStamp(new Date());
+			var timestamp = commonbo.getUTCTimeStamp(new Date());
   			console.log(timestamp + " - heartbeat received from NBTrader");
 		}
 	}
@@ -1409,7 +1409,7 @@ function resendMessage(msgno, endseqno, self) {
 				// store the first in a possible sequence of admin messages
 				sequencegapnum = msgno;
 				if (msg == null) {
-					sequencegaptimestamp = getUTCTimeStamp();
+					sequencegaptimestamp = commonbo.getUTCTimeStamp(new Date());
 				} else {
 					sequencegaptimestamp = msg.timestamp;
 				}
@@ -1531,7 +1531,7 @@ function checksum(msg) {
     return checksumstr;
 }
 
-function getUTCTimeStamp() {
+/*function getUTCTimeStamp() {
     var timestamp = new Date();
 
     var year = timestamp.getUTCFullYear();
@@ -1552,17 +1552,17 @@ function getUTCTimeStamp() {
 
     if (seconds < 10) {seconds = '0' + seconds;}
 
-    /*if (millis < 10) {
+    if (millis < 10) {
         millis = '00' + millis;
     } else if (millis < 100) {
         millis = '0' + millis;
-    }*/
+    }
 
     //var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds, '.', millis].join('');
     var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds].join('');
 
     return ts;
-}
+}*/
 
 function getQuoteStatus(status) {
 	var desc;

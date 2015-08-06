@@ -445,7 +445,7 @@ exports.publishMessage = publishMessage;
 // returns valid trading day as date object, taking into account weekends and holidays
 // from passed date, number of settlement days (i.e. T+n) and list of holidays
 //
-function getSettDate(dt, nosettdays, holidays) {
+/*function getSettDate(dt, nosettdays, holidays) {
   var days = 0;
 
   if (nosettdays > 0) {
@@ -470,7 +470,7 @@ function getSettDate(dt, nosettdays, holidays) {
   return dt;
 }
 
-exports.getSettDate = getSettDate;
+exports.getSettDate = getSettDate;*/
 
 function isHoliday(datetocheck, holidays) {
   var found = false;
@@ -487,7 +487,7 @@ function isHoliday(datetocheck, holidays) {
 //
 // returns a UTC datetime string from a passed date object
 //
-function getUTCTimeStamp(timestamp) {
+/*function getUTCTimeStamp(timestamp) {
     var year = timestamp.getUTCFullYear();
     var month = timestamp.getUTCMonth() + 1; // flip 0-11 -> 1-12
     var day = timestamp.getUTCDate();
@@ -506,11 +506,11 @@ function getUTCTimeStamp(timestamp) {
 
     if (seconds < 10) {seconds = '0' + seconds;}
 
-    /*if (millis < 10) {
+    if (millis < 10) {
         millis = '00' + millis;
     } else if (millis < 100) {
         millis = '0' + millis;
-    }*/
+    }
 
     //var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds, '.', millis].join('');
     var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds].join('');
@@ -518,12 +518,12 @@ function getUTCTimeStamp(timestamp) {
     return ts;
 }
 
-exports.getUTCTimeStamp = getUTCTimeStamp;
+exports.getUTCTimeStamp = getUTCTimeStamp;*/
 
 //
 // get a UTC date string from a passed date object
 //
-function getUTCDateString(date) {
+/*function getUTCDateString(date) {
     var year = date.getUTCFullYear();
     var month = date.getUTCMonth() + 1; // flip 0-11 -> 1-12
     var day = date.getUTCDate();
@@ -537,9 +537,9 @@ function getUTCDateString(date) {
     return utcdate;
 }
 
-exports.getUTCDateString = getUTCDateString;
+exports.getUTCDateString = getUTCDateString;*/
 
-function getReasonDesc(reason) {
+/*function getReasonDesc(reason) {
   var desc;
 
   switch (parseInt(reason)) {
@@ -619,23 +619,23 @@ function getReasonDesc(reason) {
   return desc;
 }
 
-exports.getReasonDesc = getReasonDesc;
+exports.getReasonDesc = getReasonDesc;*/
 
 //
 // Get the nuber of seconds between two UTC datetimes
 //
-function getSeconds(startutctime, finishutctime) {
+/*function getSeconds(startutctime, finishutctime) {
   var startdt = new Date(getDateString(startutctime));
   var finishdt = new Date(getDateString(finishutctime));
   return ((finishdt - startdt) / 1000);
 }
 
-exports.getSeconds = getSeconds;
+exports.getSeconds = getSeconds;*/
 
 //
 // Convert a UTC datetime to a valid string for creating a date object
 //
-function getDateString(utcdatetime) {
+/*function getDateString(utcdatetime) {
     return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
 }
 
@@ -649,7 +649,7 @@ function dateFromUTCString(utcdatestring) {
   return dt;
 }
 
-exports.dateFromUTCString = dateFromUTCString;
+exports.dateFromUTCString = dateFromUTCString;*/
 
 function getPTPQuoteRejectReason(reason) {
   var desc;
@@ -728,7 +728,7 @@ exports.registerScripts = function () {
   var stringsplit;
 
   // publish & subscribe channels
-  exports.clientserverchannel = 1;
+  /*exports.clientserverchannel = 1;
   exports.userserverchannel = 2;
   exports.tradeserverchannel = 3;
   exports.ifaserverchannel = 4;
@@ -738,16 +738,16 @@ exports.registerScripts = function () {
   exports.pricehistorychannel = 8;
   exports.pricechannel = 9;
   exports.positionchannel = 10;
-  exports.quoterequestchannel = 11;
+  exports.quoterequestchannel = 11;*/
 
-  round = '\
+  /*round = '\
   local round = function(num, dp) \
     local mult = 10 ^ (dp or 0) \
     return math.floor(num * mult + 0.5) / mult \
   end \
   ';
 
-  exports.round = round;
+  exports.round = round;*/
 
   //
   // function to split a string into an array of substrings, based on a character
@@ -835,7 +835,7 @@ exports.registerScripts = function () {
 
   exports.updatecash = updatecash;
 
-  getcash = '\
+  /*getcash = '\
   local getcash = function(clientid, currencyid) \
     local cash = redis.call("get", "client:" .. clientid .. ":cash:" .. currencyid) \
     if not cash then \
@@ -845,9 +845,9 @@ exports.registerScripts = function () {
   end \
   ';
 
-  exports.getcash = getcash;
+  exports.getcash = getcash;*/
 
-  calcfinance = round + '\
+  /*calcfinance = round + '\
   local calcfinance = function(instrumenttypeid, consid, currencyid, side, nosettdays) \
     local finance = 0 \
     local costkey = "cost:" .. instrumenttypeid .. ":" .. currencyid .. ":" .. side \
@@ -874,7 +874,7 @@ exports.registerScripts = function () {
   end \
   ';
 
-  exports.calcfinance = calcfinance;
+  exports.calcfinance = calcfinance;*/
 
   //
   // proquote version
@@ -908,7 +908,7 @@ exports.registerScripts = function () {
   end \
   ';
 
-  getunrealisedpandl = round + '\
+  /*getunrealisedpandl = round + '\
   local getunrealisedpandl = function(symbolid, quantity, cost) \
     local unrealisedpandl = 0 \
     local price = 0 \
@@ -934,9 +934,9 @@ exports.registerScripts = function () {
   end \
   ';
 
-  exports.getunrealisedpandl = getunrealisedpandl;
+  exports.getunrealisedpandl = getunrealisedpandl;*/
 
-  getmargin = round + '\
+  /*getmargin = round + '\
   local getmargin = function(symbolid, quantity) \
     local margin = 0 \
     local price = 0 \
@@ -965,10 +965,10 @@ exports.registerScripts = function () {
   end \
   ';
 
-  exports.getmargin = getmargin;
+  exports.getmargin = getmargin;*/
 
   // only dealing with trade currency for the time being - todo: review
-  gettotalpositions = getunrealisedpandl + getmargin + '\
+  /*gettotalpositions = getunrealisedpandl + getmargin + '\
   local gettotalpositions = function(clientid, currencyid) \
     local positions = redis.call("smembers", clientid .. ":positions") \
     local fields = {"symbolid", "currencyid", "quantity", "cost"} \
@@ -988,7 +988,7 @@ exports.registerScripts = function () {
   end \
   ';
 
-  exports.gettotalpositions = gettotalpositions;
+  exports.gettotalpositions = gettotalpositions;*/
 
   //
   // calculates free margin for a client and currency
@@ -996,7 +996,7 @@ exports.registerScripts = function () {
   // equity = balance + unrealised p&l
   // free margin = equity - margin used to hold positions
   //
-  getfreemargin = getcash + gettotalpositions + '\
+  /*getfreemargin = getcash + gettotalpositions + '\
   local getfreemargin = function(clientid, currencyid) \
     local cash = getcash(clientid, currencyid) \
     local totalpositions = gettotalpositions(clientid, currencyid) \
@@ -1008,12 +1008,12 @@ exports.registerScripts = function () {
   end \
   ';
 
-  exports.getfreemargin = getfreemargin;
+  exports.getfreemargin = getfreemargin;*/
 
   //
   // get a range of trades from passed ids
   //
-  gettrades = '\
+  /*gettrades = '\
   local gettrades = function(trades) \
     local tblresults = {} \
     local fields = {"clientid","orderid","symbolid","side","quantity","price","currencyid","currencyratetoorg","currencyindtoorg","commission","ptmlevy","stampduty","contractcharge","counterpartyid","markettype","externaltradeid","futsettdate","timestamp","lastmkt","externalorderid","tradeid","settlcurrencyid","settlcurramt","settlcurrfxrate","settlcurrfxratecalc","nosettdays","margin","finance"} \
@@ -1027,7 +1027,7 @@ exports.registerScripts = function () {
   end \
   ';
 
-  exports.gettrades = gettrades;
+  exports.gettrades = gettrades;*/
 
   //
   // params: array of quotereqid's, symbol ("" = any symbol)
@@ -1055,7 +1055,7 @@ exports.registerScripts = function () {
   // returns: 0=in hours, 1=ooh
   // todo: review days
   //
-  getmarkettype = '\
+  /*getmarkettype = '\
   local getmarkettype = function(symbolid, hour, minute, day) \
     local markettype = 0 \
     local timezoneid = redis.call("hget", "symbol:" .. symbolid, "timezoneid") \
@@ -1077,7 +1077,7 @@ exports.registerScripts = function () {
   end \
   ';
 
-  exports.getmarkettype = getmarkettype;
+  exports.getmarkettype = getmarkettype;*/
 
 	subscribesymbolpq = '\
   local subscribesymbolpq = function(symbolid, id, servertype) \
@@ -1384,20 +1384,20 @@ exports.registerScripts = function () {
   // get trades, most recent first
   // params: client id
   //
-  exports.scriptgettrades = gettrades + '\
+  /*exports.scriptgettrades = commonbo.gettrades + '\
   local trades = redis.call("sort", ARGV[1] .. ":trades", "DESC") \
   local tblresults = gettrades(trades) \
   return cjson.encode(tblresults) \
-  ';
+  ';*/
 
   //
   // params: client id, positionkey
   //
-  exports.scriptgetpostrades = gettrades + '\
+  /*exports.scriptgetpostrades = commonbo.gettrades + '\
   local postrades = redis.call("smembers", ARGV[1] .. ":trades:" .. ARGV[2]) \
   local tblresults = gettrades(postrades) \
   return cjson.encode(tblresults) \
-  ';
+  ';*/
 
   //
   // params: client id
@@ -1429,7 +1429,7 @@ exports.registerScripts = function () {
   // params: client id
   // returns an array of positions
   //
-  exports.scriptgetpositions = getunrealisedpandl + getmargin + '\
+  /*exports.scriptgetpositions = getunrealisedpandl + getmargin + '\
   local tblresults = {} \
   local positions = redis.call("smembers", ARGV[1] .. ":positions") \
   local fields = {"clientid","symbolid","quantity","cost","currencyid","positionid","futsettdate"} \
@@ -1500,7 +1500,7 @@ exports.registerScripts = function () {
     end \
   end \
   return {cjson.encode(tblresults), tblsubscribe} \
-  ';
+  ';*/
 
   //
   // get positions for a client and unsubscribe client & server to the position symbols
@@ -1636,14 +1636,14 @@ exports.registerScripts = function () {
   //
   // get holidays for a market, i.e. "L" = London...assume "L" for the time being?
   //
-  exports.scriptgetholidays = '\
+  /*exports.scriptgetholidays = '\
   local tblresults = {} \
   local holidays = redis.call("smembers", "holidays:" .. ARGV[1]) \
   for index = 1, #holidays do \
     table.insert(tblresults, {holidays[index]}) \
   end \
   return cjson.encode(tblresults) \
-  ';
+  ';*/
 
   exports.scriptgetclienttypes = '\
   local clienttypes = redis.call("sort", "clienttypes:" .. ARGV[1], "ALPHA") \
