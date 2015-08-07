@@ -239,8 +239,8 @@ function listen() {
         db.publish(commonbo.tradeserverchannel, msg);
       } else if (msg.substr(2, 16) == "orderfillrequest") {
         db.publish(commonbo.tradeserverchannel, msg);
-      } else if (msg.substr(2, 6) == "order\"") {
-        db.publish(commonbo.tradeserverchannel, msg);
+      /*} else if (msg.substr(2, 6) == "order\"") {
+        db.publish(commonbo.tradeserverchannel, msg);*/
       } else {
         // need to parse
         try {
@@ -248,6 +248,8 @@ function listen() {
 
           if ("quoterequest" in  obj) {
             quoteRequestReceived(obj.quoterequest, userid);
+          } else if ("order" in obj) {
+            orderReceived(obj.order, userid);
           } else if ("singlesymbolrequest" in obj) {
             singleSymbolRequest(obj.singlesymbolrequest, userid, conn);
           } else if ("singlesymbolremoverequest" in obj) {
@@ -1826,6 +1828,14 @@ function quoteRequestReceived(quoterequest, userid) {
   quoterequest.operatorid = userid;
 
   db.publish(commonbo.tradeserverchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
+}
+
+function orderReceived(order, userid) {
+  order.brokerid = brokerid;
+  order.operatortype = operatortype;
+  order.operatorid = userid;
+
+  db.publish(commonbo.tradeserverchannel, "{\"order\":" + JSON.stringify(order) + "}");
 }
 
 function registerScripts() {

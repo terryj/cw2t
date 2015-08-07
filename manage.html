@@ -2611,10 +2611,10 @@
 
                         if (d.col == "bidquote") {
                             // we are selling
-                            sendOrder(clientid, d.value.symbolid, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+                            sendOrder(1, clientid, d.value.symbolid, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
                         } else {
                             // we are buying
-                            sendOrder(clientid, d.value.symbolid, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+                            sendOrder(1, clientid, d.value.symbolid, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
                         }
 
                         // stop timer
@@ -4633,9 +4633,10 @@
             }
         }
 
-        function sendOrder(clientid, symbolid, side, quantity, price, ordertype, delivertocompid, settlcurrencyid, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
+        function sendOrder(accountid, clientid, symbolid, side, quantity, price, ordertype, delivertocompid, settlcurrencyid, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
             var order = {};
 
+            order.accountid = accountid;
             order.clientid = clientid;
             order.side = side;
             order.symbolid = symbolid;
@@ -4651,8 +4652,8 @@
             order.timeinforce = timeinforce;
             order.expiredate = expiredate;
             order.expiretime = expiretime;
-            order.operatortype = operatortype;
-            order.operatorid = userid;
+            //order.operatortype = operatortype;
+            //order.operatorid = userid;
 
             sockjs.send("{\"order\":" + JSON.stringify(order) + "}");
         }

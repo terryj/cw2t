@@ -438,9 +438,12 @@ function newOrder(order) {
   order.partfill = 1; // accept part-fill
 
   // get hour & minute for comparison with timezone to determine in/out of hours
-  var hour = today.getHours();
-  var minute = today.getMinutes();
-  var day = today.getDay();
+  //var hour = today.getHours();
+  //var minute = today.getMinutes();
+  //var day = today.getDay();
+
+  // assume in-hours
+  order.markettype = 1;
 
   // always put a price in the order
   if (!("price" in order)) {
@@ -457,9 +460,13 @@ function newOrder(order) {
     order.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, order.nosettdays, holidays));
   }
 
+  // todo
+  order.nosettdays = 2;
+
   // store the order, get an id & credit check it
   // note: param #7 not used
-  db.eval(scriptneworder, 0, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, 0, order.futsettdate, order.partfill, order.quoteid, order.currencyid, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, hour, minute, day, function(err, ret) {
+  //local neworder = function(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, remquantity, status, markettype, futsettdate, partfill, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid) \
+  db.eval(scriptneworder, 0, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currencyid, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, order.operatortype, order.operatorid, order.nosettdays, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
@@ -1045,29 +1052,49 @@ function registerScripts() {
   var closeposition;
   var createposition;
 
+  /*
+  * getcosts()
+  * calculates costs for an order/trades
+  * params: brokerid, clientid, symbolid, side, consideration, currencyid
+  * returns: commission, ptmlevy, stampduty, contractlevy
+  */
   getcosts = commonbo.round + '\
-  local getcosts = function(clientid, symbolid, instrumenttypeid, side, consid, currencyid) \
-    local fields = {"commissionpercent", "commissionmin", "ptmlevylimit", "ptmlevy", "stampdutylimit", "stampdutypercent", "contractcharge"} \
-    local vals = redis.call("hmget", "cost:" .. instrumenttypeid .. ":" .. currencyid .. ":" .. side, unpack(fields)) \
+  local getcosts = function(brokerid, clientid, symbolid, side, consid, currencyid) \
+    local brokerkey = "broker:" .. brokerid \
+    local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
+    --[[ get costs for this instrument type & currency ]] \
+    local fields = {"commissionpercent", "commissionmax", "commissionmin", "ptmlevylimit", "ptmlevy", "stampdutypercent", "contractlevy"} \
+    local vals = redis.call("hmget", brokerkey .. ":cost:" .. instrumenttypeid .. ":" .. currencyid, unpack(fields)) \
+    --[[ set default costs ]] \
     local commission = 0 \
     local ptmlevy = 0 \
     local stampduty = 0 \
-    local contractcharge = 0 \
+    local contractlevy = 0 \
     --[[ commission ]] \
-    local commpercent = redis.call("hget", "client:" .. clientid, "commissionpercent") \
-    if not commpercent or tonumber(commpercent) == nil then \
-      if vals[1] and tonumber(vals[1]) ~= nil then \
-        commpercent = vals[1] \
-      else \
-        commpercent = 0 \
+    local commpercent = redis.call("hget", brokerkey .. ":client:" .. clientid, "commissionpercent") \
+    if not commpercent or commpercent == "" then \
+      commpercent = 0 \
+    else \
+      commpercent = tonumber(commpercent) \
+    end \
+    --[[ use client commission rate, if there is one ]] \
+    if commpercent == 0 then \
+      --[[ otherwise use standard commission rate ]] \
+      if vals[1] then commpercent = tonumber(vals[1]) end \
+    end \
+    commission = round(consid * commpercent / 100, 2) \
+    --[[ check commission against min commission ]] \
+    if vals[3] and vals[3] ~= "" then \
+      local mincommission = tonumber(vals[3]) \
+      if commission < mincommission then \
+        commission = mincommission \
       end \
     end \
-    if tonumber(commpercent) ~= 0 then \
-      commission = round(consid * tonumber(commpercent) / 100, 2) \
-    end \
-    if vals[2] and tonumber(vals[2]) ~= nil then \
-      if commission < tonumber(vals[2]) then \
-        commission = tonumber(vals[2]) \
+    --[[ check commission against max commission ]] \
+    if vals[2] and vals[2] ~= "" then \
+      local maxcommission = tonumber(vals[2]) \
+      if commission < maxcommission then \
+        commission = maxcommission \
       end \
     end \
     --[[ ptm levy ]] \
@@ -1075,27 +1102,25 @@ function registerScripts() {
     if ptmexempt and tonumber(ptmexempt) == 1 then \
     else \
       --[[ only calculate ptm levy if product is not exempt ]] \
-      if vals[3] and tonumber(vals[3]) ~= nil then \
-        if consid > tonumber(vals[3]) then \
-          if vals[4] and tonumber(vals[4]) ~= nil then \
-            ptmlevy = tonumber(vals[4]) \
+      if vals[4] and vals[4] ~= "" then \
+        local ptmlevylimit = tonumber(vals[4]) \
+        if consid > ptmlevylimit then \
+          if vals[5] and vals[5] ~= "" then \
+            ptmlevy = tonumber(vals[5]) \
           end \
         end \
       end \
     end \
     --[[ stamp duty ]] \
-    if vals[5] and tonumber(vals[5]) ~= nil then \
-      if consid > tonumber(vals[5]) then \
-        if vals[6] and tonumber(vals[6]) ~= nil then \
-          stampduty = round(consid * tonumber(vals[6]) / 100, 2) \
-        end \
-      end \
+    if vals[6] and vals[6] ~= "" then \
+      local stampdutypercent = tonumber(vals[6]) \
+      stampduty = round(consid * stampdutypercent / 100, 2) \
     end \
-    --[[ contract charge ]] \
-    if vals[7] and tonumber(vals[7]) ~= nil then \
-      contractcharge = tonumber(vals[7]) \
+    --[[ contract levy ]] \
+    if vals[7] and vals[7] ~= "" then \
+      contractlevy = tonumber(vals[7]) \
     end \
-    return {commission, ptmlevy, stampduty, contractcharge} \
+    return {commission, ptmlevy, stampduty, contractlevy} \
   end \
   ';
 
@@ -1103,8 +1128,8 @@ function registerScripts() {
   // get initial margin to include costs
   //
   getinitialmargin = '\
-  local getinitialmargin = function(symbolid, consid) \
-    local marginpercent = redis.call("hget", "symbol:" .. symbolid, "marginpercent") \
+  local getinitialmargin = function(brokerid, symbolid, consid) \
+    local marginpercent = redis.call("hget", "broker:" .. brokerid .. "brokersymbol:" .. symbolid, "marginpercent") \
     if not marginpercent then marginpercent = 100 end \
     local initialmargin = tonumber(consid) * tonumber(marginpercent) / 100 \
     return initialmargin \
@@ -1351,8 +1376,8 @@ function registerScripts() {
   ';
 
   rejectorder = '\
-  local rejectorder = function(orderid, reason, text) \
-    redis.call("hmset", "order:" .. orderid, "status", "8", "reason", reason, "text", text) \
+  local rejectorder = function(brokerid, orderid, reason, text) \
+    redis.call("hmset", "broker:" .. brokerid .. "order:" .. orderid, "status", "8", "reason", reason, "text", text) \
   end \
   ';
 
@@ -1373,12 +1398,17 @@ function registerScripts() {
     return reserve \
   end \
   ';
-
-  creditcheck = rejectorder + getinitialmargin + getcosts + calcfinance + getposition + commonbo.getfreemargin + getreserve + updateordermargin + '\
-  local creditcheck = function(orderid, clientid, symbolid, side, quantity, price, currencyid, settldate, instrumenttypeid, nosettdays) \
-     --[[ see if client is allowed to trade this product ]] \
-    if redis.call("sismember", "client:" .. clientid .. ":instrumenttypes", instrumenttypeid) == 0 then \
-      rejectorder(orderid, 1018, "") \
+  //local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[20], ARGV[10], instrumenttypeid, 0) \
+//calcfinance + getposition + commonbo.getfreemargin + getreserve + updateordermargin +
+//getcosts +
+//getinitialmargin
+//rejectorder
+  creditcheck = rejectorder + getinitialmargin + getcosts + '\
+  local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, settldate, nosettdays) \
+    --[[ see if client is allowed to trade this product ]] \
+    local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
+    if redis.call("sismember", "broker:" .. brokerid .. ":client:" .. clientid .. ":instrumenttypes", instrumenttypeid) == 0 then \
+      rejectorder(brokerid, orderid, 1018, "") \
       return {0} \
     end \
     --[[ calculate initial margin, costs & finance ]] \
@@ -1386,10 +1416,14 @@ function registerScripts() {
     quantity = tonumber(quantity) \
     price = tonumber(price) \
     local consid = quantity * price \
-    local initialmargin = getinitialmargin(symbolid, consid) \
-    local costs =  getcosts(clientid, symbolid, instrumenttypeid, side, consid, currencyid) \
+    local initialmargin = getinitialmargin(brokerid, symbolid, consid) \
+    local costs =  getcosts(brokerid, clientid, symbolid, side, consid, currencyid) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
-    local finance = 0 \
+    return {1, initialmargin, costs} \
+  end \
+  ';
+
+    /*local finance = 0 \
     --[[ todo: needs considering ]] \
     --[[local finance = calcfinance(instrumenttypeid, consid, currencyid, side, nosettdays) ]]\
     local symbolsettdatekey = symbolid \
@@ -1465,7 +1499,7 @@ function registerScripts() {
     end \
     return {1, initialmargin, costs, finance} \
   end \
-  ';
+  ';*/
 
   cancelorder = adjustmarginreserve + '\
   local cancelorder = function(orderid, status) \
@@ -1547,7 +1581,7 @@ function registerScripts() {
   ';
 
   publishorder = '\
-  local publishorder = function(orderid, channel) \
+  local publishorder = function(brokerid, orderid, channel) \
     local fields = {"clientid","symbolid","side","quantity","price","ordertype","remquantity","status","markettype","futsettdate","partfill","quoteid","currencyid","currencyratetoorg","currencyindtoorg","timestamp","margin","timeinforce","expiredate","expiretime","settlcurrencyid","settlcurrfxrate","settlcurrfxratecalc","orderid","externalorderid","execid","nosettdays","operatortype","operatorid","hedgeorderid","text","reason"} \
     local vals = redis.call("hmget", "order:" .. orderid, unpack(fields)) \
     local order = {clientid=vals[1],symbolid=vals[2],side=vals[3],quantity=vals[4],price=vals[5],ordertype=vals[6],remquantity=vals[7],status=vals[8],markettype=vals[9],futsettdate=vals[10],partfill=vals[11],quoteid=vals[12],currencyid=vals[13],currencyratetoorg=vals[14],currencyindtoorg=vals[15],timestamp=vals[16],margin=vals[17],timeinforce=vals[18],expiredate=vals[19],expiretime=vals[20],settlcurrencyid=vals[21],settlcurrfxrate=vals[22],settlcurrfxratecalc=vals[23],orderid=vals[24],externalorderid=vals[25],execid=vals[26],nosettdays=vals[27],operatortype=vals[28],operatorid=vals[29],hedgeorderid=vals[30],text=vals[31],reason=vals[32]} \
@@ -1614,16 +1648,23 @@ function registerScripts() {
     end \
 */
 
+  /*
+  * neworder()
+  * gets an orderid & saves the order
+  */
   neworder = '\
-  local neworder = function(clientid, symbolid, side, quantity, price, ordertype, remquantity, status, markettype, futsettdate, partfill, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, nosettdays, operatortype, operatorid, hedgeorderid) \
+  local neworder = function(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, remquantity, status, markettype, futsettdate, partfill, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, nosettdays, operatortype, operatorid, hedgeorderid) \
+    local brokerkey = "broker:" .. brokerid \
     --[[ get a new orderid & store the order ]] \
-    local orderid = redis.call("incr", "orderid") \
-    redis.call("hmset", "order:" .. orderid, "clientid", clientid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "ordertype", ordertype, "remquantity", remquantity, "status", status, "markettype", markettype, "futsettdate", futsettdate, "partfill", partfill, "quoteid", quoteid, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "timestamp", timestamp, "margin", margin, "timeinforce", timeinforce, "expiredate", expiredate, "expiretime", expiretime, "settlcurrencyid", settlcurrencyid, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "orderid", orderid, "externalorderid", externalorderid, "execid", execid, "nosettdays", nosettdays, "operatortype", operatortype, "operatorid", operatorid, "hedgeorderid", hedgeorderid) \
+    local orderid = redis.call("hincrby", brokerkey, "lastorderid", 1) \
+    redis.call("hmset", brokerkey .. ":order:" .. orderid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "ordertype", ordertype, "remquantity", remquantity, "status", status, "markettype", markettype, "futsettdate", futsettdate, "partfill", partfill, "quoteid", quoteid, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "timestamp", timestamp, "margin", margin, "timeinforce", timeinforce, "expiredate", expiredate, "expiretime", expiretime, "settlcurrencyid", settlcurrencyid, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "orderid", orderid, "externalorderid", externalorderid, "execid", execid, "nosettdays", nosettdays, "operatortype", operatortype, "operatorid", operatorid, "hedgeorderid", hedgeorderid) \
+    --[[ add to set of orders ]] \
+    redis.call("sadd", brokerkey .. ":orders", orderid) \
     --[[ add to set of orders for this client ]] \
-    redis.call("sadd", "client:" .. clientid .. ":orders", orderid) \
+    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":orders", orderid) \
     --[[ add order id to associated quote, if there is one ]] \
     if quoteid ~= "" then \
-      redis.call("hset", "quote:" .. quoteid, "orderid", orderid) \
+      redis.call("hset", brokerkey .. ":quote:" .. quoteid, "orderid", orderid) \
     end \
     return orderid \
   end \
@@ -1674,29 +1715,49 @@ function registerScripts() {
   return 0 \
   ';
 
-  // note: param #7, markettype, not used - getmarkettype() used instead
-  scriptneworder = neworder + creditcheck + newtrade + getproquotesymbol + getproquotequote + publishorder + commonbo.getmarkettype + reverseside + '\
-  local orderid = neworder(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[4], "0", ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], 0, ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], "", "", ARGV[21], ARGV[22], ARGV[23], "") \
-  local symbolid = ARGV[2] \
-  local side = tonumber(ARGV[3]) \
+  /*
+  * scriptneworder
+  * params: accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, partfill, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, nosettdays, operatortype, operatorid
+  * returns: orderid
+  */
+  scriptneworder = neworder + rejectorder + creditcheck + '\
+  local orderid = neworder(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[6], 0, ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], 0, ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], ARGV[22], "", "", ARGV[23], ARGV[24], ARGV[25], "") \
+  local brokerid = ARGV[2] \
+  local brokerkey = "broker:" .. brokerid \
+  local symbolid = ARGV[4] \
+  local side = tonumber(ARGV[5]) \
+  local settlcurramt = tonumber(ARGV[6]) * tonumber(ARGV[7]) \
+  local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
+  if not instrumenttypeid then \
+    rejectorder(brokerid, orderid, 1007, "") \
+    publishorder(brokerid, orderid, ARGV[24]) \
+    return {0} \
+  end \
+  local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[20], ARGV[10], ARGV[23]) \
+  return {cc, orderid} \
+  ';
+  //local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[20], ARGV[10], ARGV[23]) \
+/*  local brokerid = ARGV[2] \
+  local brokerkey = "broker:" .. brokerid \
+  local symbolid = ARGV[4] \
+  local side = tonumber(ARGV[5]) \
   --[[ calculate consideration in settlement currency, costs will be added later ]] \
-  local settlcurramt = tonumber(ARGV[4]) * tonumber(ARGV[5]) \
+  local settlcurramt = tonumber(ARGV[6]) * tonumber(ARGV[7]) \
   --[[ get instrument values ]] \
   local fields = {"instrumenttypeid", "timezoneid"} \
   local vals = redis.call("hmget", "symbol:" .. symbolid, unpack(fields)) \
   if not vals[2] then \
     rejectorder(orderid, 1007, "") \
-    publishorder(orderid, ARGV[22]) \
+    publishorder(orderid, ARGV[24]) \
     return {0} \
   end \
   local instrumenttypeid = vals[1] \
-  local markettype = getmarkettype(symbolid, ARGV[24], ARGV[25], ARGV[26]) \
   --[[ do the credit check ]] \
-  local cc = creditcheck(orderid, ARGV[1], symbolid, side, ARGV[4], ARGV[5], ARGV[18], ARGV[8], instrumenttypeid, ARGV[21]) \
+  local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[20], ARGV[10], instrumenttypeid, 0) \
   --[[ cc[1] = ok/fail, cc[2] = margin, cc[3] = costs array, cc[4] = finance ]] \
   if cc[1] == 0 then \
     --[[ publish the order back to the operatortype - the order contains the error ]] \
-    publishorder(orderid, ARGV[22]) \
+    publishorder(orderid, ARGV[24]) \
     return {cc[1], orderid} \
   end \
   local proquotesymbol = {"", "", "", ""} \
@@ -1706,73 +1767,75 @@ function registerScripts() {
   local hedgeorderid = "" \
   local hedgetradeid = "" \
   local defaultnosettdays = 0 \
-  local qclientid = "" \
-  if ARGV[6] == "D" then \
-  --[[ see if order was quoted by a client ]] \
-    qclientid = redis.call("hget", "quote:" .. ARGV[10], "qclientid") \
-    if qclientid and qclientid ~= "" then \
-      local hedgecosts = {0,0,0,0} \
-      local rside = reverseside(side) \
-      --[[ create trades for both clients ]] \
-      tradeid = newtrade(ARGV[1], orderid, symbolid, side, ARGV[4], ARGV[5], ARGV[11], 1, 1, cc[3], qclientid, markettype, "", ARGV[8], ARGV[14], "", "", ARGV[18], settlcurramt, ARGV[19], ARGV[20], ARGV[21], cc[2], ARGV[22], ARGV[23], cc[4]) \
-      hedgetradeid = newtrade(qclientid, orderid, symbolid, rside, ARGV[4], ARGV[5], ARGV[11], 1, 1, hedgecosts, ARGV[1], markettype, "", ARGV[8], ARGV[14], "", "", ARGV[18], settlcurramt, ARGV[19], ARGV[20], ARGV[21], 0, ARGV[22], ARGV[23], 0) \
-      --[[ adjust order as filled ]] \
-      redis.call("hmset", "order:" .. orderid, "remquantity", 0, "status", 2) \
-      return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttypeid, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays, markettype, qclientid} \
-    end \
-  end \
   if instrumenttypeid == "CFD" or instrumenttypeid == "SPB" or instrumenttypeid == "CCFD" then \
     --[[ ignore limit orders for derivatives as they will be handled manually, at least for the time being ]] \
-    if ARGV[6] ~= "2" then \
+    if ARGV[8] ~= "2" then \
       --[[ create trades for client & hedge book for off-exchange products ]] \
-      hedgebookid = redis.call("get", "hedgebook:" .. instrumenttypeid .. ":" .. ARGV[18]) \
+      hedgebookid = redis.call("get", brokerkey .. ":hedgebook:" .. instrumenttypeid .. ":" .. ARGV[20]) \
       if not hedgebookid then hedgebookid = 999999 end \
       local rside = reverseside(side) \
       local hedgecosts = {0,0,0,0} \
-      tradeid = newtrade(ARGV[1], orderid, symbolid, side, ARGV[4], ARGV[5], ARGV[11], 1, 1, cc[3], hedgebookid, markettype, "", ARGV[8], ARGV[14], "", "", ARGV[18], settlcurramt, ARGV[19], ARGV[20], ARGV[21], cc[2], ARGV[22], ARGV[23], cc[4]) \
-      hedgetradeid = newtrade(hedgebookid, orderid, symbolid, rside, ARGV[4], ARGV[5], ARGV[11], 1, 1, hedgecosts, ARGV[1], markettype, "", ARGV[8], ARGV[14], "", "", ARGV[18], settlcurramt, ARGV[19], ARGV[20], ARGV[21], 0, ARGV[22], ARGV[23], 0) \
+      tradeid = newtrade(ARGV[1], ARGV[2], ARGV[3], orderid, symbolid, side, ARGV[6], ARGV[7], ARGV[13], 1, 1, cc[3], hedgebookid, ARGV[11], "", ARGV[10], ARGV[16], "", "", ARGV[20], settlcurramt, ARGV[21], ARGV[22], ARGV[23], cc[2], ARGV[24], ARGV[25], cc[4]) \
+      hedgetradeid = newtrade(hedgebookid, orderid, symbolid, rside, ARGV[6], ARGV[7], ARGV[13], 1, 1, hedgecosts, ARGV[3], ARGV[11], "", ARGV[10], ARGV[16], "", "", ARGV[20], settlcurramt, ARGV[21], ARGV[22], ARGV[23], 0, ARGV[24], ARGV[25], 0) \
       --[[ adjust order as filled ]] \
-      redis.call("hmset", "order:" .. orderid, "remquantity", 0, "status", 2) \
+      redis.call("hmset", brokerkey .. ":order:" .. orderid, "remquantity", 0, "status", 2) \
       --[[ todo: may need to adjust margin here ]] \
       --[[ see if we need to hedge this trade in the market ]] \
-      local hedgeclient = tonumber(redis.call("hget", "client:" .. ARGV[1], "hedge")) \
-      local hedgeinst = tonumber(redis.call("hget", "symbol:" .. symbolid, "hedge")) \
+      local hedgeclient = tonumber(redis.call("hget", brokerkey .. ":client:" .. ARGV[3], "hedge")) \
+      local hedgeinst = tonumber(redis.call("hget", brokerkey ":brokersymbol:" .. symbolid, "hedge")) \
       if hedgeclient == 1 or hedgeinst == 1 then \
         --[[ create a hedge order in the underlying product ]] \
         proquotesymbol = getproquotesymbol(symbolid) \
         if proquotesymbol[4] then \
-          hedgeorderid = neworder(hedgebookid, proquotesymbol[4], ARGV[3], ARGV[4], ARGV[5], "X", ARGV[4], 0, markettype, ARGV[8], ARGV[9], "", ARGV[11], ARGV[12], ARGV[13], ARGV[14], 0, ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], "", "", ARGV[21], ARGV[22], ARGV[23], orderid, "") \
+          hedgeorderid = neworder(hedgebookid, proquotesymbol[4], ARGV[5], ARGV[6], ARGV[7], "X", ARGV[6], 0, ARGV[11], ARGV[10], ARGV[11], "", ARGV[13], ARGV[14], ARGV[15], ARGV[14], 0, ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], ARGV[22], "", "", ARGV[23], ARGV[24], ARGV[25], orderid, "") \
           --[[ get quote broker ]] \
-          proquotequote = getproquotequote(ARGV[10]) \
+          proquotequote = getproquotequote(ARGV[12]) \
           --[[ assume uk equity as underlying for default settl days ]] \
-          defaultnosettdays = redis.call("hget", "cost:" .. "DE" .. ":" .. ARGV[18] .. ":" .. side, "defaultnosettdays") \
+          defaultnosettdays = redis.call("hget", brokerkey .. ":cost:" .. "DE" .. ":" .. ARGV[20] .. ":" .. side, "defaultnosettdays") \
         end \
       end \
     end \
   else \
     --[[ this is an equity - just consider external orders for the time being - todo: internal ]] \
     --[[ todo: consider equity limit orders ]] \
-    if markettype == 0 then \
+    if ARGV[11] == 0 then \
       --[[ see if we need to send this trade to the market - if either product or client hedge, then send ]] \
-      local hedgeclient = tonumber(redis.call("hget", "client:" .. ARGV[1], "hedge")) \
-      local hedgeinst = tonumber(redis.call("hget", "symbol:" .. ARGV[2], "hedge")) \
+      local hedgeclient = tonumber(redis.call("hget", brokerkey .. ":client:" .. ARGV[3], "hedge")) \
+      local hedgeinst = tonumber(redis.call("hget", brokerkey .. ":brokersymbol:" .. symbolid, "hedge")) \
       if hedgeclient == 0 and hedgeinst == 0 then \
         --[[ we are taking on the trade, so create trades for client & hedge book ]] \
-        hedgebookid = redis.call("get", "hedgebook:" .. instrumenttypeid .. ":" .. ARGV[18]) \
+        hedgebookid = redis.call("get", brokerkey .. ":hedgebook:" .. instrumenttypeid .. ":" .. ARGV[20]) \
         if not hedgebookid then hedgebookid = 999999 end \
         local rside = reverseside(side) \
         local hedgecosts = {0,0,0,0} \
-        tradeid = newtrade(ARGV[1], orderid, ARGV[2], side, ARGV[4], ARGV[5], ARGV[11], 1, 1, cc[3], hedgebookid, markettype, "", ARGV[8], ARGV[14], "", "", ARGV[18], settlcurramt, ARGV[19], ARGV[20], ARGV[21], cc[2], ARGV[22], ARGV[23], cc[4]) \
-        hedgetradeid = newtrade(hedgebookid, orderid, ARGV[2], rside, ARGV[4], ARGV[5], ARGV[11], 1, 1, hedgecosts, ARGV[1], markettype, "", ARGV[8], ARGV[14], "", "", ARGV[18], settlcurramt, ARGV[19], ARGV[20], ARGV[21], 0, ARGV[22], ARGV[23], 0) \
+        tradeid = newtrade(ARGV[1], ARGV[2], ARGV[3], orderid, symbolid, side, ARGV[6], ARGV[7], ARGV[13], 1, 1, cc[3], hedgebookid, ARGV[11], "", ARGV[10], ARGV[16], "", "", ARGV[20], settlcurramt, ARGV[21], ARGV[22], ARGV[23], cc[2], ARGV[24], ARGV[25], cc[4]) \
+        hedgetradeid = newtrade(ARGV[1], ARGV[2], hedgebookid, orderid, symbolid, rside, ARGV[6], ARGV[7], ARGV[13], 1, 1, hedgecosts, ARGV[3], ARGV[11], "", ARGV[10], ARGV[16], "", "", ARGV[20], settlcurramt, ARGV[21], ARGV[22], ARGV[23], 0, ARGV[24], ARGV[25], 0) \
       else \
-        proquotesymbol = getproquotesymbol(ARGV[2]) \
-        proquotequote = getproquotequote(ARGV[10]) \
-        defaultnosettdays = redis.call("hget", "cost:" .. instrumenttypeid .. ":" .. ARGV[18] .. ":" .. side, "defaultnosettdays") \
+        proquotesymbol = getproquotesymbol(symbolid) \
+        proquotequote = getproquotequote(ARGV[12]) \
+        defaultnosettdays = redis.call("hget", "cost:" .. instrumenttypeid .. ":" .. ARGV[20] .. ":" .. side, "defaultnosettdays") \
       end \
     end \
   end \
-  return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttypeid, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays, markettype, qclientid, hedgebookid, proquotesymbol[4]} \
-  ';
+  return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttypeid, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays, hedgebookid, proquotesymbol[4]} \
+  ';*/
+
+  //local markettype = getmarkettype(symbolid, ARGV[24], ARGV[25], ARGV[26]) \
+
+  /*if ARGV[8] == "D" then \
+  --[[ see if order was quoted by a client ]] \
+    qclientid = redis.call("hget", "quote:" .. ARGV[10], "qclientid") \
+    if qclientid and qclientid ~= "" then \
+      local hedgecosts = {0,0,0,0} \
+      local rside = reverseside(side) \
+      --[[ create trades for both clients ]] \
+      tradeid = newtrade(ARGV[1], orderid, symbolid, side, ARGV[4], ARGV[5], ARGV[11], 1, 1, cc[3], qclientid, ARGV[9], "", ARGV[8], ARGV[14], "", "", ARGV[18], settlcurramt, ARGV[19], ARGV[20], ARGV[21], cc[2], ARGV[22], ARGV[23], cc[4]) \
+      hedgetradeid = newtrade(qclientid, orderid, symbolid, rside, ARGV[4], ARGV[5], ARGV[11], 1, 1, hedgecosts, ARGV[1], ARGV[9], "", ARGV[8], ARGV[14], "", "", ARGV[18], settlcurramt, ARGV[19], ARGV[20], ARGV[21], 0, ARGV[22], ARGV[23], 0) \
+      --[[ adjust order as filled ]] \
+      redis.call("hmset", "order:" .. orderid, "remquantity", 0, "status", 2) \
+      return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttypeid, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays, markettype, qclientid} \
+    end \
+  end \*/
 
   // todo: add lastmkt
   // quantity required as number of shares
@@ -2115,7 +2178,6 @@ function registerScripts() {
   end \
   --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
   local quoteid = redis.call("hincrby", brokerkey, "lastquoteid", 1) \
-  redis.log(redis.LOG_WARNING, quoteid) \
   --[[ store the quote ]] \
   redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", ARGV[20], "accountid", vals[1], "clientid", vals[2], "quoteid", quoteid, "symbolid", vals[3], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", ARGV[17], "settledays", ARGV[18], "noseconds", ARGV[19]) \
   --[[ add to set of quotes ]] \
