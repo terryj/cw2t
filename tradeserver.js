@@ -479,25 +479,21 @@ function newOrder(order) {
     }
 
     // see if the order was client quoted, if so, we are done
-    if (ret[13] != "") {
+    /*if (ret[13] != "") {
       return;
-    }
+    }*/
 
     // update order details
     order.orderid = ret[1];
-    order.isin = ret[2];
-    order.mnemonic = ret[3];
-    order.exchangeid = ret[4];
-    order.instrumenttypeid = ret[7];
-    var hedgeorderid = ret[8];
-    order.markettype = ret[12];
-    var hedgebookid = ret[14];
-    var hedgesymbolid = ret[15];
+    order.isin = ret[2][0];
+    order.mnemonic = ret[2][1];
+    order.exchangeid = ret[2][2];
+    order.instrumenttypeid = ret[2][4];
 
     // use the returned quote values required by fix connection
     if (order.ordertype == "D") {
-      order.externalquoteid = ret[5];
-      order.qbroker = ret[6];
+      order.externalquoteid = ret[3][0];
+      order.quoterid = ret[3][1];
     }
 
     // set the settlement date to equity default date for cfd orders, in case they are being hedged with the market
@@ -505,13 +501,16 @@ function newOrder(order) {
       // commented out as only offering default settlement for the time being
       //order.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, ret[11], holidays));
 
+      order.hedgesymbolid = ret[2][3];
+      order.hedgeorderid = ret[4];
+
       // update the stored order settlement details if it is a hedge - todo: req'd?
-      if (hedgeorderid != "") {
+      /*if (hedgeorderid != "") {
         db.hmset("order:" + hedgeorderid, "nosettdays", ret[11], "futsettdate", order.futsettdate);
-      }
+      }*/
     }
 
-    processOrder(order, hedgeorderid, ret[9], ret[10], hedgebookid, hedgesymbolid);
+    processOrder(order);
   });
 }
 
@@ -616,7 +615,7 @@ function orderFillRequest(ofr) {
   });
 }
 
-function processOrder(order, hedgeorderid, tradeid, hedgetradeid, hedgebookid, hedgesymbolid) {
+function processOrder(order) {
   console.log("processOrder");
   //
   // the order has been credit checked
@@ -643,10 +642,7 @@ function processOrder(order, hedgeorderid, tradeid, hedgetradeid, hedgebookid, h
   } else {
     // if we are hedging, change the order id to that of the hedge & forward
     if (hedgeorderid != "") {
-      console.log("forwarding hedge order:" + hedgeorderid + " to nbt");
-      order.orderid = hedgeorderid;
-      order.clientid = hedgebookid;
-      order.symbolid = hedgesymbolid;
+      console.log("forwarding hedge order:" + order.hedgeorderid + " to nbt");
 
       if (testmode == "1") {
         // test only
@@ -1517,27 +1513,25 @@ function registerScripts() {
 
   //
   // parameter: symbol
-  // returns: isin, mnemonic, exchange, hedge symbol, instrumenttypeid & market type
+  // returns: isin, mnemonic, exchange, hedge symbol, instrumenttypeid & time zone
   //
   getproquotesymbol = '\
   local getproquotesymbol = function(symbolid) \
-    local symbolkey = "symbol:" .. symbolid \
     local fields = {"isin", "mnemonic", "exchangeid", "hedgesymbolid", "instrumenttypeid", "timezoneid"} \
-    local vals = redis.call("hmget", symbolkey, unpack(fields)) \
-    return {vals[1], vals[2], vals[3], vals[4], vals[5], vals[6]} \
+    local vals = redis.call("hmget", "symbol:" .. symbolid, unpack(fields)) \
+    return vals \
   end \
   ';
 
   //
-  // get proquote quote id & quoting rsp
+  // get quote id & quoting rsp
   //
   getproquotequote = '\
-    local getproquotequote = function(quoteid) \
-      local quotekey = "quote:" .. quoteid \
-      local pqquoteid = redis.call("hget", quotekey, "externalquoteid") \
-      local qbroker = redis.call("hget", quotekey, "qbroker") \
-      return {pqquoteid, qbroker} \
-    end \
+  local getproquotequote = function(brokerid, quoteid) \
+    local fields = {"externalquoteid", "quoterid"} \
+    local vals = redis.call("hmget", "broker:" .. brokerid .. "quote:" .. quoteid, unpack(fields)) \
+    return vals \
+  end \
   ';
 
   addtoorderbook = '\
@@ -1720,21 +1714,38 @@ function registerScripts() {
   * params: accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, partfill, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, nosettdays, operatortype, operatorid
   * returns: orderid
   */
-  scriptneworder = neworder + rejectorder + creditcheck + '\
+  //  redis.log(redis.LOG_WARNING, cc[1]) \
+  scriptneworder = neworder + rejectorder + creditcheck + publishorder + getproquotesymbol + getproquotequote + '\
   local orderid = neworder(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[6], 0, ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], 0, ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], ARGV[22], "", "", ARGV[23], ARGV[24], ARGV[25], "") \
   local brokerid = ARGV[2] \
   local brokerkey = "broker:" .. brokerid \
   local symbolid = ARGV[4] \
   local side = tonumber(ARGV[5]) \
   local settlcurramt = tonumber(ARGV[6]) * tonumber(ARGV[7]) \
-  local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
-  if not instrumenttypeid then \
-    rejectorder(brokerid, orderid, 1007, "") \
-    publishorder(brokerid, orderid, ARGV[24]) \
-    return {0} \
-  end \
   local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[20], ARGV[10], ARGV[23]) \
-  return {cc, orderid} \
+  if cc[1] == 0 then \
+    --[[ publish the order back to the operatortype - the order contains the error ]] \
+    publishorder(brokerid, orderid, ARGV[24]) \
+    return {cc[1], orderid} \
+  end \
+  --[[ get symbol details ]] \
+  local proquotesymbol = getproquotesymbol(symbolid) \
+  if proquotesymbol[1] == nil then \
+    rejectorder(brokerid, orderid, 1016, "") \
+    publishorder(brokerid, orderid, ARGV[24]) \
+    return {0, orderid} \
+  end \
+  local proquotequote = {} \
+  if ARGV[8] == "D" then \
+    --[[ get quote details ]] \
+    proquotequote = getproquotequote(brokerid, ARGV[12]) \
+    if proquotequote[1] == nil then \
+      rejectorder(brokerid, orderid, 1024, "") \
+      publishorder(brokerid, orderid, ARGV[24]) \
+      return {0, orderid} \
+    end \
+  end \
+  return {cc[1], orderid, proquotesymbol, proquotequote} \
   ';
   //local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[20], ARGV[10], ARGV[23]) \
 /*  local brokerid = ARGV[2] \
@@ -2124,7 +2135,9 @@ function registerScripts() {
   --[[ add to set of quoterequests for this account ]] \
   redis.call("sadd", KEYS[1] .. ":accountid:" .. accountid .. ":quoterequests", quoterequestid) \
   --[[ get required instrument values for external feed ]] \
+  redis.log(redis.LOG_WARNING, "before") \
   local proquotesymbol = getproquotesymbol(ARGV[12]) \
+  redis.log(redis.LOG_WARNING, proquotesymbol) \
   return {0, quoterequestid, proquotesymbol} \
   ';
 

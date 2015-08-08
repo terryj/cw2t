@@ -189,6 +189,9 @@ exports.registerScripts = function () {
     case 1023:
       desc = "Email already exists";
       break;
+    case 1024:
+      desc = "Quote not found";
+      break;
     default:
       desc = "Unknown reason";
     }
