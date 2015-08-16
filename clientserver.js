@@ -1186,7 +1186,7 @@ function cashRequest(cashreq, clientid, conn) {
 }
 
 function accountSummaryRequest(acctreq, clientid, conn) {
-  db.eval(common.scriptgetaccountsummary, 0, clientid, function(err, ret) {
+  db.eval(commonbo.scriptgetaccountsummary, 0, clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"accountsummary\":" + ret + "}");
   });

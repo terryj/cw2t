@@ -8,7 +8,6 @@
 * real-time partial record i.e. "publish 7 rp:BARC.L"
 * real-time full record i.e. "publish 7 rf:BARC.L"
 * snap full record i.e. "publish 7 snap:L.B***"
-*
 ****************/
 
 // node libraries

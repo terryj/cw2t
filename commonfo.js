@@ -717,9 +717,6 @@ exports.getPTPOrderCancelRejectReason = getPTPOrderCancelRejectReason;
 
 exports.registerScripts = function () {
   var updatecash;
-  var gettotalpositions;
-  var getcash;
-  var getfreemargin;
   var getunrealisedpandl;
   var calcfinance;
   var round;
@@ -834,18 +831,6 @@ exports.registerScripts = function () {
   ';
 
   exports.updatecash = updatecash;
-
-  /*getcash = '\
-  local getcash = function(clientid, currencyid) \
-    local cash = redis.call("get", "client:" .. clientid .. ":cash:" .. currencyid) \
-    if not cash then \
-      cash = 0 \
-    end \
-    return cash \
-  end \
-  ';
-
-  exports.getcash = getcash;*/
 
   /*calcfinance = round + '\
   local calcfinance = function(instrumenttypeid, consid, currencyid, side, nosettdays) \
@@ -966,49 +951,6 @@ exports.registerScripts = function () {
   ';
 
   exports.getmargin = getmargin;*/
-
-  // only dealing with trade currency for the time being - todo: review
-  /*gettotalpositions = getunrealisedpandl + getmargin + '\
-  local gettotalpositions = function(clientid, currencyid) \
-    local positions = redis.call("smembers", clientid .. ":positions") \
-    local fields = {"symbolid", "currencyid", "quantity", "cost"} \
-    local vals \
-    local totalmargin = 0 \
-    local totalunrealisedpandl = 0 \
-    for index = 1, #positions do \
-      vals = redis.call("hmget", clientid .. ":position:" .. positions[index], unpack(fields)) \
-      if vals[2] == currencyid then \
-        local margin = getmargin(vals[1], vals[3]) \
-        totalmargin = totalmargin + margin \
-        local unrealisedpandl = getunrealisedpandl(vals[1], vals[3], vals[4]) \
-        totalunrealisedpandl = totalunrealisedpandl + unrealisedpandl[1] \
-      end \
-    end \
-    return {totalmargin, totalunrealisedpandl} \
-  end \
-  ';
-
-  exports.gettotalpositions = gettotalpositions;*/
-
-  //
-  // calculates free margin for a client and currency
-  // balance = cash
-  // equity = balance + unrealised p&l
-  // free margin = equity - margin used to hold positions
-  //
-  /*getfreemargin = getcash + gettotalpositions + '\
-  local getfreemargin = function(clientid, currencyid) \
-    local cash = getcash(clientid, currencyid) \
-    local totalpositions = gettotalpositions(clientid, currencyid) \
-    --[[ totalpositions[1] = margin, [2] = unrealised p&l ]] \
-    local balance = tonumber(cash) \
-    local equity = balance + totalpositions[2] \
-    local freemargin = equity - totalpositions[1] \
-    return freemargin \
-  end \
-  ';
-
-  exports.getfreemargin = getfreemargin;*/
 
   //
   // get a range of trades from passed ids
@@ -1327,7 +1269,7 @@ exports.registerScripts = function () {
   // get quotes made by a client for a quote request
   //
   exports.scriptgetmyquotes = '\
-  local fields = {"quotereqid","clientid","quoteid","bidquoteid","offerquoteid","symbolid","bestbid","bestoffer","bidpx","offerpx","bidquantity","offerquantity","bidsize","offersize","validuntiltime","transacttime","currencyid","settlcurrencyid","bidqbroker","offerqbroker","nosettdays","futsettdate","bidfinance","offerfinance","orderid","qclientid"} \
+  local fields = {"quotereqid","clientid","quoteid","bidquoteid","offerquoteid","symbolid","bestbid","bestoffer","bidpx","offerpx","bidquantity","offerquantity","bidsize","offersize","validuntiltime","transacttime","currencyid","settlcurrencyid","bidquoterid","offerquoterid","nosettdays","futsettdate","bidfinance","offerfinance","orderid","qclientid"} \
   local vals \
   local tblresults = {} \
   local quotes = redis.call("smembers", "quoterequest:" .. ARGV[1] .. ":quotes") \
@@ -1335,7 +1277,7 @@ exports.registerScripts = function () {
     vals = redis.call("hmget", "quote:" .. quotes[index], unpack(fields)) \
     --[[ only include if quote was by this client ]] \
     if vals[26] == ARGV[2] then \
-      table.insert(tblresults, {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],bidquoteid=vals[4],offerquoteid=vals[5],symbolid=vals[6],bestbid=vals[7],bestoffer=vals[8],bidpx=vals[9],offerpx=vals[10],bidquantity=vals[11],offerquantity=vals[12],bidsize=vals[13],offersize=vals[14],validuntiltime=vals[15],transacttime=vals[16],currencyid=vals[17],settlcurrencyid=vals[18],bidqbroker=vals[19],offerqbroker=vals[20],nosettdays=vals[21],futsettdate=vals[22],bidfinance=vals[23],offerfinance=vals[24],orderid=vals[25]}) \
+      table.insert(tblresults, {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],bidquoteid=vals[4],offerquoteid=vals[5],symbolid=vals[6],bestbid=vals[7],bestoffer=vals[8],bidpx=vals[9],offerpx=vals[10],bidquantity=vals[11],offerquantity=vals[12],bidsize=vals[13],offersize=vals[14],validuntiltime=vals[15],transacttime=vals[16],currencyid=vals[17],settlcurrencyid=vals[18],bidquoterid=vals[19],offerquoterid=vals[20],nosettdays=vals[21],futsettdate=vals[22],bidfinance=vals[23],offerfinance=vals[24],orderid=vals[25]}) \
     end \
   end \
   return cjson.encode(tblresults) \
@@ -1356,11 +1298,11 @@ exports.registerScripts = function () {
   exports.scriptgetquotes = '\
   local tblresults = {} \
   local quotes = redis.call("smembers", ARGV[1] .. ":quotes") \
-  local fields = {"quotereqid","clientid","quoteid","bidquoteid","offerquoteid","symbolid","bestbid","bestoffer","bidpx","offerpx","bidquantity","offerquantity","bidsize","offersize","validuntiltime","transacttime","currencyid","settlcurrencyid","bidqbroker","offerqbroker","nosettdays","futsettdate","bidfinance","offerfinance","orderid"} \
+  local fields = {"quotereqid","clientid","quoteid","bidquoteid","offerquoteid","symbolid","bestbid","bestoffer","bidpx","offerpx","bidquantity","offerquantity","bidsize","offersize","validuntiltime","transacttime","currencyid","settlcurrencyid","bidquoterid","offerquoterid","nosettdays","futsettdate","bidfinance","offerfinance","orderid"} \
   local vals \
   for index = 1, #quotes do \
     vals = redis.call("hmget", "quote:" .. quotes[index], unpack(fields)) \
-    table.insert(tblresults, {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],bidquoteid=vals[4],offerquoteid=vals[5],symbolid=vals[6],bestbid=vals[7],bestoffer=vals[8],bidpx=vals[9],offerpx=vals[10],bidquantity=vals[11],offerquantity=vals[12],bidsize=vals[13],offersize=vals[14],validuntiltime=vals[15],transacttime=vals[16],currencyid=vals[17],settlcurrencyid=vals[18],bidqbroker=vals[19],offerqbroker=vals[20],nosettdays=vals[21],futsettdate=vals[22],bidfinance=vals[23],offerfinance=vals[24],orderid=vals[25]}) \
+    table.insert(tblresults, {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],bidquoteid=vals[4],offerquoteid=vals[5],symbolid=vals[6],bestbid=vals[7],bestoffer=vals[8],bidpx=vals[9],offerpx=vals[10],bidquantity=vals[11],offerquantity=vals[12],bidsize=vals[13],offersize=vals[14],validuntiltime=vals[15],transacttime=vals[16],currencyid=vals[17],settlcurrencyid=vals[18],bidquoterid=vals[19],offerquoterid=vals[20],nosettdays=vals[21],futsettdate=vals[22],bidfinance=vals[23],offerfinance=vals[24],orderid=vals[25]}) \
   end \
   return cjson.encode(tblresults) \
   ';
@@ -1527,25 +1469,6 @@ exports.registerScripts = function () {
   for index = 1, #cash do \
     local amount = redis.call("get", "client:" .. ARGV[1] .. ":cash:" .. cash[index]) \
     table.insert(tblresults, {currencyid=cash[index],amount=amount}) \
-  end \
-  return cjson.encode(tblresults) \
-  ';
-
-  //
-  // calculates account p&l, margin & equity for a client
-  // assumes there is cash for any currency with positions
-  // params: client id
-  //
-  exports.scriptgetaccountsummary = gettotalpositions + '\
-  local tblresults = {} \
-  local cash = redis.call("smembers", "client:" .. ARGV[1] .. ":cash") \
-  for index = 1, #cash do \
-    local amount = redis.call("get", "client:" .. ARGV[1] .. ":cash:" .. cash[index]) \
-    local totalpositions = gettotalpositions(ARGV[1], cash[index]) \
-    local balance = tonumber(amount) \
-    local equity = balance + totalpositions[2] \
-    local freemargin = equity - totalpositions[1] \
-    table.insert(tblresults, {currencyid=cash[index],cash=amount,balance=balance,unrealisedpandl=totalpositions[2],equity=equity,margin=totalpositions[1],freemargin=freemargin}) \
   end \
   return cjson.encode(tblresults) \
   ';

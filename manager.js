@@ -1217,7 +1217,7 @@ function cashRequest(cashreq, conn) {
 }
 
 function accountSummaryRequest(acctreq, conn) {
-  db.eval(commonfo.scriptgetaccountsummary, 0, acctreq.clientid, function(err, ret) {
+  db.eval(commonbo.scriptgetaccountsummary, 0, acctreq.clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"accountsummary\":" + ret + "}");
   });
@@ -1840,8 +1840,6 @@ function orderReceived(order, userid) {
 
 function registerScripts() {
   var stringsplit;
-  //var gettotalpositions = commonfo.gettotalpositions;
-  //var getcash = commonfo.getcash;
   //var getunrealisedpandl = commonfo.getunrealisedpandl;
   //var calcfinance = commonfo.calcfinance;
   //var gettrades = commonfo.gettrades;

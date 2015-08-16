@@ -280,17 +280,40 @@ exports.registerScripts = function () {
 
   exports.gettrades = gettrades;
 
-  getcash = '\
-  local getcash = function(clientid, currencyid) \
-    local cash = redis.call("get", "client:" .. clientid .. ":cash:" .. currencyid) \
-    if not cash then \
-      cash = 0 \
-    end \
-    return cash \
+  /*
+  * getposition()
+  * gets a position
+  * params: accountid, brokerid, symbolsettdatekey
+  * returns: quantity, cost as an array
+  */
+  getposition = '\
+  local getposition = function(accountid, brokerid, symbolsettdatekey) \
+    local fields = {"quantity", "cost"} \
+    local position = redis.call("hmget", "broker:" .. brokerid .. ":account:" .. accountid .. ":position:" .. symbolsettdatekey, unpack(fields)) \
+    return position \
   end \
   ';
 
-  exports.getcash = getcash;
+  exports.getposition = getposition;
+
+  /*
+  * getpositions()
+  * gets all positions for an account
+  * params: accountid, brokerid
+  * returns: all position fields as a table
+  */
+  getpositions = '\
+  local getpositions = function(accountid, brokerid) \
+    local tblresults = {} \
+    local fields = {"accountid","brokerid","cost","positionid","quantity","symbolid"} \
+    local positions = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid) \
+    for index = 1, #positions do \
+      local vals = redis.call("hmget", "broker:" .. brokerid .. ":position:" .. positions[index], unpack(fields)) \
+      table.insert(tblresults, {accountid=vals[1],brokerid=vals[2],cost=vals[3],positionid=vals[4],quantity=vals[5],symbolid=vals[6]}) \
+    end \
+    return tblresults \
+  end \
+  ';
 
   getmargin = round + '\
   local getmargin = function(symbolid, quantity) \
@@ -351,48 +374,22 @@ exports.registerScripts = function () {
 
   exports.getunrealisedpandl = getunrealisedpandl;
 
-  // only dealing with trade currency for the time being - todo: review
-  gettotalpositions = getunrealisedpandl + getmargin + '\
-  local gettotalpositions = function(clientid, currencyid) \
-    local positions = redis.call("smembers", clientid .. ":positions") \
-    local fields = {"symbolid", "currencyid", "quantity", "cost"} \
-    local vals \
+  gettotalpositions = getpositions + getunrealisedpandl + getmargin + '\
+  local gettotalpositions = function(accountid, brokerid) \
+    local positions = getpositions(accountid, brokerid) \
     local totalmargin = 0 \
     local totalunrealisedpandl = 0 \
     for index = 1, #positions do \
-      vals = redis.call("hmget", clientid .. ":position:" .. positions[index], unpack(fields)) \
-      if vals[2] == currencyid then \
-        local margin = getmargin(vals[1], vals[3]) \
-        totalmargin = totalmargin + margin \
-        local unrealisedpandl = getunrealisedpandl(vals[1], vals[3], vals[4]) \
-        totalunrealisedpandl = totalunrealisedpandl + unrealisedpandl[1] \
-      end \
+      local margin = getmargin(positions[index][6], positions[index][5]) \
+      totalmargin = totalmargin + margin \
+      local unrealisedpandl = getunrealisedpandl(positions[index][6], positions[index][5], positions[index][3]) \
+      totalunrealisedpandl = totalunrealisedpandl + unrealisedpandl[1] \
     end \
     return {totalmargin, totalunrealisedpandl} \
   end \
   ';
 
   exports.gettotalpositions = gettotalpositions;
-
-  //
-  // calculates free margin for a client and currency
-  // balance = cash
-  // equity = balance + unrealised p&l
-  // free margin = equity - margin used to hold positions
-  //
-  getfreemargin = getcash + gettotalpositions + '\
-  local getfreemargin = function(clientid, currencyid) \
-    local cash = getcash(clientid, currencyid) \
-    local totalpositions = gettotalpositions(clientid, currencyid) \
-    --[[ totalpositions[1] = margin, [2] = unrealised p&l ]] \
-    local balance = tonumber(cash) \
-    local equity = balance + totalpositions[2] \
-    local freemargin = equity - totalpositions[1] \
-    return freemargin \
-  end \
-  ';
-
-  exports.getfreemargin = getfreemargin;
 
   calcfinance = round + '\
   local calcfinance = function(instrumenttypeid, consid, currencyid, side, nosettdays) \
@@ -424,14 +421,58 @@ exports.registerScripts = function () {
   exports.calcfinance = calcfinance;
 
   /*
+  * getbrokeraccountid()
+  * gets a broker accountid for a default broker account
+  * params: brokerid, currencyid, account name
+  * returns: accountid if found, else 0
+  */
+  getbrokeraccountid = '\
+  local getbrokeraccountid = function(brokerid, currencyid, name) \
+    local brokerkey = "broker:" .. brokerid \
+    local brokeraccountsmapid = redis.call("get", brokerkey .. ":" .. name .. ":" .. currencyid) \
+    local accountid = 0 \
+    if brokeraccountsmapid then \
+      accountid = redis.call("hget", brokerkey .. ":brokeraccountsmap:" .. brokeraccountsmapid, "accountid") \
+    end \
+    return accountid \
+  end \
+  ';
+
+  exports.getbrokeraccountid = getbrokeraccountid;
+
+  /*
+  * getclientaccountid()
+  * gets the account of a designated type for a client
+  * params: brokerid, clientid, accounttypeid
+  * returns the first account id found for the account type, else 0
+  */
+  getclientaccountid = '\
+  local getclientaccountid = function(brokerid, clientid, accounttypeid) \
+    local acctid = 0 \
+    local clientaccounts = redis.call("smembers", "broker:" .. brokerid .. ":client:" .. clientid .. ":clientaccounts") \
+    for index = 1, #clientaccounts do \
+      local accttypeid = redis.call("hget", "broker:" .. brokerid .. ":account:" .. clientaccounts[index], "accounttypeid") \
+      if tonumber(accttypeid) == tonumber(accounttypeid) then \
+        acctid = clientaccounts[index] \
+        break \
+      end \
+    end \
+    return acctid \
+  end \
+  ';
+
+  exports.getclientaccountid = getclientaccountid;
+
+  /*
   * getaccountbalance()
-  * returns account balance & local currency balance
+  * params: accountid, brokerid
+  * returns: account balance & local currency balance
   */
   getaccountbalance = '\
   local getaccountbalance = function(accountid, brokerid) \
     local fields = {"balance", "localbalance"} \
     local vals = redis.call("hmget", "broker:" .. brokerid .. ":account:" .. accountid, unpack(fields)) \
-    return vals[1], vals[2] \
+    return vals \
   end \
   ';
  
@@ -447,6 +488,28 @@ exports.registerScripts = function () {
     redis.call("hincrbyfloat", accountkey, "localbalance", localamount) \
   end \
   ';
+
+  /*
+  * calculates free margin for an accountcurrency
+  * balance = cash
+  * equity = balance + unrealised p&l
+  * free margin = equity - margin used to hold positions
+  */
+  getfreemargin = getaccountbalance + gettotalpositions + '\
+  local getfreemargin = function(accountid, brokerid) \
+    local freemargin = 0 \
+    local accountbalance = getaccountbalance(accountid, brokerid) \
+    if accountbalance[1] then \
+      local balance = tonumber(accountbalance[1]) \
+      local totalpositions = gettotalpositions(accountid, brokerid) \
+      local equity = balance + totalpositions[2] \
+      freemargin = equity - totalpositions[1] \
+    end \
+    return freemargin \
+  end \
+  ';
+
+  exports.getfreemargin = getfreemargin;
 
   /*
   * newposting()
@@ -480,7 +543,7 @@ exports.registerScripts = function () {
   * create transaction & postings for the cash side of a trade
   * params: amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype
   */
-  newtradeaccounttransaction = newtransaction + newposting + '\
+  newtradeaccounttransaction = newtransaction + newposting + getbrokeraccountid + '\
   local newtradeaccounttransaction = function(amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype) \
     local clientcontrolaccountid = getbrokeraccountid(brokerid, currencyid, "clientcontrolaccount") \
     local transactionid = newtransaction(amount, brokerid, currencyid, localamount, note, rate, "trade:" .. tradeid, timestamp, transactiontype) \
@@ -521,8 +584,11 @@ exports.registerScripts = function () {
     newtradeaccounttransaction(commission, brokerid, clientaccountid, currencyid, localamount, nominalcommissionaccountid, note .. " Commission", rate, timestamp, tradeid, "TR") \
     newtradeaccounttransaction(ptmlevy, brokerid, clientaccountid, currencyid, localamount, nominalptmaccountid, note .. " PTM Levy", rate, timestamp, tradeid, "TR") \
     newtradeaccounttransaction(stampduty, brokerid, clientaccountid, currencyid, localamount, nominalstampdutyaccountid, note .. " Stamp Duty", rate, timestamp, tradeid, "TR") \
+    return 0 \
   end \
   ';
+
+  exports.newtradeaccounttransactions = newtradeaccounttransactions;
 
   newtradesettlementtransaction = newtransaction + newposting + '\
   local newtradesettlementtransaction = function(amount, brokerid, currencyid, frombankaccountid, localamount, nominalaccountid, note, rate, timestamp, tobankaccountid, tradeid, transactiontype) \
@@ -536,44 +602,6 @@ exports.registerScripts = function () {
     newPosting(tobankaccountid, amount, brokerid, localamount, transactionid) \
   end \
   ';
-
-  /*
-  * getbrokeraccountid()
-  * gets a broker accountid for a default broker account
-  * params: brokerid, currencyid, account name
-  * returns: accountid
-  */
-  getbrokeraccountid = '\
-  local getbrokeraccountid = function(brokerid, currencyid, name) \
-    local brokerkey = "broker:" .. brokerid \
-    local brokeraccountsmapid = redis.call("get", brokerkey .. ":" .. name .. ":" .. currencyid) \
-    local accountid = redis.call("hget", brokerkey .. ":brokeraccountsmap:" .. brokeraccountsmapid, "accountid") \
-    return accountid \
-  end \
-  ';
-
-  /*
-  * getclientaccount()
-  * gets the account of a designated type for a client
-  * params: brokerid, clientid, accounttypeid
-  * returns the first account id found for the account type, else 0
-  */
-  getclientaccount = '\
-  local getclientaccount = function(brokerid, clientid, accounttypeid) \
-    local acctid = 0 \
-    local clientaccounts = redis.call("smembers", "broker:" .. brokerid .. ":client:" .. clientid .. ":clientaccounts") \
-    for index = 1, #clientaccounts do \
-      local accttypeid = redis.call("hget", "broker:" .. brokerid .. ":account:" .. clientaccounts[index], "accounttypeid") \
-      if tonumber(accttypeid) == tonumber(accounttypeid) then \
-        acctid = clientaccounts[index] \
-        break \
-      end \
-    end \
-    return acctid \
-  end \
-  ';
-
-  exports.getclientaccount = getclientaccount;
 
   /*** Scripts ***/
 
@@ -654,6 +682,25 @@ exports.registerScripts = function () {
       local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
       table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],currencyid=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
     end \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // calculates account p&l, margin & equity for a client
+  // assumes there is cash for any currency with positions
+  // params: client id
+  //
+  exports.scriptgetaccountsummary = gettotalpositions + '\
+  local tblresults = {} \
+  local cash = redis.call("smembers", "client:" .. ARGV[1] .. ":cash") \
+  for index = 1, #cash do \
+    local amount = redis.call("get", "client:" .. ARGV[1] .. ":cash:" .. cash[index]) \
+    local totalpositions = gettotalpositions(ARGV[1], cash[index]) \
+    local balance = tonumber(amount) \
+    local equity = balance + totalpositions[2] \
+    local freemargin = equity - totalpositions[1] \
+    table.insert(tblresults, {currencyid=cash[index],cash=amount,balance=balance,unrealisedpandl=totalpositions[2],equity=equity,margin=totalpositions[1],freemargin=freemargin}) \
   end \
   return cjson.encode(tblresults) \
   ';

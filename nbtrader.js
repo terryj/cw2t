@@ -358,8 +358,8 @@ Nbt.prototype.quoteRequest = function(quoterequest) {
 	}
 
 	// specify a marketmaker
-	if ('qbroker' in quoterequest) {
-		msg += '6158=' + quoterequest.qbroker + SOH;
+	if ('quoterid' in quoterequest) {
+		msg += '6158=' + quoterequest.quoterid + SOH;
 	}
 
 	sendMessage('R', onbehalfofcompid, "", msg, false, null, null);
@@ -387,7 +387,7 @@ Nbt.prototype.newOrder = function(order) {
 	if (order.ordertype == 'D') { // previously quoted
 		// add quote id & who the quote was from
 		msg += '117=' + order.externalquoteid + SOH;
-		delivertocompid = order.qbroker;
+		delivertocompid = order.quoterid;
 	} else if (order.delivertocompid != "") {
 		delivertocompid = order.delivertocompid;
 	}
@@ -883,7 +883,7 @@ function getBody(msgtype, tagvalarr) {
 				body.securityexchange = tagvalarr[i].value;
 				break;
 			case 6158:
-				body.qbroker = tagvalarr[i].value;
+				body.quoterid = tagvalarr[i].value;
 				break;
 			case 159:
 				body.accruedinterest = tagvalarr[i].value;
@@ -1096,7 +1096,7 @@ function getBody(msgtype, tagvalarr) {
 				body.quoterejectreason = tagvalarr[i].value;
 				break;
 			case 6158:
-				body.qbroker = tagvalarr[i].value;
+				body.quoterid = tagvalarr[i].value;
 				break;
 			default:
 				unknownTag(tagvalarr[i].tag);
