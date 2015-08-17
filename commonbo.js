@@ -471,6 +471,10 @@ exports.registerScripts = function () {
   getaccountbalance = '\
   local getaccountbalance = function(accountid, brokerid) \
     local fields = {"balance", "localbalance"} \
+    redis.log(redis.LOG_WARNING, "accountid") \
+    redis.log(redis.LOG_WARNING, accountid) \
+    redis.log(redis.LOG_WARNING, "brokerid") \
+    redis.log(redis.LOG_WARNING, brokerid) \
     local vals = redis.call("hmget", "broker:" .. brokerid .. ":account:" .. accountid, unpack(fields)) \
     return vals \
   end \
@@ -500,7 +504,10 @@ exports.registerScripts = function () {
     local freemargin = 0 \
     local accountbalance = getaccountbalance(accountid, brokerid) \
     if accountbalance[1] then \
+      redis.log(redis.LOG_WARNING, "accountbalance[1]") \
+      redis.log(redis.LOG_WARNING, accountbalance[1]) \
       local balance = tonumber(accountbalance[1]) \
+      balance = 0 \
       local totalpositions = gettotalpositions(accountid, brokerid) \
       local equity = balance + totalpositions[2] \
       freemargin = equity - totalpositions[1] \

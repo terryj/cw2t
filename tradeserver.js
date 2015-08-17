@@ -431,7 +431,6 @@ function newOrder(order) {
   var settlcurrfxratecalc = 1;
 
   console.log("newOrder");
-  console.log(order);
 
   var today = new Date();
 
@@ -464,9 +463,9 @@ function newOrder(order) {
   // todo
   order.nosettdays = 2;
 
+  console.log(order);
+
   // store the order, get an id & credit check it
-  // note: param #7 not used
-  //local neworder = function(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, remquantity, status, markettype, futsettdate, partfill, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid) \
   db.eval(scriptneworder, 0, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currencyid, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, order.operatortype, order.operatorid, order.nosettdays, function(err, ret) {
     if (err) throw err;
     console.log(ret);
@@ -483,11 +482,6 @@ function newOrder(order) {
     /*if (ret[13] != "") {
       return;
     }*/
-    console.log("0" + ret[0]);
-    console.log("1" + ret[1]);
-    console.log("2" + ret[2]);
-    console.log("3" + ret[2][0]);
-    console.log("4" + ret[3]);
 
     // update order details
     order.orderid = ret[1];
@@ -515,7 +509,6 @@ function newOrder(order) {
         db.hmset("order:" + hedgeorderid, "nosettdays", ret[11], "futsettdate", order.futsettdate);
       }*/
     }
-    console.log("here");
 
     processOrder(order);
   });
@@ -1404,15 +1397,12 @@ function registerScripts() {
   end \
   ';*/
 
-  //local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[20], ARGV[10], instrumenttypeid, 0) \
-//calcfinance + getposition + commonbo.getfreemargin + getreserve + updateordermargin +
-
-  /*creditcheck = rejectorder + getinitialmargin + getcosts + commonbo.getposition + commonbo.getfreemargin + '\
-  local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, settldate, nosettdays) \
-    return {1, 0, {0,0,0,0}} \
-  end \
-  ';*/
-
+  /*
+  * creditcheck()
+  * credit checks an order
+  * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, settldate, nosettdays
+  * returns: 0=fail/1=succeed, inialmargin, costs as a table
+  */
   creditcheck = rejectorder + getinitialmargin + getcosts + commonbo.getposition + commonbo.getfreemargin + '\
   local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, settldate, nosettdays) \
     --[[ see if client is allowed to trade this product ]] \
@@ -1427,6 +1417,14 @@ function registerScripts() {
     --[[ calculate costs ]] \
     local costs =  getcosts(brokerid, clientid, symbolid, side, consid, currencyid) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
+    redis.log(redis.LOG_WARNING, "costs[1]") \
+    redis.log(redis.LOG_WARNING, costs[1]) \
+    redis.log(redis.LOG_WARNING, "costs[2]") \
+    redis.log(redis.LOG_WARNING, costs[2]) \
+    redis.log(redis.LOG_WARNING, "costs[3]") \
+    redis.log(redis.LOG_WARNING, costs[3]) \
+    redis.log(redis.LOG_WARNING, "costs[4]") \
+    redis.log(redis.LOG_WARNING, costs[4]) \
     --[[ calculate margin required for order ]] \
     local initialmargin = getinitialmargin(brokerid, symbolid, consid, totalcost) \
     --[[ position key varies by instrument type ]] \
@@ -1466,7 +1464,11 @@ function registerScripts() {
     end \
     --[[ check free margin for all derivative trades & equity buys ]] \
     if instrumenttypeid == "CFD" or instrumenttypeid == "SPB" or instrumenttypeid == "CCFD" or side == 1 then \
-      local freemargin = getfreemargin(clientid, currencyid) \
+      local freemargin = getfreemargin(accountid, brokerid) \
+      redis.log(redis.LOG_WARNING, "initialmargin") \
+      redis.log(redis.LOG_WARNING, initialmargin) \
+      redis.log(redis.LOG_WARNING, "freemargin") \
+      redis.log(redis.LOG_WARNING, freemargin) \
       if initialmargin + totalcost > freemargin then \
         rejectorder(orderid, 1020, "") \
         return {0} \
@@ -1513,10 +1515,12 @@ function registerScripts() {
   end \
   ';
 
-  //
-  // parameter: symbol
-  // returns: isin, mnemonic, exchange, hedge symbol, instrumenttypeid & time zone
-  //
+  /*
+  * getproquotesymbol()
+  * get symbol details for external feed
+  * params: symbol
+  * returns: isin, mnemonic, exchangeid, hedgesymbolid, instrumenttypeid & timezoneid as a table
+  */
   getproquotesymbol = '\
   local getproquotesymbol = function(symbolid) \
     local fields = {"isin", "mnemonic", "exchangeid", "hedgesymbolid", "instrumenttypeid", "timezoneid"} \
@@ -1525,9 +1529,12 @@ function registerScripts() {
   end \
   ';
 
-  //
-  // get quote id & quoting rsp
-  //
+  /*
+  * getproquotequote()
+  * get quote details
+  * params: brokerid, quoteid
+  * returns: externalquoteid, quoterid as a table
+  */
   getproquotequote = '\
   local getproquotequote = function(brokerid, quoteid) \
     local fields = {"externalquoteid", "quoterid"} \
@@ -1735,13 +1742,13 @@ function registerScripts() {
   return 0 \
   ';
 
+  //  redis.log(redis.LOG_WARNING, cc[1]) \
+
   /*
   * scriptneworder
   * params: accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, partfill, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, nosettdays, operatortype, operatorid
   * returns: orderid
   */
-  //  redis.log(redis.LOG_WARNING, cc[1]) \
-  //creditcheck
   scriptneworder = neworder + rejectorder + creditcheck + publishorder + getproquotesymbol + getproquotequote + '\
   local orderid = neworder(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[6], 0, ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], 0, ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], ARGV[22], "", "", ARGV[23], ARGV[24], ARGV[25], "") \
   local brokerid = ARGV[2] \
@@ -1749,38 +1756,72 @@ function registerScripts() {
   local symbolid = ARGV[4] \
   local side = tonumber(ARGV[5]) \
   local settlcurramt = tonumber(ARGV[6]) * tonumber(ARGV[7]) \
-  redis.log(redis.LOG_WARNING, "ere") \
   local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[20], ARGV[10], ARGV[23]) \
- redis.log(redis.LOG_WARNING, "aftercc") \
    if cc[1] == 0 then \
     --[[ publish the order back to the operatortype - the order contains the error ]] \
     publishorder(brokerid, orderid, ARGV[24]) \
     return {cc[1], orderid} \
   end \
-  redis.log(redis.LOG_WARNING, "ere1") \
-  --[[ get symbol details ]] \
-  local proquotesymbol = getproquotesymbol(symbolid) \
-  redis.log(redis.LOG_WARNING, proquotesymbol[1]) \
-  if proquotesymbol[1] == nil then \
-    rejectorder(brokerid, orderid, 1016, "") \
-    publishorder(brokerid, orderid, ARGV[24]) \
-    return {0, orderid} \
-  end \
-  redis.log(redis.LOG_WARNING, "ere2") \
-  local proquotequote = {} \
-  if ARGV[8] == "D" then \
-    --[[ get quote details ]] \
-    proquotequote = getproquotequote(brokerid, ARGV[12]) \
-    redis.log(redis.LOG_WARNING, proquotequote[1]) \
-    if proquotequote[1] == nil then \
-      rejectorder(brokerid, orderid, 1024, "") \
-      publishorder(brokerid, orderid, ARGV[24]) \
-      return {0, orderid} \
+  local proquotesymbol = {"", "", "", "", "", ""} \
+  local proquotequote = {"", ""} \
+  local hedgebookid = "" \
+  local tradeid = "" \
+  local hedgeorderid = "" \
+  local hedgetradeid = "" \
+  local defaultnosettdays = 0 \
+  if instrumenttypeid == "CFD" or instrumenttypeid == "SPB" or instrumenttypeid == "CCFD" then \
+    --[[ ignore limit orders for derivatives as they will be handled manually, at least for the time being ]] \
+    if ARGV[8] ~= "2" then \
+      --[[ create trades for client & hedge book for off-exchange products ]] \
+      hedgebookid = redis.call("get", brokerkey .. ":hedgebook:" .. instrumenttypeid .. ":" .. ARGV[20]) \
+      if not hedgebookid then hedgebookid = 999999 end \
+      local rside = reverseside(side) \
+      local hedgecosts = {0,0,0,0} \
+      tradeid = newtrade(ARGV[1], ARGV[2], ARGV[3], orderid, symbolid, side, ARGV[6], ARGV[7], ARGV[13], 1, 1, cc[3], hedgebookid, ARGV[11], "", ARGV[10], ARGV[16], "", "", ARGV[20], settlcurramt, ARGV[21], ARGV[22], ARGV[23], cc[2], ARGV[24], ARGV[25], cc[4]) \
+      hedgetradeid = newtrade(hedgebookid, orderid, symbolid, rside, ARGV[6], ARGV[7], ARGV[13], 1, 1, hedgecosts, ARGV[3], ARGV[11], "", ARGV[10], ARGV[16], "", "", ARGV[20], settlcurramt, ARGV[21], ARGV[22], ARGV[23], 0, ARGV[24], ARGV[25], 0) \
+      --[[ adjust order as filled ]] \
+      redis.call("hmset", brokerkey .. ":order:" .. orderid, "remquantity", 0, "status", 2) \
+      --[[ todo: may need to adjust margin here ]] \
+      --[[ see if we need to hedge this trade in the market ]] \
+      local hedgeclient = tonumber(redis.call("hget", brokerkey .. ":client:" .. ARGV[3], "hedge")) \
+      local hedgeinst = tonumber(redis.call("hget", brokerkey ":brokersymbol:" .. symbolid, "hedge")) \
+      if hedgeclient == 1 or hedgeinst == 1 then \
+        --[[ create a hedge order in the underlying product ]] \
+        proquotesymbol = getproquotesymbol(symbolid) \
+        if proquotesymbol[4] then \
+          hedgeorderid = neworder(hedgebookid, proquotesymbol[4], ARGV[5], ARGV[6], ARGV[7], "X", ARGV[6], 0, ARGV[11], ARGV[10], ARGV[11], "", ARGV[13], ARGV[14], ARGV[15], ARGV[14], 0, ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], ARGV[22], "", "", ARGV[23], ARGV[24], ARGV[25], orderid, "") \
+          --[[ get quote broker ]] \
+          proquotequote = getproquotequote(ARGV[12]) \
+          --[[ assume uk equity as underlying for default settl days ]] \
+          defaultnosettdays = redis.call("hget", brokerkey .. ":cost:" .. "DE" .. ":" .. ARGV[20] .. ":" .. side, "defaultnosettdays") \
+        end \
+      end \
+    end \
+  else \
+    --[[ this is an equity - just consider external orders for the time being - todo: internal ]] \
+    --[[ todo: consider equity limit orders ]] \
+    if ARGV[9] == 0 then \
+      --[[ see if we need to send this trade to the market - if either product or client hedge, then send ]] \
+      local hedgeclient = tonumber(redis.call("hget", brokerkey .. ":client:" .. ARGV[3], "hedge")) \
+      local hedgeinst = tonumber(redis.call("hget", brokerkey .. ":brokersymbol:" .. symbolid, "hedge")) \
+      if hedgeclient == 0 and hedgeinst == 0 then \
+        --[[ we are taking on the trade, so create trades for client & hedge book ]] \
+        hedgebookid = redis.call("get", brokerkey .. ":hedgebook:" .. instrumenttypeid .. ":" .. ARGV[20]) \
+        if not hedgebookid then hedgebookid = 999999 end \
+        local rside = reverseside(side) \
+        local hedgecosts = {0,0,0,0} \
+        tradeid = newtrade(ARGV[1], ARGV[2], ARGV[3], orderid, symbolid, side, ARGV[6], ARGV[7], ARGV[13], 1, 1, cc[3], hedgebookid, ARGV[11], "", ARGV[10], ARGV[16], "", "", ARGV[20], settlcurramt, ARGV[21], ARGV[22], ARGV[23], cc[2], ARGV[24], ARGV[25], cc[4]) \
+        hedgetradeid = newtrade(ARGV[1], ARGV[2], hedgebookid, orderid, symbolid, rside, ARGV[6], ARGV[7], ARGV[13], 1, 1, hedgecosts, ARGV[3], ARGV[11], "", ARGV[10], ARGV[16], "", "", ARGV[20], settlcurramt, ARGV[21], ARGV[22], ARGV[23], 0, ARGV[24], ARGV[25], 0) \
+      else \
+        proquotesymbol = getproquotesymbol(symbolid) \
+        proquotequote = getproquotequote(ARGV[12]) \
+        defaultnosettdays = redis.call("hget", "cost:" .. instrumenttypeid .. ":" .. ARGV[20] .. ":" .. side, "defaultnosettdays") \
+      end \
     end \
   end \
-  redis.log(redis.LOG_WARNING, "ere3") \
   return {cc[1], orderid, proquotesymbol, proquotequote} \
   ';
+  //return {cc[1], orderid, proquotesymbol[1], proquotesymbol[2], proquotesymbol[3], proquotequote[1], proquotequote[2], instrumenttypeid, hedgeorderid, tradeid, hedgetradeid, defaultnosettdays, hedgebookid, proquotesymbol[4]} \
   //local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[20], ARGV[10], ARGV[23]) \
 /*  local brokerid = ARGV[2] \
   local brokerkey = "broker:" .. brokerid \
@@ -2173,9 +2214,7 @@ function registerScripts() {
   --[[ add to set of quoterequests for this account ]] \
   redis.call("sadd", KEYS[1] .. ":accountid:" .. accountid .. ":quoterequests", quoterequestid) \
   --[[ get required instrument values for external feed ]] \
-  redis.log(redis.LOG_WARNING, "before") \
   local proquotesymbol = getproquotesymbol(ARGV[12]) \
-  redis.log(redis.LOG_WARNING, proquotesymbol) \
   return {0, quoterequestid, proquotesymbol} \
   ';
 
