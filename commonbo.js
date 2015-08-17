@@ -304,10 +304,12 @@ exports.registerScripts = function () {
   */
   getpositions = '\
   local getpositions = function(accountid, brokerid) \
+      redis.log(redis.LOG_WARNING, "getpositions") \
     local tblresults = {} \
     local fields = {"accountid","brokerid","cost","positionid","quantity","symbolid"} \
-    local positions = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid) \
+    local positions = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. "positions") \
     for index = 1, #positions do \
+      redis.log(redis.LOG_WARNING, "positions") \
       local vals = redis.call("hmget", "broker:" .. brokerid .. ":position:" .. positions[index], unpack(fields)) \
       table.insert(tblresults, {accountid=vals[1],brokerid=vals[2],cost=vals[3],positionid=vals[4],quantity=vals[5],symbolid=vals[6]}) \
     end \
@@ -376,10 +378,12 @@ exports.registerScripts = function () {
 
   gettotalpositions = getpositions + getunrealisedpandl + getmargin + '\
   local gettotalpositions = function(accountid, brokerid) \
+      redis.log(redis.LOG_WARNING, "gettotalpositions") \
     local positions = getpositions(accountid, brokerid) \
     local totalmargin = 0 \
     local totalunrealisedpandl = 0 \
     for index = 1, #positions do \
+      redis.log(redis.LOG_WARNING, "positions") \
       local margin = getmargin(positions[index][6], positions[index][5]) \
       totalmargin = totalmargin + margin \
       local unrealisedpandl = getunrealisedpandl(positions[index][6], positions[index][5], positions[index][3]) \
@@ -509,6 +513,8 @@ exports.registerScripts = function () {
       local balance = tonumber(accountbalance[1]) \
       balance = 0 \
       local totalpositions = gettotalpositions(accountid, brokerid) \
+      redis.log(redis.LOG_WARNING, "totalpositions[2]") \
+      redis.log(redis.LOG_WARNING, totalpositions[2]) \
       local equity = balance + totalpositions[2] \
       freemargin = equity - totalpositions[1] \
     end \
