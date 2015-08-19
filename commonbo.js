@@ -511,7 +511,6 @@ exports.registerScripts = function () {
       redis.log(redis.LOG_WARNING, "accountbalance[1]") \
       redis.log(redis.LOG_WARNING, accountbalance[1]) \
       local balance = tonumber(accountbalance[1]) \
-      balance = 0 \
       local totalpositions = gettotalpositions(accountid, brokerid) \
       redis.log(redis.LOG_WARNING, "totalpositions[2]") \
       redis.log(redis.LOG_WARNING, totalpositions[2]) \

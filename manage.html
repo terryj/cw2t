@@ -1462,7 +1462,9 @@
         }*/
 
         function orderReceived(order) {
-            if (order.status == "8") {
+            console.log("orderReceived");
+            console.log(order);
+            if (order.orderstatusid == "8") {
                 var msg = "Order rejected";
 
                 if ("reason" in order) {
