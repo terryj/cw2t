@@ -1266,8 +1266,12 @@ function registerScripts() {
   //
   updateposition = commonbo.round + closeposition + createposition + publishposition + '\
   local updateposition = function(brokerid, accountid, symbolid, side, tradequantity, tradeprice, tradecost, currencyid, tradeid, futsettdate) \
+    redis.log(redis.LOG_WARNING, "updateposition") \
+    redis.log(redis.LOG_WARNING, brokerid) \
+    redis.log(redis.LOG_WARNING, accountid) \
+    redis.log(redis.LOG_WARNING, symbolid) \
     local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
-    local brokeraccountkey = "broker:" .. brokerid .. ":account" .. accountid \
+    local brokeraccountkey = "broker:" .. brokerid .. ":account:" .. accountid \
     local positionkey = brokeraccountkey .. ":position:" .. symbolid \
     local postradeskey = brokeraccountkey .. ":trades:" .. symbolid \
     local positionskey = brokeraccountkey .. ":positions" \
@@ -1412,10 +1416,11 @@ function registerScripts() {
       rejectorder(brokerid, orderid, 0, "Symbol not found") \
       return {0} \
     end \
-    if redis.call("sismember", "broker:" .. brokerid .. ":client:" .. clientid .. ":instrumenttypes", instrumenttypeid) == 0 then \
-      rejectorder(brokerid, orderid, 0, "Client not authorised to trade this type of product") \
-      return {0} \
-    end \
+    --[[ todo: reinstate - commented out until instrument types added to client setup ]]\
+    --[[if redis.call("sismember", "broker:" .. brokerid .. ":client:" .. clientid .. ":instrumenttypes", instrumenttypeid) == 0 then ]]\
+      --[[rejectorder(brokerid, orderid, 0, "Client not authorised to trade this type of product") ]]\
+      --[[return {0} ]]\
+    --[[end ]]\
     side = tonumber(side) \
     quantity = tonumber(quantity) \
     local consid = tonumber(quantity) * tonumber(price) \
@@ -1623,6 +1628,8 @@ function registerScripts() {
 
   newtrade = updateposition + commonbo.newtradeaccounttransactions + publishtrade + '\
   local newtrade = function(brokerid, accountid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, margin, operatortype, operatorid, finance) \
+    redis.log(redis.LOG_WARNING, "newtrade") \
+    redis.log(redis.LOG_WARNING, settlcurramt) \
     local brokerkey = "broker:" .. brokerid \
     local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
     if not tradeid then return 0 end \

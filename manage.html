@@ -2746,12 +2746,13 @@
         }
 
         function tradeReceived(trade) {
+            console.log("tradeReceived");
             var inquotes = false;
 
             // make sure trade is for this client
             var inpclientid = document.getElementById("inpclientid");
 
-            if (inpclientid == null) { return; }
+            /*if (inpclientid == null) { return; }
             if (trade.clientid != inpclientid.value) { return; }
 
             // add to trades, if that is what we are looking at
@@ -2759,13 +2760,13 @@
                 trades.unshift(trade); // add to start of array
                 updateTradeTable();
                 return;
-            }
+            }*/
 
             // indicate the quote has been traded
             // quote may be in rfq quotes
             for (var i = 0; i < quotes.length; i++) {
                 if (trade.side == "1") {
-                    if (trade.quoteid == quotes[i].offerquote.quoteid) {
+                    //if (trade.quoteid == quotes[i].offerquote.quoteid) {
                         quotes[i].offerquote.tradeid = trade.tradeid;
 
                         // update display
@@ -2776,9 +2777,9 @@
 
                         inquotes = true;
                         break;
-                    }
+                    //}
                 } else {
-                    if (trade.quoteid == quotes[i].bidquote.quoteid) {
+                    //if (trade.quoteid == quotes[i].bidquote.quoteid) {
                         quotes[i].bidquote.tradeid = trade.tradeid;
 
                         // update display
@@ -2789,7 +2790,7 @@
 
                         inquotes = true;
                         break;
-                    }
+                    //}
                 }
             }
         }
