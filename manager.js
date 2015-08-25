@@ -226,6 +226,7 @@ function listen() {
 
     //test();
     //testtrade();
+    testSettle();
 
     // data callback
     // todo: multiple messages in one data event
@@ -553,7 +554,7 @@ function cashTrans(cashtrans, userid, conn) {
   cashtrans.transactiontypeid = "CD";
 
   // note we are passing the key in, so as to facilitate clustering
-  db.eval(commonbo.scriptnewclientfundstransfer, 1, "broker:" + brokerid, cashtrans.amount, cashtrans.bankaccountid, brokerid, cashtrans.clientaccountid, cashtrans.currencyid, cashtrans.localamount, cashtrans.note, cashtrans.rate, cashtrans.reference, cashtrans.timestamp, cashtrans.transactiontypeid, function(err, ret) {
+  db.eval(commonbo.newClientFundsTransfer, 1, "broker:" + brokerid, cashtrans.amount, cashtrans.bankaccountid, brokerid, cashtrans.clientaccountid, cashtrans.currencyid, cashtrans.localamount, cashtrans.note, cashtrans.rate, cashtrans.reference, cashtrans.timestamp, cashtrans.transactiontypeid, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });
@@ -1817,6 +1818,30 @@ function testtrade() {
 
   // note we are passing a key
   db.eval(commonbo.scripttesttrade, 1, "broker:" + brokerid, consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+  });
+}
+
+function testSettle() {
+  var tradesettle = {};
+
+  tradesettle.amount = 125;
+  tradesettle.brokerid = 1;
+  tradesettle.currencyid = "GBP";
+  tradesettle.fromaccountid = 1;
+  tradesettle.localamount = 125;
+  tradesettle.note = "Trade settlement";
+  tradesettle.rate = 1;
+  tradesettle.timestamp = new Date();
+  tradesettle.toaccountid = 2;
+  tradesettle.tradeid = 12;
+  tradesettle.transactiontypeid = "";
+
+  console.log(tradesettle);
+
+  // note we are passing the key in, so as to facilitate clustering
+  db.eval(commonbo.newTradeSettlementTransaction, 1, "broker:" + brokerid, tradesettle.amount, tradesettle.brokerid, tradesettle.currencyid, tradesettle.fromaccountid, tradesettle.localamount, tradesettle.note, tradesettle.rate, tradesettle.timestamp, tradesettle.toaccountid, tradesettle.tradeid, tradesettle.transactiontypeid, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });

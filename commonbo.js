@@ -304,12 +304,11 @@ exports.registerScripts = function () {
   */
   getpositions = '\
   local getpositions = function(accountid, brokerid) \
-      redis.log(redis.LOG_WARNING, "getpositions") \
+    redis.log(redis.LOG_DEBUG, "getpositions") \
     local tblresults = {} \
     local fields = {"accountid","brokerid","cost","positionid","quantity","symbolid"} \
     local positions = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. "positions") \
     for index = 1, #positions do \
-      redis.log(redis.LOG_WARNING, "positions") \
       local vals = redis.call("hmget", "broker:" .. brokerid .. ":position:" .. positions[index], unpack(fields)) \
       table.insert(tblresults, {accountid=vals[1],brokerid=vals[2],cost=vals[3],positionid=vals[4],quantity=vals[5],symbolid=vals[6]}) \
     end \
@@ -378,12 +377,11 @@ exports.registerScripts = function () {
 
   gettotalpositions = getpositions + getunrealisedpandl + getmargin + '\
   local gettotalpositions = function(accountid, brokerid) \
-      redis.log(redis.LOG_WARNING, "gettotalpositions") \
+    redis.log(redis.LOG_DEBUG, "gettotalpositions") \
     local positions = getpositions(accountid, brokerid) \
     local totalmargin = 0 \
     local totalunrealisedpandl = 0 \
     for index = 1, #positions do \
-      redis.log(redis.LOG_WARNING, "positions") \
       local margin = getmargin(positions[index][6], positions[index][5]) \
       totalmargin = totalmargin + margin \
       local unrealisedpandl = getunrealisedpandl(positions[index][6], positions[index][5], positions[index][3]) \
@@ -487,11 +485,7 @@ exports.registerScripts = function () {
   */
   updateaccountbalance = '\
   local updateaccountbalance = function(accountid, amount, brokerid, localamount) \
-        redis.log(redis.LOG_WARNING, "updateaccountbalance") \
-        redis.log(redis.LOG_WARNING, accountid) \
-        redis.log(redis.LOG_WARNING, brokerid) \
-        redis.log(redis.LOG_WARNING, amount) \
-        redis.log(redis.LOG_WARNING, localamount) \
+    redis.log(redis.LOG_DEBUG, "updateaccountbalance") \
     local accountkey = "broker:" .. brokerid .. ":account:" .. accountid \
     redis.call("hincrbyfloat", accountkey, "balance", amount) \
     redis.call("hincrbyfloat", accountkey, "localbalance", localamount) \
@@ -506,15 +500,16 @@ exports.registerScripts = function () {
   */
   getfreemargin = getaccountbalance + gettotalpositions + '\
   local getfreemargin = function(accountid, brokerid) \
+    redis.log(redis.LOG_DEBUG, "getfreemargin") \
     local freemargin = 0 \
     local accountbalance = getaccountbalance(accountid, brokerid) \
     if accountbalance[1] then \
-      redis.log(redis.LOG_WARNING, "accountbalance[1]") \
-      redis.log(redis.LOG_WARNING, accountbalance[1]) \
+      redis.log(redis.LOG_DEBUG, "accountbalance[1]") \
+      redis.log(redis.LOG_DEBUG, accountbalance[1]) \
       local balance = tonumber(accountbalance[1]) \
       local totalpositions = gettotalpositions(accountid, brokerid) \
-      redis.log(redis.LOG_WARNING, "totalpositions[2]") \
-      redis.log(redis.LOG_WARNING, totalpositions[2]) \
+      redis.log(redis.LOG_DEBUG, "totalpositions[2]") \
+      redis.log(redis.LOG_DEBUG, totalpositions[2]) \
       local equity = balance + totalpositions[2] \
       freemargin = equity - totalpositions[1] \
     end \
@@ -736,12 +731,12 @@ exports.registerScripts = function () {
   ';*/
 
   /*
-  * scriptnewclientfundstransfer
+  * newClientFundsTransfer
   * script to handle client deposits & withdrawals
   * keys: broker:<brokerid>
   * args: amount, bankaccountid, brokerid, clientaccountid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid
   */
-  exports.scriptnewclientfundstransfer = newtransaction + newposting + getbrokeraccountid + '\
+  exports.newClientFundsTransfer = newtransaction + newposting + getbrokeraccountid + '\
     local controlclientaccountid = getbrokeraccountid(ARGV[3], ARGV[5], "controlclient") \
     local amount \
     local localamount \
@@ -769,26 +764,50 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * scriptnewtradesettlement
+  * newTradeSettlementTransaction
   * script to handle settlement of trades
   * params: amount, brokerid, currencyid, fromaccountid, localamount, note, rate, timestamp, toaccountid, tradeid, transactiontypeid
+  * returns: 0 if ok, else error message
   */
-  exports.scriptnewtradesettlement + '\
+  exports.newTradeSettlementTransaction = '\
+    redis.log(redis.LOG_DEBUG, "newTradeSettlementTransaction") \
     --[[ transactiontypeid may be passed, else derive it ]] \
     local transactiontypeid = ARGV[11] \
     if transactiontypeid == "" then \
-      local fromaccountgroupid = redis.call("hget", "broker:" .. ARGV[2] .. ":account:" .. ARGV[4], "accountgroupid") \
-      local toaccountgroupid = redis.call("hget", "broker:" .. ARGV[2] .. ":account:" .. ARGV[9], "accountgroupid") \
+      local brokeraccountkey = "broker:" .. ARGV[2] .. ":account:" \
+      local fromaccountgroupid = redis.call("hget", brokeraccountkey .. ARGV[4], "accountgroupid") \
+      local toaccountgroupid = redis.call("hget", brokeraccountkey .. ARGV[9], "accountgroupid") \
+      if not fromaccountgroupid or not toaccountgroupid then return "Account not found" end \
       if tonumber(fromaccountgroupid) == 1 and tonumber(toaccountgroupid) == 5 then \
         transactiontypeid = "BP" \
       elseif tonumber(fromaccountgroupid) == 5 and tonumber(toaccountgroupid) == 1 then \
         transactiontypeid = "BR" \
       else \
-        return 0 \
+        return "Invalid account" \
       end \
     end \
     local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[10], ARGV[8], transactiontypeid) \
     newPosting(fromaccountgroupid, -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid) \
     newPosting(tobankaccountid, ARGV[1], ARGV[2], ARGV[5], transactionid) \
+    return 0 \
+  ';
+
+  /*
+  * newBrokerFundsTransfer
+  * script to handle transfer of funds between broker and supplier
+  * params: amount, brokerid, currencyid, brokerbankaccountid, localamount, nominalaccountid, note, rate, reference, supplieraccountid, timestamp, transactiontypeid
+  * returns 0
+  */
+  exports.newBrokerFundsTransfer = '\
+    redis.log(redis.LOG_DEBUG, "newBrokerFundsTransfer") \
+    local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[7], ARGV[8], ARGV[9], ARGV[11], ARGV[12]) \
+    if ARGV[12] == "BP" then \
+      newPosting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid) \
+      newPosting(ARG[10], ARGV[1], ARGV[2], ARGV[5], transactionid) \
+    else \
+      newPosting(ARGV[4], ARGV[1], ARGV[2], ARGV[5], transactionid) \
+      newPosting(ARG[10], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid) \
+    end \
+    return 0 \
   ';
 }
