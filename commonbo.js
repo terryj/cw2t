@@ -810,4 +810,27 @@ exports.registerScripts = function () {
     end \
     return 0 \
   ';
+
+  /*
+  * newSupplierFundsTransfer
+  * script to handle receipts from and payments to a supplier
+  * params: amount, bankaccountid, brokerid, currencyid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid
+  * returns: 0
+  */
+  exports.newSupplierFundsTransfer = '\
+    redis.log(redis.LOG_DEBUG, "newSupplierFundsTransfer") \
+    local amount \
+    local localamount \
+    if ARGV[11] == "SP" then \
+      amount = -tonumber(ARGV[1]) \
+      localamount = -tonumber(ARGV[5]) \
+    else \
+      amount = ARGV[1] \
+      localamount = ARGV[5] \
+    end \
+    local transactionid = newtransaction(ARGV[1], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[10], ARGV[11]) \
+    newPosting(ARGV[9], amount, ARGV[3], localamount, transactionid) \
+    newPosting(ARGV[2], amount, ARGV[3], localamount, transactionid) \
+    return 0 \
+  ';
 }
