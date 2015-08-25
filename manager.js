@@ -226,7 +226,9 @@ function listen() {
 
     //test();
     //testtrade();
-    testSettle();
+    //testSettle();
+    //testBrokerFundsTransfer();
+    newSupplierFundsTransfer();
 
     // data callback
     // todo: multiple messages in one data event
@@ -1842,6 +1844,54 @@ function testSettle() {
 
   // note we are passing the key in, so as to facilitate clustering
   db.eval(commonbo.newTradeSettlementTransaction, 1, "broker:" + brokerid, tradesettle.amount, tradesettle.brokerid, tradesettle.currencyid, tradesettle.fromaccountid, tradesettle.localamount, tradesettle.note, tradesettle.rate, tradesettle.timestamp, tradesettle.toaccountid, tradesettle.tradeid, tradesettle.transactiontypeid, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+  });
+}
+
+function testBrokerFundsTransfer() {
+  var bft = {};
+
+  bft.amount = 125;
+  bft.brokerid = 1;
+  bft.currencyid = "GBP";
+  bft.brokerbankaccountid = 1;
+  bft.localamount = 125;
+  bft.note = "broker funds transfer test";
+  bft.rate = 1;
+  bft.reference = "bft1";
+  bft.supplieraccountid = 2;
+  bft.timestamp = new Date();
+  bft.transactiontypeid = "BP";
+
+  console.log(bft);
+
+  // note we are passing the key in, so as to facilitate clustering
+  db.eval(commonbo.newBrokerFundsTransfer, 1, "broker:" + brokerid, bft.amount, bft.brokerid, bft.currencyid, bft.brokerbankaccountid, bft.localamount, bft.note, bft.rate, bft.reference, bft.supplieraccountid, bft.timestamp, bft.transactiontypeid, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+  });
+}
+
+function newSupplierFundsTransfer() {
+  var sft = {};
+
+  sft.amount = 125;
+  sft.brokerbankaccountid = 1;
+  sft.brokerid = 1;
+  sft.currencyid = "GBP";
+  sft.localamount = 125;
+  sft.note = "supplier funds transfer test";
+  sft.rate = 1;
+  sft.reference = "sft1";
+  sft.supplieraccountid = 2;
+  sft.timestamp = new Date();
+  sft.transactiontypeid = "SP";
+
+  console.log(sft);
+
+  // note we are passing the key in, so as to facilitate clustering
+  db.eval(commonbo.newSupplierFundsTransfer, 1, "broker:" + brokerid, sft.amount, sft.brokerbankaccountid, sft.brokerid, sft.currencyid, sft.localamount, sft.note, sft.rate, sft.reference, sft.supplieraccountid, sft.timestamp, sft.transactiontypeid, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });

@@ -735,6 +735,7 @@ exports.registerScripts = function () {
   * script to handle client deposits & withdrawals
   * keys: broker:<brokerid>
   * args: amount, bankaccountid, brokerid, clientaccountid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid
+  * returns: 0
   */
   exports.newClientFundsTransfer = newtransaction + newposting + getbrokeraccountid + '\
     local controlclientaccountid = getbrokeraccountid(ARGV[3], ARGV[5], "controlclient") \
@@ -769,7 +770,7 @@ exports.registerScripts = function () {
   * params: amount, brokerid, currencyid, fromaccountid, localamount, note, rate, timestamp, toaccountid, tradeid, transactiontypeid
   * returns: 0 if ok, else error message
   */
-  exports.newTradeSettlementTransaction = '\
+  exports.newTradeSettlementTransaction = newtransaction + newposting + '\
     redis.log(redis.LOG_DEBUG, "newTradeSettlementTransaction") \
     --[[ transactiontypeid may be passed, else derive it ]] \
     local transactiontypeid = ARGV[11] \
@@ -783,30 +784,30 @@ exports.registerScripts = function () {
       elseif tonumber(fromaccountgroupid) == 5 and tonumber(toaccountgroupid) == 1 then \
         transactiontypeid = "BR" \
       else \
-        return "Invalid account" \
+        return "Invalid account group" \
       end \
     end \
     local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[10], ARGV[8], transactiontypeid) \
-    newPosting(fromaccountgroupid, -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid) \
-    newPosting(tobankaccountid, ARGV[1], ARGV[2], ARGV[5], transactionid) \
+    newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid) \
+    newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid) \
     return 0 \
   ';
 
   /*
   * newBrokerFundsTransfer
   * script to handle transfer of funds between broker and supplier
-  * params: amount, brokerid, currencyid, brokerbankaccountid, localamount, nominalaccountid, note, rate, reference, supplieraccountid, timestamp, transactiontypeid
+  * params: amount, brokerid, currencyid, brokerbankaccountid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid
   * returns 0
   */
-  exports.newBrokerFundsTransfer = '\
+  exports.newBrokerFundsTransfer = newtransaction + newposting + '\
     redis.log(redis.LOG_DEBUG, "newBrokerFundsTransfer") \
-    local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[7], ARGV[8], ARGV[9], ARGV[11], ARGV[12]) \
-    if ARGV[12] == "BP" then \
-      newPosting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid) \
-      newPosting(ARG[10], ARGV[1], ARGV[2], ARGV[5], transactionid) \
+    local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[10], ARGV[11]) \
+    if ARGV[11] == "BP" then \
+      newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid) \
+      newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid) \
     else \
-      newPosting(ARGV[4], ARGV[1], ARGV[2], ARGV[5], transactionid) \
-      newPosting(ARG[10], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid) \
+      newposting(ARGV[4], ARGV[1], ARGV[2], ARGV[5], transactionid) \
+      newposting(ARGV[9], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid) \
     end \
     return 0 \
   ';
@@ -817,7 +818,7 @@ exports.registerScripts = function () {
   * params: amount, bankaccountid, brokerid, currencyid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid
   * returns: 0
   */
-  exports.newSupplierFundsTransfer = '\
+  exports.newSupplierFundsTransfer = newtransaction + newposting + '\
     redis.log(redis.LOG_DEBUG, "newSupplierFundsTransfer") \
     local amount \
     local localamount \
@@ -829,8 +830,8 @@ exports.registerScripts = function () {
       localamount = ARGV[5] \
     end \
     local transactionid = newtransaction(ARGV[1], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[10], ARGV[11]) \
-    newPosting(ARGV[9], amount, ARGV[3], localamount, transactionid) \
-    newPosting(ARGV[2], amount, ARGV[3], localamount, transactionid) \
+    newposting(ARGV[9], amount, ARGV[3], localamount, transactionid) \
+    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid) \
     return 0 \
   ';
 }
