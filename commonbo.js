@@ -831,13 +831,14 @@ exports.registerScripts = function () {
   * newpositionposting()
   * creates a position posting record & updates a position
   */
-  newpositionposting = '\
-  local newpositionposting = function(accountid, brokerid, cost, futsettdate, quantity, symbolid, timestamp) \
+  newpositionposting = updateposition + '\
+  local newpositionposting = function(accountid, brokerid, cost, futsettdate, positionpostingtype, positionpostingtypeid, quantity, symbolid, timestamp) \
     local brokerkey = "broker:" .. brokerid \
     local positionpostingid = redis.call("hincrby", brokerkey, "lastpositionpostingid", 1) \
     local positionid = updateposition(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
-    redis.call("hmset", brokerkey .. ":positionposting:" .. positionpostingid, "accountid", accountid, "brokerid", brokerid, "cost", cost, "positionid", positionid, "positionpostingid", positionpostingid, "quantity", quantity, "symbolid", symbolid, "timestamp", timestamp) \
+    redis.call("hmset", brokerkey .. ":positionposting:" .. positionpostingid, "accountid", accountid, "brokerid", brokerid, "cost", cost, "positionid", positionid, "positionpostingid", positionpostingid, "positionpostingtype", positionpostingtype, "positionpostingtypeid", positionpostingtypeid, "quantity", quantity, "symbolid", symbolid, "timestamp", timestamp) \
     redis.call("sadd", "broker:" .. brokerid .. ":position:" .. positionid .. "positionpostings", positionpostingid) \
+    return positionpostingid \
   end \
   ';
 

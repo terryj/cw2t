@@ -1619,7 +1619,12 @@ function registerScripts() {
   end \
   ';
 
-  newtrade = commonbo.updateposition + commonbo.newtradeaccounttransactions + publishtrade + '\
+  /*
+  * newtrade()
+  * stores a trade & updates cash & position
+  * */
+//commonbo.updateposition
+  newtrade = commonbo.newpositionposting + commonbo.newtradeaccounttransactions + publishtrade + '\
   local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, margin, operatortype, operatorid, finance) \
     redis.log(redis.LOG_WARNING, "newtrade") \
     local brokerkey = "broker:" .. brokerid \
@@ -1640,13 +1645,14 @@ function registerScripts() {
       note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
     local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side) \
-    local positionid = updateposition(accountid, brokerid, consid, futsettdate, quantity, symbolid) \
-    redis.call("hset", tradekey, "positionid", positionid) \
+    local positionpostingid = newpositionposting(accountid, brokerid, consid, futsettdate, "trade", tradeid, quantity, symbolid, timestamp) \
+    redis.call("hset", tradekey, "positionpostingid", positionpostingid) \
     publishtrade(brokerid, tradeid, 6) \
     return tradeid \
   end \
   ';
 
+  //local positionid = updateposition(accountid, brokerid, consid, futsettdate, quantity, symbolid) \
   //    local positionid = updateposition(brokerid, accountid, symbolid, side, quantity, price, settlcurramt, settlcurrencyid, tradeid, futsettdate) \
 
   //    redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":tradesbydate", milliseconds, tradeid) \
