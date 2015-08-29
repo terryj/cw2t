@@ -1031,7 +1031,7 @@ nbt.on("businessReject", function(businessreject) {
 });
 
 function registerScripts() {
-  var updateposition;
+  //var updateposition;
   var updateordermargin;
   var updatereserve;
   var removefromorderbook;
@@ -1060,10 +1060,13 @@ function registerScripts() {
   local getcosts = function(brokerid, clientid, symbolid, side, consid, currencyid) \
     local brokerkey = "broker:" .. brokerid \
     local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
-    --[[ get costs for this instrument type & currency ]] \
+    --[[ get costs for this instrument type & currency - will be set to zero if not found ]] \
+    local vals = {} \
     local costid = redis.call("get", brokerkey .. ":cost:" .. instrumenttypeid .. ":" .. currencyid) \
-    local fields = {"commissionpercent", "commissionmax", "commissionmin", "ptmlevylimit", "ptmlevy", "stampdutypercent", "contractlevy"} \
-    local vals = redis.call("hmget", brokerkey .. ":cost:" .. costid, unpack(fields)) \
+    if costid then \
+      local fields = {"commissionpercent", "commissionmax", "commissionmin", "ptmlevylimit", "ptmlevy", "stampdutypercent", "contractlevy"} \
+      vals = redis.call("hmget", brokerkey .. ":cost:" .. costid, unpack(fields)) \
+    end \
     --[[ set default costs ]] \
     local commission = 0 \
     local ptmlevy = 0 \
@@ -1425,20 +1428,20 @@ function registerScripts() {
     --[[ calculate costs ]] \
     local costs =  getcosts(brokerid, clientid, symbolid, side, consid, currencyid) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
-    redis.log(redis.LOG_DEBUG, "costs") \
-    redis.log(redis.LOG_DEBUG, costs[1]) \
-    redis.log(redis.LOG_DEBUG, costs[2]) \
-    redis.log(redis.LOG_DEBUG, costs[3]) \
-    redis.log(redis.LOG_DEBUG, costs[4]) \
+    redis.log(redis.LOG_WARNING, "costs") \
+    redis.log(redis.LOG_WARNING, costs[1]) \
+    redis.log(redis.LOG_WARNING, costs[2]) \
+    redis.log(redis.LOG_WARNING, costs[3]) \
+    redis.log(redis.LOG_WARNING, costs[4]) \
     --[[ calculate margin required for order ]] \
     local initialmargin = getinitialmargin(brokerid, symbolid, consid, totalcost) \
     --[[ position key varies by instrument type ]] \
-    local symbolsettdatekey = symbolid \
+    local symbolkey = symbolid \
     if instrumenttypeid == "CFD" or instrumenttypeid == "SPB" then \
-      symbolsettdatekey = symbolsettdatekey .. ":" .. settldate \
+      symbolkey = symbolkey .. ":" .. settldate \
     end \
     --[[ get position, if there is one, as may be a closing buy or sell ]] \
-    local position = getposition(accountid, brokerid, symbolsettdatekey) \
+    local position = getposition(accountid, brokerid, symbolkey) \
     if position[1] then \
       --[[ we have a position - always allow closing trades ]] \
       local posqty = tonumber(position[1]) \
@@ -1616,9 +1619,9 @@ function registerScripts() {
   end \
   ';
 
-  newtrade = updateposition + commonbo.newtradeaccounttransactions + publishtrade + '\
+  newtrade = commonbo.updateposition + commonbo.newtradeaccounttransactions + publishtrade + '\
   local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, margin, operatortype, operatorid, finance) \
-    redis.log(redis.LOG_DEBUG, "newtrade") \
+    redis.log(redis.LOG_WARNING, "newtrade") \
     local brokerkey = "broker:" .. brokerid \
     local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
     if not tradeid then return 0 end \
@@ -1626,19 +1629,25 @@ function registerScripts() {
     redis.call("hmset", tradekey, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "margin", margin, "finance", finance) \
     redis.call("sadd", brokerkey .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
+    local consid \
     local note \
     if tonumber(side) == 1 then \
+      consid = settlcurramt \
       note = "Bought " .. quantity .. " " .. symbolid .. " @ " .. price \
     else \
+      quantity = -tonumber(quantity) \
+      consid = -tonumber(settlcurramt) \
       note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
     local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side) \
-    local positionid = updateposition(brokerid, accountid, symbolid, side, quantity, price, settlcurramt, settlcurrencyid, tradeid, futsettdate) \
+    local positionid = updateposition(accountid, brokerid, consid, futsettdate, quantity, symbolid) \
     redis.call("hset", tradekey, "positionid", positionid) \
     publishtrade(brokerid, tradeid, 6) \
     return tradeid \
   end \
   ';
+
+  //    local positionid = updateposition(brokerid, accountid, symbolid, side, quantity, price, settlcurramt, settlcurrencyid, tradeid, futsettdate) \
 
   //    redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":tradesbydate", milliseconds, tradeid) \
 
@@ -1741,18 +1750,21 @@ function registerScripts() {
   * returns: orderid
   */
   scriptneworder = neworder + rejectorder + creditcheck + publishorder + getproquotesymbol + getproquotequote + '\
+  redis.log(redis.LOG_WARNING, "scriptneworder") \
   local orderid = neworder(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[6], 0, ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], 0, ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], ARGV[22], "", "", ARGV[23], ARGV[24], ARGV[25], "") \
   local brokerid = ARGV[2] \
   local brokerkey = "broker:" .. brokerid \
   local symbolid = ARGV[4] \
   local side = tonumber(ARGV[5]) \
   local settlcurramt = tonumber(ARGV[6]) * tonumber(ARGV[7]) \
+  redis.log(redis.LOG_DEBUG, "beforecc") \
   local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[20], ARGV[10], ARGV[23]) \
    if cc[1] == 0 then \
     --[[ publish the order back to the operatortype - the order contains the error ]] \
     publishorder(brokerid, orderid, ARGV[24]) \
     return {cc[1], orderid} \
   end \
+  redis.log(redis.LOG_DEBUG, "aftercc") \
   local hedgebookid = "" \
   local tradeid = "" \
   local hedgeorderid = "" \
@@ -1927,6 +1939,7 @@ function registerScripts() {
   // fill from the market
   //
   scriptnewtrade = newtrade + getcosts + '\
+  redis.log(redis.LOG_WARNING, "scriptnewtrade") \
   --[[ get order ]] \
   local orderid = ARGV[4] \
   local fields = {"clientid", "symbolid", "side", "quantity", "price", "margin", "remquantity", "nosettdays", "operatortype", "hedgeorderid", "futsettdate", "operatorid", "accountid", "brokerid"} \

@@ -283,14 +283,19 @@ exports.registerScripts = function () {
   /*
   * getposition()
   * gets a position
-  * params: accountid, brokerid, symbolsettdatekey
+  * params: accountid, brokerid, symbolkey
   * returns: quantity, cost as an array
   */
   getposition = '\
-  local getposition = function(accountid, brokerid, symbolsettdatekey) \
-    local fields = {"quantity", "cost"} \
-    local position = redis.call("hmget", "broker:" .. brokerid .. ":account:" .. accountid .. ":position:" .. symbolsettdatekey, unpack(fields)) \
-    return position \
+  local getposition = function(accountid, brokerid, symbolkey) \
+    local vals = {} \
+    local brokerkey = "broker:" .. brokerid \
+    local positionid = redis.call("get", brokerkey .. ":account:" .. accountid .. ":position:" .. symbolkey) \
+    if positionid then \
+      local fields = {"quantity", "cost"} \
+      vals = redis.call("hmget", brokerkey .. ":position:" .. positionid, unpack(fields)) \
+    end \
+    return vals \
   end \
   ';
 
@@ -606,13 +611,14 @@ exports.registerScripts = function () {
   */
   createposition = '\
   local createposition = function(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
+    redis.log(redis.LOG_WARNING, "createposition") \
     local brokerkey = "broker:" .. brokerid \
     local positionid = redis.call("hincrby", brokerkey, "lastpositionid", 1) \
     redis.call("hmset", brokerkey .. ":position:" .. positionid, "brokerid", brokerid, "accountid", accountid, "symbolid", symbolid, "quantity", quantity, "cost", cost, "positionid", positionid, "futsettdate", futsettdate) \
-    redis.call("sadd", brokerkey .. ":positions" .. positionid) \
-    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":positions" .. positionid) \
-    redis.call("sadd", brokerkey .. ":symbol:" .. symbolid .. ":positions" .. positionid) \
-    redis.call("sadd", brokerkey .. ":symbol:" .. symbolid .. ":accounts" .. accountid) \
+    redis.call("sadd", brokerkey .. ":positions", positionid) \
+    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":positions", positionid) \
+    redis.call("sadd", brokerkey .. ":symbol:" .. symbolid .. ":positions", positionid) \
+    redis.call("sadd", brokerkey .. ":symbol:" .. symbolid .. ":accounts", accountid) \
     return positionid \
   end \
   ';
@@ -623,15 +629,16 @@ exports.registerScripts = function () {
   */
   closeposition = '\
   local closeposition = function(brokerid, positionid) \
+    redis.log(redis.LOG_WARNING, "closeposition") \
     local brokerkey = "broker:" .. brokerid \
     local positionkey = brokerkey .. ":position:" .. positionid \
     local fields = {"accountid", "futsettdate", "symbolid"} \
     local vals = redis.call("hmget", positionkey, unpack(fields)) \
     redis.call("hdel", positionkey, "brokerid", "accountid", "symbolid", "quantity", "cost", "positionid", "futsettdate") \
-    redis.call("sadd", brokerkey .. ":positions" .. positionid) \
-    redis.call("sadd", brokerkey .. ":account:" .. vals[1] .. ":positions" .. positionid) \
-    redis.call("sadd", brokerkey .. ":symbol:" .. vals[3] .. ":positions" .. positionid) \
-    redis.call("sadd", brokerkey .. ":symbol:" .. vals[3] .. ":accounts" .. vals[1]) \
+    redis.call("srem", brokerkey .. ":positions", positionid) \
+    redis.call("srem", brokerkey .. ":account:" .. vals[1] .. ":positions", positionid) \
+    redis.call("srem", brokerkey .. ":symbol:" .. vals[3] .. ":positions", positionid) \
+    redis.call("srem", brokerkey .. ":symbol:" .. vals[3] .. ":accounts", vals[1]) \
   end \
   ';
 
@@ -656,7 +663,7 @@ exports.registerScripts = function () {
   */
   publishposition = getunrealisedpandl + getmargin + '\
   local publishposition = function(brokerid, positionid, channel) \
-    local fields = {"accountid", "symbolid", "quantity", "cost", "positionid", "futsettdate") \
+    local fields = {"accountid", "symbolid", "quantity", "cost", "positionid", "futsettdate"} \
     local vals = redis.call("hmget", "broker:" .. brokerid .. ":position:" .. positionid, unpack(fields)) \
     local pos = {} \
     if vals[1] then \
@@ -699,34 +706,40 @@ exports.registerScripts = function () {
   * quantity/cost is stored as a +ve/-ve value
   */
   updateposition = round + closeposition + createposition + publishposition + '\
-  local updateposition(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
-    redis.log(redis.LOG_DEBUG, "updateposition") \
+  local updateposition = function(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
+    redis.log(redis.LOG_WARNING, "updateposition") \
     local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
     local brokerkey = "broker:" .. brokerid \
-    local symbolkey = ":symbol:" .. symbolid \
+    local symbolkey = symbolid \
     --[[ add settlement date to symbol key for devivs ]] \
     if instrumenttypeid == "CFD" or instrumenttypeid == "SPD" then \
       symbolkey = symbolkey .. ":" .. futsettdate \
     end \
+    local positionid \
     --[[ do we already have a position? ]] \
-    if redis.call("sismember", brokerkey .. symbolkey .. ":accounts", accountid) == 1 then \
+    if redis.call("sismember", brokerkey .. ":symbol:" .. symbolkey .. ":accounts", accountid) == 1 then \
       --[[ we have a position, so update it ]] \
-      local positionid = redis.call("get", brokerkey .. ":account:" .. accountid .. ":position:" .. symbolkey \
+      positionid = redis.call("get", brokerkey .. ":account:" .. accountid .. ":position:" .. symbolkey) \
+      redis.log(redis.LOG_WARNING, positionid) \
       if not positionid then return 0 end \
       local positionkey = brokerkey .. ":position:" .. positionid \
-      redis.call("hincrbyfloat", positionkey, "cost", cost, "quantity", quantity) \
+      redis.call("hincrbyfloat", positionkey, "quantity", quantity) \
       --[[ close the position if empty ]] \
       local posqty = redis.call("hget", positionkey, "quantity") \
       if posqty == 0 then \
         closeposition(brokerid, positionid) \
+      else \
+        redis.call("hincrbyfloat", positionkey, "cost", cost) \
       end \
     else \
       positionid = createposition(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
-    endif \
+    end \
     publishposition(brokerid, positionid, 10) \
     return positionid \
   end \
   ';
+
+  exports.updateposition = updateposition;
 
   //local updateposition = function(accountid, brokerid, symbolid, side, tradequantity, tradeprice, tradecost, currencyid, tradeid, futsettdate) \
       /*positionid = vals[3] \
