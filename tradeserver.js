@@ -1478,18 +1478,18 @@ function registerScripts() {
     redis.call("hmset", tradekey, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "margin", margin, "finance", finance) \
     redis.call("sadd", brokerkey .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
-    local consid \
+    local amount \
     local note \
     if tonumber(side) == 1 then \
-      consid = settlcurramt \
+      amount = settlcurramt \
       note = "Bought " .. quantity .. " " .. symbolid .. " @ " .. price \
     else \
       quantity = -tonumber(quantity) \
-      consid = -tonumber(settlcurramt) \
+      amount = -tonumber(settlcurramt) \
       note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
     local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side) \
-    newpositiontransaction(accountid, brokerid, consid, futsettdate, "trade", tradeid, quantity, symbolid, timestamp) \
+    newpositiontransaction(accountid, amount, brokerid, futsettdate, "trade", tradeid, quantity, symbolid, timestamp) \
     --[[ todo: do we need to update the trade record with positionid or positionpostingid or nothing? ]] \
     --[[redis.call("hset", tradekey, "positionpostingid", positionpostingid) ]]\
     publishtrade(brokerid, tradeid, 6) \

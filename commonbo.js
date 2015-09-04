@@ -667,7 +667,8 @@ exports.registerScripts = function () {
   * updateposition()
   * quantity & cost can be +ve/-ve
   */
-  updateposition = round + publishposition + '\
+  //todo: do we need round?
+  updateposition = publishposition + '\
   local updateposition = function(brokerid, cost, positionid, quantity) \
     redis.log(redis.LOG_WARNING, "updateposition") \
     local positionkey = "broker:" .. brokerid .. ":position:" .. positionid\
@@ -683,11 +684,11 @@ exports.registerScripts = function () {
   */
   //todo: need cost?
   newpositionposting = '\
-  local newpositionposting = function(brokerid, positionid, quantity, timestamp, positionpostingtype, positionpostingtypeid) \
+  local newpositionposting = function(amount, brokerid, positionid, quantity, timestamp, positionpostingtype, positionpostingtypeid) \
     local brokerkey = "broker:" .. brokerid \
     local positionpostingid = redis.call("hincrby", brokerkey, "lastpositionpostingid", 1) \
-    redis.call("hmset", brokerkey .. ":positionposting:" .. positionpostingid, "brokerid", brokerid, "positionid", positionid, "positionpostingid", positionpostingid, "positionpostingtype", positionpostingtype, "positionpostingtypeid", positionpostingtypeid, "quantity", quantity, "timestamp", timestamp) \
-    redis.call("sadd", brokerkey .. ":position:" .. positionid .. "positionpostings", positionpostingid) \
+    redis.call("hmset", brokerkey .. ":positionposting:" .. positionpostingid, "brokerid", brokerid, "positionid", positionid, "positionpostingid", positionpostingid, "positionpostingtype", positionpostingtype, "positionpostingtypeid", positionpostingtypeid, "amount", amount, "quantity", quantity, "timestamp", timestamp) \
+    redis.call("sadd", brokerkey .. ":position:" .. positionid .. ":positionpostings", positionpostingid) \
     return positionpostingid \
   end \
   ';
@@ -697,7 +698,7 @@ exports.registerScripts = function () {
   * a transaction to either create or update a position and create a position posting
   */
   newpositiontransaction = getsymbolkey + updateposition + newposition + newpositionposting + '\
-  local newpositiontransaction = function(accountid, brokerid, cost, futsettdate, positionpostingtype, positionpostingtypeid, quantity, symbolid, timestamp) \
+  local newpositiontransaction = function(accountid, amount, brokerid, futsettdate, positionpostingtype, positionpostingtypeid, quantity, symbolid, timestamp) \
     local brokerkey = "broker:" .. brokerid \
     local symbolkey = getsymbolkey(symbolid, futsettdate) \
     local positionid \
@@ -709,11 +710,11 @@ exports.registerScripts = function () {
         redis.log(redis.LOG_WARNING, "position not found") \
         return \
       end \
-      updateposition(brokerid, cost, positionid, quantity) \
+      updateposition(brokerid, amount, positionid, quantity) \
     else \
-      positionid = newposition(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
+      positionid = newposition(accountid, brokerid, amount, futsettdate, quantity, symbolid) \
     end \
-    newpositionposting(brokerid, positionid, quantity, timestamp, positionpostingtype, positionpostingtypeid) \
+    newpositionposting(amount, brokerid, positionid, quantity, timestamp, positionpostingtype, positionpostingtypeid) \
   end \
   ';
 
