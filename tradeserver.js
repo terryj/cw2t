@@ -1046,7 +1046,6 @@ function registerScripts() {
   //var updatetrademargin;
   var neworder;
   //var getreserve;
-  //var getposition;
   var closeposition;
   var createposition;
 
@@ -1280,17 +1279,13 @@ function registerScripts() {
     redis.log(redis.LOG_WARNING, costs[4]) \
     --[[ calculate margin required for order ]] \
     local initialmargin = getinitialmargin(brokerid, symbolid, consid, totalcost) \
-    --[[ position key varies by instrument type ]] \
-    local symbolkey = symbolid \
-    if instrumenttypeid == "CFD" or instrumenttypeid == "SPB" then \
-      symbolkey = symbolkey .. ":" .. settldate \
-    end \
     --[[ get position, if there is one, as may be a closing buy or sell ]] \
-    local position = getposition(accountid, brokerid, symbolkey) \
+    local position = getposition(accountid, brokerid, symbolid, settldate) \
     if position[1] then \
       --[[ we have a position - always allow closing trades ]] \
-      local posqty = tonumber(position[1]) \
-      local poscost = tonumber(position[2]) \
+      local posqty = tonumber(position[5]) \
+      redis.log(redis.LOG_WARNING, "position") \
+      redis.log(redis.LOG_WARNING, posqty) \
       if (side == 1 and posqty < 0) or (side == 2 and posqty > 0) then \
         if quantity <= math.abs(posqty) then \
           --[[ closing trade, so ok ]] \
@@ -1339,14 +1334,10 @@ function registerScripts() {
         rejectorder(brokerid, orderid, 0, "No position held in this instrument") \
         return {0} \
       end \
-      local posqty = tonumber(position[1]) \
+      local posqty = tonumber(position[5]) \
       --[[ check the position is long ]] \
-      if posqty < 0 then \
+      if posqty < 0 or quantity > posqty then \
         rejectorder(brokerid, orderid, 0, "Insufficient position size in this instrument") \
-        return {0} \
-      end \
-      if quantity > posqty then \
-        rejectorder(brokerid, orderid, 1004, "Insufficient position size in this instrument") \
         return {0} \
       end \
     end \
@@ -1478,18 +1469,18 @@ function registerScripts() {
     redis.call("hmset", tradekey, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "margin", margin, "finance", finance) \
     redis.call("sadd", brokerkey .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
-    local amount \
+    local cost \
     local note \
     if tonumber(side) == 1 then \
-      amount = settlcurramt \
+      cost = settlcurramt \
       note = "Bought " .. quantity .. " " .. symbolid .. " @ " .. price \
     else \
       quantity = -tonumber(quantity) \
-      amount = -tonumber(settlcurramt) \
+      cost = -tonumber(settlcurramt) \
       note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
     local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side) \
-    newpositiontransaction(accountid, amount, brokerid, futsettdate, "trade", tradeid, quantity, symbolid, timestamp) \
+    newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp) \
     --[[ todo: do we need to update the trade record with positionid or positionpostingid or nothing? ]] \
     --[[redis.call("hset", tradekey, "positionpostingid", positionpostingid) ]]\
     publishtrade(brokerid, tradeid, 6) \
@@ -1564,7 +1555,7 @@ function registerScripts() {
   local settlcurramt = tonumber(ARGV[6]) * tonumber(ARGV[7]) \
   redis.log(redis.LOG_WARNING, "beforecc") \
   local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[20], ARGV[10], ARGV[23]) \
-   if cc[1] == 0 then \
+  if cc[1] == 0 then \
     --[[ publish the order back to the operatortype - the order contains the error ]] \
     publishorder(brokerid, orderid, ARGV[24]) \
     return {cc[1], orderid} \
