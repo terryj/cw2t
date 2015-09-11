@@ -166,7 +166,7 @@ exports.registerScripts = function () {
       desc = "Symbol not found";
       break;
     case 1016:
-      desc = "Proquote symbol not found";
+      desc = "Symbol data not found";
       break;
     case 1017:
       desc = "Client not found";
@@ -300,48 +300,6 @@ exports.registerScripts = function () {
 
   exports.getsymbolkey = getsymbolkey;
 
-  /*
-  * getposition()
-  * gets a position
-  * params: accountid, brokerid, symbolkey
-  * returns: position as a table
-  */
-  getposition = getsymbolkey + '\
-  local getposition = function(accountid, brokerid, symbolid, futsettdate) \
-    local vals = {} \
-    local brokerkey = "broker:" .. brokerid \
-    local symbolkey = getsymbolkey(symbolid, futsettdate) \
-    local positionid = redis.call("get", brokerkey .. ":account:" .. accountid .. ":symbol:" .. symbolkey) \
-    if positionid then \
-      local fields = {"accountid","brokerid","cost","positionid","quantity","symbolid","futsettdate"} \
-      vals = redis.call("hmget", brokerkey .. ":position:" .. positionid, unpack(fields)) \
-    end \
-    return vals \
-  end \
-  ';
-
-  exports.getposition = getposition;
-
-  /*
-  * getpositions()
-  * gets all positions for an account
-  * params: accountid, brokerid
-  * returns: all position fields as a table
-  */
-  getpositions = '\
-  local getpositions = function(accountid, brokerid) \
-    redis.log(redis.LOG_WARNING, "getpositions") \
-    local tblresults = {} \
-    local fields = {"accountid","brokerid","cost","positionid","quantity","symbolid","futsettdate"} \
-    local positions = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. "positions") \
-    for index = 1, #positions do \
-      local vals = redis.call("hmget", "broker:" .. brokerid .. ":position:" .. positions[index], unpack(fields)) \
-      table.insert(tblresults, {accountid=vals[1],brokerid=vals[2],cost=vals[3],positionid=vals[4],quantity=vals[5],symbolid=vals[6],futsettdate=vals[7]}) \
-    end \
-    return tblresults \
-  end \
-  ';
-
   getmargin = round + '\
   local getmargin = function(symbolid, quantity) \
     local margin = 0 \
@@ -401,9 +359,94 @@ exports.registerScripts = function () {
 
   exports.getunrealisedpandl = getunrealisedpandl;
 
+  /*
+  * getposition()
+  * gets a position
+  * params: accountid, brokerid, symbolkey
+  * returns: position as a table
+  */
+  getposition = getsymbolkey + '\
+  local getposition = function(accountid, brokerid, symbolid, futsettdate) \
+    local vals = {} \
+    local brokerkey = "broker:" .. brokerid \
+    local symbolkey = getsymbolkey(symbolid, futsettdate) \
+    local positionid = redis.call("get", brokerkey .. ":account:" .. accountid .. ":symbol:" .. symbolkey) \
+    if positionid then \
+      local fields = {"accountid","brokerid","cost","positionid","quantity","symbolid","futsettdate"} \
+      vals = redis.call("hmget", brokerkey .. ":position:" .. positionid, unpack(fields)) \
+    end \
+    return vals \
+  end \
+  ';
+
+  exports.getposition = getposition;
+
+  /*
+  * getpositionpl()
+  * values a position
+  * params: brokerid, positionid
+  * returns: position & p&l
+  */
+  getpositionpl = getmargin + getunrealisedpandl + '\
+  local getpositionpl = function(brokerid, positionid) \
+    local tblresults = {} \
+    local fields = {"accountid","brokerid","cost","positionid","quantity","symbolid","futsettdate"} \
+    local vals = redis.call("hmget", "broker:" .. brokerid .. ":position:" .. positionid, unpack(fields)) \
+    if vals[1] then \
+      vals[8] = getmargin(vals[6], vals[5]) \
+      local unrealisedpandl = getunrealisedpandl(vals[6], vals[5], vals[3]) \
+      vals[9] = unrealisedpandl[2] \
+      vals[10] = unrealisedpandl[1] \
+    end \
+    return vals \
+  end \
+  ';
+
+  exports.getpositionpl = getpositionpl;
+
+  /*
+  * getpositions()
+  * gets all positions for an account
+  * params: accountid, brokerid
+  * returns: all position fields as a table
+  */
+  getpositions = '\
+  local getpositions = function(accountid, brokerid) \
+    redis.log(redis.LOG_WARNING, "getpositions") \
+    local tblresults = {} \
+    local fields = {"accountid","brokerid","cost","positionid","quantity","symbolid","futsettdate"} \
+    local positions = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. "positions") \
+    for index = 1, #positions do \
+      local vals = redis.call("hmget", "broker:" .. brokerid .. ":position:" .. positions[index], unpack(fields)) \
+      table.insert(tblresults, {accountid=vals[1],brokerid=vals[2],cost=vals[3],positionid=vals[4],quantity=vals[5],symbolid=vals[6],futsettdate=vals[7]}) \
+    end \
+    return tblresults \
+  end \
+  ';
+
+  /*
+  * getpositionspl()
+  * values all positions for an account
+  * params: accountid, brokerid
+  * returns: all position & p&l fields as a table
+  */
+  getpositionspl = '\
+  local getpositionspl = function(accountid, brokerid) \
+    redis.log(redis.LOG_WARNING, "getpositions") \
+    local tblresults = {} \
+    local fields = {"accountid","brokerid","cost","positionid","quantity","symbolid","futsettdate"} \
+    local positions = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. "positions") \
+    for index = 1, #positions do \
+      local vals = redis.call("hmget", "broker:" .. brokerid .. ":position:" .. positions[index], unpack(fields)) \
+      table.insert(tblresults, {accountid=vals[1],brokerid=vals[2],cost=vals[3],positionid=vals[4],quantity=vals[5],symbolid=vals[6],futsettdate=vals[7]}) \
+    end \
+    return tblresults \
+  end \
+  ';
+
   gettotalpositions = getpositions + getunrealisedpandl + getmargin + '\
   local gettotalpositions = function(accountid, brokerid) \
-    redis.log(redis.LOG_DEBUG, "gettotalpositions") \
+    redis.log(redis.LOG_WARNING, "gettotalpositions") \
     local positions = getpositions(accountid, brokerid) \
     local totalmargin = 0 \
     local totalunrealisedpandl = 0 \
@@ -472,11 +515,11 @@ exports.registerScripts = function () {
   * getclientaccountid()
   * gets the account of a designated type for a client
   * params: brokerid, clientid, accounttypeid
-  * returns the first account id found for the account type, else 0
+  * returns the first account id found for the account type
   */
   getclientaccountid = '\
   local getclientaccountid = function(brokerid, clientid, accounttypeid) \
-    local acctid = 0 \
+    local acctid \
     local clientaccounts = redis.call("smembers", "broker:" .. brokerid .. ":client:" .. clientid .. ":clientaccounts") \
     for index = 1, #clientaccounts do \
       local accttypeid = redis.call("hget", "broker:" .. brokerid .. ":account:" .. clientaccounts[index], "accounttypeid") \
@@ -519,7 +562,7 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * calculates free margin for an accountcurrency
+  * calculates free margin for an account
   * balance = cash
   * equity = balance + unrealised p&l
   * free margin = equity - margin used to hold positions
@@ -752,14 +795,34 @@ exports.registerScripts = function () {
   return cjson.encode(tblresults) \
   ';
 
-  //
-  // get positions for a client
-  // params: client id
-  // returns an array of positions
-  //
-  exports.scriptgetpositions = getunrealisedpandl + getmargin + '\
+  /*
+  * get positions for an account
+  * params: brokerid, accountid
+  * returns an array of positions
+  */
+  /*exports.scriptgetpositions = getunrealisedpandl + getmargin + '\
   local tblresults = {} \
   local positions = redis.call("smembers", ARGV[1] .. ":positions") \
+  local fields = {"clientid","symbolid","quantity","cost","currencyid","positionid","futsettdate"} \
+  local vals \
+  for index = 1, #positions do \
+    vals = redis.call("hmget", ARGV[1] .. ":position:" .. positions[index], unpack(fields)) \
+    local margin = getmargin(vals[2], vals[3]) \
+    --[[ value the position ]] \
+    local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
+    table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],currencyid=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+  end \
+  return tblresults \
+  ';*/
+
+  /*
+  * get positions for an account
+  * params: brokerid, accountid
+  * returns an array of positions
+  */
+  exports.scriptgetpositions = getunrealisedpandl + getmargin + '\
+  local tblresults = {} \
+  local positions = redis.call("smembers", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":positions") \
   local fields = {"clientid","symbolid","quantity","cost","currencyid","positionid","futsettdate"} \
   local vals \
   for index = 1, #positions do \

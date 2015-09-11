@@ -228,7 +228,7 @@ function listen() {
     //testtrade();
     //testSettle();
     //testBrokerFundsTransfer();
-    newSupplierFundsTransfer();
+    //testSupplierFundsTransfer();
 
     // data callback
     // todo: multiple messages in one data event
@@ -1206,7 +1206,15 @@ function sendPositions(orgclientkey, conn) {
 }
 
 function positionRequest(posreq, conn) {
-  db.eval(commonfo.scriptgetpositions, 0, posreq.clientid, function(err, ret) {
+  var brokerid = 1;
+  var accountid = 1;
+
+  /*db.eval(commonfo.scriptgetpositions, 1, posreq.clientid, function(err, ret) {
+    if (err) throw err;
+    conn.write("{\"positions\":" + JSON.stringify(ret) + "}");
+  });*/
+
+  db.eval(commonbo.scriptgetpositions, 1, "broker:" + brokerid, brokerid, accountid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"positions\":" + JSON.stringify(ret) + "}");
   });
@@ -1873,7 +1881,7 @@ function testBrokerFundsTransfer() {
   });
 }
 
-function newSupplierFundsTransfer() {
+function testSupplierFundsTransfer() {
   var sft = {};
 
   sft.amount = 125;
@@ -1898,6 +1906,7 @@ function newSupplierFundsTransfer() {
 }
 
 function quoteRequestReceived(quoterequest, userid) {
+  console.log(quoterequest);
   quoterequest.brokerid = brokerid;
   quoterequest.operatortype = operatortype;
   quoterequest.operatorid = userid;

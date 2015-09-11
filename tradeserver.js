@@ -234,13 +234,13 @@ function quoteRequest(quoterequest) {
     // todo:sort out
     if (ret[0] != 0) {
       // todo: send a quote ack to client
-      console.log("Error in scriptQuoteRequest:" + commonbo.getReasonDesc(ret[0]));
+      console.log("Error in scriptQuoteRequest: " + commonbo.getReasonDesc(ret[0]));
       return;
     }
 
     console.log(ret);
 
-    // add the quote request id & symbol details required for fix connection
+    // add the quote request id & symbol details required for the fix connection
     quoterequest.quoterequestid = ret[1];
     quoterequest.isin = ret[2][2];
     quoterequest.mnemonic = ret[2][3];
@@ -304,11 +304,11 @@ function testQuoteAck(quoterequest) {
   console.log(quoterequest);
 
   quoteack.quoterequestid = quoterequest.quoterequestid;
-  quoteack.quoteackstatusid = "";
+  quoteack.quotestatusid = 5;
   quoteack.quoterejectreasonid = "";
-  quoteack.text = "too much toblerone";
+  quoteack.text = "test rejection message";
 
-  db.eval(scriptQuoteAck, 0, quoterequest.brokerid, quoteack.quoterequestid, quoteack.quoteackstatusid, quoteack.quoterejectreasonid, quoteack.text, function(err, ret) {
+  db.eval(scriptQuoteAck, 1, "broker:" + quoterequest.brokerid, quoterequest.brokerid, quoteack.quoterequestid, quoteack.quotestatusid, quoteack.quoterejectreasonid, quoteack.text, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -993,7 +993,8 @@ nbt.on("quoteack", function(quoteack) {
   console.log("quote ack, request id " + quoteack.quoterequestid);
   console.log(quoteack);
 
-  db.eval(scriptQuoteAck, 0, quoteack.quoterequestid, quoteack.quoteackstatus, quoteack.orderrejectreasonid, quoteack.text, function(err, ret) {
+  // todo: add brokerid
+  db.eval(scriptQuoteAck, 1, quoteack.quoterequestid, quoteack.quoteackstatus, quoteack.orderrejectreasonid, quoteack.text, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -1368,11 +1369,11 @@ function registerScripts() {
   getproquotesymbol = '\
   local getproquotesymbol = function(symbolid) \
     redis.log(redis.LOG_WARNING, "getproquotesymbol") \
-    if symbolid == nil then \
-      return {"","","","","",""} \
+    local vals \
+    if symbolid ~= nil then \
+      local fields = {"isin", "mnemonic", "exchangeid", "hedgesymbolid", "instrumenttypeid", "timezoneid"} \
+      vals = redis.call("hmget", "symbol:" .. symbolid, unpack(fields)) \
     end \
-    local fields = {"isin", "mnemonic", "exchangeid", "hedgesymbolid", "instrumenttypeid", "timezoneid"} \
-    local vals = redis.call("hmget", "symbol:" .. symbolid, unpack(fields)) \
     return vals \
   end \
   ';
@@ -1452,6 +1453,15 @@ function registerScripts() {
     local vals = redis.call("hmget", brokerkey .. ":trade:" .. tradeid, unpack(fields)) \
     local trade = {accountid=vals[1],brokerid=vals[2],clientid=vals[3],orderid=vals[4],symbolid=vals[5],side=vals[6],quantity=vals[7],price=vals[8],currencyid=vals[9],currencyratetoorg=vals[10],currencyindtoorg=vals[11],commission=vals[12],ptmlevy=vals[13],stampduty=vals[14],contractcharge=vals[15],counterpartyid=vals[16],markettype=vals[17],externaltradeid=vals[18],futsettdate=vals[19],timestamp=vals[20],lastmkt=vals[21],externalorderid=vals[22],tradeid=vals[23],settlcurrencyid=vals[24],settlcurramt=vals[25],settlcurrfxrate=vals[26],settlcurrfxratecalc=vals[27],nosettdays=vals[28],finance=vals[29],margin=vals[30],positionid=vals[31]} \
     redis.call("publish", channel, "{" .. cjson.encode("trade") .. ":" .. cjson.encode(trade) .. "}") \
+  end \
+  ';
+
+  quoteack = publishquoteack + '\
+  local quoteack = function(brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text) \
+    --[[ update quote request ]] \
+    redis.call("hmset", "broker:" .. brokerid .. ":quoterequest:" .. quoterequestid, "quotestatusid", quotestatusid, "quoterejectreasonid", quoterejectreasonid, "text", text) \
+    --[[ publish to operator type ]] \
+    publishquoteack(brokerid, quoterequestid) \
   end \
   ';
 
@@ -1856,11 +1866,11 @@ function registerScripts() {
   return {ret, operatortype} \
   ';
 
-  scriptQuoteRequest = getproquotesymbol + commonbo.getclientaccountid + '\
+  scriptQuoteRequest = getproquotesymbol + commonbo.getclientaccountid + quoteack + '\
   local quoterequestid = redis.call("hincrby", KEYS[1], "lastquoterequestid", 1) \
-  if not quoterequestid then return 1005 end \
+  if not quoterequestid then return {1005} end \
   --[[ get trading accountid if not specified ]] \
-  local accountid = 0 \
+  local accountid \
   if ARGV[1] == "" then \
     accountid = getclientaccountid(ARGV[2], ARGV[4], 1) \
   else \
@@ -1874,6 +1884,10 @@ function registerScripts() {
   redis.call("sadd", KEYS[1] .. ":accountid:" .. accountid .. ":quoterequests", quoterequestid) \
   --[[ get required instrument values for external feed ]] \
   local proquotesymbol = getproquotesymbol(ARGV[12]) \
+  if not proquotesymbol[1] then \
+    quoteack(ARGV[2], quoterequestid, 5, 99, "Symbol data not found") \
+    return {1016} \
+  end \
   return {0, quoterequestid, proquotesymbol} \
   ';
 
@@ -1924,7 +1938,6 @@ function registerScripts() {
   redis.call("sadd", brokerkey .. ":quotes", quoteid) \
   --[[ keep a list of quotes for the quoterequest ]] \
   redis.call("sadd", brokerkey .. ":quoterequest:" .. ARGV[1] .. ":quotes", quoteid) \
-  --[[ quote status - 0=new, 1=quoted, 2=rejected ]] \
   local quotestatusid \
   --[[ bid or offer size needs to be non-zero ]] \
   if ARGV[5] == 0 and ARGV[6] == 0 then \
@@ -1972,11 +1985,8 @@ function registerScripts() {
     --[[bidfinance = calcfinance(instrumenttypeid, bidquantity * bidprice, vals[7], 2, vals[6]) ]]\
   */
 
-  scriptQuoteAck = publishquoteack + '\
-  --[[ update quote request ]] \
-  redis.call("hmset", "broker:" .. ARGV[1] .. ":quoterequest:" .. ARGV[2], "quotestatusid", ARGV[3], "quoterejectreasonid", ARGV[4], "text", ARGV[5]) \
-  --[[ publish to operator type ]] \
-  publishquoteack(ARGV[1], ARGV[2]) \
+  scriptQuoteAck = quoteack + '\
+  quoteack(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5]) \
   return \
   ';
 

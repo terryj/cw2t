@@ -717,6 +717,7 @@ exports.getPTPOrderCancelRejectReason = getPTPOrderCancelRejectReason;
 
 exports.registerScripts = function () {
   var updatecash;
+  var getmargin;
   var getunrealisedpandl;
   var calcfinance;
   var round;
@@ -1367,56 +1368,6 @@ exports.registerScripts = function () {
   ';
 
   //
-  // get positions for a client
-  // params: client id
-  // returns an array of positions
-  //
-  /*exports.scriptgetpositions = getunrealisedpandl + getmargin + '\
-  local tblresults = {} \
-  local positions = redis.call("smembers", ARGV[1] .. ":positions") \
-  local fields = {"clientid","symbolid","quantity","cost","currencyid","positionid","futsettdate"} \
-  local vals \
-  for index = 1, #positions do \
-    vals = redis.call("hmget", ARGV[1] .. ":position:" .. positions[index], unpack(fields)) \
-    local margin = getmargin(vals[2], vals[3]) \
-    --[[ value the position ]] \
-    local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-    table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],currencyid=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
-  end \
-  return tblresults \
-  ';
-
-  //
-  // get position(s) for a client for a single symbol
-  // params: client id, symbol
-  // may return none/one or a number of positions as may be more than one settlement date
-  //
-  exports.scriptgetposition = getunrealisedpandl + getmargin + '\
-  local fields = {"clientid","symbolid","quantity","cost","currencyid","positionid","futsettdate"} \
-  local tblresults = {} \
-  local instrumenttypeid = redis.call("hget", "symbol:" .. ARGV[2], "instrumenttypeid") \
-  if instrumenttypeid == "CFD" or instrumenttypeid == "SPB" then \
-    local positions = redis.call("smembers", ARGV[1] .. ":positions:" .. ARGV[2]) \
-    for index = 1, #positions do \
-      local vals = redis.call("hmget", ARGV[1] .. ":position:" .. ARGV[2] .. ":" .. positions[index], unpack(fields)) \
-      local margin = getmargin(vals[2], vals[3]) \
-      --[[ value the position ]] \
-      local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-      table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],currencyid=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
-    end \
-  else \
-    local vals = redis.call("hmget", ARGV[1] .. ":position:" .. ARGV[2], unpack(fields)) \
-    if vals[1] then \
-      local margin = getmargin(vals[2], vals[3]) \
-      --[[ value the position ]] \
-      local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-      table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],currencyid=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
-    end \
-  end \
-  return cjson.encode(tblresults) \
-  ';
-
-  //
   // get positions for a client & subscribe client & server to the position symbols
   // params: client id, server id
   //
@@ -1442,7 +1393,7 @@ exports.registerScripts = function () {
     end \
   end \
   return {cjson.encode(tblresults), tblsubscribe} \
-  ';*/
+  ';
 
   //
   // get positions for a client and unsubscribe client & server to the position symbols
