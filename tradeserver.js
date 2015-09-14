@@ -1254,7 +1254,7 @@ function registerScripts() {
   * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, settldate, nosettdays
   * returns: 0=fail/1=succeed, inialmargin, costs as a table
   */
-  creditcheck = rejectorder + getinitialmargin + getcosts + commonbo.getposition + commonbo.getfreemargin + '\
+  creditcheck = rejectorder + getinitialmargin + getcosts + commonbo.getpositionid + commonbo.getposition + commonbo.getfreemargin + '\
   local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, settldate, nosettdays) \
     --[[ see if client is allowed to trade this product ]] \
     local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
@@ -1281,11 +1281,12 @@ function registerScripts() {
     --[[ calculate margin required for order ]] \
     local initialmargin = getinitialmargin(brokerid, symbolid, consid, totalcost) \
     --[[ get position, if there is one, as may be a closing buy or sell ]] \
-    local position = getposition(accountid, brokerid, symbolid, settldate) \
+    local positionid = getpositionid(accountid, brokerid, symbolid, settldate) \
+    local position = getposition(brokerid, positionid) \
     if position[1] then \
       --[[ we have a position - always allow closing trades ]] \
       local posqty = tonumber(position[5]) \
-      redis.log(redis.LOG_WARNING, "position") \
+      redis.log(redis.LOG_WARNING, "posqty") \
       redis.log(redis.LOG_WARNING, posqty) \
       if (side == 1 and posqty < 0) or (side == 2 and posqty > 0) then \
         if quantity <= math.abs(posqty) then \

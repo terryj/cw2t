@@ -1206,17 +1206,15 @@ function sendPositions(orgclientkey, conn) {
 }
 
 function positionRequest(posreq, conn) {
+  console.log("positionrequest");
+
   var brokerid = 1;
   var accountid = 1;
 
-  /*db.eval(commonfo.scriptgetpositions, 1, posreq.clientid, function(err, ret) {
+  db.eval(commonbo.scriptgetpositionvalues, 1, "broker:" + brokerid, accountid, brokerid, function(err, ret) {
     if (err) throw err;
-    conn.write("{\"positions\":" + JSON.stringify(ret) + "}");
-  });*/
-
-  db.eval(commonbo.scriptgetpositions, 1, "broker:" + brokerid, brokerid, accountid, function(err, ret) {
-    if (err) throw err;
-    conn.write("{\"positions\":" + JSON.stringify(ret) + "}");
+    console.log(ret);
+    conn.write("{\"positions\":" + ret + "}");
   });
 }
 

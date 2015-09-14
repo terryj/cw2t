@@ -1066,6 +1066,7 @@
         }
 
         function loadPositions(positionarr) {
+            console.log(positionarr);
             for (var i = 0; i < positionarr.length; ++i) {
                 positions[positionarr[i].positionid] = positionarr[i];
             }            
@@ -2896,7 +2897,9 @@
             var tblbody;
             var posrow;
             var headingrow;
-            var numcols = 11;
+            var numcols = 7;
+
+            console.log("displayPositions");
 
             var emptyline = addNewLine(main, "emptyline:1");
 
@@ -2926,40 +2929,26 @@
                     col.innerHTML = "Symbol";
                     break;
                 case 1:
-                    col.innerHTML = "Currency";
-                    break;
-                case 2:
-                    col.innerHTML = "Long/Short";
-                    break;
-                case 3:
                     col.innerHTML = "Quantity";
                     col.className = "colrightalign";
                     break;
-                case 4:
+                case 2:
                     col.innerHTML = "Cost";
                     col.className = "colrightalign";
                     break;
-                case 5:
-                    col.innerHTML = "Avg. Cost";
-                    col.className = "colrightalign";
-                    break;
-                case 6:
+                case 3:
                     col.innerHTML = "Margin";
                     col.className = "colrightalign";
                     break;
-                case 7:
-                    col.innerHTML = "Realised P&L";
-                    col.className = "colrightalign";
-                    break;
-                case 8:
+                case 4:
                     col.innerHTML = "Market Price";
                     col.className = "colrightalign";
                     break;
-                case 9:
+                case 5:
                     col.innerHTML = "Unrealised P&L";
                     col.className = "colrightalign";
                     break;
-                case 10:
+                case 6:
                     col.innerHTML = "View Trades";
                     break;
                 default:
@@ -2981,46 +2970,26 @@
                         col.innerHTML = positions[x].symbolid;
                         break;
                     case 1:
-                        col.innerHTML = positions[x].currencyid;
-                        break;
-                    case 2:
-                        if (positions[x].side == 1) {
-                            col.innerHTML = "Long";
-                            posrow.className = "rowlong";
-                        } else {
-                            col.innerHTML = "Short";                            
-                            posrow.className = "rowshort";
-                        }
-                        break;
-                    case 3:
                         col.innerHTML = positions[x].quantity;
                         col.className = "colrightalign";
                         break;
-                    case 4:
+                    case 2:
                         col.innerHTML = positions[x].cost;
                         col.className = "colrightalign";
                         break;
-                    case 5:
-                        col.innerHTML = positions[x].averagecostpershare;
-                        col.className = "colrightalign";
-                        break;
-                    case 6:
+                    case 3:
                         col.innerHTML = positions[x].margin;
                         col.className = "colrightalign";
                         break;
-                    case 7:
-                        col.innerHTML = positions[x].realisedpandl;
-                        col.className = "colrightalign";
-                        break;
-                    case 8:
+                    case 4:
                         col.innerHTML = positions[x].mktprice;
                         col.className = "colrightalign";
                         break;
-                    case 9:
+                    case 5:
                         col.innerHTML = positions[x].unrealisedpandl;
                         col.className = "colrightalign";
                         break;
-                    case 10:
+                    case 6:
                         displayPostrades(col);
                         break;
                     default:
