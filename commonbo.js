@@ -388,6 +388,19 @@ exports.registerScripts = function () {
 
   exports.calcfinance = calcfinance;
 
+  gethashvalues = '\
+  local gethashvalues = function(key) \
+    local vals = {} \
+    local rawvals = redis.call("hgetall", key) \
+    for index = 1, #rawvals, 2 do \
+      vals[rawvals[index]] = rawvals[index + 1] \
+    end \
+    return vals \
+  end \
+  ';
+
+  exports.gethashvalues = gethashvalues;
+
   /*
   * getpositionid()
   * gets a position id
@@ -408,18 +421,39 @@ exports.registerScripts = function () {
   * getposition()
   * gets a position
   * params: brokerid, positionid
-  * returns: position
+  * returns: all fields in a position as an array
   */
   getposition = '\
   local getposition = function(brokerid, positionid) \
     local vals = {} \
-    local fields = {"accountid","brokerid","cost","positionid","quantity","symbolid","futsettdate"} \
-    vals = redis.call("hmget", "broker:" .. brokerid .. ":position:" .. positionid, unpack(fields)) \
+    local rawvals = redis.call("hgetall", "broker:" .. brokerid .. ":position:" .. positionid) \
+    for index = 1, #rawvals, 2 do \
+      vals[rawvals[index]] = rawvals[index + 1] \
+    end \
     return vals \
   end \
   ';
 
   exports.getposition = getposition;
+
+ /*
+  * getpositionbysymbol()
+  * gets a position by symbolid
+  * params: accountid, brokerid, symbolid, futsettdate
+  * returns: all fields in a position as an array
+  */
+  getpositionbysymbol = getpositionid + getposition + '\
+  local getpositionbysymbol = function(accountid, brokerid, symbolid, futsettdate) \
+    local position \
+    local positionid = getpositionid(accountid, brokerid, symbolid, futsettdate) \
+    if positionid then \
+      position = getposition(brokerid, positionid) \
+    end \
+    return position \
+  end \
+  ';
+
+  exports.getpositionbysymbol = getpositionbysymbol;
 
   /*
   * getpositionvalue()
@@ -429,16 +463,15 @@ exports.registerScripts = function () {
   */
   getpositionvalue = getposition + getmargin + getunrealisedpandl + '\
   local getpositionvalue = function(brokerid, positionid) \
-    redis.log(redis.LOG_WARNING, "getpositionvalue") \
-    local vals = getposition(brokerid, positionid) \
-    if vals[1] then \
-      local margin = getmargin(vals[6], vals[5]) \
-      local unrealisedpandl = getunrealisedpandl(vals[6], vals[5], vals[3]) \
-      vals[8] = margin \
-      vals[9] = unrealisedpandl[2] \
-      vals[10] = unrealisedpandl[1] \
+    local position = getposition(brokerid, positionid) \
+    if position["positionid"] then \
+      local margin = getmargin(position["symbolid"], position["quantity"]) \
+      local unrealisedpandl = getunrealisedpandl(position["symbolid"], position["quantity"], position["cost"]) \
+      position["margin"] = margin \
+      position["price"] = unrealisedpandl[2] \
+      position["unrealisedpandl"] = unrealisedpandl[1] \
     end \
-    return vals \
+    return position \
   end \
   ';
 
@@ -448,7 +481,7 @@ exports.registerScripts = function () {
   * getpositions()
   * gets all positions for an account
   * params: accountid, brokerid
-  * returns: all position fields as a table
+  * returns: all position records as a table
   */
   getpositions = getposition + '\
   local getpositions = function(accountid, brokerid) \
@@ -494,8 +527,8 @@ exports.registerScripts = function () {
     local totalmargin = 0 \
     local totalunrealisedpandl = 0 \
     for index = 1, #positions do \
-      totalmargin = totalmargin + positions[index][8] \
-      totalunrealisedpandl = totalunrealisedpandl + positions[index][10] \
+      totalmargin = totalmargin + positions[index]["margin"] \
+      totalunrealisedpandl = totalunrealisedpandl + positions[index]["unrealisedpandl"] \
     end \
     return {totalmargin, totalunrealisedpandl} \
   end \
@@ -713,7 +746,7 @@ exports.registerScripts = function () {
       local margin = getmargin(vals[2], vals[3]) \
       --[[ value the position ]] \
       local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-      pos = {brokerid=brokerid,accountid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],positionid=vals[5],futsettdate=vals[6],margin=margin,mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
+      pos = {brokerid=brokerid,accountid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],positionid=vals[5],futsettdate=vals[6],margin=margin,price=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
     else \
       pos = {brokerid=brokerid,positionid=positionid,quantity=0} \
     end \
@@ -863,7 +896,7 @@ exports.registerScripts = function () {
       local margin = getmargin(vals[2], vals[3]) \
       --[[ value the position ]] \
       local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-      table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],currencyid=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
+      table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],currencyid=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],price=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
       --[[ subscribe to this symbol, so as to get prices to the f/e for p&l calc ]] \
       local subscribe = subscribesymbolnbt(vals[2], ARGV[1], ARGV[2]) \
       if subscribe[1] == 1 then \

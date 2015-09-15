@@ -561,7 +561,7 @@ function cashTrans(cashtrans, userid, conn) {
     console.log(ret);
   });
 
-  /*db.eval(commonfo.scriptcashtrans, 0, cashtrans.clientid, cashtrans.currencyid, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.settldate, operatortype, userid, function(err, ret) {
+  /*db.eval(commonfo.scriptcashtrans, 0, cashtrans.clientid, cashtrans.currencyid, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.futsettdate, operatortype, userid, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
@@ -2139,13 +2139,13 @@ function registerScripts() {
   //
   scriptgetreserves = '\
   local tblresults = {} \
-  local fields = {"symbol", "quantity", "currency", "settldate"} \
+  local fields = {"symbol", "quantity", "currency", "futsettdate"} \
   local vals \
   local reserves = redis.call("smembers", KEYS[1] .. ":reserves") \
   for index = 1, #reserves do \
     vals = redis.call("hmget", KEYS[1] .. ":reserve:" .. reserves[index], unpack(fields)) \
     if vals[1] then \
-      table.insert(tblresults, {symbol=vals[1], quantity=vals[2], currency=vals[3], settldate=vals[4]}) \
+      table.insert(tblresults, {symbol=vals[1], quantity=vals[2], currency=vals[3], futsettdate=vals[4]}) \
     end \
   end \
   return cjson.encode(tblresults) \

@@ -768,14 +768,14 @@ exports.registerScripts = function () {
   ';
 
   updatecash = '\
-  local updatecash = function(clientid, currencyid, transtype, amount, drcr, desc, reference, timestamp, settldate, operatortype, operatorid) \
+  local updatecash = function(clientid, currencyid, transtype, amount, drcr, desc, reference, timestamp, futsettdate, operatortype, operatorid) \
     amount = tonumber(amount) \
     if amount == 0 then \
       return {0, 0} \
     end \
     local cashtransid = redis.call("incr", "cashtransid") \
     if not cashtransid then return {1005} end \
-    redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currencyid", currencyid, "transtype", transtype, "amount", amount, "drcr", drcr, "description", desc, "reference", reference, "timestamp", timestamp, "settldate", settldate, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
+    redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currencyid", currencyid, "transtype", transtype, "amount", amount, "drcr", drcr, "description", desc, "reference", reference, "timestamp", timestamp, "futsettdate", futsettdate, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
     redis.call("sadd", "client:" .. clientid .. ":cashtrans", cashtransid) \
     local cashkey = "client:" .. clientid .. ":cash:" .. currencyid \
     local cashsetkey = "client:" .. clientid .. ":cash" \
@@ -1348,7 +1348,7 @@ exports.registerScripts = function () {
   exports.scriptgetcashhistory = '\
   local tblresults = {} \
   local cashhistory = redis.call("sort", "client:" .. ARGV[1] .. ":cashtrans") \
-  local fields = {"clientid","currencyid","amount","transtype","drcr","description","reference","timestamp","settldate","cashtransid"} \
+  local fields = {"clientid","currencyid","amount","transtype","drcr","description","reference","timestamp","futsettdate","cashtransid"} \
   local vals \
   local balance = 0 \
   for index = 1, #cashhistory do \
@@ -1361,7 +1361,7 @@ exports.registerScripts = function () {
       else \
         balance = balance - tonumber(vals[3]) \
       end \
-      table.insert(tblresults, {datetime=vals[1],currencyid=vals[2],amount=vals[3],transtype=vals[4],drcr=vals[5],description=vals[6],reference=vals[7],timestamp=vals[8],settldate=vals[9],cashtransid=vals[10],balance=balance}) \
+      table.insert(tblresults, {datetime=vals[1],currencyid=vals[2],amount=vals[3],transtype=vals[4],drcr=vals[5],description=vals[6],reference=vals[7],timestamp=vals[8],futsettdate=vals[9],cashtransid=vals[10],balance=balance}) \
     end \
   end \
   return cjson.encode(tblresults) \
