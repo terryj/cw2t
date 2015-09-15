@@ -368,7 +368,7 @@ Nbt.prototype.quoteRequest = function(quoterequest) {
 Nbt.prototype.newOrder = function(order) {
 	var delivertocompid = "";
 
-	var msg = '11=' + order.orderid + SOH
+	var msg = '11=' + order.brokerid + ":" + order.orderid + SOH
 		+ '21=' + handinst + SOH
 		+ '55=' + order.mnemonic + SOH
 		+ '48=' + order.isin + SOH
@@ -377,6 +377,7 @@ Nbt.prototype.newOrder = function(order) {
 		+ '207=' + order.exchangeid + SOH
 		+ '54=' + order.side + SOH
 		+ '60=' + order.timestamp + SOH
+		// todo: is this right?
 		+ '63=' + settlmnttyp + SOH
 		+ '64=' + order.futsettdate + SOH
 		+ '59=' + order.timeinforce + SOH
@@ -823,7 +824,9 @@ function getBody(msgtype, tagvalarr) {
 		for (var i = 0; i < tagarrlen; i++) {
 			switch (tagvalarr[i].tag) {
 			case 131:
-				body.quoterequestid = tagvalarr[i].value;
+				var res = tagvalarr[i].value.split(":");
+				body.brokerid = res[0];
+				body.quoterequestid = res[1];
 				break;
 			case 117:
 				body.externalquoteid = tagvalarr[i].value;
@@ -936,7 +939,9 @@ function getBody(msgtype, tagvalarr) {
 				body.orderid = tagvalarr[i].value;
 				break;
 			case 11:
-				body.clordid = tagvalarr[i].value;
+				var res = tagvalarr[i].value.split(":");
+				body.brokerid = res[0];
+				body.clordid = res[1];
 				break;
 			case 17:
 				body.execid = tagvalarr[i].value;
@@ -1058,7 +1063,9 @@ function getBody(msgtype, tagvalarr) {
 				body.orderid = tagvalarr[i].value;
 				break;
 			case 11:
-				body.clordid = tagvalarr[i].value;
+				var res = tagvalarr[i].value.split(":");
+				body.brokerid = res[0];
+				body.clordid = res[1];
 				break;
 			case 102:
 				body.cxlrejreason = tagvalarr[i].value;
@@ -1087,7 +1094,9 @@ function getBody(msgtype, tagvalarr) {
 				body.text = tagvalarr[i].value;
 				break;
 			case 131:
-				body.quoterequestid = tagvalarr[i].value;				
+				var res = tagvalarr[i].value.split(":");
+				body.brokerid = res[0];
+				body.quoterequestid = res[1];
 				break;
 			case 297:
 				body.quoteackstatus = tagvalarr[i].value;
@@ -1103,7 +1112,7 @@ function getBody(msgtype, tagvalarr) {
 			}
 		}
 		break;
-	case '3':
+	case '3': // reject
 		for (var i = 0; i < tagarrlen; ++i) {
 			switch (tagvalarr[i].tag) {
 			case 45:
@@ -1179,7 +1188,7 @@ function getBody(msgtype, tagvalarr) {
 			}
 		}
 		break;
-	case 'j':
+	case 'j': // business message reject
 		for (var i = 0; i < tagarrlen; ++i) {
 			switch (tagvalarr[i].tag) {
 			case 58:

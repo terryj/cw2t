@@ -737,20 +737,11 @@ exports.registerScripts = function () {
   * publishposition()
   * publish a position
   */
-  publishposition = getunrealisedpandl + getmargin + '\
+  publishposition = getposition + '\
   local publishposition = function(brokerid, positionid, channel) \
-    local fields = {"accountid", "symbolid", "quantity", "cost", "positionid", "futsettdate"} \
-    local vals = redis.call("hmget", "broker:" .. brokerid .. ":position:" .. positionid, unpack(fields)) \
-    local pos = {} \
-    if vals[1] then \
-      local margin = getmargin(vals[2], vals[3]) \
-      --[[ value the position ]] \
-      local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-      pos = {brokerid=brokerid,accountid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],positionid=vals[5],futsettdate=vals[6],margin=margin,price=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]} \
-    else \
-      pos = {brokerid=brokerid,positionid=positionid,quantity=0} \
-    end \
-    redis.call("publish", channel, "{" .. cjson.encode("position") .. ":" .. cjson.encode(pos) .. "}") \
+    redis.log(redis.LOG_WARNING, "publishposition") \
+    local position = getposition(brokerid, positionid) \
+    redis.call("publish", channel, "{" .. cjson.encode("position") .. ":" .. cjson.encode(position) .. "}") \
   end \
   ';
 
