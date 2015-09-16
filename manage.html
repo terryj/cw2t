@@ -4380,7 +4380,7 @@
             rfq.cashorderqty = cashorderqty;
             rfq.currencyid = currencyid;
             //rfq.settlcurrencyid = currencyid;
-            rfq.settlmnttyp = 0;
+            rfq.settlmnttypid = 0;
             //rfq.nosettdays = 2;
             //rfq.operatortype = operatortype;
             //rfq.operatorid = clientid;
@@ -4626,8 +4626,7 @@
             order.timeinforce = timeinforce;
             order.expiredate = expiredate;
             order.expiretime = expiretime;
-            //order.operatortype = operatortype;
-            //order.operatorid = userid;
+            order.settlmnttypid = 0;
 
             sockjs.send("{\"order\":" + JSON.stringify(order) + "}");
         }

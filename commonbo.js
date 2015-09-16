@@ -639,13 +639,14 @@ exports.registerScripts = function () {
   * creates a posting record & updates balances for an account
   */
   newposting = updateaccountbalance + '\
-  local newposting = function(accountid, amount, brokerid, localamount, transactionid) \
+  local newposting = function(accountid, amount, brokerid, localamount, transactionid, milliseconds) \
     local brokerkey = "broker:" .. brokerid \
     local postingid = redis.call("hincrby", brokerkey, "lastpostingid", 1) \
     redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", amount, "localamount", localamount, "postingid", postingid, "transactionid", transactionid) \
     redis.call("sadd", brokerkey .. ":transaction:" .. transactionid .. ":postings", postingid) \
+    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":postings", postingid) \
     --[[ add a sorted set for time based queries ]] \
-    --[[redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postings", unixtimestamp, postingid) ]]\
+    redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", milliseconds, postingid) \
     updateaccountbalance(accountid, amount, brokerid, localamount) \
   return postingid \
   end \
@@ -666,22 +667,22 @@ exports.registerScripts = function () {
   /*
   * newtradeaccounttransaction()
   * create transaction & postings for the cash side of a trade
-  * params: amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype
+  * params: amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype, milliseconds
   */
   newtradeaccounttransaction = newtransaction + newposting + getbrokeraccountid + '\
-  local newtradeaccounttransaction = function(amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype) \
+  local newtradeaccounttransaction = function(amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype, milliseconds) \
     local clientcontrolaccountid = getbrokeraccountid(brokerid, currencyid, "clientcontrolaccount") \
     local transactionid = newtransaction(amount, brokerid, currencyid, localamount, note, rate, "trade:" .. tradeid, timestamp, transactiontype) \
     if transactiontype == "TR" then \
       --[[ receipt from broker point of view ]] \
-      newposting(clientaccountid, -amount, brokerid, -localamount, transactionid) \
-      newposting(clientcontrolaccountid, -amount, brokerid, -localamount, transactionid) \
-      newposting(nominalaccountid, amount, brokerid, localamount, transactionid) \
+      newposting(clientaccountid, -amount, brokerid, -localamount, transactionid, milliseconds) \
+      newposting(clientcontrolaccountid, -amount, brokerid, -localamount, transactionid, milliseconds) \
+      newposting(nominalaccountid, amount, brokerid, localamount, transactionid, milliseconds) \
     else \
       --[[ pay from broker point of view ]] \
-      newposting(clientaccountid, amount, brokerid, localamount, transactionid) \
-      newposting(clientcontrolaccountid, amount, brokerid, localamount, transactionid) \
-      newposting(nominalaccountid, -amount, brokerid, -localamount, transactionid) \
+      newposting(clientaccountid, amount, brokerid, localamount, transactionid, milliseconds) \
+      newposting(clientcontrolaccountid, amount, brokerid, localamount, transactionid, milliseconds) \
+      newposting(nominalaccountid, -amount, brokerid, -localamount, transactionid, milliseconds) \
     end \
   end \
   ';
@@ -692,7 +693,7 @@ exports.registerScripts = function () {
   * creates a separate transaction for the consideration & each of the cost items
   */
   newtradeaccounttransactions = newtradeaccounttransaction + '\
-  local newtradeaccounttransactions = function(consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side) \
+  local newtradeaccounttransactions = function(consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side, milliseconds) \
     local nominaltradeaccountid = getbrokeraccountid(brokerid, currencyid, "nominaltradeaccount") \
     local nominalcommissionaccountid = getbrokeraccountid(brokerid, currencyid, "nominalcommissionaccount") \
     local nominalptmaccountid = getbrokeraccountid(brokerid, currencyid, "nominalptmaccount") \
@@ -700,15 +701,15 @@ exports.registerScripts = function () {
     --[[ side determines pay / receive ]] \
     if tonumber(side) == 1 then \
       --[[ client buy, so cash received from broker point of view ]] \
-      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominaltradeaccountid, note, rate, timestamp, tradeid, "TR") \
+      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominaltradeaccountid, note, rate, timestamp, tradeid, "TR", milliseconds) \
     else \
       --[[ cash paid from broker point of view ]] \
-      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominaltradeaccountid, note, rate, timestamp, tradeid, "TP") \
+      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominaltradeaccountid, note, rate, timestamp, tradeid, "TP", milliseconds) \
     end \
     --[[ broker always receives costs ]] \
-    newtradeaccounttransaction(commission, brokerid, clientaccountid, currencyid, commission, nominalcommissionaccountid, note .. " Commission", rate, timestamp, tradeid, "TR") \
-    newtradeaccounttransaction(ptmlevy, brokerid, clientaccountid, currencyid, ptmlevy, nominalptmaccountid, note .. " PTM Levy", rate, timestamp, tradeid, "TR") \
-    newtradeaccounttransaction(stampduty, brokerid, clientaccountid, currencyid, stampduty, nominalstampdutyaccountid, note .. " Stamp Duty", rate, timestamp, tradeid, "TR") \
+    newtradeaccounttransaction(commission, brokerid, clientaccountid, currencyid, commission, nominalcommissionaccountid, note .. " Commission", rate, timestamp, tradeid, "TR", milliseconds) \
+    newtradeaccounttransaction(ptmlevy, brokerid, clientaccountid, currencyid, ptmlevy, nominalptmaccountid, note .. " PTM Levy", rate, timestamp, tradeid, "TR", milliseconds) \
+    newtradeaccounttransaction(stampduty, brokerid, clientaccountid, currencyid, stampduty, nominalstampdutyaccountid, note .. " Stamp Duty", rate, timestamp, tradeid, "TR", milliseconds) \
     return 0 \
   end \
   ';
@@ -773,6 +774,25 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":position:" .. positionid .. ":positionpostings", positionpostingid) \
     redis.call("zadd", brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", milliseconds, positionpostingid) \
     return positionpostingid \
+  end \
+  ';
+
+  /*
+  * getpositionpostings()
+  * gets position postings for a position between two dates, sorted by datetime
+  * params: brokerid, positionid, start of period, end of period - datetimes expressed as unixtimestamp in milliseconds
+  * returns: array of postings
+  */
+  getpositionpostings = gethashvalues + '\
+  local getpositionpostings = function(brokerid, positionid, startmilliseconds, endmilliseconds) \
+    local tblpostings = {} \
+    local brokerkey = "broker:" .. brokerid \
+    local positionpostings = redis.call("zrangebyscore", brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", startmilliseconds, endmilliseconds) \
+    for i = 1, #positionpostings do \
+      local positionposting = gethashvalues(brokerkey .. ":positionposting:" .. positionpostings[i]) \
+      table.insert(tblpostings, positionposting) \
+    end \
+    return tblpostings \
   end \
   ';
 
@@ -853,6 +873,16 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * scriptgetpositionpostings
+  * params: brokerid, positionid, startmilliseconds, endmilliseconds
+  * returns: array of postings
+  */
+  exports.scriptgetpositionpostings = getpositionpostings + '\
+  local positionpostings = getpositionpostings(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
+  return cjson.encode(positionpostings) \
+  ';
+
+  /*
   * scriptgetaccountsummary
   * calculates account p&l, margin & equity for a client
   * params: accountid, brokerid
@@ -899,7 +929,7 @@ exports.registerScripts = function () {
   * newClientFundsTransfer
   * script to handle client deposits & withdrawals
   * keys: broker:<brokerid>
-  * args: amount, bankaccountid, brokerid, clientaccountid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid
+  * args: amount, bankaccountid, brokerid, clientaccountid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid, milliseconds
   * returns: 0
   */
   exports.newClientFundsTransfer = newtransaction + newposting + getbrokeraccountid + '\
@@ -915,28 +945,22 @@ exports.registerScripts = function () {
     end \
     local transactionid = newtransaction(ARGV[1], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11]) \
     --[[ update client account ]] \
-    newposting(ARGV[4], amount, ARGV[3], localamount, transactionid) \
+    newposting(ARGV[4], amount, ARGV[3], localamount, transactionid, milliseconds) \
     --[[ client control account ]] \
-    newposting(controlclientaccountid, amount, ARGV[3], localamount, transactionid) \
+    newposting(controlclientaccountid, amount, ARGV[3], localamount, transactionid, milliseconds) \
     --[[ update bank account ]] \
-    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid) \
-    return 0 \
-  ';
-
-  // todo: this needs to be called from a trade
-  exports.scripttesttrade = newtradeaccounttransactions + '\
-    newtradeaccounttransactions(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13]) \
+    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, milliseconds) \
     return 0 \
   ';
 
   /*
   * newTradeSettlementTransaction
   * script to handle settlement of trades
-  * params: amount, brokerid, currencyid, fromaccountid, localamount, note, rate, timestamp, toaccountid, tradeid, transactiontypeid
+  * params: amount, brokerid, currencyid, fromaccountid, localamount, note, rate, timestamp, toaccountid, tradeid, transactiontypeid, milliseconds
   * returns: 0 if ok, else error message
   */
   exports.newTradeSettlementTransaction = newtransaction + newposting + '\
-    redis.log(redis.LOG_DEBUG, "newTradeSettlementTransaction") \
+    redis.log(redis.LOG_WARNING, "newTradeSettlementTransaction") \
     --[[ transactiontypeid may be passed, else derive it ]] \
     local transactiontypeid = ARGV[11] \
     if transactiontypeid == "" then \
@@ -953,26 +977,26 @@ exports.registerScripts = function () {
       end \
     end \
     local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[10], ARGV[8], transactiontypeid) \
-    newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid) \
-    newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid) \
+    newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, milliseconds) \
+    newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid, milliseconds) \
     return 0 \
   ';
 
   /*
   * newBrokerFundsTransfer
   * script to handle transfer of funds between broker and supplier
-  * params: amount, brokerid, currencyid, brokerbankaccountid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid
+  * params: amount, brokerid, currencyid, brokerbankaccountid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid, milliseconds
   * returns 0
   */
   exports.newBrokerFundsTransfer = newtransaction + newposting + '\
-    redis.log(redis.LOG_DEBUG, "newBrokerFundsTransfer") \
+    redis.log(redis.LOG_WARNING, "newBrokerFundsTransfer") \
     local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[10], ARGV[11]) \
     if ARGV[11] == "BP" then \
-      newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid) \
-      newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid) \
+      newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, milliseconds) \
+      newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid, milliseconds) \
     else \
-      newposting(ARGV[4], ARGV[1], ARGV[2], ARGV[5], transactionid) \
-      newposting(ARGV[9], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid) \
+      newposting(ARGV[4], ARGV[1], ARGV[2], ARGV[5], transactionid, milliseconds) \
+      newposting(ARGV[9], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, milliseconds) \
     end \
     return 0 \
   ';
@@ -980,11 +1004,11 @@ exports.registerScripts = function () {
   /*
   * newSupplierFundsTransfer
   * script to handle receipts from and payments to a supplier
-  * params: amount, bankaccountid, brokerid, currencyid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid
+  * params: amount, bankaccountid, brokerid, currencyid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid, milliseconds
   * returns: 0
   */
   exports.newSupplierFundsTransfer = newtransaction + newposting + '\
-    redis.log(redis.LOG_DEBUG, "newSupplierFundsTransfer") \
+    redis.log(redis.LOG_WARNING, "newSupplierFundsTransfer") \
     local amount \
     local localamount \
     if ARGV[11] == "SP" then \
@@ -995,8 +1019,8 @@ exports.registerScripts = function () {
       localamount = ARGV[5] \
     end \
     local transactionid = newtransaction(ARGV[1], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[10], ARGV[11]) \
-    newposting(ARGV[9], amount, ARGV[3], localamount, transactionid) \
-    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid) \
+    newposting(ARGV[9], amount, ARGV[3], localamount, transactionid, milliseconds) \
+    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, milliseconds) \
     return 0 \
   ';
 }

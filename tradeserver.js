@@ -208,25 +208,6 @@ function quoteRequest(quoterequest) {
     quoterequest.side = "";
   }
 
-
-  // use settlement date, if specified
-  /*if (quoterequest.futsettdate != "") {
-    quoterequest.settlmnttyp = 6; // future date
-  } else if (quoterequest.nosettdays == 2) {
-    quoterequest.settlmnttyp = 3;      
-  } else if (quoterequest.nosettdays == 3) {
-    quoterequest.settlmnttyp = 4;      
-  } else if (quoterequest.nosettdays == 4) {
-    quoterequest.settlmnttyp = 5;
-  } else if (quoterequest.nosettdays > 5) {
-    // get settlement date from T+n no. of days
-    quoterequest.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, quoterequest.nosettdays, holidays));
-    quoterequest.settlmnttyp = 6;
-  } else {
-    // default
-    quoterequest.settlmnttyp = 0;
-  }*/
-
   // store the quote request & get an id
   db.eval(scriptQuoteRequest, 1, "broker:" + quoterequest.brokerid, quoterequest.accountid, quoterequest.brokerid, quoterequest.cashorderqty, quoterequest.clientid, quoterequest.currencyid, quoterequest.futsettdate, quoterequest.operatorid, quoterequest.operatortype, quoterequest.quantity, quoterequest.settlmnttypid, quoterequest.side, quoterequest.symbolid, quoterequest.timestamp, function(err, ret) {
     if (err) throw err;
@@ -238,13 +219,11 @@ function quoteRequest(quoterequest) {
       return;
     }
 
-    console.log(ret);
-
     // add the quote request id & symbol details required for the fix connection
     quoterequest.quoterequestid = ret[1];
-    quoterequest.isin = ret[2][2];
-    quoterequest.mnemonic = ret[2][3];
-    quoterequest.exchangeid = ret[2][4];
+    quoterequest.isin = ret[2];
+    quoterequest.mnemonic = ret[3];
+    quoterequest.exchangeid = ret[4];
 
     if (testmode == "1") {
       console.log("test response");
@@ -337,6 +316,7 @@ function testQuote(quoterequest, side) {
     quote.offerquotedepth = "1";
   }
 
+  quote.brokerid = quoterequest.brokerid;
   quote.cashorderqty = quoterequest.cashorderqty;
   quote.quoterequestid = quoterequest.quoterequestid;
   quote.symbolid = quoterequest.symbolid;
@@ -360,11 +340,12 @@ function testQuote(quoterequest, side) {
 
   // quote script
   // note: not passing securityid & idsource as proquote symbol should be enough
-  db.eval(scriptQuote, 0, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quoterequest.brokerid, function(err, ret) {
+  db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
     }
+    console.log("out of scriptQuote");
     console.log(ret);
 
     //todo:sortout
@@ -427,48 +408,54 @@ function getFixDate(date) {
 }
 
 function newOrder(order) {
+  console.log("newOrder");
+  console.log(order);
+
   var currencyratetoorg = 1; // product currency to org currency rate
   var currencyindtoorg = 1;
   var settlcurrfxrate = 1; // settlement currency to product currency rate
   var settlcurrfxratecalc = 1;
 
-  console.log("newOrder");
-
   var today = new Date();
 
   order.timestamp = commonbo.getUTCTimeStamp(today);
-  order.partfill = 1; // accept part-fill
+  order.markettype = 0;
 
   // get hour & minute for comparison with timezone to determine in/out of hours
   //var hour = today.getHours();
   //var minute = today.getMinutes();
   //var day = today.getDay();
 
-  // assume in-hours
-  order.markettype = 0;
+  if (!("accountid" in order)) {
+    order.accountid = "";
+  }
 
   // always put a price in the order
   if (!("price" in order)) {
-    order.price = "0";
+    order.price = "";
   }
 
-  // and always have a quote id
+  // always have a quote id
   if (!("quoteid" in order)) {
     order.quoteid = "";
   }
 
   // get settlement date from T+n no. of days
-  if (order.futsettdate == "") {
+  /*if (order.futsettdate == "") {
     order.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, order.nosettdays, holidays));
+  }*/
+
+  // if there is no settlement type, set to standard
+  if (!("settlmnttypid" in order)) {
+    order.settlmnttypid = 0;
   }
 
-  // todo
-  order.nosettdays = 2;
-
-  console.log(order);
+  if (!("futsettdate" in order)) {
+    order.futsettdate = "";
+  }
 
   // store the order, get an id & credit check it
-  db.eval(scriptneworder, 0, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.partfill, order.quoteid, order.currencyid, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, function(err, ret) {
+  db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, order.operatortype, order.operatorid, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
@@ -506,8 +493,6 @@ function newOrder(order) {
         db.hmset("order:" + hedgeorderid, "nosettdays", ret[11], "futsettdate", order.futsettdate);
       }*/
     }
-
-    console.log(order);
 
     processOrder(order);
   });
@@ -681,6 +666,7 @@ function testTradeResponse(order) {
   exereport.settlcurramt = parseFloat(order.price) * parseInt(order.quantity);
   exereport.settlcurrfxrate = 1;
   exereport.settlcurrfxratecalc = 1;
+
   var milliseconds = new Date().getTime();
 
   db.eval(scriptnewtrade, 1, "broker:" + exereport.brokerid, exereport.accountid, exereport.brokerid, exereport.clientid, exereport.clordid, exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.execbroker, counterpartytype, markettype, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.lastmkt, exereport.orderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, function(err, ret) {
@@ -786,6 +772,10 @@ function newQuote(quote) {
     quote.noseconds = commonbo.getSeconds(quote.transacttime, quote.validuntiltime);
   }
 
+  if (!('futsettdate' in quote)) {
+    quote.futsettdate = "";    
+  }
+
   if (!('settledays' in quote)) {
     quote.settledays = "";
   }
@@ -796,7 +786,7 @@ function newQuote(quote) {
   }
 
   // quote script
-  db.eval(scriptQuote, 0, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, function(err, ret) {
+  db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -978,16 +968,6 @@ nbt.on("quote", function(quote, header) {
     }
   }
 
-  // a two-way quote arrives in two bits, so fill in 'missing' price/size/quote id (note: separate external quote id for bid & offer)
-  /*if (!('bidpx' in quote)) {
-    quote.bidpx = '';
-    quote.bidsize = '';
-  }
-  if (!('offerpx' in quote)) {
-    quote.offerpx = '';
-    quote.offersize = '';
-  }*/
-
   newQuote(quote);
 });
 
@@ -998,20 +978,11 @@ nbt.on("quoteack", function(quoteack) {
   console.log("quote ack, request id " + quoteack.quoterequestid);
   console.log(quoteack);
 
-  // todo: add brokerid
-  db.eval(scriptQuoteAck, 1, quoteack.quoterequestid, quoteack.quoteackstatus, quoteack.orderrejectreasonid, quoteack.text, function(err, ret) {
+  db.eval(scriptQuoteAck, 1, "broker:" + quoteack.brokerid, quoteack.brokerid, quoteack.quoterequestid, quoteack.quoteackstatus, quoteack.quoterejectreasonid, quoteack.text, function(err, ret) {
     if (err) {
       console.log(err);
       return;
     }
-
-    /*if (ret[0] == 1) {
-      console.log("already received rejection for this quote request, ignoring");
-      return;
-    }*/
-
-    // script will publish
-    //db.publish(ret[1], "{\"quoteack\":" + JSON.stringify(quoteack) + "}");
   });
 });
 
@@ -1253,11 +1224,11 @@ function registerScripts() {
   /*
   * creditcheck()
   * credit checks an order
-  * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, futsettdate, nosettdays
+  * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, futsettdate
   * returns: 0=fail/1=succeed, inialmargin, costs as a table
   */
   creditcheck = rejectorder + getinitialmargin + getcosts + commonbo.getpositionbysymbol + commonbo.getfreemargin + '\
-  local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, futsettdate, nosettdays) \
+  local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, futsettdate) \
     --[[ see if client is allowed to trade this product ]] \
     local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
     if not instrumenttypeid then \
@@ -1413,7 +1384,9 @@ function registerScripts() {
 
   publishquote = commonbo.gethashvalues + '\
   local publishquote = function(brokerid, quoteid, channel, operatorid) \
-    redis.log(redis.LOG_WARNING, "publishquote") \
+    redis.log(redis.LOG_WARNING, quoteid) \
+    redis.log(redis.LOG_WARNING, channel) \
+    redis.log(redis.LOG_WARNING, operatorid) \
     local quote = gethashvalues("broker:" .. brokerid .. ":quote:" .. quoteid) \
     quote["operatorid"] = operatorid \
     redis.call("publish", channel, "{" .. cjson.encode("quote") .. ":" .. cjson.encode(quote) .. "}") \
@@ -1456,7 +1429,7 @@ function registerScripts() {
     local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
     if not tradeid then return 0 end \
     local tradekey = brokerkey .. ":trade:" .. tradeid \
-    redis.call("hmset", tradekey, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "margin", margin, "finance", finance) \
+    redis.call("hmset", tradekey, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "nosettdays", nosettdays, "margin", margin, "finance", finance, "tradesettlestatusid", 0) \
     redis.call("sadd", brokerkey .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
     local cost \
@@ -1469,7 +1442,7 @@ function registerScripts() {
       cost = -tonumber(settlcurramt) \
       note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
-    local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side) \
+    local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side, milliseconds) \
     newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, milliseconds) \
     --[[ todo: do we need to update the trade record with positionid or positionpostingid or nothing? ]] \
     --[[redis.call("hset", tradekey, "positionpostingid", positionpostingid) ]]\
@@ -1483,11 +1456,11 @@ function registerScripts() {
   * gets an orderid & saves the order
   */
   neworder = '\
-  local neworder = function(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, remquantity, orderstatusid, markettype, futsettdate, partfill, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, nosettdays, operatortype, operatorid, hedgeorderid) \
+  local neworder = function(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid) \
     local brokerkey = "broker:" .. brokerid \
     --[[ get a new orderid & store the order ]] \
     local orderid = redis.call("hincrby", brokerkey, "lastorderid", 1) \
-    redis.call("hmset", brokerkey .. ":order:" .. orderid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "ordertype", ordertype, "remquantity", remquantity, "orderstatusid", orderstatusid, "markettype", markettype, "futsettdate", futsettdate, "partfill", partfill, "quoteid", quoteid, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "timestamp", timestamp, "margin", margin, "timeinforce", timeinforce, "expiredate", expiredate, "expiretime", expiretime, "settlcurrencyid", settlcurrencyid, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "orderid", orderid, "externalorderid", externalorderid, "execid", execid, "nosettdays", nosettdays, "operatortype", operatortype, "operatorid", operatorid, "hedgeorderid", hedgeorderid, "orderrejectreasonid", "", "text", "") \
+    redis.call("hmset", brokerkey .. ":order:" .. orderid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "ordertype", ordertype, "remquantity", quantity, "orderstatusid", 0, "markettype", markettype, "futsettdate", futsettdate, "quoteid", quoteid, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "timestamp", timestamp, "margin", margin, "timeinforce", timeinforce, "expiredate", expiredate, "expiretime", expiretime, "settlcurrencyid", settlcurrencyid, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "orderid", orderid, "externalorderid", externalorderid, "execid", execid, "operatortype", operatortype, "operatorid", operatorid, "hedgeorderid", hedgeorderid, "orderrejectreasonid", "", "text", "") \
     --[[ add to set of orders ]] \
     redis.call("sadd", brokerkey .. ":orders", orderid) \
     --[[ add to set of orders for this client ]] \
@@ -1532,22 +1505,25 @@ function registerScripts() {
 
   /*
   * scriptneworder
-  * params: 1=accountid, 2=brokerid, 3=clientid, 4=symbolid, 5=side, 6=quantity, 7=price, 8=ordertype, 9=markettype, 10=futsettdate, 11=partfill, 12=quoteid, 13=currencyid, 14=currencyratetoorg, 15=currencyindtoorg, 16=timestamp, 17=timeinforce, 18=expiredate, 19=expiretime, 20=settlcurrencyid, 21=settlcurrfxrate, 22=settlcurrfxratecalc, 23=nosettdays, 24=operatortype, 25=operatorid
+  * params: 1=accountid, 2=brokerid, 3=clientid, 4=symbolid, 5=side, 6=quantity, 7=price, 8=ordertype, 9=markettype, 10=futsettdate, 11=quoteid, 12=currencyid, 13=currencyratetoorg, 14=currencyindtoorg, 15=timestamp, 16=timeinforce, 17=expiredate, 18=expiretime, 19=settlcurrencyid, 20=settlcurrfxrate, 21=settlcurrfxratecalc, 22=operatortype, 23=operatorid
   * returns: orderid
   */
+  //db.eval(scriptneworder, 0, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, order.nosettdays, order.operatortype, order.operatorid, function(err, ret) {
+  //local neworder = function(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid) \
+  //db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, order.operatortype, order.operatorid, function(err, ret) {
   scriptneworder = neworder + rejectorder + creditcheck + publishorder + getproquotequote + newtrade + '\
   redis.log(redis.LOG_WARNING, "scriptneworder") \
-  local orderid = neworder(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[6], 0, ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], 0, ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], ARGV[22], "", "", ARGV[23], ARGV[24], ARGV[25], "") \
+  local orderid = neworder(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15], 0, ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], "", "", ARGV[22], ARGV[23], "") \
   local brokerid = ARGV[2] \
   local brokerkey = "broker:" .. brokerid \
   local symbolid = ARGV[4] \
   local side = tonumber(ARGV[5]) \
   local settlcurramt = tonumber(ARGV[6]) * tonumber(ARGV[7]) \
   redis.log(redis.LOG_WARNING, "beforecc") \
-  local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[20], ARGV[10], ARGV[23]) \
+  local cc = creditcheck(ARGV[1], brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[19], ARGV[10]) \
   if cc[1] == 0 then \
     --[[ publish the order back to the operatortype - the order contains the error ]] \
-    publishorder(brokerid, orderid, ARGV[24]) \
+    publishorder(brokerid, orderid, ARGV[22]) \
     return {cc[1], orderid} \
   end \
   redis.log(redis.LOG_WARNING, "aftercc") \
@@ -1556,7 +1532,7 @@ function registerScripts() {
   local hedgeorderid = "" \
   local hedgetradeid = "" \
   local proquotesymbol = gethashvalues("symbol:" .. symbolid) \
-  local proquotequote = getproquotequote(brokerid, ARGV[12]) \
+  local proquotequote = getproquotequote(brokerid, ARGV[11]) \
   local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
   if instrumenttypeid == "CFD" or instrumenttypeid == "SPB" or instrumenttypeid == "CCFD" then \
     --[[ ignore limit orders for derivatives as they will be handled manually, at least for the time being ]] \
@@ -1894,7 +1870,7 @@ function registerScripts() {
   --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
   local quoteid = redis.call("hincrby", brokerkey, "lastquoteid", 1) \
   --[[ store the quote ]] \
-  redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", ARGV[20], "accountid", quoterequest["accountid"], "clientid", quoterequest["clientid"], "quoteid", quoteid, "symbolid", quoterequest["symbolid"], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", ARGV[17], "settledays", ARGV[18], "noseconds", ARGV[19]) \
+  redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", ARGV[20], "accountid", quoterequest["accountid"], "clientid", quoterequest["clientid"], "quoteid", quoteid, "symbolid", quoterequest["symbolid"], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", ARGV[17], "settledays", ARGV[18], "noseconds", ARGV[19], "settlmnttypid", ARGV[21]) \
   --[[ add to set of quotes ]] \
   redis.call("sadd", brokerkey .. ":quotes", quoteid) \
   --[[ keep a list of quotes for the quoterequest ]] \
@@ -1946,6 +1922,11 @@ function registerScripts() {
     --[[bidfinance = calcfinance(instrumenttypeid, bidquantity * bidprice, vals[7], 2, vals[6]) ]]\
   */
 
+  /*
+  * scriptQuoteAck
+  * script to handle a quote acknowledgement
+  * params: brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text
+  */
   scriptQuoteAck = quoteack + '\
   quoteack(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5]) \
   return \

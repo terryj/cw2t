@@ -41,7 +41,7 @@ var messagerecoveryout = false; // flag to indicate we are in a resend process f
 var sequencegapnum = 0; // sequence gap starting message number
 var sequencegaptimestamp; // timestamp of first message in a sequence gap
 var resendrequestrequired = false; // indicates we need to do our own resend once we have serviced a resend request
-var settlmnttyp = '6'; // indicates a settlement date is being used, rather than a number of days
+//var settlmnttyp = '6'; // indicates a settlement date is being used, rather than a number of days
 var norelatedsym = '1'; // number of related symbols in a request, always 1
 var idsource = '4'; // indicates ISIN is to be used to identify a security
 //var securitytype = 'CS'; // common stock
@@ -334,14 +334,14 @@ Nbt.prototype.quoteRequest = function(quoterequest) {
 		+ '48=' + quoterequest.isin + SOH
 		+ '22=' + idsource + SOH
 		//+ '167=' + securitytype + SOH
-		+ '63=' + quoterequest.settlmnttyp + SOH
+		+ '63=' + quoterequest.settlmnttypid + SOH
 		+ '207=' + quoterequest.exchangeid + SOH
 		+ '15=' + quoterequest.currencyid + SOH
 		//+ '120=' + quoterequest.settlcurrencyid + SOH
 		+ '60=' + quoterequest.timestamp + SOH;
 
 	// add settlement date if future settlement type specified
-	if (quoterequest.settlmnttyp == 6) {
+	if (quoterequest.settlmnttypid == 6) {
 		msg += '64=' + quoterequest.futsettdate + SOH;
 	}
 
@@ -378,8 +378,8 @@ Nbt.prototype.newOrder = function(order) {
 		+ '54=' + order.side + SOH
 		+ '60=' + order.timestamp + SOH
 		// todo: is this right?
-		+ '63=' + settlmnttyp + SOH
-		+ '64=' + order.futsettdate + SOH
+		+ '63=' + order.settlmnttypid + SOH
+		//+ '64=' + order.futsettdate + SOH
 		+ '59=' + order.timeinforce + SOH
 		+ '120=' + order.settlcurrencyid + SOH
 		+ '15=' + order.currencyid + SOH
@@ -853,7 +853,7 @@ function getBody(msgtype, tagvalarr) {
 				body.offersize = tagvalarr[i].value;
 				break;
 			case 63:
-				body.settlmnttyp = tagvalarr[i].value;
+				body.settlmnttypid = tagvalarr[i].value;
 				break;
 			case 64:
 				body.futsettdate = tagvalarr[i].value;
@@ -871,7 +871,7 @@ function getBody(msgtype, tagvalarr) {
 				body.lastmkt + tagvalarr[i].value;
 				break;
 			case 300:
-				body.quoterejectreason = tagvalarr[i].value;
+				body.quoterejectreasonid = tagvalarr[i].value;
 				break;
 			case 152:
 				body.cashorderqty = tagvalarr[i].value;
@@ -968,7 +968,7 @@ function getBody(msgtype, tagvalarr) {
 				body.idsource = tagvalarr[i].value;
 				break;
 			case 63:
-				body.settlmnttyp = tagvalarr[i].value;
+				body.settlmnttypid = tagvalarr[i].value;
 				break;
 			case 64:
 				body.futsettdate = tagvalarr[i].value;
@@ -1102,7 +1102,7 @@ function getBody(msgtype, tagvalarr) {
 				body.quoteackstatus = tagvalarr[i].value;
 				break;
 			case 300:
-				body.quoterejectreason = tagvalarr[i].value;
+				body.quoterejectreasonid = tagvalarr[i].value;
 				break;
 			case 6158:
 				body.quoterid = tagvalarr[i].value;

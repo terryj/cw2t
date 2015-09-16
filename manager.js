@@ -229,6 +229,7 @@ function listen() {
     //testSettle();
     //testBrokerFundsTransfer();
     //testSupplierFundsTransfer();
+    testPositionPostings();
 
     // data callback
     // todo: multiple messages in one data event
@@ -1909,6 +1910,18 @@ function testSupplierFundsTransfer() {
   });
 }
 
+function testPositionPostings() {
+  var brokerid = 1;
+  var positionid = 12;
+  var startmilli = 0;
+  var endmilli = new Date().getTime();
+
+  db.eval(commonbo.scriptgetpositionpostings, 1, "broker:" + brokerid, brokerid, positionid, startmilli, endmilli, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+  });
+}
+
 function quoteRequestReceived(quoterequest, userid) {
   console.log(quoterequest);
   quoterequest.brokerid = brokerid;
@@ -1919,6 +1932,9 @@ function quoteRequestReceived(quoterequest, userid) {
 }
 
 function orderReceived(order, userid) {
+  console.log("orderReceived");
+  console.log(order);
+  
   order.brokerid = brokerid;
   order.operatortype = operatortype;
   order.operatorid = userid;
