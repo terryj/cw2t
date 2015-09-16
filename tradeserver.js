@@ -657,6 +657,8 @@ function testTradeResponse(order) {
   var exereport = {};
   var currencyratetoorg = 1; // product currency rate back to org 
   var currencyindtoorg = 1;
+  var markettype = 0;
+  var counterpartytype = 1;
 
   console.log("test fill");
 
@@ -673,9 +675,7 @@ function testTradeResponse(order) {
   exereport.execid = 1;
   exereport.futsettdate = order.futsettdate;
   exereport.transacttime = order.timestamp;
-  exereport.ordstatus = 2;
   exereport.lastmkt = "";
-  exereport.leavesqty = 0;
   exereport.orderid = "";
   exereport.settlcurrencyid = "GBP";
   exereport.settlcurramt = parseFloat(order.price) * parseInt(order.quantity);
@@ -683,9 +683,7 @@ function testTradeResponse(order) {
   exereport.settlcurrfxratecalc = 1;
   var milliseconds = new Date().getTime();
 
-  //local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, margin, operatortype, operatorid, finance) \
-
-  db.eval(scriptnewtrade, 1, "broker:" + exereport.brokerid, exereport.accountid, exereport.brokerid, exereport.clientid, exereport.clordid, exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.execbroker, 1, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.ordstatus, exereport.lastmkt, exereport.leavesqty, exereport.orderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, function(err, ret) {
+  db.eval(scriptnewtrade, 1, "broker:" + exereport.brokerid, exereport.accountid, exereport.brokerid, exereport.clientid, exereport.clordid, exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.execbroker, counterpartytype, markettype, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.lastmkt, exereport.orderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, function(err, ret) {
     if (err) {
       console.log(err);
       return
@@ -910,9 +908,10 @@ nbt.on("orderExpired", function(exereport) {
 nbt.on("orderFill", function(exereport) {
   var currencyratetoorg = 1; // product currency rate back to org 
   var currencyindtoorg = 1;
+  var counterpartytype = 1;
+  var markettype = 0;
 
   console.log("fill received");
-  console.log(exereport);
 
   if (!('settlcurrfxrate' in exereport)) {
     exereport.settlcurrfxrate = 1;
@@ -924,7 +923,9 @@ nbt.on("orderFill", function(exereport) {
   // milliseconds since epoch, used for scoring trades so they can be retrieved in a range
   var milliseconds = new Date().getTime();
 
-  db.eval(scriptnewtrade, 0, "broker:" + exereport.brokerid, exereport.accountid, exereport.brokerid, exereport.clientid, exereport.clordid, exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.execbroker, 1, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.ordstatus, exereport.lastmkt, exereport.leavesqty, exereport.orderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, function(err, ret) {
+  console.log(exereport);
+
+  db.eval(scriptnewtrade, 0, "broker:" + exereport.brokerid, exereport.accountid, exereport.brokerid, exereport.clientid, exereport.clordid, exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.execbroker, counterpartytype, markettype, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.lastmkt, exereport.orderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, function(err, ret) {
     if (err) {
       console.log(err);
       return
@@ -1449,7 +1450,7 @@ function registerScripts() {
   * stores a trade & updates cash & position
   */
   newtrade = commonbo.newpositiontransaction + commonbo.newtradeaccounttransactions + publishtrade + '\
-  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, margin, operatortype, operatorid, finance) \
+  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, nosettdays, margin, operatortype, operatorid, finance, milliseconds) \
     redis.log(redis.LOG_WARNING, "newtrade") \
     local brokerkey = "broker:" .. brokerid \
     local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
@@ -1469,7 +1470,7 @@ function registerScripts() {
       note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
     local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side) \
-    newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp) \
+    newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, milliseconds) \
     --[[ todo: do we need to update the trade record with positionid or positionpostingid or nothing? ]] \
     --[[redis.call("hset", tradekey, "positionpostingid", positionpostingid) ]]\
     publishtrade(brokerid, tradeid, 6) \
@@ -1699,7 +1700,7 @@ function registerScripts() {
   local finance = 0 \
   local margin = 0 \
   --[[ create trade ]] \
-  local tradeid = newtrade(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], costs, ARGV[12], ARGV[13], 0, ARGV[14], ARGV[15], ARGV[16], ARGV[18], ARGV[20], ARGV[21], ARGV[22], ARGV[23], ARGV[24], vals[1], margin, vals[2], vals[3], finance) \
+  local tradeid = newtrade(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], costs, ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], ARGV[22], ARGV[23], vals[1], margin, vals[2], vals[3], finance, ARGV[24]) \
   --[[ adjust order ]] \
   redis.call("hmset", KEYS[1] .. ":order:" .. orderid, "remquantity", ARGV[18], "orderstatusid", ARGV[16]) \
   return tradeid \

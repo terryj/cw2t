@@ -1226,8 +1226,14 @@ function cashRequest(cashreq, conn) {
 }
 
 function accountSummaryRequest(acctreq, conn) {
-  db.eval(commonbo.scriptgetaccountsummary, 0, acctreq.clientid, function(err, ret) {
+  console.log("accountSummaryRequest");
+
+  var brokerid = 1;
+  var accountid = 1;
+
+  db.eval(commonbo.scriptgetaccountsummary, 1, "broker:" + brokerid, accountid, brokerid, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
     conn.write("{\"accountsummary\":" + ret + "}");
   });
 }

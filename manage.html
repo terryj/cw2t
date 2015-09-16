@@ -879,7 +879,7 @@
         var cashhistory = {};
         var watchlist = [];
         var showvolume = false;
-        var account = {};
+        var accountsummary = {};
         var coheading = "Thomas Grant & Company";
         var orderdivnumarr = {};
         var loggedout = false;
@@ -964,10 +964,10 @@
                     displayPositions();
                 } else if ("position" in obj) {
                     updatePosition(obj.position);
-                } else if ("account" in obj) {
+                } else if ("accountsummary" in obj) {
                     clearAccount();
-                    loadAccount(obj.account);
-                    displayAccount();
+                    loadAccountSummary(obj.accountsummary);
+                    displayAccountSummary();
                 } else if ("cashitem" in obj) {
                     updateCash(obj.cashitem);
                 } else if ("cashtranstypes" in obj) {
@@ -1078,9 +1078,9 @@
             }                        
         }
 
-        function loadAccount(acctarr) {
+        function loadAccountSummary(acctarr) {
             for (var i = 0; i < acctarr.length; ++i) {
-                account[acctarr[i].currencyid] = acctarr[i];
+                accountsummary["GBP"] = acctarr[i];
             }
         }
 
@@ -3025,15 +3025,17 @@
             }
         }
 
-        function displayAccount() {
+        function displayAccountSummary() {
             var tblaccount;
             var tblbody;
             var numrows = 7;
             var firstcurr = true;
 
+            console.log("displayAccountSummary");
+
             var emptyline = addNewLine(main, "emptyline:1");
 
-            if (Object.keys(account).length == 0) {
+            if (Object.keys(accountsummary).length == 0) {
                 var list = getList("list1");
                 addElement("No cash or transactions", list, 0);
                 return;
@@ -3048,7 +3050,7 @@
             tblaccount.appendChild(tblbody);
             main.appendChild(tblaccount);
 
-            for (var x in account) {
+            for (var x in accountsummary) {
                 if (!firstcurr) {
                     var emptyrow = document.createElement("tr");
                     var emptycol = document.createElement("td");
@@ -3062,7 +3064,7 @@
                 var headingrow = document.createElement("tr");
 
                 var col = document.createElement("td");
-                col.innerHTML = account[x].currencyid;
+                col.innerHTML = "GBP";
                 col.className = "colleftalign";
 
                 headingrow.appendChild(col);
@@ -3079,19 +3081,19 @@
                     case 0:
                         col.innerHTML = "Cash";
                         col.className = "colleftalign";
-                        colval.innerHTML = formatCurrency(account[x].cash);
+                        colval.innerHTML = formatCurrency(accountsummary[x].cash);
                         colval.className = "colrightalign";
                         break;
                     case 1:
                         col.innerHTML = "Realised P&L";
                         col.className = "colleftalign";
-                        colval.innerHTML = formatCurrency(account[x].realisedpandl);
+                        colval.innerHTML = formatCurrency(accountsummary[x].realisedpandl);
                         colval.className = "colunderline";
                         break;
                     case 2:
                         col.innerHTML = "Trading Balance";
                         col.className = "colleftalign";
-                        colval.innerHTML = formatCurrency(account[x].balance);
+                        colval.innerHTML = formatCurrency(accountsummary[x].balance);
                         colval.className = "colrightalign";
                         var colempty = document.createElement("td");
                         row.appendChild(colempty);
@@ -3099,7 +3101,7 @@
                     case 3:
                         col.innerHTML = "Unrealised P&L";
                         col.className = "colleftalign";
-                        colval.innerHTML = formatCurrency(account[x].unrealisedpandl);
+                        colval.innerHTML = formatCurrency(accountsummary[x].unrealisedpandl);
                         colval.className = "colunderline";
                         var colempty = document.createElement("td");
                         row.appendChild(colempty);
@@ -3107,7 +3109,7 @@
                     case 4:
                         col.innerHTML = "Equity";
                         col.className = "colleftalign";
-                        colval.innerHTML = formatCurrency(account[x].equity);
+                        colval.innerHTML = formatCurrency(accountsummary[x].equity);
                         colval.className = "colrightalign";
                         var colempty1 = document.createElement("td");
                         row.appendChild(colempty1);
@@ -3117,7 +3119,7 @@
                     case 5:
                         col.innerHTML = "Margin";
                         col.className = "colleftalign";
-                        colval.innerHTML = "(" + formatCurrency(account[x].margin) + ")";
+                        colval.innerHTML = "(" + formatCurrency(accountsummary[x].margin) + ")";
                         colval.className = "colunderline";
                         var colempty1 = document.createElement("td");
                         row.appendChild(colempty1);
@@ -3127,7 +3129,7 @@
                     case 6:
                         col.innerHTML = "Free Margin";
                         col.className = "colleftalign";
-                        colval.innerHTML = formatCurrency(account[x].freemargin);
+                        colval.innerHTML = formatCurrency(accountsummary[x].freemargin);
                         colval.className = "coldoubleunderline";
                         var colempty1 = document.createElement("td");
                         row.appendChild(colempty1);
@@ -4082,14 +4084,14 @@
             }*/
 
             lnkaccount.onclick = function() {
-                var accountrequest = {};
+                var accountsummaryrequest = {};
 
                 if (!validateClientid()) {return;}
 
                 tidy();
                 setSelected(lnkaccount);
-                accountrequest.clientid = inpclientid.value;
-                sockjs.send("{\"accountrequest\":" + JSON.stringify(accountrequest) + "}");
+                accountsummaryrequest.clientid = inpclientid.value;
+                sockjs.send("{\"accountsummaryrequest\":" + JSON.stringify(accountsummaryrequest) + "}");
             }
 
             inpclientid = document.createElement("input");
