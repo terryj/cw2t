@@ -201,6 +201,19 @@ exports.registerScripts = function () {
 
   exports.getReasonDesc = getReasonDesc;
 
+
+  function isHoliday(datetocheck, holidays) {
+    var found = false;
+
+    var datetocheckstr = getUTCDateString(datetocheck);
+
+    if (datetocheckstr in holidays) {
+      found = true;
+    }
+
+    return found;
+  }
+
   //
   // returns valid trading day as date object, taking into account weekends and holidays
   // from passed date, number of settlement days (i.e. T+n) and list of holidays

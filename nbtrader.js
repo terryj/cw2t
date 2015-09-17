@@ -337,7 +337,7 @@ Nbt.prototype.quoteRequest = function(quoterequest) {
 		+ '63=' + quoterequest.settlmnttypid + SOH
 		+ '207=' + quoterequest.exchangeid + SOH
 		+ '15=' + quoterequest.currencyid + SOH
-		//+ '120=' + quoterequest.settlcurrencyid + SOH
+		+ '120=' + quoterequest.settlcurrencyid + SOH
 		+ '60=' + quoterequest.timestamp + SOH;
 
 	// add settlement date if future settlement type specified
@@ -379,7 +379,7 @@ Nbt.prototype.newOrder = function(order) {
 		+ '60=' + order.timestamp + SOH
 		// todo: is this right?
 		+ '63=' + order.settlmnttypid + SOH
-		//+ '64=' + order.futsettdate + SOH
+		+ '64=' + order.futsettdate + SOH
 		+ '59=' + order.timeinforce + SOH
 		+ '120=' + order.settlcurrencyid + SOH
 		+ '15=' + order.currencyid + SOH
@@ -400,9 +400,8 @@ Nbt.prototype.newOrder = function(order) {
 		msg += '152=' + order.cashorderqty + SOH;				
 	}
 
-	// price required for a limit order
+	// add price
 	if (order.price != '') {
-		// add price
 		msg += '44=' + order.price + SOH;
 	}
 
@@ -832,7 +831,7 @@ function getBody(msgtype, tagvalarr) {
 				body.externalquoteid = tagvalarr[i].value;
 				break;
 			case 55:
-			 	body.symbolid = tagvalarr[i].value;
+			 	body.mnemonic = tagvalarr[i].value;
 			 	break;
 			case 48:
 				body.securityid = tagvalarr[i].value;
@@ -959,7 +958,7 @@ function getBody(msgtype, tagvalarr) {
 				body.ordrejreason = tagvalarr[i].value;
 				break;
 			case 55:
-				body.symbolid = tagvalarr[i].value;
+				body.mnemonic = tagvalarr[i].value;
 				break;
 			case 48:
 				body.securityid = tagvalarr[i].value;
