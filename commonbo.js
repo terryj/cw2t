@@ -192,6 +192,12 @@ exports.registerScripts = function () {
     case 1024:
       desc = "Quote not found";
       break;
+    case 1025:
+      desc = "Account not found";
+      break;
+    case 1026:
+      desc = "Credit check failed";
+      break;
     default:
       desc = "Unknown reason";
     }

@@ -2614,10 +2614,10 @@
 
                         if (d.col == "bidquote") {
                             // we are selling
-                            sendOrder(1, clientid, d.value.symbolid, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+                            sendOrder("", clientid, d.value.symbolid, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
                         } else {
                             // we are buying
-                            sendOrder(1, clientid, d.value.symbolid, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
+                            sendOrder("", clientid, d.value.symbolid, 1, d.value.offerquantity, d.value.offerpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
                         }
 
                         // stop timer
