@@ -1289,12 +1289,12 @@ function registerScripts() {
         end \
       end \
       --[[ check there is a position ]] \
-      if not position["positionid"] then \
+      if not position then \
         rejectorder(brokerid, orderid, 0, "No position held in this instrument") \
         return {0} \
       end \
       local posqty = tonumber(position["quantity"]) \
-      --[[ check the position is long ]] \
+      --[[ check the position is of sufficient size ]] \
       if posqty < 0 or quantity > posqty then \
         rejectorder(brokerid, orderid, 0, "Insufficient position size in this instrument") \
         return {0} \

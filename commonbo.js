@@ -358,17 +358,19 @@ exports.registerScripts = function () {
     if qty > 0 then \
       local bidprice = redis.call("hget", "symbol:" .. symbolid, "bid") \
       if bidprice and tonumber(bidprice) ~= 0 then \
-        price = tonumber(bidprice) \
+        --[[ show price as pounds rather than pence ]] \
+        price = tonumber(bidprice) / 100 \
         if price ~= 0 then \
-          unrealisedpandl = round(qty * price / 100 - cost, 2) \
+          unrealisedpandl = round(qty * price - cost, 2) \
         end \
       end \
     else \
       local askprice = redis.call("hget", "symbol:" .. symbolid, "ask") \
       if askprice and tonumber(askprice) ~= 0 then \
-        price = tonumber(askprice) \
+        --[[ show price as pounds rather than pence ]] \
+        price = tonumber(askprice) / 100 \
         if price ~= 0 then \
-          unrealisedpandl = round(qty * price / 100 + cost, 2) \
+          unrealisedpandl = round(qty * price + cost, 2) \
         end \
       end \
     end \
@@ -549,6 +551,11 @@ exports.registerScripts = function () {
     totalpositionvalue["margin"] = 0 \
     totalpositionvalue["unrealisedpandl"] = 0 \
     for index = 1, #positionvalues do \
+      redis.log(redis.LOG_WARNING, positionvalues[index]["symbolid"]) \
+      redis.log(redis.LOG_WARNING, "price") \
+      redis.log(redis.LOG_WARNING, positionvalues[index]["price"]) \
+      redis.log(redis.LOG_WARNING, "unrealisedpandl") \
+      redis.log(redis.LOG_WARNING, positionvalues[index]["unrealisedpandl"]) \
       totalpositionvalue["margin"] = totalpositionvalue["margin"] + tonumber(positionvalues[index]["margin"]) \
       totalpositionvalue["unrealisedpandl"] = totalpositionvalue["unrealisedpandl"] + tonumber(positionvalues[index]["unrealisedpandl"]) \
     end \
@@ -643,8 +650,12 @@ exports.registerScripts = function () {
     local freemargin = 0 \
     local accountbalance = getaccountbalance(accountid, brokerid) \
     if accountbalance["balance"] then \
+      redis.log(redis.LOG_WARNING, "balance") \
+      redis.log(redis.LOG_WARNING, accountbalance["balance"]) \
       local totalpositionvalue = gettotalpositionvalue(accountid, brokerid) \
       local equity = tonumber(accountbalance["balance"]) + totalpositionvalue["unrealisedpandl"] \
+      redis.log(redis.LOG_WARNING, "totunrealisedpandl") \
+      redis.log(redis.LOG_WARNING, totalpositionvalue["unrealisedpandl"]) \
       freemargin = equity - totalpositionvalue["margin"] \
     end \
     return freemargin \
@@ -964,11 +975,11 @@ exports.registerScripts = function () {
     end \
     local transactionid = newtransaction(ARGV[1], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11]) \
     --[[ update client account ]] \
-    newposting(ARGV[4], amount, ARGV[3], localamount, transactionid, milliseconds) \
+    newposting(ARGV[4], amount, ARGV[3], localamount, transactionid, ARGV[12]) \
     --[[ client control account ]] \
-    newposting(controlclientaccountid, amount, ARGV[3], localamount, transactionid, milliseconds) \
+    newposting(controlclientaccountid, amount, ARGV[3], localamount, transactionid, ARGV[12]) \
     --[[ update bank account ]] \
-    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, milliseconds) \
+    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[12]) \
     return 0 \
   ';
 
@@ -996,8 +1007,8 @@ exports.registerScripts = function () {
       end \
     end \
     local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[10], ARGV[8], transactiontypeid) \
-    newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, milliseconds) \
-    newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid, milliseconds) \
+    newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, ARGV[12]) \
+    newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid, ARGV[12]) \
     return 0 \
   ';
 
@@ -1011,11 +1022,11 @@ exports.registerScripts = function () {
     redis.log(redis.LOG_WARNING, "newBrokerFundsTransfer") \
     local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[10], ARGV[11]) \
     if ARGV[11] == "BP" then \
-      newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, milliseconds) \
-      newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid, milliseconds) \
+      newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, ARGV[12]) \
+      newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid, ARGV[12]) \
     else \
-      newposting(ARGV[4], ARGV[1], ARGV[2], ARGV[5], transactionid, milliseconds) \
-      newposting(ARGV[9], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, milliseconds) \
+      newposting(ARGV[4], ARGV[1], ARGV[2], ARGV[5], transactionid, ARG[12]) \
+      newposting(ARGV[9], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, ARGV[12]) \
     end \
     return 0 \
   ';
@@ -1038,8 +1049,8 @@ exports.registerScripts = function () {
       localamount = ARGV[5] \
     end \
     local transactionid = newtransaction(ARGV[1], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[10], ARGV[11]) \
-    newposting(ARGV[9], amount, ARGV[3], localamount, transactionid, milliseconds) \
-    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, milliseconds) \
+    newposting(ARGV[9], amount, ARGV[3], localamount, transactionid, ARGV[12]) \
+    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[12]) \
     return 0 \
   ';
 }

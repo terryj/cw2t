@@ -228,8 +228,8 @@ function listen() {
     //testtrade();
     //testSettle();
     //testBrokerFundsTransfer();
-    //testSupplierFundsTransfer();
-    testPositionPostings();
+    testSupplierFundsTransfer();
+    //testPositionPostings();
 
     // data callback
     // todo: multiple messages in one data event
@@ -548,16 +548,23 @@ function cashTrans(cashtrans, userid, conn) {
   console.log(cashtrans);
 
   cashtrans.bankaccountid = 999988;
-  cashtrans.clientaccountid = 2;
+  cashtrans.clientaccountid = 3;
   cashtrans.currencyid = "GBP";
   cashtrans.localamount = cashtrans.amount;
-  cashtrans.note = "first cash receipt";
+  cashtrans.note = cashtrans.description;
   cashtrans.rate = 1;
-  cashtrans.reference = "ABC123";
-  cashtrans.transactiontypeid = "CD";
+  cashtrans.reference = cashtrans.reference;
+  if (cashtrans.drcr == 1) {
+    cashtrans.transactiontypeid = "CD";
+  } else {
+    cashtrans.transactiontypeid = "CW";    
+  }
+
+  // milliseconds since epoch, used for scoring datetime indexes
+  var milliseconds = new Date().getTime();
 
   // note we are passing the key in, so as to facilitate clustering
-  db.eval(commonbo.newClientFundsTransfer, 1, "broker:" + brokerid, cashtrans.amount, cashtrans.bankaccountid, brokerid, cashtrans.clientaccountid, cashtrans.currencyid, cashtrans.localamount, cashtrans.note, cashtrans.rate, cashtrans.reference, cashtrans.timestamp, cashtrans.transactiontypeid, function(err, ret) {
+  db.eval(commonbo.newClientFundsTransfer, 1, "broker:" + brokerid, cashtrans.amount, cashtrans.bankaccountid, brokerid, cashtrans.clientaccountid, cashtrans.currencyid, cashtrans.localamount, cashtrans.note, cashtrans.rate, cashtrans.reference, cashtrans.timestamp, cashtrans.transactiontypeid, milliseconds, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });
@@ -1230,7 +1237,7 @@ function accountSummaryRequest(acctreq, conn) {
   console.log("accountSummaryRequest");
 
   var brokerid = 1;
-  var accountid = 1;
+  var accountid = 3;
 
   db.eval(commonbo.scriptgetaccountsummary, 1, "broker:" + brokerid, accountid, brokerid, function(err, ret) {
     if (err) throw err;
@@ -1855,8 +1862,10 @@ function testSettle() {
 
   console.log(tradesettle);
 
+  var milliseconds = tradesettle.timestamp.getTime();
+
   // note we are passing the key in, so as to facilitate clustering
-  db.eval(commonbo.newTradeSettlementTransaction, 1, "broker:" + brokerid, tradesettle.amount, tradesettle.brokerid, tradesettle.currencyid, tradesettle.fromaccountid, tradesettle.localamount, tradesettle.note, tradesettle.rate, tradesettle.timestamp, tradesettle.toaccountid, tradesettle.tradeid, tradesettle.transactiontypeid, function(err, ret) {
+  db.eval(commonbo.newTradeSettlementTransaction, 1, "broker:" + brokerid, tradesettle.amount, tradesettle.brokerid, tradesettle.currencyid, tradesettle.fromaccountid, tradesettle.localamount, tradesettle.note, tradesettle.rate, tradesettle.timestamp, tradesettle.toaccountid, tradesettle.tradeid, tradesettle.transactiontypeid, milliseconds, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });
@@ -1879,8 +1888,10 @@ function testBrokerFundsTransfer() {
 
   console.log(bft);
 
+  var milliseconds = bft.timestamp.getTime();
+
   // note we are passing the key in, so as to facilitate clustering
-  db.eval(commonbo.newBrokerFundsTransfer, 1, "broker:" + brokerid, bft.amount, bft.brokerid, bft.currencyid, bft.brokerbankaccountid, bft.localamount, bft.note, bft.rate, bft.reference, bft.supplieraccountid, bft.timestamp, bft.transactiontypeid, function(err, ret) {
+  db.eval(commonbo.newBrokerFundsTransfer, 1, "broker:" + brokerid, bft.amount, bft.brokerid, bft.currencyid, bft.brokerbankaccountid, bft.localamount, bft.note, bft.rate, bft.reference, bft.supplieraccountid, bft.timestamp, bft.transactiontypeid, milliseconds, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });
@@ -1888,6 +1899,8 @@ function testBrokerFundsTransfer() {
 
 function testSupplierFundsTransfer() {
   var sft = {};
+
+  console.log("testSupplierFundsTransfer");
 
   sft.amount = 125;
   sft.brokerbankaccountid = 1;
@@ -1903,8 +1916,10 @@ function testSupplierFundsTransfer() {
 
   console.log(sft);
 
+  var milliseconds = sft.timestamp.getTime();
+
   // note we are passing the key in, so as to facilitate clustering
-  db.eval(commonbo.newSupplierFundsTransfer, 1, "broker:" + brokerid, sft.amount, sft.brokerbankaccountid, sft.brokerid, sft.currencyid, sft.localamount, sft.note, sft.rate, sft.reference, sft.supplieraccountid, sft.timestamp, sft.transactiontypeid, function(err, ret) {
+  db.eval(commonbo.newSupplierFundsTransfer, 1, "broker:" + brokerid, sft.amount, sft.brokerbankaccountid, sft.brokerid, sft.currencyid, sft.localamount, sft.note, sft.rate, sft.reference, sft.supplieraccountid, sft.timestamp, sft.transactiontypeid, milliseconds, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });
@@ -1934,7 +1949,7 @@ function quoteRequestReceived(quoterequest, userid) {
 function orderReceived(order, userid) {
   console.log("orderReceived");
   console.log(order);
-  
+
   order.brokerid = brokerid;
   order.operatortype = operatortype;
   order.operatorid = userid;
