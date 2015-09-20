@@ -534,8 +534,6 @@ exports.registerScripts = function () {
     return tblresults \
   end \
   ';
-    /*local totalmargin = 0 \
-    local totalunrealisedpandl = 0 \*/
 
   /*
   * gettotalpositionvalue()
@@ -611,15 +609,11 @@ exports.registerScripts = function () {
   /*
   * getaccountbalance()
   * params: accountid, brokerid
-  * returns: account balance & local currency balance
+  * returns: account balance
   */
   getaccountbalance = '\
   local getaccountbalance = function(accountid, brokerid) \
-    local accountbalance = {} \
-    local fields = {"balance", "localbalance"} \
-    local vals = redis.call("hmget", "broker:" .. brokerid .. ":account:" .. accountid, unpack(fields)) \
-    accountbalance["balance"] = vals[1] \
-    accountbalance["localbalance"] = vals[2] \
+    local accountbalance = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid, "balance") \
     return accountbalance \
   end \
   ';
@@ -649,11 +643,11 @@ exports.registerScripts = function () {
     redis.log(redis.LOG_WARNING, "getfreemargin") \
     local freemargin = 0 \
     local accountbalance = getaccountbalance(accountid, brokerid) \
-    if accountbalance["balance"] then \
+    if accountbalance then \
       redis.log(redis.LOG_WARNING, "balance") \
-      redis.log(redis.LOG_WARNING, accountbalance["balance"]) \
+      redis.log(redis.LOG_WARNING, accountbalance) \
       local totalpositionvalue = gettotalpositionvalue(accountid, brokerid) \
-      local equity = tonumber(accountbalance["balance"]) + totalpositionvalue["unrealisedpandl"] \
+      local equity = tonumber(accountbalance) + totalpositionvalue["unrealisedpandl"] \
       redis.log(redis.LOG_WARNING, "totunrealisedpandl") \
       redis.log(redis.LOG_WARNING, totalpositionvalue["unrealisedpandl"]) \
       freemargin = equity - totalpositionvalue["margin"] \
@@ -679,6 +673,28 @@ exports.registerScripts = function () {
     redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", milliseconds, postingid) \
     updateaccountbalance(accountid, amount, brokerid, localamount) \
   return postingid \
+  end \
+  ';
+
+  /*
+  * getpostings()
+  * gets postings for an account between two dates, sorted by datetime
+  * params: accountid, brokerid, positionid, start of period, end of period - datetimes expressed in milliseconds
+  * returns: array of postings
+  */
+  getpostings = gethashvalues + '\
+  local getpostings = function(accountid, brokerid, startmilliseconds, endmilliseconds) \
+    redis.log(redis.LOG_WARNING, "getpostings") \
+    redis.log(redis.LOG_WARNING, startmilliseconds) \
+    redis.log(redis.LOG_WARNING, endmilliseconds) \
+    local tblpostings = {} \
+    local brokerkey = "broker:" .. brokerid \
+    local postings = redis.call("zrangebyscore", brokerkey .. ":account:" .. accountid .. ":postingsbydate", startmilliseconds, endmilliseconds) \
+    for i = 1, #postings do \
+      local posting = gethashvalues(brokerkey .. ":posting:" .. postings[i]) \
+      table.insert(tblpostings, posting) \
+    end \
+    return tblpostings \
   end \
   ';
 
@@ -810,19 +826,19 @@ exports.registerScripts = function () {
   /*
   * getpositionpostings()
   * gets position postings for a position between two dates, sorted by datetime
-  * params: brokerid, positionid, start of period, end of period - datetimes expressed as unixtimestamp in milliseconds
+  * params: brokerid, positionid, start of period, end of period - datetimes expressed in milliseconds
   * returns: array of postings
   */
   getpositionpostings = gethashvalues + '\
   local getpositionpostings = function(brokerid, positionid, startmilliseconds, endmilliseconds) \
-    local tblpostings = {} \
+    local tblpositionpostings = {} \
     local brokerkey = "broker:" .. brokerid \
     local positionpostings = redis.call("zrangebyscore", brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", startmilliseconds, endmilliseconds) \
     for i = 1, #positionpostings do \
       local positionposting = gethashvalues(brokerkey .. ":positionposting:" .. positionpostings[i]) \
-      table.insert(tblpostings, positionposting) \
+      table.insert(tblpositionpostings, positionposting) \
     end \
-    return tblpostings \
+    return tblpositionpostings \
   end \
   ';
 
@@ -921,8 +937,8 @@ exports.registerScripts = function () {
   local tblresults = {} \
   local accountbalance = getaccountbalance(ARGV[1], ARGV[2]) \
   local totalpositionvalue = gettotalpositionvalue(ARGV[1], ARGV[2]) \
-  local equity = tonumber(accountbalance["balance"]) + tonumber(totalpositionvalue["unrealisedpandl"]) \
-  local freemargin = equity - tonumber(totalpositionvalue["margin"]) \
+  local equity = tonumber(accountbalance) + totalpositionvalue["unrealisedpandl"] \
+  local freemargin = equity - totalpositionvalue["margin"] \
   table.insert(tblresults, {accountid=ARGV[1],balance=accountbalance["balance"],unrealisedpandl=totalpositionvalue["unrealisedpandl"],equity=equity,margin=totalpositionvalue["margin"],freemargin=freemargin}) \
   return cjson.encode(tblresults) \
   ';
@@ -1052,5 +1068,19 @@ exports.registerScripts = function () {
     newposting(ARGV[9], amount, ARGV[3], localamount, transactionid, ARGV[12]) \
     newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[12]) \
     return 0 \
+  ';
+
+  exports.getaccountbalancebydate = getaccountbalance + getpostings + '\
+    redis.log(redis.LOG_WARNING, "getaccountbalancebydate") \
+    local accountbalance = tonumber(getaccountbalance(ARGV[1], ARGV[2])) \
+      redis.log(redis.LOG_WARNING, accountbalance) \
+    local postings = getpostings(ARGV[1], ARGV[2], ARGV[3], "inf") \
+    for index = 1, #postings do \
+      redis.log(redis.LOG_WARNING, "posting") \
+      redis.log(redis.LOG_WARNING, postings[index]["amount"]) \
+      accountbalance = accountbalance - (postings[index]["amount"]) \
+      redis.log(redis.LOG_WARNING, accountbalance) \
+    end \
+    return accountbalance \
   ';
 }

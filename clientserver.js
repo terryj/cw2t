@@ -22,7 +22,8 @@ var node_static = require('node-static');
 var redis = require('redis');
 
 // cw2t libraries
-var common = require('./commonfo.js');
+var commonfo = require('./commonfo.js');
+var commonbo = require('./commonbo.js');
 
 // globals
 var connections = {}; // added to if & when a client logs on
@@ -34,6 +35,7 @@ var serverid = 1; // must be unique, use .ini file?
 var servertype = "client";
 var feedtype = "nbtrader";
 var operatortype = 1;
+var brokerid = 1;
 
 // redis
 var redishost;
@@ -86,10 +88,11 @@ db.on("error", function(err) {
 });
 
 function initialise() {
-  common.registerScripts();
+  commonfo.registerScripts();
+  commonbo.registerScripts();
   registerScripts();
   initDb();
-  clearSubscriptions();
+  //clearSubscriptions();
   pubsub();
   listen();
 }
@@ -110,7 +113,7 @@ function pubsub() {
     //console.log("channel: " + channel + ", message: " + message);
 
     if (channel.substr(0, 6) == "price:") {
-      common.newPrice(channel.substr(6), serverid, message, connections, feedtype);
+      commonfo.newPrice(channel.substr(6), serverid, message, connections, feedtype);
     } else {
       console.log("channel: " + channel + ", message: " + message);
       try {
@@ -154,16 +157,16 @@ function pubsub() {
   });
 
   // listen for client related messages
-  dbsub.subscribe(common.clientserverchannel);
+  dbsub.subscribe(commonbo.clientserverchannel);
 
   // listen for trading messages
-  dbsub.subscribe(common.tradechannel);
+  dbsub.subscribe(commonbo.tradechannel);
 
   // listen for ooh quoterequests
-  dbsub.subscribe(common.quoterequestchannel);
+  dbsub.subscribe(commonbo.quoterequestchannel);
 
   // listen for position updates
-  dbsub.subscribe(common.positionchannel);
+  dbsub.subscribe(commonbo.positionchannel);
 }
 
 // sockjs server
@@ -291,9 +294,12 @@ function listen() {
     function signIn(signin) {
       var reply = {};
       reply.success = false;
+      var brokerkey = "broker:" + brokerid;
+
+      console.log("signIn");
 
       // add servertype i.e. email:client:emailaddr?
-      db.get(servertype + ":" + signin.email, function(err, cid) {
+      db.get(brokerkey + ":email:" + signin.email, function(err, cid) {
         if (err) {
           console.log("Error in signIn:" + err);
           return;
@@ -307,7 +313,7 @@ function listen() {
         }
 
         // validate email/password
-        db.hgetall(servertype + ":" + cid, function(err, client) {
+        db.hgetall(brokerkey + ":client:" + cid, function(err, client) {
           if (err) {
             console.log("Error in signIn:" + err);
             return;
@@ -347,7 +353,7 @@ function listen() {
             reply.clientid = clientid;
             replySignIn(reply, conn);
 
-            var timestamp = common.getUTCTimeStamp(new Date());
+            var timestamp = commonbo.getUTCTimeStamp(new Date());
             console.log(timestamp + " - client:" + clientid + " logged on");
 
             // send the data
@@ -363,7 +369,7 @@ function tidy(clientid, conn) {
   console.log("tidy");
   if (clientid != "0") {
     if (clientid in connections) {
-      var timestamp = common.getUTCTimeStamp(new Date());
+      var timestamp = commonbo.getUTCTimeStamp(new Date());
       console.log(timestamp + " - client:" + clientid + " logged off");
 
       if (connections[clientid] == conn) {
@@ -382,7 +388,7 @@ function tidy(clientid, conn) {
 
 function unsubscribeConnection(id) {
   console.log("unsubscribeConnection");
-  db.eval(common.scriptunsubscribeid, 0, id, serverid, feedtype, function(err, ret) {
+  db.eval(commonfo.scriptunsubscribeid, 0, id, serverid, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
@@ -957,7 +963,7 @@ function replySignIn(reply, conn) {
 function clearSubscriptions() {
   console.log("clearSubscriptions");
   // clears connections & subscriptions
-  db.eval(common.scriptunsubscribeserver, 0, serverid, function(err, ret) {
+  db.eval(commonfo.scriptunsubscribeserver, 0, serverid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -1028,7 +1034,7 @@ function registerClient(reg, conn) {
 //
 function subscribePriceRequest(clientid, symbol, conn) {
   console.log(symbol);
-  db.eval(common.scriptsubscribesymbol, 0, symbol.symbolid, clientid, serverid, feedtype, function(err, ret) {
+  db.eval(commonfo.scriptsubscribesymbol, 0, symbol.symbolid, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
@@ -1051,7 +1057,7 @@ function subscribePriceRequest(clientid, symbol, conn) {
 }
 
 function unsubscribePriceRequest(clientid, symbol, conn) {
-  db.eval(common.scriptunsubscribesymbol, 0, symbol.symbolid, clientid, serverid, feedtype, function(err, ret) {
+  db.eval(commonfo.scriptunsubscribesymbol, 0, symbol.symbolid, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
@@ -1076,7 +1082,7 @@ function unsubscribePriceRequest(clientid, symbol, conn) {
 //
 function openQuoteRequestRequest(req, conn) {
   console.log("openQuoteRequestRequest");
-  db.eval(common.scriptgetopenquoterequests, 0, req.symbolid, function(err, ret) {
+  db.eval(commonfo.scriptgetopenquoterequests, 0, req.symbolid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"quoterequests\":" + ret + "}");
   });
@@ -1088,28 +1094,28 @@ function openQuoteRequestRequest(req, conn) {
 function myQuotesRequest(req, clientid, conn) {
   console.log("myQuotesRequest");
   console.log(req);
-  db.eval(common.scriptgetmyquotes, 0, req.quotereqid, clientid, function(err, ret) {
+  db.eval(commonfo.scriptgetmyquotes, 0, req.quotereqid, clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"myquotes\":" + ret + "}");
   });
 }
 
 function quoteRequestHistory(req, clientid, conn) {
-  db.eval(common.scriptgetquoterequests, 0, clientid, function(err, ret) {
+  db.eval(commonbo.scriptgetquoterequests, 0, clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"quoterequesthistory\":" + ret + "}");
   });
 }
 
 function quoteHistory(req, clientid, conn) {
-  db.eval(common.scriptgetquotes, 0, clientid, function(err, ret) {
+  db.eval(commonbo.scriptgetquotes, 0, clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"quotes\":" + ret + "}");
   });
 }
 
 function orderHistory(req, clientid, conn) {
-  db.eval(common.scriptgetorders, 0, clientid, function(err, ret) {
+  db.eval(commonbo.scriptgetorders, 0, clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"orders\":" + ret + "}");
   });
@@ -1117,12 +1123,12 @@ function orderHistory(req, clientid, conn) {
 
 function tradeHistory(req, clientid, conn) {
   if ("positionkey" in req) {
-    db.eval(common.scriptgetpostrades, 0, clientid, req.positionkey, function(err, ret) {
+    db.eval(commonbo.scriptgetpostrades, 0, clientid, req.positionkey, function(err, ret) {
       if (err) throw err;
       conn.write("{\"trades\":" + ret + "}");
     });
   } else {
-    db.eval(common.scriptgettrades, 0, clientid, function(err, ret) {
+    db.eval(commonbo.scriptgettrades, 0, clientid, function(err, ret) {
       if (err) throw err;
       conn.write("{\"trades\":" + ret + "}");
     });
@@ -1130,7 +1136,7 @@ function tradeHistory(req, clientid, conn) {
 }
 
 function cashHistory(req, clientid, conn) {
-  db.eval(common.scriptgetcashhistory, 0, clientid, req.currencyid, function(err, ret) {
+  db.eval(commonbo.scriptgetcashhistory, 0, clientid, req.currencyid, function(err, ret) {
     console.log(ret);
     if (err) throw err;
     conn.write("{\"cashhistory\":" + ret + "}");
@@ -1143,7 +1149,7 @@ function positionRequest(posreq, clientid, conn) {
 
   if ('symbolid' in posreq && posreq.symbolid == "*") {
     // all positions
-    db.eval(common.scriptsubscribepositions, 0, clientid, serverid, function(err, ret) {
+    db.eval(commonfo.scriptsubscribepositions, 0, clientid, serverid, function(err, ret) {
       if (err) throw err;
 
       // send positions
@@ -1156,7 +1162,7 @@ function positionRequest(posreq, clientid, conn) {
     });
   } else {
     // single symbol
-    db.eval(common.scriptgetposition, 0, clientid, posreq.symbolid, function(err, ret) {
+    db.eval(commonbo.scriptgetposition, 0, clientid, posreq.symbolid, function(err, ret) {
       if (err) throw err;
       conn.write("{\"positions\":" + ret + "}");
     });    
@@ -1168,7 +1174,7 @@ function unsubscribePositionsRequest(unsubposreq, clientid, conn) {
   console.log(unsubposreq);
 
   // all positions
-  db.eval(common.scriptunsubscribepositions, 0, clientid, serverid, function(err, ret) {
+  db.eval(commonfo.scriptunsubscribepositions, 0, clientid, serverid, function(err, ret) {
     if (err) throw err;
 
     // unsubscribe to prices
@@ -1179,7 +1185,7 @@ function unsubscribePositionsRequest(unsubposreq, clientid, conn) {
 }
 
 function cashRequest(cashreq, clientid, conn) {
-  db.eval(common.scriptgetcash, 0, clientid, function(err, ret) {
+  db.eval(commonbo.scriptgetcash, 0, clientid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"cash\":" + ret + "}");
   });  
@@ -1193,7 +1199,7 @@ function accountSummaryRequest(acctreq, clientid, conn) {
 }
 
 function statementRequest(statementreq, clientid, conn) {
-  db.eval(common.scriptgetcashhistory, 0, clientid, statementreq.currencyid, function(err, ret) {
+  db.eval(commonbo.scriptgetcashhistory, 0, clientid, statementreq.currencyid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"statement\":" + ret + "}");
   });  
@@ -1224,7 +1230,7 @@ function sendQuoteack(quoteack) {
     //quoteack.quotereqid = quoterequest.quotereqid;
     quoteack.clientid = quoterequest.clientid;
     quoteack.symbolid = quoterequest.symbolid;
-    quoteack.quoterejectreasondesc = common.getPTPQuoteRejectReason(quoterequest.quoterejectreason);
+    quoteack.quoterejectreasondesc = commonfo.getPTPQuoteRejectReason(quoterequest.quoterejectreason);
     if ('text' in quoterequest) {
       quoteack.text = quoterequest.text;
     }
@@ -1250,7 +1256,7 @@ function sendQuote(quoteid) {
     }
 
     // get the number of seconds the quote is valid for
-    quote.noseconds = common.getSeconds(quote.transacttime, quote.validuntiltime);
+    quote.noseconds = commonfo.getSeconds(quote.transacttime, quote.validuntiltime);
 
     // send quote to the client who placed the quote request
     db.hget("quoterequest:" + quote.quotereqid, "operatorid", function(err, operatorid) {
@@ -1360,7 +1366,7 @@ function watchlistRequest(watchlist, clientid, conn) {
 
   if ("symbolid" in watchlist) {
     // add a symbol to the watchlist for this client
-    db.eval(common.scriptaddtowatchlist, 0, watchlist.symbolid, clientid, serverid, servertype, function(err, ret) {
+    db.eval(commonfo.scriptaddtowatchlist, 0, watchlist.symbolid, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1375,7 +1381,7 @@ function watchlistRequest(watchlist, clientid, conn) {
     });
   } else {
     // get the watchlist for this client
-    db.eval(common.scriptgetwatchlist, 0, clientid, serverid, servertype, function(err, ret) {
+    db.eval(commonfo.scriptgetwatchlist, 0, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1398,7 +1404,7 @@ function unwatchlistrequest(uwl, clientid, conn) {
 
   if ("symbolid" in uwl) {
     // unsubscribe from the watchlist for this client
-    db.eval(common.scriptremovewatchlist, 0, uwl.symbolid, clientid, serverid, servertype, function(err, ret) {
+    db.eval(commonfo.scriptremovewatchlist, 0, uwl.symbolid, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1413,7 +1419,7 @@ function unwatchlistrequest(uwl, clientid, conn) {
     });
   } else {
     // unsubscribe from the watchlist for this client
-    db.eval(common.scriptunwatchlist, 0, clientid, serverid, servertype, function(err, ret) {
+    db.eval(commonfo.scriptunwatchlist, 0, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1437,7 +1443,7 @@ function quoteRequest(rfq, clientid, conn) {
   rfq.operatortype = operatortype;
 
   // send to tradeserver
-  db.publish(common.tradeserverchannel, "{\"quoterequest\":" + JSON.stringify(rfq) + "}");
+  db.publish(commonbo.tradeserverchannel, "{\"quoterequest\":" + JSON.stringify(rfq) + "}");
 }
 
 function newOrder(order, clientid, conn) {
@@ -1450,7 +1456,7 @@ function newOrder(order, clientid, conn) {
   order.operatortype = operatortype;
 
   // send to tradeserver
-  db.publish(common.tradeserverchannel, "{\"order\":" + JSON.stringify(order) + "}");
+  db.publish(commonbo.tradeserverchannel, "{\"order\":" + JSON.stringify(order) + "}");
 }
 
 function registerScripts() {

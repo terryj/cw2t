@@ -337,11 +337,11 @@ function initdb() {
   db.sadd("currencies", "USD");
 
   // client types
-  /*db.sadd("clienttypes:user", "1");
+  db.sadd("clienttypes:user", "1");
   db.sadd("clienttypes:user", "2");
   db.sadd("clienttypes:user", "3");
   db.sadd("clienttypes:ifa", "1");
-  db.sadd("clienttypes:ifa", "3");*/
+  db.sadd("clienttypes:ifa", "3");
 
   db.set("clienttype:1", "Retail");
   db.set("clienttype:2", "Hedge");
