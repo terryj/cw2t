@@ -230,7 +230,7 @@ function listen() {
     //testBrokerFundsTransfer();
     //testSupplierFundsTransfer();
     //testPositionPostings();
-    testAccountBalanceBydate();
+    testStatement();
 
     // data callback
     // todo: multiple messages in one data event
@@ -1958,17 +1958,16 @@ function orderReceived(order, userid) {
   db.publish(commonbo.tradeserverchannel, "{\"order\":" + JSON.stringify(order) + "}");
 }
 
-function testAccountBalanceBydate() {
+function testStatement() {
   var brokerid = 1;
   var accountid = 3;
-  var startperiod = new Date(86400000);
-  console.log(startperiod);
-  var milliseconds = startperiod.getTime();
-  console.log(milliseconds);
+  var startmilli = new Date("September 13, 2015 11:13:00").getTime();
 
-  db.eval(commonbo.getaccountbalancebydate, 1, "broker:" + brokerid, accountid, brokerid, milliseconds, function(err, ret) {
+  db.eval(commonbo.scriptgetstatement, 1, "broker:" + brokerid, accountid, brokerid, startmilli, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
+
+    var obj = JSON.parse(ret);
+    console.log(obj);
   });
 }
 
