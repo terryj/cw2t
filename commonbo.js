@@ -565,6 +565,29 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * getpositionsbysymbolbydate()
+  * gets all positions for a symbol as at a date
+  * params: brokerid, symbolid, date in milliseconds
+  * returns: a table of positions
+  */
+  getpositionsbysymbolbydate = getpositionsbysymbol + getpositionpostingsbydate + '\
+  local getpositionsbysymbolbydate = function(brokerid, symbolid, milliseconds) \
+    redis.log(redis.LOG_WARNING, "getpositionsbysymbolbydate") \
+    local tblresults = {} \
+    local positions = getpositionsbysymbol(brokerid, symbolid) \
+    for i = 1, #positions do \
+      --[[ get the position postings for this position since the date ]] \
+      local positionpostings = getpositionpostingsbydate(brokerid, positions[i]["positionid"], milliseconds, "inf") \
+      --[[ adjust the position to reflect these postings ]] \
+      for j = #positionpostings, 1, -1 do \
+        positions[i]["quantity"] = tonumber(positions[i]["quantity"]) - tonumber(positionpostings[j]["quantity"]) \
+      end \
+      table.insert(tblresults, positions) \
+    end \
+  end \
+  ';
+
+  /*
   * gettotalpositionvalue()
   * gets sum of margin & p&l for all positions for an account
   * params: accountid, brokerid
@@ -703,6 +726,7 @@ exports.registerScripts = function () {
   /*
   * newposting()
   * creates a posting record & updates balances for an account
+  * params: accountid, amount, brokerid, localamount, transactionid, timestamp in milliseconds
   */
   newposting = updateaccountbalance + '\
   local newposting = function(accountid, amount, brokerid, localamount, transactionid, milliseconds) \
@@ -721,6 +745,7 @@ exports.registerScripts = function () {
   /*
   * newtransaction()
   * creates a transaction record
+  * params: amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid
   */
   newtransaction = '\
   local newtransaction = function(amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid) \
@@ -772,7 +797,7 @@ exports.registerScripts = function () {
   /*
   * newtradeaccounttransaction()
   * create transaction & postings for the cash side of a trade
-  * params: amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype, milliseconds
+  * params: amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype, timestamp in milliseconds
   */
   newtradeaccounttransaction = newtransaction + newposting + getbrokeraccountid + '\
   local newtradeaccounttransaction = function(amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype, milliseconds) \
@@ -873,6 +898,7 @@ exports.registerScripts = function () {
   */
   newpositionposting = '\
   local newpositionposting = function(brokerid, cost, linkid, positionid, positionpostingtypeid, quantity, timestamp, milliseconds) \
+    redis.log(redis.LOG_WARNING, "newpositionposting") \
     local brokerkey = "broker:" .. brokerid \
     local positionpostingid = redis.call("hincrby", brokerkey, "lastpositionpostingid", 1) \
     redis.call("hmset", brokerkey .. ":positionposting:" .. positionpostingid, "brokerid", brokerid, "cost", cost, "linkid", linkid, "positionid", positionid, "positionpostingid", positionpostingid, "positionpostingtypeid", positionpostingtypeid, "quantity", quantity, "timestamp", timestamp) \
@@ -883,13 +909,14 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * getpositionpostings()
+  * getpositionpostingsbydate()
   * gets position postings for a position between two dates, sorted by datetime
   * params: brokerid, positionid, start of period, end of period - datetimes expressed in milliseconds
   * returns: array of postings
   */
-  getpositionpostings = gethashvalues + '\
-  local getpositionpostings = function(brokerid, positionid, startmilliseconds, endmilliseconds) \
+  getpositionpostingsbydate = gethashvalues + '\
+  local getpositionpostingsbydate = function(brokerid, positionid, startmilliseconds, endmilliseconds) \
+    redis.log(redis.LOG_WARNING, "getpositionpostingsbydate") \
     local tblpositionpostings = {} \
     local brokerkey = "broker:" .. brokerid \
     local positionpostings = redis.call("zrangebyscore", brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", startmilliseconds, endmilliseconds) \
@@ -982,8 +1009,8 @@ exports.registerScripts = function () {
   * params: brokerid, positionid, startmilliseconds, endmilliseconds
   * returns: array of postings
   */
-  exports.scriptgetpositionpostings = getpositionpostings + '\
-  local positionpostings = getpositionpostings(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
+  exports.scriptgetpositionpostings = getpositionpostingsbydate + '\
+  local positionpostings = getpositionpostingsbydate(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
   return cjson.encode(positionvalues) \
   ';
 
@@ -1131,8 +1158,8 @@ exports.registerScripts = function () {
 
   /*
   * scriptgetstatement
-  * prepares a statement for an account from a start date to now
-  * params: accountid, brokerid, start date
+  * prepares a statement for an account between two dates
+  * params: accountid, brokerid, start date, end date
   */
   exports.scriptgetstatement = getaccountbalance + getpostingsbydate + '\
     redis.log(redis.LOG_WARNING, "scriptgetstatement") \
@@ -1140,13 +1167,12 @@ exports.registerScripts = function () {
     --[[ get the currenct account balance ]] \
     local accountbalance = tonumber(getaccountbalance(ARGV[1], ARGV[2])) \
     --[[ get all the postings from the start date to now ]] \
-    local postings = getpostingsbydate(ARGV[1], ARGV[2], ARGV[3], "inf") \
-    --[[ go backwards through postings to calculate a start balance ]] \
+    local postings = getpostingsbydate(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
+    --[[ go backwards through the postings to calculate a start balance ]] \
     for index = #postings, 1, -1 do \
       accountbalance = accountbalance - tonumber(postings[index]["amount"]) \
-      redis.log(redis.LOG_WARNING, accountbalance) \
     end \
-    --[[ go forwards through postings, calculating the account balance after each posting ]]\
+    --[[ go forwards through the postings, calculating the account balance after each one ]]\
     for index = 1, #postings do \
       accountbalance = accountbalance + tonumber(postings[index]["amount"]) \
       postings[index]["balance"] = accountbalance \
@@ -1158,20 +1184,84 @@ exports.registerScripts = function () {
   /*
   * applycacashdividend()
   * script to apply a cash dividend
-  * params: brokerid, corporateactionid
+  * params: brokerid, corporateactionid, timestamp, timestamp in milliseconds, exdate
+  * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycacashdividend = getpositionsbysymbol + round + '\
+  exports.applycacashdividend = getpositionsbysymbolbydate + round + newtransaction + getbrokeraccountid + newposting + '\
     redis.log(redis.LOG_WARNING, "applycacashdividend") \
+    local brokerid = ARGV[1] \
+    local corporateactionid = ARGV[2] \
+    local timestamp = ARGV[3] \
+    local timestampmilli = ARGV[4] \
+    local exdate = ARGV[5] \
     --[[ get the corporate action ]] \
-    local corporateaction = gethashvalues("corporateaction:" .. ARGV[2]) \
+    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction then \
       return {1, 1027} \
     end \
-    --[[ get all positions in the stock of the corporate action ]] \
-    local positions = getpositionsbysymbol(brokerid, corporateaction["symbolid"]) \
-    for index = 1, #positions do \
-      local dividend = tonumber(positions[index]["quantity"]) * tonumber(corporateaction["cashpershare"]) \
-      dividend = round(dividend, 2) \
+    --[[ get the symbol ]] \
+    local symbol = gethashvalues(corporateaction["symbolid"]) \
+    if not symbol then \
+      return {1, 1015} \
+    end \
+    local note = "Dividend payment - " .. symbol["shortname"] \
+    --[[ get all positions in the stock of the corporate action as at the ex date ]] \
+    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdate) \
+    for i = 1, #positions do \
+      --[[ calculate the dividend ]] \
+      local dividend = round(tonumber(positions[i]["quantity"]) * tonumber(corporateaction["cashpershare"]), 2) \
+      --[[ get the broker account ids ]] \
+      local bankfundsclient = getbrokeraccountid(brokerid, corporateaction["currencyid"], "bankfundsclient") \
+      local nominalcorporateactions = getbrokeraccountid(brokerid, corporateaction["currencyid"], "nominalcorporateactions") \
+      --[[ create a transaction & postings ]] \
+      local transactionid = newtransaction(dividend, brokerid, corporateaction["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
+      newposting(bankfundsclient, -dividend, brokerid, -dividend, transactionid, timestampmilli) \
+      newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampmilli) \
+      newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampmilli) \
+    end \
+    return {0} \
+  ';
+
+  /*
+  * applycadividendscrip()
+  * script to apply a scrip dividend
+  * params: brokerid, corporateactionid, timestamp, timestamp in milliseconds, exdate
+  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  */
+  exports.applycadividendscrip = getpositionsbysymbolbydate + round + newtransaction + getbrokeraccountid + newposting + '\
+    redis.log(redis.LOG_WARNING, "applycadividendscrip") \
+    local brokerid = ARGV[1] \
+    local corporateactionid = ARGV[2] \
+    local timestamp = ARGV[3] \
+    local timestampmilli = ARGV[4] \
+    local exdate = ARGV[5] \
+    --[[ get the corporate action ]] \
+    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
+    if not corporateaction then \
+      return {1, 1027} \
+    end \
+    --[[ get the symbol ]] \
+    local symbol = gethashvalues(corporateaction["symbolid"]) \
+    if not symbol then \
+      return {1, 1015} \
+    end \
+    local note = "Dividend scrip - " .. symbol["shortname"] \
+    --[[ get all positions in the stock of the corporate action as at the ex date ]] \
+    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdate) \
+    for i = 1, #positions do \
+      --[[ calculate the shares due ]] \
+      local sharesdue = round(tonumber(positions[i]["quantity"]) * tonumber(corporateaction["sharespershare"]), 2) \
+      local sharestub = sharesdue % 1 \
+      if sharestub ~= 0 then \
+      end \
+      --[[ get the broker account ids ]] \
+      local bankfundsclient = getbrokeraccountid(brokerid, corporateaction["currencyid"], "bankfundsclient") \
+      local nominalcorporateactions = getbrokeraccountid(brokerid, corporateaction["currencyid"], "nominalcorporateactions") \
+      --[[ create a transaction & postings ]] \
+      local transactionid = newtransaction(dividend, brokerid, corporateaction["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
+      newposting(bankfundsclient, -dividend, brokerid, -dividend, transactionid, timestampmilli) \
+      newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampmilli) \
+      newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampmilli) \
     end \
     return {0} \
   ';

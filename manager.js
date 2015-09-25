@@ -1961,9 +1961,14 @@ function orderReceived(order, userid) {
 function testStatement() {
   var brokerid = 1;
   var accountid = 3;
-  var startmilli = new Date("September 13, 2015 11:13:00").getTime();
 
-  db.eval(commonbo.scriptgetstatement, 1, "broker:" + brokerid, accountid, brokerid, startmilli, function(err, ret) {
+  var startmilli = new Date("September 13, 2015 00:00:00").getTime();
+  var endmilli = new Date("September 19, 2015 08:24:29").getTime();
+
+  console.log(startmilli);
+  console.log(endmilli);
+
+  db.eval(commonbo.scriptgetstatement, 1, "broker:" + brokerid, accountid, brokerid, startmilli, endmilli, function(err, ret) {
     if (err) throw err;
 
     var obj = JSON.parse(ret);
