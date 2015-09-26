@@ -426,20 +426,120 @@ exports.registerScripts = function () {
   exports.gethashvalues = gethashvalues;
 
   /*
-  * getpositionid()
-  * gets a position id
-  * params: accountid, brokerid, symbolkey
-  * returns: positionid
+  * getaccountbalance()
+  * params: accountid, brokerid
+  * returns: account balance
   */
-  getpositionid = getsymbolkey + '\
-  local getpositionid = function(accountid, brokerid, symbolid, futsettdate) \
-    local symbolkey = getsymbolkey(symbolid, futsettdate) \
-    local positionid = redis.call("get", "broker:" .. brokerid .. ":account:" .. accountid .. ":symbol:" .. symbolkey) \
-    return positionid \
+  getaccountbalance = '\
+  local getaccountbalance = function(accountid, brokerid) \
+    local accountbalance = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid, "balance") \
+    return accountbalance \
   end \
   ';
 
-  exports.getpositionid = getpositionid;
+  /*
+  * updateaccountbalance()
+  * updates account balance & local currency balance
+  * amount & localamount can be -ve
+  */
+  updateaccountbalance = '\
+  local updateaccountbalance = function(accountid, amount, brokerid, localamount) \
+    redis.log(redis.LOG_DEBUG, "updateaccountbalance") \
+    local accountkey = "broker:" .. brokerid .. ":account:" .. accountid \
+    redis.call("hincrbyfloat", accountkey, "balance", amount) \
+    redis.call("hincrbyfloat", accountkey, "localbalance", localamount) \
+  end \
+  ';
+
+  /*
+  * newposting()
+  * creates a posting record & updates balances for an account
+  * params: accountid, amount, brokerid, localamount, transactionid, timestamp in milliseconds
+  */
+  newposting = updateaccountbalance + '\
+  local newposting = function(accountid, amount, brokerid, localamount, transactionid, milliseconds) \
+    local brokerkey = "broker:" .. brokerid \
+    local postingid = redis.call("hincrby", brokerkey, "lastpostingid", 1) \
+    redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", amount, "localamount", localamount, "postingid", postingid, "transactionid", transactionid) \
+    redis.call("sadd", brokerkey .. ":transaction:" .. transactionid .. ":postings", postingid) \
+    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":postings", postingid) \
+    --[[ add a sorted set for time based queries ]] \
+    redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", milliseconds, postingid) \
+    updateaccountbalance(accountid, amount, brokerid, localamount) \
+  return postingid \
+  end \
+  ';
+
+  /*
+  * newtransaction()
+  * creates a transaction record
+  * params: amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid
+  */
+  newtransaction = '\
+  local newtransaction = function(amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid) \
+    local transactionid = redis.call("hincrby", "broker:" .. brokerid, "lasttransactionid", 1) \
+    redis.call("hmset", "broker:" .. brokerid .. ":transaction:" .. transactionid, "amount", amount, "brokerid", brokerid, "currencyid", currencyid, "localamount", localamount, "note", note, "rate", rate, "reference", reference, "timestamp", timestamp, "transactiontypeid", transactiontypeid, "transactionid", transactionid) \
+    return transactionid \
+  end \
+  ';
+
+  /*
+  * gettransaction()
+  * get a transaction
+  * params: brokerid, transactionid
+  */
+  gettransaction = gethashvalues + '\
+  local gettransaction = function(brokerid, transactionid) \
+    local transaction = gethashvalues("broker:" .. brokerid .. ":transaction:" .. transactionid) \
+    return transaction \
+  end \
+  ';
+
+  /*
+  * getpostingsbydate()
+  * gets postings for an account between two dates, sorted by datetime
+  * params: accountid, brokerid, positionid, start of period, end of period - datetimes expressed in milliseconds
+  * returns: array of postings
+  */
+  getpostingsbydate = gettransaction + '\
+  local getpostingsbydate = function(accountid, brokerid, startmilliseconds, endmilliseconds) \
+    redis.log(redis.LOG_WARNING, "getpostingsbydate") \
+    redis.log(redis.LOG_WARNING, startmilliseconds) \
+    redis.log(redis.LOG_WARNING, endmilliseconds) \
+    local tblpostings = {} \
+    local brokerkey = "broker:" .. brokerid \
+    local postings = redis.call("zrangebyscore", brokerkey .. ":account:" .. accountid .. ":postingsbydate", startmilliseconds, endmilliseconds) \
+    for i = 1, #postings do \
+      local posting = gethashvalues(brokerkey .. ":posting:" .. postings[i]) \
+      local transaction = gettransaction(brokerid, posting["transactionid"]) \
+      posting["note"] = transaction["note"] \
+      posting["reference"] = transaction["reference"] \
+      posting["timestamp"] = transaction["timestamp"] \
+      posting["type"] = transaction["transactiontypeid"] \
+      table.insert(tblpostings, posting) \
+    end \
+    return tblpostings \
+  end \
+  ';
+
+  /*
+  * newposition()
+  * create a new position
+  */
+  newposition = getsymbolkey + '\
+  local newposition = function(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
+    redis.log(redis.LOG_WARNING, "newposition") \
+    local brokerkey = "broker:" .. brokerid \
+    local positionid = redis.call("hincrby", brokerkey, "lastpositionid", 1) \
+    redis.call("hmset", brokerkey .. ":position:" .. positionid, "brokerid", brokerid, "accountid", accountid, "symbolid", symbolid, "quantity", quantity, "cost", cost, "positionid", positionid, "futsettdate", futsettdate) \
+    local symbolkey = getsymbolkey(symbolid, futsettdate) \
+    redis.call("set", brokerkey .. ":account:" .. accountid .. ":symbol:" .. symbolkey, positionid) \
+    redis.call("sadd", brokerkey .. ":positions", positionid) \
+    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":positions", positionid) \
+    redis.call("sadd", brokerkey .. ":symbol:" .. symbolkey .. ":positions", positionid) \
+    return positionid \
+  end \
+  ';
 
   /*
   * getposition()
@@ -454,18 +554,87 @@ exports.registerScripts = function () {
   end \
   ';
 
-  /*getposition = '\
-  local getposition = function(brokerid, positionid) \
-    local vals = {} \
-    local rawvals = redis.call("hgetall", "broker:" .. brokerid .. ":position:" .. positionid) \
-    for index = 1, #rawvals, 2 do \
-      vals[rawvals[index]] = rawvals[index + 1] \
-    end \
-    return vals \
-  end \
-  ';*/
-
   exports.getposition = getposition;
+
+  /*
+  * newpositionposting()
+  * creates a positionposting for a position
+  */
+  newpositionposting = '\
+  local newpositionposting = function(brokerid, cost, linkid, positionid, positionpostingtypeid, quantity, timestamp, milliseconds) \
+    redis.log(redis.LOG_WARNING, "newpositionposting") \
+    local brokerkey = "broker:" .. brokerid \
+    local positionpostingid = redis.call("hincrby", brokerkey, "lastpositionpostingid", 1) \
+    redis.call("hmset", brokerkey .. ":positionposting:" .. positionpostingid, "brokerid", brokerid, "cost", cost, "linkid", linkid, "positionid", positionid, "positionpostingid", positionpostingid, "positionpostingtypeid", positionpostingtypeid, "quantity", quantity, "timestamp", timestamp) \
+    redis.call("sadd", brokerkey .. ":position:" .. positionid .. ":positionpostings", positionpostingid) \
+    redis.call("zadd", brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", milliseconds, positionpostingid) \
+    return positionpostingid \
+  end \
+  ';
+
+  /*
+  * getpositionpostingsbydate()
+  * gets position postings for a position between two dates, sorted by datetime
+  * params: brokerid, positionid, start of period, end of period - datetimes expressed in milliseconds
+  * returns: array of postings
+  */
+  getpositionpostingsbydate = gethashvalues + '\
+  local getpositionpostingsbydate = function(brokerid, positionid, startmilliseconds, endmilliseconds) \
+    redis.log(redis.LOG_WARNING, "getpositionpostingsbydate") \
+    local tblpositionpostings = {} \
+    local brokerkey = "broker:" .. brokerid \
+    local positionpostings = redis.call("zrangebyscore", brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", startmilliseconds, endmilliseconds) \
+    for i = 1, #positionpostings do \
+      local positionposting = gethashvalues(brokerkey .. ":positionposting:" .. positionpostings[i]) \
+      table.insert(tblpositionpostings, positionposting) \
+    end \
+    return tblpositionpostings \
+  end \
+  ';
+
+  /*
+  * publishposition()
+  * publish a position
+  * params: brokerid, positionid, channel
+  */
+  publishposition = getposition + '\
+  local publishposition = function(brokerid, positionid, channel) \
+    redis.log(redis.LOG_WARNING, "publishposition") \
+    local position = getposition(brokerid, positionid) \
+    redis.call("publish", channel, "{" .. cjson.encode("position") .. ":" .. cjson.encode(position) .. "}") \
+  end \
+  ';
+
+  /*
+  * updateposition()
+  * quantity & cost can be +ve/-ve
+  */
+  //todo: do we need round?
+  updateposition = publishposition + '\
+  local updateposition = function(brokerid, cost, positionid, quantity) \
+    redis.log(redis.LOG_WARNING, "updateposition") \
+    local positionkey = "broker:" .. brokerid .. ":position:" .. positionid\
+    redis.call("hincrby", positionkey, "quantity", quantity) \
+    redis.call("hincrbyfloat", positionkey, "cost", cost) \
+    publishposition(brokerid, positionid, 10) \
+  end \
+  ';
+
+  /*
+  * getpositionid()
+  * gets a position id
+  * params: accountid, brokerid, symbolkey
+  * returns: positionid
+  */
+  getpositionid = getsymbolkey + '\
+  local getpositionid = function(accountid, brokerid, symbolid, futsettdate) \
+    local symbolkey = getsymbolkey(symbolid, futsettdate) \
+    local positionid = redis.call("get", "broker:" .. brokerid .. ":account:" .. accountid .. ":symbol:" .. symbolkey) \
+    return positionid \
+  end \
+  ';
+
+  exports.getpositionid = getpositionid;
 
  /*
   * getpositionbysymbol()
@@ -555,7 +724,7 @@ exports.registerScripts = function () {
   local getpositionsbysymbol = function(brokerid, symbolid) \
     redis.log(redis.LOG_WARNING, "getpositionsbysymbol") \
     local tblresults = {} \
-    local positions = redis.call("smembers", "broker:" .. brokerid .. ":symbol:" .. symbolid .. ":positions", positionid) \
+    local positions = redis.call("smembers", "broker:" .. brokerid .. ":symbol:" .. symbolid .. ":positions") \
     for index = 1, #positions do \
       local vals = getposition(brokerid, positions[index]) \
       table.insert(tblresults, vals) \
@@ -582,8 +751,11 @@ exports.registerScripts = function () {
       for j = #positionpostings, 1, -1 do \
         positions[i]["quantity"] = tonumber(positions[i]["quantity"]) - tonumber(positionpostings[j]["quantity"]) \
       end \
-      table.insert(tblresults, positions) \
+      redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
+      table.insert(tblresults, positions[i]) \
     end \
+      redis.log(redis.LOG_WARNING, "leavinggetpositionsbysymbolbydate") \
+    return tblresults \
   end \
   ';
 
@@ -669,33 +841,7 @@ exports.registerScripts = function () {
   end \
   ';
 
-  exports.getclientaccountid = getclientaccountid;
-
-  /*
-  * getaccountbalance()
-  * params: accountid, brokerid
-  * returns: account balance
-  */
-  getaccountbalance = '\
-  local getaccountbalance = function(accountid, brokerid) \
-    local accountbalance = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid, "balance") \
-    return accountbalance \
-  end \
-  ';
- 
-  /*
-  * updateaccountbalance()
-  * updates account balance & local currency balance
-  * amount & localamount can be -ve
-  */
-  updateaccountbalance = '\
-  local updateaccountbalance = function(accountid, amount, brokerid, localamount) \
-    redis.log(redis.LOG_DEBUG, "updateaccountbalance") \
-    local accountkey = "broker:" .. brokerid .. ":account:" .. accountid \
-    redis.call("hincrbyfloat", accountkey, "balance", amount) \
-    redis.call("hincrbyfloat", accountkey, "localbalance", localamount) \
-  end \
-  ';
+  exports.getclientaccountid = getclientaccountid; 
 
   /*
   * calculates free margin for an account
@@ -722,77 +868,6 @@ exports.registerScripts = function () {
   ';
 
   exports.getfreemargin = getfreemargin;
-
-  /*
-  * newposting()
-  * creates a posting record & updates balances for an account
-  * params: accountid, amount, brokerid, localamount, transactionid, timestamp in milliseconds
-  */
-  newposting = updateaccountbalance + '\
-  local newposting = function(accountid, amount, brokerid, localamount, transactionid, milliseconds) \
-    local brokerkey = "broker:" .. brokerid \
-    local postingid = redis.call("hincrby", brokerkey, "lastpostingid", 1) \
-    redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", amount, "localamount", localamount, "postingid", postingid, "transactionid", transactionid) \
-    redis.call("sadd", brokerkey .. ":transaction:" .. transactionid .. ":postings", postingid) \
-    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":postings", postingid) \
-    --[[ add a sorted set for time based queries ]] \
-    redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", milliseconds, postingid) \
-    updateaccountbalance(accountid, amount, brokerid, localamount) \
-  return postingid \
-  end \
-  ';
-
-  /*
-  * newtransaction()
-  * creates a transaction record
-  * params: amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid
-  */
-  newtransaction = '\
-  local newtransaction = function(amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid) \
-    local transactionid = redis.call("hincrby", "broker:" .. brokerid, "lasttransactionid", 1) \
-    redis.call("hmset", "broker:" .. brokerid .. ":transaction:" .. transactionid, "amount", amount, "brokerid", brokerid, "currencyid", currencyid, "localamount", localamount, "note", note, "rate", rate, "reference", reference, "timestamp", timestamp, "transactiontypeid", transactiontypeid, "transactionid", transactionid) \
-    return transactionid \
-  end \
-  ';
-
-  /*
-  * gettransaction()
-  * get a transaction
-  * params: brokerid, transactionid
-  */
-  gettransaction = gethashvalues + '\
-  local gettransaction = function(brokerid, transactionid) \
-    local transaction = gethashvalues("broker:" .. brokerid .. ":transaction:" .. transactionid) \
-    return transaction \
-  end \
-  ';
-
-  /*
-  * getpostingsbydate()
-  * gets postings for an account between two dates, sorted by datetime
-  * params: accountid, brokerid, positionid, start of period, end of period - datetimes expressed in milliseconds
-  * returns: array of postings
-  */
-  getpostingsbydate = gettransaction + '\
-  local getpostingsbydate = function(accountid, brokerid, startmilliseconds, endmilliseconds) \
-    redis.log(redis.LOG_WARNING, "getpostingsbydate") \
-    redis.log(redis.LOG_WARNING, startmilliseconds) \
-    redis.log(redis.LOG_WARNING, endmilliseconds) \
-    local tblpostings = {} \
-    local brokerkey = "broker:" .. brokerid \
-    local postings = redis.call("zrangebyscore", brokerkey .. ":account:" .. accountid .. ":postingsbydate", startmilliseconds, endmilliseconds) \
-    for i = 1, #postings do \
-      local posting = gethashvalues(brokerkey .. ":posting:" .. postings[i]) \
-      local transaction = gettransaction(brokerid, posting["transactionid"]) \
-      posting["note"] = transaction["note"] \
-      posting["reference"] = transaction["reference"] \
-      posting["timestamp"] = transaction["timestamp"] \
-      posting["type"] = transaction["transactiontypeid"] \
-      table.insert(tblpostings, posting) \
-    end \
-    return tblpostings \
-  end \
-  ';
 
   /*
   * newtradeaccounttransaction()
@@ -845,88 +920,6 @@ exports.registerScripts = function () {
   ';
 
   exports.newtradeaccounttransactions = newtradeaccounttransactions;
-
-  /*
-  * newposition()
-  * create a new position
-  */
-  newposition = getsymbolkey + '\
-  local newposition = function(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
-    redis.log(redis.LOG_WARNING, "newposition") \
-    local brokerkey = "broker:" .. brokerid \
-    local positionid = redis.call("hincrby", brokerkey, "lastpositionid", 1) \
-    redis.call("hmset", brokerkey .. ":position:" .. positionid, "brokerid", brokerid, "accountid", accountid, "symbolid", symbolid, "quantity", quantity, "cost", cost, "positionid", positionid, "futsettdate", futsettdate) \
-    local symbolkey = getsymbolkey(symbolid, futsettdate) \
-    redis.call("set", brokerkey .. ":account:" .. accountid .. ":symbol:" .. symbolkey, positionid) \
-    redis.call("sadd", brokerkey .. ":positions", positionid) \
-    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":positions", positionid) \
-    redis.call("sadd", brokerkey .. ":symbol:" .. symbolkey .. ":positions", positionid) \
-    return positionid \
-  end \
-  ';
-
-  /*
-  * publishposition()
-  * publish a position
-  */
-  publishposition = getposition + '\
-  local publishposition = function(brokerid, positionid, channel) \
-    redis.log(redis.LOG_WARNING, "publishposition") \
-    local position = getposition(brokerid, positionid) \
-    redis.call("publish", channel, "{" .. cjson.encode("position") .. ":" .. cjson.encode(position) .. "}") \
-  end \
-  ';
-
-  /*
-  * updateposition()
-  * quantity & cost can be +ve/-ve
-  */
-  //todo: do we need round?
-  updateposition = publishposition + '\
-  local updateposition = function(brokerid, cost, positionid, quantity) \
-    redis.log(redis.LOG_WARNING, "updateposition") \
-    local positionkey = "broker:" .. brokerid .. ":position:" .. positionid\
-    redis.call("hincrby", positionkey, "quantity", quantity) \
-    redis.call("hincrbyfloat", positionkey, "cost", cost) \
-    publishposition(brokerid, positionid, 10) \
-  end \
-  ';
-
-  /*
-  * newpositionposting()
-  * creates a positionposting for a position
-  */
-  newpositionposting = '\
-  local newpositionposting = function(brokerid, cost, linkid, positionid, positionpostingtypeid, quantity, timestamp, milliseconds) \
-    redis.log(redis.LOG_WARNING, "newpositionposting") \
-    local brokerkey = "broker:" .. brokerid \
-    local positionpostingid = redis.call("hincrby", brokerkey, "lastpositionpostingid", 1) \
-    redis.call("hmset", brokerkey .. ":positionposting:" .. positionpostingid, "brokerid", brokerid, "cost", cost, "linkid", linkid, "positionid", positionid, "positionpostingid", positionpostingid, "positionpostingtypeid", positionpostingtypeid, "quantity", quantity, "timestamp", timestamp) \
-    redis.call("sadd", brokerkey .. ":position:" .. positionid .. ":positionpostings", positionpostingid) \
-    redis.call("zadd", brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", milliseconds, positionpostingid) \
-    return positionpostingid \
-  end \
-  ';
-
-  /*
-  * getpositionpostingsbydate()
-  * gets position postings for a position between two dates, sorted by datetime
-  * params: brokerid, positionid, start of period, end of period - datetimes expressed in milliseconds
-  * returns: array of postings
-  */
-  getpositionpostingsbydate = gethashvalues + '\
-  local getpositionpostingsbydate = function(brokerid, positionid, startmilliseconds, endmilliseconds) \
-    redis.log(redis.LOG_WARNING, "getpositionpostingsbydate") \
-    local tblpositionpostings = {} \
-    local brokerkey = "broker:" .. brokerid \
-    local positionpostings = redis.call("zrangebyscore", brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", startmilliseconds, endmilliseconds) \
-    for i = 1, #positionpostings do \
-      local positionposting = gethashvalues(brokerkey .. ":positionposting:" .. positionpostings[i]) \
-      table.insert(tblpositionpostings, positionposting) \
-    end \
-    return tblpositionpostings \
-  end \
-  ';
 
   /*
   * newpositiontransaction()
@@ -1187,6 +1180,7 @@ exports.registerScripts = function () {
   * params: brokerid, corporateactionid, timestamp, timestamp in milliseconds, exdate
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
+  // todo: consider currency impact of cdis
   exports.applycacashdividend = getpositionsbysymbolbydate + round + newtransaction + getbrokeraccountid + newposting + '\
     redis.log(redis.LOG_WARNING, "applycacashdividend") \
     local brokerid = ARGV[1] \
@@ -1194,32 +1188,48 @@ exports.registerScripts = function () {
     local timestamp = ARGV[3] \
     local timestampmilli = ARGV[4] \
     local exdate = ARGV[5] \
+    local numaccountsupdated = 0 \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
-    if not corporateaction then \
+    if not corporateaction["corporateactionid"] then \
       return {1, 1027} \
     end \
     --[[ get the symbol ]] \
-    local symbol = gethashvalues(corporateaction["symbolid"]) \
-    if not symbol then \
+    local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
+    if not symbol["symbolid"] then \
       return {1, 1015} \
     end \
     local note = "Dividend payment - " .. symbol["shortname"] \
     --[[ get all positions in the stock of the corporate action as at the ex date ]] \
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdate) \
     for i = 1, #positions do \
-      --[[ calculate the dividend ]] \
-      local dividend = round(tonumber(positions[i]["quantity"]) * tonumber(corporateaction["cashpershare"]), 2) \
-      --[[ get the broker account ids ]] \
-      local bankfundsclient = getbrokeraccountid(brokerid, corporateaction["currencyid"], "bankfundsclient") \
-      local nominalcorporateactions = getbrokeraccountid(brokerid, corporateaction["currencyid"], "nominalcorporateactions") \
-      --[[ create a transaction & postings ]] \
-      local transactionid = newtransaction(dividend, brokerid, corporateaction["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
-      newposting(bankfundsclient, -dividend, brokerid, -dividend, transactionid, timestampmilli) \
-      newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampmilli) \
-      newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampmilli) \
+      redis.log(redis.LOG_WARNING, "accountid") \
+      redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
+      redis.log(redis.LOG_WARNING, "quantity") \
+      redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
+      local posqty = tonumber(positions[i]["quantity"]) \
+      --[[ may have a position with no quantity ]] \
+      if posqty ~= 0 then \
+        local dividend = round(posqty * tonumber(corporateaction["cashpershare"]), 2) \
+        redis.log(redis.LOG_WARNING, "dividend") \
+        redis.log(redis.LOG_WARNING, dividend) \
+        if dividend ~= 0 then \
+          local nominalcorporateactions = getbrokeraccountid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
+          local transactiontype \
+          if dividend > 0 then \
+            transactiontype = "AR" \
+          else \
+            transactiontype = "AP" \
+          end \
+          --[[ create a transaction & postings ]] \
+          local transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, transactiontype) \
+          newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampmilli) \
+          newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampmilli) \
+          numaccountsupdated = numaccountsupdated + 1 \
+        end \
+      end \
     end \
-    return {0} \
+    return {0, numaccountsupdated} \
   ';
 
   /*

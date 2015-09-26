@@ -230,7 +230,8 @@ function listen() {
     //testBrokerFundsTransfer();
     //testSupplierFundsTransfer();
     //testPositionPostings();
-    testStatement();
+    //testStatement();
+    applycorporateaction(1);
 
     // data callback
     // todo: multiple messages in one data event
@@ -1963,7 +1964,7 @@ function testStatement() {
   var accountid = 3;
 
   var startmilli = new Date("September 13, 2015 00:00:00").getTime();
-  var endmilli = new Date("September 19, 2015 08:24:29").getTime();
+  var endmilli = new Date("September 19, 2015 00:00:00").getTime();
 
   console.log(startmilli);
   console.log(endmilli);
@@ -1973,6 +1974,42 @@ function testStatement() {
 
     var obj = JSON.parse(ret);
     console.log(obj);
+  });
+}
+
+function applycorporateaction(corporateactionid) {
+  console.log("applycorporateaction");
+  db.hget("corporateaction:" + corporateactionid, "corporateactiontypeid", function(err, corporateactiontypeid) {
+    if (err) {
+      console.log("Error in applycorporateaction:" + err);
+      return;
+    }
+    console.log(corporateactiontypeid);
+
+    if (corporateactiontypeid == "DVCA") {
+      applycashdividend(corporateactionid);
+    }
+  });
+}
+
+function applycashdividend(corporateactionid) {
+  console.log("applycashdividend");
+  var brokerid = 1;
+  var timestamp = new Date();
+  var timestampmilli = timestamp.getTime();
+  var exdatemilli = new Date("September 13, 2015 00:00:00").getTime();
+  var testdatemilli = new Date("September 13, 2015 00:00:00").getTime();
+
+  console.log(corporateactionid);
+  console.log(brokerid);
+  console.log(timestamp);
+  console.log(timestampmilli);
+  console.log(exdatemilli);
+
+  db.eval(commonbo.applycacashdividend, 1, "broker:" + brokerid, brokerid, corporateactionid, timestamp, timestampmilli, exdatemilli, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+    console.log("Number of accounts updated: " + ret[1]);
   });
 }
 
