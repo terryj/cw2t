@@ -751,10 +751,8 @@ exports.registerScripts = function () {
       for j = #positionpostings, 1, -1 do \
         positions[i]["quantity"] = tonumber(positions[i]["quantity"]) - tonumber(positionpostings[j]["quantity"]) \
       end \
-      redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
       table.insert(tblresults, positions[i]) \
     end \
-      redis.log(redis.LOG_WARNING, "leavinggetpositionsbysymbolbydate") \
     return tblresults \
   end \
   ';
@@ -1274,5 +1272,29 @@ exports.registerScripts = function () {
       newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampmilli) \
     end \
     return {0} \
+  ';
+
+  /*
+  * scriptgetpositionsbysymbol
+  * get positions for a symbol
+  * params: brokerid, symbolid
+  * returns: a table of positions
+  */
+  exports.scriptgetpositionsbysymbol = getpositionsbysymbol + '\
+    redis.log(redis.LOG_WARNING, "scriptgetpositionsbysymbol") \
+    local positions = getpositionsbysymbol(ARGV[1], ARGV[2]) \
+    return positions \
+  ';
+
+  /*
+  * scriptgetpositionsbysymbolbydate
+  * get positions as at a date
+  * params: brokerid, symbolid, millisecond representation of the date
+  * returns: a table of positions
+  */
+  exports.scriptgetpositionsbysymbolbydate = getpositionsbysymbolbydate + '\
+    redis.log(redis.LOG_WARNING, "scriptgetpositionsbysymbolbydate") \
+    local positions = getpositionsbysymbolbydate(ARGV[1], ARGV[2], ARGV[3]) \
+    return positions \
   ';
 }
