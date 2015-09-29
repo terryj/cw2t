@@ -18,7 +18,8 @@ var fs = require('fs');
 var redis = require('redis');
 
 // cw2t libraries
-var common = require('./commonfo.js');
+var commonfo = require('./commonfo.js');
+var commonbo = require('./commonbo.js');
 
 // redis
 var redishost;
@@ -80,7 +81,8 @@ db.on("error", function(err) {
 
 function initialise() {
   initDb();
-  common.registerScripts();
+  commonfo.registerScripts();
+  commonbo.registerScripts();
   registerScripts();
   pubsub();
 }
@@ -102,7 +104,7 @@ function pubsub() {
     requestData(message);
   });
 
-  dbsub.subscribe(common.priceserverchannel);
+  dbsub.subscribe(commonbo.priceserverchannel);
 }
 
 //
@@ -361,7 +363,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
   //console.log(instrec);
   // create a unix timestamp
   var now = new Date();
-  instrec.timestamp = common.getUTCTimeStamp(now);
+  instrec.timestamp = commonbo.getUTCTimeStamp(now);
 
   // store a complete record for a symbol
   if (functioncode == "340") {
@@ -412,7 +414,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
   //var start = +new Date();
   //for (i=0; i<10000; i++) {
   // update price
-  db.eval(common.scriptpriceupdate, 0, instrumentcode, instrec.timestamp, instrec.bid, instrec.ask, instrec.midnetchange, instrec.midpercentchange, function(err, ret) {
+  db.eval(commonfo.scriptpriceupdate, 0, instrumentcode, instrec.timestamp, instrec.bid, instrec.ask, instrec.midnetchange, instrec.midpercentchange, function(err, ret) {
     if (err) throw err;
   //var end = +new Date();
   //console.log("test took " + (end-start) + " ms");

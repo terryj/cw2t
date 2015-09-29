@@ -859,6 +859,8 @@ exports.registerScripts = function () {
       local equity = tonumber(accountbalance) + totalpositionvalue["unrealisedpandl"] \
       redis.log(redis.LOG_WARNING, "totunrealisedpandl") \
       redis.log(redis.LOG_WARNING, totalpositionvalue["unrealisedpandl"]) \
+      redis.log(redis.LOG_WARNING, "margin") \
+      redis.log(redis.LOG_WARNING, totalpositionvalue["margin"]) \
       freemargin = equity - totalpositionvalue["margin"] \
     end \
     return freemargin \

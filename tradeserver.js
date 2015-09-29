@@ -208,7 +208,7 @@ function quoteRequest(quoterequest) {
   }
 
   if (!('settlcurrencyid' in quoterequest)) {
-    quoterequest.settlcurrencyid = quoterequest.currencyid;
+    quoterequest.settlcurrencyid = "GBP";
   }
 
   // store the quote request & get an id
@@ -432,6 +432,8 @@ function newOrder(order) {
     order.mnemonic = ret[3];
     order.exchangeid = ret[4];
     order.instrumenttypeid = ret[5];
+    order.hedgesymbolid = ret[6];
+    order.hedgeorderid = ret[7];
 
     // use the returned quote values required by fix connection
     if (order.ordertype == "D") {
@@ -440,18 +442,18 @@ function newOrder(order) {
     }
 
     // set the settlement date to equity default date for cfd orders, in case they are being hedged with the market
-    if (order.instrumenttypeid == "CFD" || order.instrumenttypeid == "SPB") {
+    //if (order.instrumenttypeid == "CFD" || order.instrumenttypeid == "SPB") {
       // commented out as only offering default settlement for the time being
       //order.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, ret[11], holidays));
 
-      order.hedgesymbolid = ret[6];
-      order.hedgeorderid = ret[7];
+      //order.hedgesymbolid = ret[6];
+      //order.hedgeorderid = ret[7];
 
       // update the stored order settlement details if it is a hedge - todo: req'd?
       /*if (hedgeorderid != "") {
         db.hmset("order:" + hedgeorderid, "nosettdays", ret[11], "futsettdate", order.futsettdate);
       }*/
-    }
+    //}
 
     processOrder(order);
   });
@@ -584,7 +586,7 @@ function processOrder(order) {
     }
   } else {
     // if we are hedging, change the order id to that of the hedge & forward
-    if (hedgeorderid != "") {
+    if (order.hedgeorderid != "") {
       console.log("forwarding hedge order:" + order.hedgeorderid + " to nbt");
 
       if (testmode == "1") {
@@ -1846,6 +1848,11 @@ function registerScripts() {
   return {0, quoterequestid, symbol["isin"], symbol["mnemonic"], symbol["exchangeid"]} \
   ';
 
+  /*
+  * scriptQuote
+  * script to store and publish a quote
+  * params: 1=quoterequestid, 2=symbolid, 3=bidpx, 4=offerpx, 5=bidsize, 6=offersize, 7=validuntiltime, 8=transacttime, 9=currencyid, 10=settlcurrencyid, 11=quoterid, 12=quotertype, 13=futsettdate, 14=bidquotedepth, 15=offerquotedepth, 16=externalquoteid, 17=cashorderqty, 18=settledays, 19=noseconds, 20=brokerid, 21=settlmnttypid
+  */
   scriptQuote = publishquote + commonbo.round + '\
   local errorcode = 0 \
   local brokerkey = "broker:" .. ARGV[20] \
@@ -1867,6 +1874,7 @@ function registerScripts() {
   local offerquantity = "" \
   local bidfinance = 0 \
   local offerfinance = 0 \
+  local cashorderqty \
   --[[ calculate the quantity from the cashorderqty, if necessary ]] \
   if ARGV[3] == "" then \
     local offerprice = tonumber(ARGV[4]) \
@@ -1875,6 +1883,8 @@ function registerScripts() {
     else \
       offerquantity = tonumber(quoterequest["quantity"]) \
     end \
+    --[[ set the amount of cash based on the quoted price ]] \
+    cashorderqty = offerquantity * offerprice \
   else \
     local bidprice = tonumber(ARGV[3]) \
     if quoterequest["quantity"] == "" then \
@@ -1882,11 +1892,13 @@ function registerScripts() {
     else \
       bidquantity = tonumber(quoterequest["quantity"]) \
     end \
+    --[[ set the amount of cash based on the quoted price ]] \
+    cashorderqty = bidquantity * bidprice \
   end \
   --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
   local quoteid = redis.call("hincrby", brokerkey, "lastquoteid", 1) \
   --[[ store the quote ]] \
-  redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", ARGV[20], "accountid", quoterequest["accountid"], "clientid", quoterequest["clientid"], "quoteid", quoteid, "symbolid", quoterequest["symbolid"], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", ARGV[17], "settledays", ARGV[18], "noseconds", ARGV[19], "settlmnttypid", ARGV[21]) \
+  redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", ARGV[20], "accountid", quoterequest["accountid"], "clientid", quoterequest["clientid"], "quoteid", quoteid, "symbolid", quoterequest["symbolid"], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", cashorderqty, "settledays", ARGV[18], "noseconds", ARGV[19], "settlmnttypid", ARGV[21]) \
   --[[ add to set of quotes ]] \
   redis.call("sadd", brokerkey .. ":quotes", quoteid) \
   --[[ keep a list of quotes for the quoterequest ]] \
