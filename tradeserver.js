@@ -185,11 +185,6 @@ function quoteRequest(quoterequest) {
   var today = new Date();
   quoterequest.timestamp = commonbo.getUTCTimeStamp(today);
 
-  // todo: remove
-  //quoterequest.symbolid = "AMZN";
-  //quoterequest.currencyid = "USD";
-  //quoterequest.settlcurrencyid = "USD";
-
   if (!("accountid" in quoterequest)) {
     quoterequest.accountid = "";
   }
@@ -211,6 +206,7 @@ function quoteRequest(quoterequest) {
     quoterequest.currencyid = "GBP";
   }
 
+  // todo - match settle currency with currency?
   if (!('settlcurrencyid' in quoterequest)) {
     quoterequest.settlcurrencyid = "GBP";
   }
@@ -219,21 +215,21 @@ function quoteRequest(quoterequest) {
   db.eval(scriptQuoteRequest, 1, "broker:" + quoterequest.brokerid, quoterequest.accountid, quoterequest.brokerid, quoterequest.cashorderqty, quoterequest.clientid, quoterequest.currencyid, quoterequest.futsettdate, quoterequest.operatorid, quoterequest.operatortype, quoterequest.quantity, quoterequest.settlmnttypid, quoterequest.side, quoterequest.symbolid, quoterequest.timestamp, quoterequest.settlcurrencyid, function(err, ret) {
     if (err) throw err;
 
+    console.log(ret);
+
     // todo:sort out
     if (ret[0] != 0) {
       // todo: send a quote ack to client
       console.log("Error in scriptQuoteRequest: " + commonbo.getReasonDesc(ret[0]));
       return;
     }
-    //console.log(ret);
+    console.log("ere");
 
     // add the quote request id & symbol details required for the fix connection
     quoterequest.quoterequestid = ret[1];
     quoterequest.isin = ret[2];
     quoterequest.mnemonic = ret[3];
     quoterequest.exchangeid = ret[4];
-
-    //console.log(quoterequest);
 
 
     if (testmode == "1") {
@@ -736,8 +732,6 @@ function newQuote(quote) {
   if (!('symbolid' in  quote)) {
     quote.symbolid = "";
   }
-
-  console.log("about to sq");
 
   // quote script
   db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, function(err, ret) {

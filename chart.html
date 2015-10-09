@@ -1586,7 +1586,7 @@
 
                 var nosettdays = symbols[symbolid].instrumenttypeid == "CFD" ? "" : ""; // todo: cfd=10?
 
-                sendRfq(qty, cashorderqty, symbolid, "", "GBP", nosettdays, ""); // todo: currency
+                sendRfq(1, qty, cashorderqty, symbolid, "", "GBP", 0, "");
 
                 // remove button
                 d3.select(this).remove();
@@ -1609,20 +1609,23 @@
             return div;
         }
 
-        function sendRfq(quantity, cashorderqty, symbolid, side, currencyid, nosettdays, futsettdate) {
+        function sendRfq(accountid, quantity, cashorderqty, symbolid, side, currencyid, settlmnttypid, futsettdate) {
             var rfq = {};
 
-            //rfq.clientid = clientid;
+            rfq.accountid = accountid;
             rfq.symbolid = symbolid;
             rfq.quantity = quantity;
             rfq.cashorderqty = cashorderqty;
-            rfq.side = side;
             rfq.currencyid = currencyid;
-            rfq.settlcurrencyid = currencyid;
-            rfq.nosettdays = nosettdays;
-            rfq.futsettdate = futsettdate;
-            //rfq.operatortype = operatortype;
-            //rfq.operatorid = clientid;
+            rfq.settlmnttypid = settlmnttypid;
+
+            if (futsettdate != "") {
+                rfq.futsettdate = futsettdate;
+            }
+
+            if (side != "") {
+                rfq.side = side;
+            }
 
             sockjs.send("{\"quoterequest\":" + JSON.stringify(rfq) + "}");
         }
@@ -1708,6 +1711,14 @@
             return tbody;
         }
 
+        function sendOrderQuoted(quoteid) {
+            var order = {};
+
+            order.quoteid = quoteid;
+
+            sockjs.send("{\"order\":" + JSON.stringify(order) + "}");
+        }
+
         function sendOrder(symbolid, side, quantity, price, ordertype, delivertocompid, settlcurrencyid, nosettdays, settdate, quoteid, timeinforce, expiredate, expiretime) {
             var order = {};
 
@@ -1751,6 +1762,7 @@
         }
 
         function tradeReceived(trade) {
+            console.log("tradeReceived");
             var inquotes = false;
 
             // add to trades, if that is what we are looking at
@@ -1764,7 +1776,7 @@
             // quote may be in rfq quotes
             for (var i = 0; i < quotes.length; i++) {
                 if (trade.side == "1") {
-                    if (trade.quoteid == quotes[i].offerquote.quoteid) {
+                    //if (trade.quoteid == quotes[i].offerquote.quoteid) {
                         quotes[i].offerquote.tradeid = trade.tradeid;
 
                         // update display
@@ -1777,9 +1789,9 @@
 
                         inquotes = true;
                         break;
-                    }
+                    //}
                 } else {
-                    if (trade.quoteid == quotes[i].bidquote.quoteid) {
+                    //if (trade.quoteid == quotes[i].bidquote.quoteid) {
                         quotes[i].bidquote.tradeid = trade.tradeid;
 
                         // update display
@@ -1792,7 +1804,7 @@
 
                         inquotes = true;
                         break;
-                    }
+                    //}
                 }
             }
 
@@ -2324,6 +2336,7 @@
                 .append("input")
                     .attr("type", "button")
                     .on("click", function(d, i, j) { // d=data, i=col, j=row
+                        //sendOrderQuoted(d.value.quoteid);
                         if (d.col == "bidquote") {
                             // we are selling
                             sendOrder(d.value.symbolid, 2, d.value.bidquantity, d.value.bidpx, 'D', "", d.value.settlcurrencyid, d.value.nosettdays, d.value.futsettdate, d.value.quoteid, "4", "", "");
@@ -3693,9 +3706,8 @@
 
                                 var side = positions[j].quantity > 0 ? 2 : 1;
 
-                                // todo: does sett date need to depend on inst type 
-
-                                sendRfq(Math.abs(positions[j].quantity), "", positions[j].symbolid, side, "GBP", "", positions[j].futsettdate); // todo: currency
+                                // todo: does sett date need to depend on inst type
+                                sendRfq(1, Math.abs(positions[j].quantity), "", positions[j].symbolid, side, "GBP", 0, positions[j].futsettdate); // todo: currency
 
                                 // disable button & remove the event listener
                                 d3.select(this)

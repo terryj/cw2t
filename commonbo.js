@@ -621,8 +621,8 @@ exports.registerScripts = function () {
   updateposition = publishposition + '\
   local updateposition = function(brokerid, cost, positionid, quantity) \
     redis.log(redis.LOG_WARNING, "updateposition") \
-    local positionkey = "broker:" .. brokerid .. ":position:" .. positionid\
-    redis.call("hincrby", positionkey, "quantity", quantity) \
+    local positionkey = "broker:" .. brokerid .. ":position:" .. positionid \
+    redis.call("hincrbyfloat", positionkey, "quantity", quantity) \
     redis.call("hincrbyfloat", positionkey, "cost", cost) \
     publishposition(brokerid, positionid, 10) \
   end \

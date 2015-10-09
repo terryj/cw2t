@@ -1438,6 +1438,7 @@ function quoteRequest(rfq, clientid, conn) {
   console.log(rfq);
 
   // add clientid & operator
+  rfq.brokerid = brokerid;
   rfq.clientid = clientid;
   rfq.operatorid = clientid;
   rfq.operatortype = operatortype;
@@ -1450,13 +1451,53 @@ function newOrder(order, clientid, conn) {
   console.log("newOrder");
   console.log(order);
 
-  // add clientid & operator
-  order.clientid = clientid;
+  order.brokerid = brokerid;
   order.operatorid = clientid;
   order.operatortype = operatortype;
 
-  // send to tradeserver
-  db.publish(commonbo.tradeserverchannel, "{\"order\":" + JSON.stringify(order) + "}");
+  if ("quoteid" in order) {
+    db.hgetall("broker:" + brokerid + ":quote:" + order.quoteid, function(err, quote) {
+      if (err) {
+        console.log("Error getting quote:" + err);
+        return;
+      }
+
+      if (quote == null) {
+        console.log("Quote not found");
+        return;
+      }
+
+      order.clientid = quote.clientid;
+      order.accountid = quote.accountid;
+      order.symbolid = quote.symbolid;
+
+      if (quote.bidpx != "") {
+        order.side = 2;
+        order.price = quote.bidpx;
+        order.quantity = quote.bidquantity;
+      } else {
+        order.side = 1;
+        order.price = quote.offerpx;
+        order.quantity = quote.offerquantity;
+      }
+      
+      order.ordertype = "D";
+      order.markettype = 0;
+      order.currencyid = quote.currencyid;
+      order.timeinforce = 4;
+      order.expiredate = "";
+      order.expiretime = "";
+      order.settlcurrencyid = quote.settlcurrencyid;
+
+      // send to tradeserver
+      db.publish(commonbo.tradeserverchannel, "{\"order\":" + JSON.stringify(order) + "}");
+    });
+  } else {
+      order.clientid = clientid;
+
+      // send to tradeserver
+      db.publish(commonbo.tradeserverchannel, "{\"order\":" + JSON.stringify(order) + "}");
+  }
 }
 
 function registerScripts() {
