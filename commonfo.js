@@ -716,313 +716,22 @@ exports.getPTPOrderCancelRejectReason = getPTPOrderCancelRejectReason;
 
 
 exports.registerScripts = function () {
-  var updatecash;
+  //var updatecash;
   var getmargin;
   var getunrealisedpandl;
   var calcfinance;
   var round;
   var gettrades;
   var getquoterequests;
-  var stringsplit;
 
-  // publish & subscribe channels
-  /*exports.clientserverchannel = 1;
-  exports.userserverchannel = 2;
-  exports.tradeserverchannel = 3;
-  exports.ifaserverchannel = 4;
-  exports.webserverchannel = 5;
-  exports.tradechannel = 6;
-  exports.priceserverchannel = 7;
-  exports.pricehistorychannel = 8;
-  exports.pricechannel = 9;
-  exports.positionchannel = 10;
-  exports.quoterequestchannel = 11;*/
-
-  /*round = '\
+  round = '\
   local round = function(num, dp) \
     local mult = 10 ^ (dp or 0) \
     return math.floor(num * mult + 0.5) / mult \
   end \
   ';
 
-  exports.round = round;*/
-
-  //
-  // function to split a string into an array of substrings, based on a character
-  // parameters are the string & character
-  // i.e. stringsplit("abc,def,hgi", ",") = ["abc", "def", "hgi"]
-  //
-  stringsplit = '\
-  local stringsplit = function(str, inSplitPattern) \
-    local outResults = {} \
-    local theStart = 1 \
-    local theSplitStart, theSplitEnd = string.find(str, inSplitPattern, theStart) \
-    while theSplitStart do \
-      table.insert(outResults, string.sub(str, theStart, theSplitStart-1)) \
-      theStart = theSplitEnd + 1 \
-      theSplitStart, theSplitEnd = string.find(str, inSplitPattern, theStart) \
-    end \
-    table.insert(outResults, string.sub(str, theStart)) \
-    return outResults \
-  end \
-  ';
-
-  updatecash = '\
-  local updatecash = function(clientid, currencyid, transtype, amount, drcr, desc, reference, timestamp, futsettdate, operatortype, operatorid) \
-    amount = tonumber(amount) \
-    if amount == 0 then \
-      return {0, 0} \
-    end \
-    local cashtransid = redis.call("incr", "cashtransid") \
-    if not cashtransid then return {1005} end \
-    redis.call("hmset", "cashtrans:" .. cashtransid, "clientid", clientid, "currencyid", currencyid, "transtype", transtype, "amount", amount, "drcr", drcr, "description", desc, "reference", reference, "timestamp", timestamp, "futsettdate", futsettdate, "operatortype", operatortype, "operatorid", operatorid, "cashtransid", cashtransid) \
-    redis.call("sadd", "client:" .. clientid .. ":cashtrans", cashtransid) \
-    local cashkey = "client:" .. clientid .. ":cash:" .. currencyid \
-    local cashsetkey = "client:" .. clientid .. ":cash" \
-    local cash = redis.call("get", cashkey) \
-    --[[ adjust for credit]] \
-    if tonumber(drcr) == 2 then \
-      amount = -amount \
-    end \
-    if not cash then \
-      redis.call("set", cashkey, amount) \
-      redis.call("sadd", cashsetkey, currencyid) \
-    else \
-      local adjamount = tonumber(cash) + amount \
-      if adjamount == 0 then \
-        redis.call("del", cashkey) \
-        redis.call("srem", cashsetkey, currencyid) \
-      else \
-        redis.call("set", cashkey, adjamount) \
-      end \
-    end \
-    local key = "client:" .. clientid \
-    if transtype == "ST" then \
-      key = key .. ":selltrades:" .. currencyid \
-    elseif transtype == "BT" then \
-      key = key .. ":buytrades:" .. currencyid \
-    elseif transtype == "CO" then \
-      key = key .. ":commission:" .. currencyid \
-    elseif transtype == "PL" then \
-      key = key .. ":ptmlevy:" .. currencyid \
-    elseif transtype == "CC" then \
-      key = key .. ":contractcharge:" .. currencyid \
-    elseif transtype == "SD" then \
-      key = key .. ":stampduty:" .. currencyid \
-    elseif transtype == "DI" then \
-      key = key .. ":dividend:" .. currencyid \
-    elseif transtype == "FI" then \
-      key = key .. ":finance:" .. currencyid \
-    elseif transtype == "IN" then \
-      key = key .. ":interest:" .. currencyid \
-    elseif transtype == "CD" then \
-      key = key .. ":deposits:" .. currencyid \
-    elseif transtype == "CW" then \
-      key = key .. ":withdrawals:" .. currencyid \
-    elseif transtype == "OT" then \
-      key = key .. ":other:" .. currencyid \
-    else \
-      key = key .. ":unknown:" .. currencyid \
-    end \
-    local val = redis.call("get", key) \
-    if not val then val = 0 end \
-    redis.call("set", key, val - amount) \
-    return {0, cashtransid} \
-  end \
-  ';
-
-  exports.updatecash = updatecash;
-
-  /*calcfinance = round + '\
-  local calcfinance = function(instrumenttypeid, consid, currencyid, side, nosettdays) \
-    local finance = 0 \
-    local costkey = "cost:" .. instrumenttypeid .. ":" .. currencyid .. ":" .. side \
-    local financerate = redis.call("hget", costkey, "finance") \
-    if financerate and tonumber(financerate) ~= nil then \
-      local daystofinance = 0 \
-      --[[ nosettdays = 0 represents rolling settlement, so set it to 1 day for interest calculation ]] \
-      if tonumber(nosettdays) == 0 then \
-        daystofinance = 1 \
-      else \
-        local defaultnosettdays = redis.call("hget", costkey, "defaultnosettdays") \
-        if defaultnosettdays and tonumber(defaultnosettdays) ~= nil then \
-          defaultnosettdays = tonumber(defaultnosettdays) \
-        else \
-          defaultnosettdays = 0 \
-        end \
-        if tonumber(nosettdays) > defaultnosettdays then \
-          daystofinance = tonumber(nosettdays) - defaultnosettdays \
-        end \
-      end \
-      finance = round(consid * daystofinance / 365 * tonumber(financerate) / 100, 2) \
-   end \
-   return finance \
-  end \
-  ';
-
-  exports.calcfinance = calcfinance;*/
-
-  //
-  // proquote version
-  //
-  getunrealisedpandlpq = '\
-  local getunrealisedpandlpq = function(symbolid, quantity, side, avgcost) \
-    local topic = redis.call("hget", "symbol:" .. symbolid, "topic") \
-    if not topic then return {0, 0} end \
-    --[[ get delayed topic - todo: review ]] \
-    topic = topic .. "D" \
-    local bidprice = redis.call("hget", "topic:" .. topic, "bid1") \
-    local offerprice = redis.call("hget", "topic:" .. topic, "offer1") \
-    local unrealisedpandl = 0 \
-    local price = 0 \
-    local qty = tonumber(quantity) \
-    if tonumber(side) == 1 then \
-      if bidprice and tonumber(bidprice) ~= 0 then \
-        price = tonumber(bidprice) / 100 \
-      end \
-    else \
-      if offerprice and tonumber(offerprice) ~= 0 then \
-        price = tonumber(offerprice) / 100 \
-      end \
-      --[[ take account of short position ]] \
-      qty = -qty \
-    end \
-    if price ~= 0 then \
-      unrealisedpandl = qty * (price - tonumber(avgcost)) \
-    end \
-    return {unrealisedpandl, price} \
-  end \
-  ';
-
-  /*getunrealisedpandl = round + '\
-  local getunrealisedpandl = function(symbolid, quantity, cost) \
-    local unrealisedpandl = 0 \
-    local price = 0 \
-    local qty = tonumber(quantity) \
-    if qty > 0 then \
-      local bidprice = redis.call("hget", "symbol:" .. symbolid, "bid") \
-      if bidprice and tonumber(bidprice) ~= 0 then \
-        price = tonumber(bidprice) \
-        if price ~= 0 then \
-          unrealisedpandl = round(qty * price / 100 - cost, 2) \
-        end \
-      end \
-    else \
-      local askprice = redis.call("hget", "symbol:" .. symbolid, "ask") \
-      if askprice and tonumber(askprice) ~= 0 then \
-        price = tonumber(askprice) \
-        if price ~= 0 then \
-          unrealisedpandl = round(qty * price / 100 + cost, 2) \
-        end \
-      end \
-    end \
-    return {unrealisedpandl, price} \
-  end \
-  ';
-
-  exports.getunrealisedpandl = getunrealisedpandl;*/
-
-  /*getmargin = round + '\
-  local getmargin = function(symbolid, quantity) \
-    local margin = 0 \
-    local price = 0 \
-    local qty = tonumber(quantity) \
-    if qty > 0 then \
-      local bidprice = redis.call("hget", "symbol:" .. symbolid, "bid") \
-      if bidprice and tonumber(bidprice) ~= 0 then \
-        price = tonumber(bidprice) \
-      end \
-    else \
-      local askprice = redis.call("hget", "symbol:" .. symbolid, "ask") \
-      if askprice and tonumber(askprice) ~= 0 then \
-        price = tonumber(askprice) \
-      end \
-    end \
-    if price ~= 0 then \
-      local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
-      if instrumenttypeid ~= "DE" and instrumenttypeid ~= "IE" then \
-        local marginpercent = redis.call("hget", "symbol:" .. symbolid, "marginpercent") \
-        if marginpercent then \
-          margin = round(math.abs(qty) * price / 100 * tonumber(marginpercent) / 100, 2) \
-        end \
-      end \
-    end \
-    return margin \
-  end \
-  ';
-
-  exports.getmargin = getmargin;*/
-
-  //
-  // get a range of trades from passed ids
-  //
-  /*gettrades = '\
-  local gettrades = function(trades) \
-    local tblresults = {} \
-    local fields = {"clientid","orderid","symbolid","side","quantity","price","currencyid","currencyratetoorg","currencyindtoorg","commission","ptmlevy","stampduty","contractcharge","counterpartyid","markettype","externaltradeid","futsettdate","timestamp","lastmkt","externalorderid","tradeid","settlcurrencyid","settlcurramt","settlcurrfxrate","settlcurrfxratecalc","nosettdays","margin","finance"} \
-    local vals \
-    for index = 1, #trades do \
-      vals = redis.call("hmget", "trade:" .. trades[index], unpack(fields)) \
-      local brokerclientcode = redis.call("hget", "client:" .. vals[1], "brokerclientcode") \
-      table.insert(tblresults, {clientid=vals[1],brokerclientcode=brokerclientcode,orderid=vals[2],symbolid=vals[3],side=vals[4],quantity=vals[5],price=vals[6],currencyid=vals[7],currencyratetoorg=vals[8],currencyindtoorg=vals[9],commission=vals[10],ptmlevy=vals[11],stampduty=vals[12],contractcharge=vals[13],counterpartyid=vals[14],markettype=vals[15],externaltradeid=vals[16],futsettdate=vals[17],timestamp=vals[18],lastmkt=vals[19],externalorderid=vals[20],tradeid=vals[21],settlcurrencyid=vals[22],settlcurramt=vals[23],settlcurrfxrate=vals[24],settlcurrfxratecalc=vals[25],nosettdays=vals[26],margin=vals[27],finance=vals[28]}) \
-    end \
-    return tblresults \
-  end \
-  ';
-
-  exports.gettrades = gettrades;*/
-
-  //
-  // params: array of quotereqid's, symbol ("" = any symbol)
-  // returns array of quote requests
-  //
-  getquoterequests = '\
-  local getquoterequests = function(quoterequests, symbolid) \
-    local tblresults = {} \
-    local fields = {"clientid","symbolid","quantity","cashorderqty","currencyid","settlcurrencyid","nosettdays","futsettdate","quotestatus","timestamp","quoteid","quoterejectreason","quotereqid","operatortype","operatorid"} \
-    local vals \
-    for index = 1, #quoterequests do \
-      vals = redis.call("hmget", "quoterequest:" .. quoterequests[index], unpack(fields)) \
-      if symbolid == "" or symbolid == vals[2] then \
-        table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],quantity=vals[3],cashorderqty=vals[4],currencyid=vals[5],settlcurrencyid=vals[6],nosettdays=vals[7],futsettdate=vals[8],quotestatus=vals[9],timestamp=vals[10],quoteid=vals[11],quoterejectreason=vals[12],quotereqid=vals[13],operatortype=vals[14],operatorid=vals[15]}) \
-      end \
-    end \
-    return tblresults \
-  end \
-  ';
-
-  exports.getquoterequests = getquoterequests;
-
-  //
-  // compare hour & minute with timezone open/close times to determine in/out of hours
-  // returns: 0=in hours, 1=ooh
-  // todo: review days
-  //
-  /*getmarkettype = '\
-  local getmarkettype = function(symbolid, hour, minute, day) \
-    local markettype = 0 \
-    local timezoneid = redis.call("hget", "symbol:" .. symbolid, "timezoneid") \
-    if not timezoneid then \
-      return markettype \
-    end \
-    local fields = {"openhour","openminute","closehour","closeminute"} \
-    local vals = redis.call("hmget", "timezone:" .. timezoneid, unpack(fields)) \
-    if tonumber(day) == 0 or tonumber(day) == 6 then \
-      markettype = 1 \
-    elseif tonumber(hour) < tonumber(vals[1]) or tonumber(hour) > tonumber(vals[3]) then \
-      markettype = 1 \
-    elseif tonumber(hour) == tonumber(vals[1]) and tonumber(minute) < tonumber(vals[2]) then \
-      markettype = 1 \
-    elseif tonumber(hour) == tonumber(vals[3]) and tonumber(minute) > tonumber(vals[4]) then \
-      markettype = 1 \
-    end \
-    return markettype \
-  end \
-  ';
-
-  exports.getmarkettype = getmarkettype;*/
-
-	subscribesymbolpq = '\
+  subscribesymbolpq = '\
   local subscribesymbolpq = function(symbolid, id, servertype) \
     local topic = redis.call("hget", "symbol:" .. symbolid, "topic") \
     if not topic then \
@@ -1249,14 +958,6 @@ exports.registerScripts = function () {
   ';
 
   //
-  // a cash transaction
-  //
-  exports.scriptcashtrans = updatecash + '\
-  local ret = updatecash(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11]) \
-  return ret \
-  ';
-
-  //
   // get open quote requests for a symbol
   // params: symbol
   //
@@ -1324,50 +1025,6 @@ exports.registerScripts = function () {
   ';
 
   //
-  // get trades, most recent first
-  // params: client id
-  //
-  /*exports.scriptgettrades = commonbo.gettrades + '\
-  local trades = redis.call("sort", ARGV[1] .. ":trades", "DESC") \
-  local tblresults = gettrades(trades) \
-  return cjson.encode(tblresults) \
-  ';*/
-
-  //
-  // params: client id, positionkey
-  //
-  /*exports.scriptgetpostrades = commonbo.gettrades + '\
-  local postrades = redis.call("smembers", ARGV[1] .. ":trades:" .. ARGV[2]) \
-  local tblresults = gettrades(postrades) \
-  return cjson.encode(tblresults) \
-  ';*/
-
-  //
-  // params: client id
-  // todo: need to guarantee order
-  exports.scriptgetcashhistory = '\
-  local tblresults = {} \
-  local cashhistory = redis.call("sort", "client:" .. ARGV[1] .. ":cashtrans") \
-  local fields = {"clientid","currencyid","amount","transtype","drcr","description","reference","timestamp","futsettdate","cashtransid"} \
-  local vals \
-  local balance = 0 \
-  for index = 1, #cashhistory do \
-    vals = redis.call("hmget", "cashtrans:" .. cashhistory[index], unpack(fields)) \
-    --[[ match the currency ]] \
-    if vals[2] == ARGV[2] then \
-      --[[ adjust balance according to debit/credit ]] \
-      if tonumber(vals[5]) == 1 then \
-        balance = balance + tonumber(vals[3]) \
-      else \
-        balance = balance - tonumber(vals[3]) \
-      end \
-      table.insert(tblresults, {datetime=vals[1],currencyid=vals[2],amount=vals[3],transtype=vals[4],drcr=vals[5],description=vals[6],reference=vals[7],timestamp=vals[8],futsettdate=vals[9],cashtransid=vals[10],balance=balance}) \
-    end \
-  end \
-  return cjson.encode(tblresults) \
-  ';
-
-  //
   // get positions for a client & subscribe client & server to the position symbols
   // params: client id, server id
   //
@@ -1409,19 +1066,6 @@ exports.registerScripts = function () {
     end \
   end \
   return tblunsubscribe \
-  ';
-
-  //
-  // params: client id
-  //
-  exports.scriptgetcash = '\
-  local tblresults = {} \
-  local cash = redis.call("smembers", "client:" .. ARGV[1] .. ":cash") \
-  for index = 1, #cash do \
-    local amount = redis.call("get", "client:" .. ARGV[1] .. ":cash:" .. cash[index]) \
-    table.insert(tblresults, {currencyid=cash[index],amount=amount}) \
-  end \
-  return cjson.encode(tblresults) \
   ';
 
   //
@@ -1507,18 +1151,6 @@ exports.registerScripts = function () {
   return unsubscribetopics \
   ';
 
-  //
-  // get holidays for a market, i.e. "L" = London...assume "L" for the time being?
-  //
-  /*exports.scriptgetholidays = '\
-  local tblresults = {} \
-  local holidays = redis.call("smembers", "holidays:" .. ARGV[1]) \
-  for index = 1, #holidays do \
-    table.insert(tblresults, {holidays[index]}) \
-  end \
-  return cjson.encode(tblresults) \
-  ';*/
-
   exports.scriptgetclienttypes = '\
   local clienttypes = redis.call("sort", "clienttypes:" .. ARGV[1], "ALPHA") \
   local clienttype = {} \
@@ -1576,7 +1208,6 @@ exports.registerScripts = function () {
       redis.call("publish", "price:" .. symbols[index], pricemsg) \
     end \
   end \
-  return \
   ';
 
   exports.scriptpriceupdate = scriptpriceupdate;

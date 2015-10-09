@@ -201,6 +201,9 @@ exports.registerScripts = function () {
     case 1027:
       desc = "Corporate action not found";
       break;
+    case 1028:
+      desc = "Broker account for corporate action not found";
+      break;
     default:
       desc = "Unknown reason";
     }
@@ -340,7 +343,7 @@ exports.registerScripts = function () {
     end \
     if price ~= 0 then \
       local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
-      if instrumenttypeid ~= "DE" and instrumenttypeid ~= "IE" then \
+      if instrumenttypeid == "CFD" or instrumenttypeid == "SPB" or instrumenttypeid == "CCFD" then \
         local marginpercent = redis.call("hget", "symbol:" .. symbolid, "marginpercent") \
         if marginpercent then \
           margin = round(math.abs(qty) * price / 100 * tonumber(marginpercent) / 100, 2) \
@@ -550,6 +553,11 @@ exports.registerScripts = function () {
   getposition = gethashvalues + '\
   local getposition = function(brokerid, positionid) \
     local position = gethashvalues("broker:" .. brokerid .. ":position:" .. positionid) \
+    --[[ add isin as external systems seem to rely on this ]] \
+    if position["symbolid"] then \
+      local isin = redis.call("hget", "symbol:" .. position["symbolid"], "isin") \
+      position["isin"] = isin \
+    end \
     return position \
   end \
   ';
@@ -752,6 +760,22 @@ exports.registerScripts = function () {
         positions[i]["quantity"] = tonumber(positions[i]["quantity"]) - tonumber(positionpostings[j]["quantity"]) \
       end \
       table.insert(tblresults, positions[i]) \
+    end \
+    return tblresults \
+  end \
+  ';
+
+  /*
+  * get all the positions for a nominee account
+  *
+  */
+  getpositionsnominee = getpositions + '\
+  local getpositionsnominee = function(brokerid, nomineeaccountid) \
+    local tblresults = {} \
+    local accounts = redis.call("smembers", "broker:" .. brokerid .. ":nomineeaccount:" .. nomineeaccountid .. ":accounts") \
+    for index = 1, #accounts do \
+      local positions = getpositions(accounts[index], brokerid) \
+      table.insert(tblresults, positions) \
     end \
     return tblresults \
   end \
@@ -1199,6 +1223,12 @@ exports.registerScripts = function () {
     if not symbol["symbolid"] then \
       return {1, 1015} \
     end \
+    --[[ get the relevant broker accounts ]] \
+    local nominalcorporateactions = getbrokeraccountid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
+    local bankfundsbroker = getbrokeraccountid(brokerid, symbol["currencyid"], "bankfundsbroker") \
+    if not nominalcorporateactions or not bankfundsbroker then \
+      return {1, 1027} \
+    end \
     local note = "Dividend payment - " .. symbol["shortname"] \
     --[[ get all positions in the stock of the corporate action as at the ex date ]] \
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdate) \
@@ -1214,15 +1244,19 @@ exports.registerScripts = function () {
         redis.log(redis.LOG_WARNING, "dividend") \
         redis.log(redis.LOG_WARNING, dividend) \
         if dividend ~= 0 then \
-          local nominalcorporateactions = getbrokeraccountid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
-          local transactiontype \
+          local nominalcorporateactionstransactiontype \
+          local bankfundsbrokertransactiontype \
           if dividend > 0 then \
-            transactiontype = "AR" \
+            nominalcorporateactionstransactiontype = "AR" \
+            bankfundsbrokertransactiontype = "AP" \
           else \
-            transactiontype = "AP" \
+            nominalcorporateactionstransactiontype = "AP" \
+            bankfundsbrokertransactiontype = "AR" \
           end \
-          --[[ create a transaction & postings ]] \
-          local transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, transactiontype) \
+          --[[ create transactions & postings ]] \
+          local transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, bankfundsbrokertransactiontype) \
+          newposting(bankfundsbroker, dividend, brokerid, dividend, transactionid, timestampmilli) \
+          transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, nominalcorporateactionstransactiontype) \
           newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampmilli) \
           newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampmilli) \
           numaccountsupdated = numaccountsupdated + 1 \
@@ -1245,10 +1279,13 @@ exports.registerScripts = function () {
     local timestamp = ARGV[3] \
     local timestampmilli = ARGV[4] \
     local exdate = ARGV[5] \
+    --[[ get the broker account ids ]] \
+    local bankfundsclient = getbrokeraccountid(brokerid, corporateaction["currencyid"], "bankfundsclient") \
+    local nominalcorporateactions = getbrokeraccountid(brokerid, corporateaction["currencyid"], "nominalcorporateactions") \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction then \
-      return {1, 1027} \
+      return {1, 1028} \
     end \
     --[[ get the symbol ]] \
     local symbol = gethashvalues(corporateaction["symbolid"]) \
@@ -1264,10 +1301,7 @@ exports.registerScripts = function () {
       local sharestub = sharesdue % 1 \
       if sharestub ~= 0 then \
       end \
-      --[[ get the broker account ids ]] \
-      local bankfundsclient = getbrokeraccountid(brokerid, corporateaction["currencyid"], "bankfundsclient") \
-      local nominalcorporateactions = getbrokeraccountid(brokerid, corporateaction["currencyid"], "nominalcorporateactions") \
-      --[[ create a transaction & postings ]] \
+      --[[ create transactions & postings ]] \
       local transactionid = newtransaction(dividend, brokerid, corporateaction["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
       newposting(bankfundsclient, -dividend, brokerid, -dividend, transactionid, timestampmilli) \
       newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampmilli) \
