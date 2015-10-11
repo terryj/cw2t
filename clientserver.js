@@ -1135,34 +1135,21 @@ function tradeHistory(req, clientid, conn) {
   }
 }
 
-function cashHistory(req, clientid, conn) {
-  db.eval(commonbo.scriptgetcashhistory, 0, clientid, req.currencyid, function(err, ret) {
-    console.log(ret);
-    if (err) throw err;
-    conn.write("{\"cashhistory\":" + ret + "}");
-  });  
-}
-
 function positionRequest(posreq, clientid, conn) {
   console.log("positionRequest");
   console.log(posreq);
 
   if ('symbolid' in posreq && posreq.symbolid == "*") {
     // all positions
-    db.eval(commonfo.scriptsubscribepositions, 0, clientid, serverid, function(err, ret) {
+    db.eval(commonbo.scriptgetpositionvalues, 1, "broker:" + brokerid, posreq.accountid, brokerid, function(err, ret) {
       if (err) throw err;
-
-      // send positions
-      conn.write("{\"positions\":" + ret[0] + "}");
-
-      // subscribe to prices, so p&l can be calculated in the front-end
-      for (var i = 0; i < ret[1].length; i++) {
-        dbsub.subscribe("price:" + ret[1][i]);
-      }
+      console.log(ret);
+      conn.write("{\"positions\":" + ret + "}");
     });
   } else {
+    var position = commonbo.getpositionbysymbol
     // single symbol
-    db.eval(commonbo.scriptgetposition, 0, clientid, posreq.symbolid, function(err, ret) {
+    db.eval(commonbo.scriptgetposition, 0, posreq.accountid, posreq.symbolid, function(err, ret) {
       if (err) throw err;
       conn.write("{\"positions\":" + ret + "}");
     });    
@@ -1184,25 +1171,31 @@ function unsubscribePositionsRequest(unsubposreq, clientid, conn) {
   });
 }
 
-function cashRequest(cashreq, clientid, conn) {
-  db.eval(commonbo.scriptgetcash, 0, clientid, function(err, ret) {
-    if (err) throw err;
-    conn.write("{\"cash\":" + ret + "}");
-  });  
-}
-
 function accountSummaryRequest(acctreq, clientid, conn) {
-  db.eval(commonbo.scriptgetaccountsummary, 0, clientid, function(err, ret) {
+  console.log("accountSummaryRequest");
+  db.eval(commonbo.scriptgetaccountsummary, 1, "broker:" + brokerid, acctreq.accountid, brokerid, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
     conn.write("{\"accountsummary\":" + ret + "}");
   });
 }
 
 function statementRequest(statementreq, clientid, conn) {
-  db.eval(commonbo.scriptgetcashhistory, 0, clientid, statementreq.currencyid, function(err, ret) {
+  console.log("statementRequest, account: " + statementreq.accountid);
+
+  var startmilli = new Date("September 13, 2015 00:00:00").getTime();
+  var endmilli = new Date("September 19, 2015 00:00:00").getTime();
+
+  console.log(startmilli);
+  console.log(endmilli);
+
+  db.eval(commonbo.scriptgetstatement, 1, "broker:" + brokerid, statementreq.accountid, brokerid, startmilli, endmilli, function(err, ret) {
     if (err) throw err;
+
+    var obj = JSON.parse(ret);
+    console.log(obj);
     conn.write("{\"statement\":" + ret + "}");
-  });  
+  });
 }
 
 function passwordRequest(clientid, pwdrequest, conn) {
@@ -1480,7 +1473,7 @@ function newOrder(order, clientid, conn) {
         order.price = quote.offerpx;
         order.quantity = quote.offerquantity;
       }
-      
+
       order.ordertype = "D";
       order.markettype = 0;
       order.currencyid = quote.currencyid;

@@ -514,6 +514,7 @@ exports.registerScripts = function () {
     local postings = redis.call("zrangebyscore", brokerkey .. ":account:" .. accountid .. ":postingsbydate", startmilliseconds, endmilliseconds) \
     for i = 1, #postings do \
       local posting = gethashvalues(brokerkey .. ":posting:" .. postings[i]) \
+    redis.log(redis.LOG_WARNING, posting["accountid"]) \
       local transaction = gettransaction(brokerid, posting["transactionid"]) \
       posting["note"] = transaction["note"] \
       posting["reference"] = transaction["reference"] \
@@ -923,6 +924,7 @@ exports.registerScripts = function () {
   */
   newtradeaccounttransactions = newtradeaccounttransaction + '\
   local newtradeaccounttransactions = function(consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side, milliseconds) \
+    redis.log(redis.LOG_WARNING, "newtradeaccounttransactions") \
     local nominaltradeaccountid = getbrokeraccountid(brokerid, currencyid, "nominaltradeaccount") \
     local nominalcommissionaccountid = getbrokeraccountid(brokerid, currencyid, "nominalcommissionaccount") \
     local nominalptmaccountid = getbrokeraccountid(brokerid, currencyid, "nominalptmaccount") \
@@ -1037,12 +1039,13 @@ exports.registerScripts = function () {
   * params: accountid, brokerid
   */
   exports.scriptgetaccountsummary = getaccountbalance + gettotalpositionvalue + '\
+  redis.log(redis.LOG_WARNING, "scriptgetaccountsummary") \
   local tblresults = {} \
   local accountbalance = getaccountbalance(ARGV[1], ARGV[2]) \
   local totalpositionvalue = gettotalpositionvalue(ARGV[1], ARGV[2]) \
   local equity = tonumber(accountbalance) + totalpositionvalue["unrealisedpandl"] \
   local freemargin = equity - totalpositionvalue["margin"] \
-  table.insert(tblresults, {accountid=ARGV[1],balance=accountbalance["balance"],unrealisedpandl=totalpositionvalue["unrealisedpandl"],equity=equity,margin=totalpositionvalue["margin"],freemargin=freemargin}) \
+  table.insert(tblresults, {accountid=ARGV[1],balance=accountbalance,unrealisedpandl=totalpositionvalue["unrealisedpandl"],equity=equity,margin=totalpositionvalue["margin"],freemargin=freemargin}) \
   return cjson.encode(tblresults) \
   ';
 

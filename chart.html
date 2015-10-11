@@ -543,6 +543,8 @@
         function requestPosition(symbolid) {
             var positionrequest = {};
             positionrequest.symbolid = symbolid;
+            // todo: select account
+            positionrequest.accountid = 1;
 
             // request position
             sockjs.send("{\"positionrequest\":" + JSON.stringify(positionrequest) + "}");
@@ -557,6 +559,9 @@
 
         function requestAccountSummary() {
             var accountsummrequest = {};
+
+            // todo: select accountid
+            accountsummrequest.accountid = 1;
 
             // request account
             sockjs.send("{\"accountsummaryrequest\":" + JSON.stringify(accountsummrequest) + "}");
@@ -3590,7 +3595,7 @@
         }
 
         function updatePositionTable() {
-            var cols = ["symbolid", "futsettdate", "quantity", "cost", "currencyid", "margin", "costpershare", "mktprice", "unrealisedpandl"];
+            var cols = ["symbolid", "futsettdate", "quantity", "cost", "margin", "costpershare", "mktprice", "unrealisedpandl"];
 
             if (positions.length == 0) {
                 cols = [];
@@ -3814,7 +3819,8 @@
         function requestStatement() {
             var statementrequest = {};
 
-            statementrequest.currencyid = "GBP";
+            // tooo: which account id?
+            statementrequest.accountid = 1;
 
             sockjs.send("{\"statementrequest\":" + JSON.stringify(statementrequest) + "}");            
         }
@@ -3830,7 +3836,7 @@
         }
 
         function updateStatementTable() {
-            var cols = ["timestamp", "transtype", "description", "reference", "amount", "balance"];
+            var cols = ["timestamp", "type", "note", "reference", "transactionid", "amount", "balance"];
 
             var tblstatement = d3.select("#tblstatement");
             if (tblstatement.empty()) {
@@ -3906,7 +3912,7 @@
         }
 
         function updateAccountSummaryTable() {
-            var cols = ["currencyid", "cash", "balance", "unrealisedpandl", "margin", "freemargin"];
+            var cols = ["balance", "unrealisedpandl", "margin", "freemargin"];
 
             var tblaccountsummary = d3.select("#tblaccountsummary");
             if (tblaccountsummary.empty()) {

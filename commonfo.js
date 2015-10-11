@@ -1025,34 +1025,6 @@ exports.registerScripts = function () {
   ';
 
   //
-  // get positions for a client & subscribe client & server to the position symbols
-  // params: client id, server id
-  //
-  exports.scriptsubscribepositions = getunrealisedpandl + subscribesymbolnbt + getmargin + '\
-  local tblresults = {} \
-  local tblsubscribe = {} \
-  local positions = redis.call("smembers", "client:" .. ARGV[1] .. ":positions") \
-  local fields = {"clientid","symbolid","quantity","cost","currencyid","positionid","futsettdate"} \
-  local vals \
-  for index = 1, #positions do \
-    vals = redis.call("hmget", "client:" .. ARGV[1] .. ":position:" .. positions[index], unpack(fields)) \
-    --[[ todo: error msg ]] \
-    if vals[1] then \
-      local margin = getmargin(vals[2], vals[3]) \
-      --[[ value the position ]] \
-      local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-      table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],currencyid=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],mktprice=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
-      --[[ subscribe to this symbol, so as to get prices to the f/e for p&l calc ]] \
-      local subscribe = subscribesymbolnbt(vals[2], ARGV[1], ARGV[2]) \
-      if subscribe[1] == 1 then \
-        table.insert(tblsubscribe, vals[2]) \
-      end \
-    end \
-  end \
-  return {cjson.encode(tblresults), tblsubscribe} \
-  ';
-
-  //
   // get positions for a client and unsubscribe client & server to the position symbols
   // params: client id, server id
   // 
