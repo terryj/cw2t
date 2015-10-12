@@ -721,8 +721,6 @@ exports.registerScripts = function () {
   var getunrealisedpandl;
   var calcfinance;
   var round;
-  var gettrades;
-  var getquoterequests;
 
   round = '\
   local round = function(num, dp) \
@@ -955,73 +953,6 @@ exports.registerScripts = function () {
     end \
     return {needtounsubscribe, ticker, needtopublish, tickers} \
   end \
-  ';
-
-  //
-  // get open quote requests for a symbol
-  // params: symbol
-  //
-  exports.scriptgetopenquoterequests = getquoterequests + '\
-  local quoterequests = redis.call("smembers", "openquoterequests") \
-  local tblresults = getquoterequests(quoterequests, ARGV[1]) \
-  return cjson.encode(tblresults) \
-  ';
-
-  //
-  // get quotes made by a client for a quote request
-  //
-  exports.scriptgetmyquotes = '\
-  local fields = {"quotereqid","clientid","quoteid","bidquoteid","offerquoteid","symbolid","bestbid","bestoffer","bidpx","offerpx","bidquantity","offerquantity","bidsize","offersize","validuntiltime","transacttime","currencyid","settlcurrencyid","bidquoterid","offerquoterid","nosettdays","futsettdate","bidfinance","offerfinance","orderid","qclientid"} \
-  local vals \
-  local tblresults = {} \
-  local quotes = redis.call("smembers", "quoterequest:" .. ARGV[1] .. ":quotes") \
-  for index = 1, #quotes do \
-    vals = redis.call("hmget", "quote:" .. quotes[index], unpack(fields)) \
-    --[[ only include if quote was by this client ]] \
-    if vals[26] == ARGV[2] then \
-      table.insert(tblresults, {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],bidquoteid=vals[4],offerquoteid=vals[5],symbolid=vals[6],bestbid=vals[7],bestoffer=vals[8],bidpx=vals[9],offerpx=vals[10],bidquantity=vals[11],offerquantity=vals[12],bidsize=vals[13],offersize=vals[14],validuntiltime=vals[15],transacttime=vals[16],currencyid=vals[17],settlcurrencyid=vals[18],bidquoterid=vals[19],offerquoterid=vals[20],nosettdays=vals[21],futsettdate=vals[22],bidfinance=vals[23],offerfinance=vals[24],orderid=vals[25]}) \
-    end \
-  end \
-  return cjson.encode(tblresults) \
-  ';
-
-  //
-  // params: client id - todo: add symbolid as an option
-  //
-  exports.scriptgetquoterequests = getquoterequests + '\
-  local quoterequests = redis.call("smembers", ARGV[1] .. ":quoterequests") \
-  local tblresults = getquoterequests(quoterequests, "") \
-  return cjson.encode(tblresults) \
-  ';
-
-  //
-  // params: client id
-  //
-  exports.scriptgetquotes = '\
-  local tblresults = {} \
-  local quotes = redis.call("smembers", ARGV[1] .. ":quotes") \
-  local fields = {"quotereqid","clientid","quoteid","bidquoteid","offerquoteid","symbolid","bestbid","bestoffer","bidpx","offerpx","bidquantity","offerquantity","bidsize","offersize","validuntiltime","transacttime","currencyid","settlcurrencyid","bidquoterid","offerquoterid","nosettdays","futsettdate","bidfinance","offerfinance","orderid"} \
-  local vals \
-  for index = 1, #quotes do \
-    vals = redis.call("hmget", "quote:" .. quotes[index], unpack(fields)) \
-    table.insert(tblresults, {quotereqid=vals[1],clientid=vals[2],quoteid=vals[3],bidquoteid=vals[4],offerquoteid=vals[5],symbolid=vals[6],bestbid=vals[7],bestoffer=vals[8],bidpx=vals[9],offerpx=vals[10],bidquantity=vals[11],offerquantity=vals[12],bidsize=vals[13],offersize=vals[14],validuntiltime=vals[15],transacttime=vals[16],currencyid=vals[17],settlcurrencyid=vals[18],bidquoterid=vals[19],offerquoterid=vals[20],nosettdays=vals[21],futsettdate=vals[22],bidfinance=vals[23],offerfinance=vals[24],orderid=vals[25]}) \
-  end \
-  return cjson.encode(tblresults) \
-  ';
-
-  //
-  // params: client id
-  //
-  exports.scriptgetorders = '\
-  local tblresults = {} \
-  local orders = redis.call("smembers", ARGV[1] .. ":orders") \
-  local fields = {"clientid","symbolid","side","quantity","price","ordertype","remquantity","status","markettype","futsettdate","partfill","quoteid","currencyid","currencyratetoorg","currencyindtoorg","timestamp","margin","timeinforce","expiredate","expiretime","settlcurrencyid","settlcurrfxrate","settlcurrfxratecalc","orderid","externalorderid","execid","nosettdays","operatortype","operatorid","hedgeorderid","reason","text"} \
-  local vals \
-  for index = 1, #orders do \
-    vals = redis.call("hmget", "order:" .. orders[index], unpack(fields)) \
-    table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],side=vals[3],quantity=vals[4],price=vals[5],ordertype=vals[6],remquantity=vals[7],status=vals[8],markettype=vals[9],futsettdate=vals[10],partfill=vals[11],quoteid=vals[12],currencyid=vals[13],currencyratetoorg=vals[14],currencyindtoorg=vals[15],timestamp=vals[16],margin=vals[17],timeinforce=vals[18],expiredate=vals[19],expiretime=vals[20],settlcurrencyid=vals[21],settlcurrfxrate=vals[22],settlcurrfxratecalc=vals[23],orderid=vals[24],externalorderid=vals[25],execid=vals[26],nosettdays=vals[27],operatortype=vals[28],operatorid=vals[29],hedgeorderid=vals[30],reason=vals[31],text=vals[32]}) \
-  end \
-  return cjson.encode(tblresults) \
   ';
 
   //

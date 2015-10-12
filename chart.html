@@ -1029,7 +1029,7 @@
         }
 
         function updateTradeTable() {
-            var cols = ["timestamp","symbolid","tradeid","orderid","side","quantity","price","currencyid","commission","ptmlevy","stampduty","contractcharge","externaltradeid"];
+            var cols = ["timestamp","symbolid","tradeid","orderid","side","quantity","price","settlcurramt","currencyid","commission","ptmlevy","stampduty","contractcharge","externaltradeid"];
 
             // create a trade table if one does not exist
             var tbltrade = d3.select("#tbltrade");
@@ -3812,6 +3812,9 @@
 
         function requestTrades() {
             var historyrequest = {};
+
+            // todo: get account id
+            historyrequest.accountid = 1;
 
             sockjs.send("{\"tradehistoryrequest\":" + JSON.stringify(historyrequest) + "}");
         }

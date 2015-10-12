@@ -286,25 +286,6 @@ exports.registerScripts = function () {
 
   exports.getmarkettype = getmarkettype;
 
-  //
-  // get a range of trades from passed ids
-  //
-  gettrades = '\
-  local gettrades = function(trades) \
-    local tblresults = {} \
-    local fields = {"clientid","orderid","symbolid","side","quantity","price","currencyid","currencyratetoorg","currencyindtoorg","commission","ptmlevy","stampduty","contractcharge","counterpartyid","markettype","externaltradeid","futsettdate","timestamp","lastmkt","externalorderid","tradeid","settlcurrencyid","settlcurramt","settlcurrfxrate","settlcurrfxratecalc","nosettdays","margin","finance"} \
-    local vals \
-    for index = 1, #trades do \
-      vals = redis.call("hmget", "trade:" .. trades[index], unpack(fields)) \
-      local brokerclientcode = redis.call("hget", "client:" .. vals[1], "brokerclientcode") \
-      table.insert(tblresults, {clientid=vals[1],brokerclientcode=brokerclientcode,orderid=vals[2],symbolid=vals[3],side=vals[4],quantity=vals[5],price=vals[6],currencyid=vals[7],currencyratetoorg=vals[8],currencyindtoorg=vals[9],commission=vals[10],ptmlevy=vals[11],stampduty=vals[12],contractcharge=vals[13],counterpartyid=vals[14],markettype=vals[15],externaltradeid=vals[16],futsettdate=vals[17],timestamp=vals[18],lastmkt=vals[19],externalorderid=vals[20],tradeid=vals[21],settlcurrencyid=vals[22],settlcurramt=vals[23],settlcurrfxrate=vals[24],settlcurrfxratecalc=vals[25],nosettdays=vals[26],margin=vals[27],finance=vals[28]}) \
-    end \
-    return tblresults \
-  end \
-  ';
-
-  exports.gettrades = gettrades;
-
   /*
   * getsymbolkey()
   * creates a symbol key for positions, adding a settlement date for derivatives
@@ -985,21 +966,58 @@ exports.registerScripts = function () {
   ';
 
   //
-  // get trades, most recent first
-  // params: client id
+  // get quote requests for an account, most recent first
+  // params: accountid, brokerid
   //
-  exports.scriptgettrades = gettrades + '\
-  local trades = redis.call("sort", ARGV[1] .. ":trades", "DESC") \
-  local tblresults = gettrades(trades) \
+  exports.scriptgetquoterequests = gethashvalues + '\
+  local tblresults = {} \
+  local quoterequests = redis.call("sort", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":quoterequests", "DESC") \
+  for index = 1, #quoterequests do \
+    local quoterequest = gethashvalues("broker:" .. ARGV[1] .. ":quoterequest:" .. quoterequests[index]) \
+    table.insert(tblresults, quoterequest) \
+  end \
   return cjson.encode(tblresults) \
   ';
 
   //
-  // params: client id, positionkey
+  // get quotes for an account, most recent first
+  // params: accountid, brokerid
   //
-  exports.scriptgetpostrades = gettrades + '\
-  local postrades = redis.call("smembers", ARGV[1] .. ":trades:" .. ARGV[2]) \
-  local tblresults = gettrades(postrades) \
+  exports.scriptgetquotes = gethashvalues + '\
+  local tblresults = {} \
+  local quotes = redis.call("sort", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":quotes", "DESC") \
+  for index = 1, #quotes do \
+    local quote = gethashvalues("broker:" .. ARGV[1] .. ":quote:" .. quotes[index]) \
+    table.insert(tblresults, quote) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // get orders for an account, most recent first
+  // params: accountid, brokerid
+  //
+  exports.scriptgetorders = gethashvalues + '\
+  local tblresults = {} \
+  local orders = redis.call("sort", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":orders", "DESC") \
+  for index = 1, #orders do \
+    local order = gethashvalues("broker:" .. ARGV[1] .. ":order:" .. orders[index]) \
+    table.insert(tblresults, order) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  //
+  // get trades for an account, most recent first
+  // params: accountid, brokerid
+  //
+  exports.scriptgettrades = gethashvalues + '\
+  local tblresults = {} \
+  local trades = redis.call("sort", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":trades", "DESC") \
+  for index = 1, #trades do \
+    local trade = gethashvalues("broker:" .. ARGV[1] .. ":trade:" .. trades[index]) \
+    table.insert(tblresults, trade) \
+  end \
   return cjson.encode(tblresults) \
   ';
 

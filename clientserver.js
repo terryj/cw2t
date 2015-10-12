@@ -1101,38 +1101,33 @@ function myQuotesRequest(req, clientid, conn) {
 }
 
 function quoteRequestHistory(req, clientid, conn) {
-  db.eval(commonbo.scriptgetquoterequests, 0, clientid, function(err, ret) {
+  db.eval(commonbo.scriptgetquoterequests, 1, "broker:" + brokerid, req.accountid, brokerid, function(err, ret) {
     if (err) throw err;
+    console.log(ret);
     conn.write("{\"quoterequesthistory\":" + ret + "}");
   });
 }
 
 function quoteHistory(req, clientid, conn) {
-  db.eval(commonbo.scriptgetquotes, 0, clientid, function(err, ret) {
+  db.eval(commonbo.scriptgetquotes, 1, "broker:" + brokerid, req.accountid, brokerid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"quotes\":" + ret + "}");
   });
 }
 
 function orderHistory(req, clientid, conn) {
-  db.eval(commonbo.scriptgetorders, 0, clientid, function(err, ret) {
+  db.eval(commonbo.scriptgetorders, 1, "broker:" + brokerid, req.accountid, brokerid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"orders\":" + ret + "}");
   });
 }
 
 function tradeHistory(req, clientid, conn) {
-  if ("positionkey" in req) {
-    db.eval(commonbo.scriptgetpostrades, 0, clientid, req.positionkey, function(err, ret) {
-      if (err) throw err;
-      conn.write("{\"trades\":" + ret + "}");
-    });
-  } else {
-    db.eval(commonbo.scriptgettrades, 0, clientid, function(err, ret) {
-      if (err) throw err;
-      conn.write("{\"trades\":" + ret + "}");
-    });
-  }
+  db.eval(commonbo.scriptgettrades, 1, "broker:" + brokerid, req.accountid, brokerid, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+    conn.write("{\"trades\":" + ret + "}");
+  });
 }
 
 function positionRequest(posreq, clientid, conn) {

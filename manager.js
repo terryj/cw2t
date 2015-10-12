@@ -1053,14 +1053,14 @@ function sendIndex(orgclientkey, index, conn) {
 }
 
 function quoteRequestHistory(req, conn) {
-  db.eval(commonfo.scriptgetquoterequests, 0, req.clientid, function(err, ret) {
+  db.eval(commonfo.scriptgetquoterequests, 1, "broker:" + brokerid, req.accountid, brokerid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"quoterequests\":" + ret + "}");
   });
 }
 
 function quoteHistory(req, conn) {
-  db.eval(commonfo.scriptgetquotes, 0, req.clientid, function(err, ret) {
+  db.eval(commonfo.scriptgetquotes, 1, "broker:" + brokerid, req.accountid, brokerid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"quotes\":" + ret + "}");
   });
@@ -1073,7 +1073,7 @@ function sendOrder(order, conn) {
 }
 
 function orderHistory(req, conn) {
-  db.eval(commonfo.scriptgetorders, 0, req.clientid, function(err, ret) {
+  db.eval(commonfo.scriptgetorders, 1, "broker:" + brokerid, req.accountid, brokerid, function(err, ret) {
     if (err) throw err;
     conn.write("{\"orders\":" + ret + "}");
   });
