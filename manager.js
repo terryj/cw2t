@@ -229,9 +229,9 @@ function listen() {
     //testSettle();
     //testBrokerFundsTransfer();
     //testSupplierFundsTransfer();
-    //testPositionPostings();
+    testPositionPostings();
     //testStatement();
-    applycorporateaction(1);
+    //applycorporateaction(1);
 
     // data callback
     // todo: multiple messages in one data event
@@ -1930,10 +1930,8 @@ function testSupplierFundsTransfer() {
 function testPositionPostings() {
   var brokerid = 1;
   var positionid = 12;
-  var startmilli = 0;
-  var endmilli = new Date().getTime();
 
-  db.eval(commonbo.scriptgetpositionpostings, 1, "broker:" + brokerid, brokerid, positionid, startmilli, endmilli, function(err, ret) {
+  db.eval(commonbo.scriptgetpositionpostings, 1, "broker:" + brokerid, brokerid, positionid, "-inf", "inf", function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });

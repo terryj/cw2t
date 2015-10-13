@@ -488,14 +488,11 @@ exports.registerScripts = function () {
   getpostingsbydate = gettransaction + '\
   local getpostingsbydate = function(accountid, brokerid, startmilliseconds, endmilliseconds) \
     redis.log(redis.LOG_WARNING, "getpostingsbydate") \
-    redis.log(redis.LOG_WARNING, startmilliseconds) \
-    redis.log(redis.LOG_WARNING, endmilliseconds) \
     local tblpostings = {} \
     local brokerkey = "broker:" .. brokerid \
     local postings = redis.call("zrangebyscore", brokerkey .. ":account:" .. accountid .. ":postingsbydate", startmilliseconds, endmilliseconds) \
     for i = 1, #postings do \
       local posting = gethashvalues(brokerkey .. ":posting:" .. postings[i]) \
-    redis.log(redis.LOG_WARNING, posting["accountid"]) \
       local transaction = gettransaction(brokerid, posting["transactionid"]) \
       posting["note"] = transaction["note"] \
       posting["reference"] = transaction["reference"] \
@@ -1048,7 +1045,7 @@ exports.registerScripts = function () {
   */
   exports.scriptgetpositionpostings = getpositionpostingsbydate + '\
   local positionpostings = getpositionpostingsbydate(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
-  return cjson.encode(positionvalues) \
+  return cjson.encode(positionpostings) \
   ';
 
   /*
