@@ -257,8 +257,8 @@ function listen() {
             orderHistory(obj.orderhistoryrequest, clientid, conn);
           } else if ("cashhistoryrequest" in obj) {
             cashHistory(obj.cashhistoryrequest, clientid, conn);
-          } else if ("unsubscribepositionsrequest" in obj) {
-            unsubscribePositionsRequest(obj.unsubscribepositionsrequest, clientid, conn);
+          /*} else if ("unsubscribepositionsrequest" in obj) {
+            unsubscribePositionsRequest(obj.unsubscribepositionsrequest, clientid, conn);*/
           } else if ("watchlistrequest" in obj) {
             watchlistRequest(obj.watchlistrequest, clientid, conn);
           } else if ("unwatchlistrequest" in obj) {
@@ -1033,7 +1033,8 @@ function registerClient(reg, conn) {
 // request for a new symbol subscription
 //
 function subscribePriceRequest(clientid, symbol, conn) {
-  console.log(symbol);
+  console.log("subscribePriceRequest:" + symbol);
+
   db.eval(commonfo.scriptsubscribesymbol, 0, symbol.symbolid, clientid, serverid, feedtype, function(err, ret) {
     if (err) throw err;
     console.log(ret);
@@ -1142,9 +1143,8 @@ function positionRequest(posreq, clientid, conn) {
       conn.write("{\"positions\":" + ret + "}");
     });
   } else {
-    var position = commonbo.getpositionbysymbol
-    // single symbol
-    db.eval(commonbo.scriptgetposition, 0, posreq.accountid, posreq.symbolid, function(err, ret) {
+   // single symbol
+    db.eval(commonbo.scriptgetpositionbysymbol, 0, posreq.accountid, posreq.symbolid, function(err, ret) {
       if (err) throw err;
       conn.write("{\"positions\":" + ret + "}");
     });    

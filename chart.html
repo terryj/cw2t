@@ -551,10 +551,14 @@
         }
 
         function requestUnsubscribePositions() {
-            var unsubscribepositionsrequest = {};
+            //var unsubscribepositionsrequest = {};
+
+            for (var i = 0; i < positions.length; i++) {
+                requestUnsubscribeSymbol(positions[i].symbolid);
+            }
 
             // request position
-            sockjs.send("{\"unsubscribepositionsrequest\":" + JSON.stringify(unsubscribepositionsrequest) + "}");            
+            //sockjs.send("{\"unsubscribepositionsrequest\":" + JSON.stringify(unsubscribepositionsrequest) + "}");            
         }
 
         function requestAccountSummary() {
@@ -3501,6 +3505,9 @@
                 positionsarr[i].costpershare = Math.abs(positionsarr[i].cost / positionsarr[i].quantity);
 
                 positions.push(positionsarr[i]);
+
+                // & subscribe to this symbol
+                requestSubscribeSymbol(positionsarr[i].symbolid)
             }
 
             updatePositionTable();

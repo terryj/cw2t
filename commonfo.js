@@ -956,22 +956,6 @@ exports.registerScripts = function () {
   ';
 
   //
-  // get positions for a client and unsubscribe client & server to the position symbols
-  // params: client id, server id
-  // 
-  exports.scriptunsubscribepositions = unsubscribesymbolnbt + '\
-  local tblunsubscribe = {} \
-  local positions = redis.call("smembers", ARGV[1] .. ":positions") \
-  for index = 1, #positions do \
-    local unsubscribe = unsubscribesymbolnbt(positions[index], ARGV[1], ARGV[2]) \
-    if unsubscribe[1] == 1 then \
-      table.insert(tblunsubscribe, positions[index]) \
-    end \
-  end \
-  return tblunsubscribe \
-  ';
-
-  //
   // subscribe to a new instrument
   // params: symbol, client/user/ifa id, serverid, feedtype
   // i.e. "BARC.L", 1, 1, "digitallook"
