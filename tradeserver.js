@@ -416,7 +416,7 @@ function newOrder(order) {
       order.settlmnttypid = 0;
     }
   }
-
+  
   // store the order, get an id & credit check it
   db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, order.operatortype, order.operatorid, function(err, ret) {
     if (err) throw err;
@@ -992,7 +992,7 @@ function registerScripts() {
   var updatereserve;
   var removefromorderbook;
   var cancelorder;
-  var newtrade;
+  //var newtrade;
   var getcosts;
   var rejectorder;
   var adjustmarginreserve;
@@ -1379,51 +1379,12 @@ function registerScripts() {
   end \
   ';
 
-  publishtrade = commonbo.gethashvalues + '\
-  local publishtrade = function(brokerid, tradeid, channel) \
-    redis.log(redis.LOG_WARNING, "publishtrade") \
-    local trade = gethashvalues("broker:" .. brokerid .. ":trade:" .. tradeid) \
-    redis.call("publish", channel, "{" .. cjson.encode("trade") .. ":" .. cjson.encode(trade) .. "}") \
-  end \
-  ';
-
   quoteack = publishquoteack + '\
   local quoteack = function(brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text) \
     --[[ update quote request ]] \
     redis.call("hmset", "broker:" .. brokerid .. ":quoterequest:" .. quoterequestid, "quotestatusid", quotestatusid, "quoterejectreasonid", quoterejectreasonid, "text", text) \
     --[[ publish to operator type ]] \
     publishquoteack(brokerid, quoterequestid) \
-  end \
-  ';
-
-  /*
-  * newtrade()
-  * stores a trade & updates cash & position
-  */
-  newtrade = commonbo.newpositiontransaction + commonbo.newtradeaccounttransactions + publishtrade + '\
-  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, milliseconds) \
-    redis.log(redis.LOG_WARNING, "newtrade") \
-    local brokerkey = "broker:" .. brokerid \
-    local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
-    if not tradeid then return 0 end \
-    redis.call("hmset", brokerkey .. ":trade:" .. tradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "finance", finance, "tradesettlestatusid", 0) \
-    redis.call("sadd", brokerkey .. ":trades", tradeid) \
-    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
-    redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
-    local cost \
-    local note \
-    if tonumber(side) == 1 then \
-      cost = settlcurramt \
-      note = "Bought " .. quantity .. " " .. symbolid .. " @ " .. price \
-    else \
-      quantity = -tonumber(quantity) \
-      cost = -tonumber(settlcurramt) \
-      note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
-    end \
-    local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side, milliseconds) \
-    newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, milliseconds) \
-    publishtrade(brokerid, tradeid, 6) \
-    return tradeid \
   end \
   ';
 
@@ -1478,7 +1439,7 @@ function registerScripts() {
   * params: 1=accountid, 2=brokerid, 3=clientid, 4=symbolid, 5=side, 6=quantity, 7=price, 8=ordertype, 9=markettype, 10=futsettdate, 11=quoteid, 12=currencyid, 13=currencyratetoorg, 14=currencyindtoorg, 15=timestamp, 16=timeinforce, 17=expiredate, 18=expiretime, 19=settlcurrencyid, 20=settlcurrfxrate, 21=settlcurrfxratecalc, 22=operatortype, 23=operatorid
   * returns: orderid
   */
-  scriptneworder = getclientaccountid + neworder + creditcheck + publishorder + getproquotequote + newtrade + '\
+  scriptneworder = getclientaccountid + neworder + creditcheck + publishorder + getproquotequote + commonbo.newtrade + '\
   redis.log(redis.LOG_WARNING, "scriptneworder") \
   --[[ get trading accountid if not specified ]] \
   local accountid \
@@ -1545,7 +1506,7 @@ function registerScripts() {
   // todo: add lastmkt
   // quantity required as number of shares
   // todo: settlcurrency
-  scriptmatchorder = addtoorderbook + removefromorderbook + adjustmarginreserve + newtrade + getcosts + '\
+  scriptmatchorder = addtoorderbook + removefromorderbook + adjustmarginreserve + commonbo.newtrade + getcosts + '\
   local fields = {"clientid", "symbolid", "side", "quantity", "price", "currencyid", "margin", "remquantity", "futsettdate", "timestamp", "nosettdays"} \
   local vals = redis.call("hmget", "order:" .. KEYS[1], unpack(fields)) \
   local clientid = vals[1] \
@@ -1642,7 +1603,7 @@ function registerScripts() {
   * process a fill from the market
   * params: 1=accountid, 2=brokerid, 3=clientid, 4=clordid, 5=symbolid, 6=side, 7=lastshares, 8=lastpx, 9=currencyid, 10=currencyratetoorg, 11=currencyindtoorg, 12=execbroker, 13=counterpartytype, 14=markettype, 15=execid, 16=futsettdate, 17=transacttime, 18=lastmkt, 19=orderid, 20=settlcurrencyid, 21=settlcurramt, 22=settlcurrfxrate, 23=settlcurrfxratecalc, 24=milliseconds, 25=operatortype, 26=operatorid
   */
-  scriptnewtrade = commonbo.gethashvalues + getcosts + newtrade + '\
+  scriptnewtrade = getcosts + commonbo.newtrade + '\
   redis.log(redis.LOG_WARNING, "scriptnewtrade") \
   local accountid = ARGV[1] \
   local clientid = ARGV[3] \

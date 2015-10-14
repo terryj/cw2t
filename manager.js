@@ -1994,17 +1994,15 @@ function applycashdividend(corporateactionid) {
   console.log("applycashdividend");
   var brokerid = 1;
   var timestamp = new Date();
-  var timestampmilli = timestamp.getTime();
-  var exdatemilli = new Date("September 13, 2015 00:00:00").getTime();
-  var testdatemilli = new Date("September 13, 2015 00:00:00").getTime();
+  var timestampms = timestamp.getTime();
+  var exdatems = new Date("September 13, 2015 00:00:00").getTime();
 
   console.log(corporateactionid);
   console.log(brokerid);
   console.log(timestamp);
-  console.log(timestampmilli);
   console.log(exdatemilli);
 
-  db.eval(commonbo.applycacashdividend, 1, "broker:" + brokerid, brokerid, corporateactionid, timestamp, timestampmilli, exdatemilli, function(err, ret) {
+  db.eval(commonbo.applycacashdividend, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, function(err, ret) {
     if (err) throw err;
     console.log(ret);
     console.log("Number of accounts updated: " + ret[1]);

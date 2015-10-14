@@ -204,6 +204,9 @@ exports.registerScripts = function () {
     case 1028:
       desc = "Broker account for corporate action not found";
       break;
+    case 1029:
+      desc = "No closing price for symbol found";
+      break;
     default:
       desc = "Unknown reason";
     }
@@ -948,11 +951,66 @@ exports.registerScripts = function () {
 
   exports.newpositiontransaction = newpositiontransaction;
 
+  /*
+  * getcloseprice()
+  * get closing price for a symbol as a date
+  * params: symbolid, date
+  * returns: bid, offer
+  */
+  getcloseprice = '\
+  local getcloseprice = function(symbolid, datems) \
+  local closeprice \
+  return closeprice \
+  end \
+  ';
+
+  publishtrade = gethashvalues + '\
+  local publishtrade = function(brokerid, tradeid, channel) \
+    redis.log(redis.LOG_WARNING, "publishtrade") \
+    local trade = gethashvalues("broker:" .. brokerid .. ":trade:" .. tradeid) \
+    redis.call("publish", channel, "{" .. cjson.encode("trade") .. ":" .. cjson.encode(trade) .. "}") \
+  end \
+  ';
+
+  /*
+  * newtrade()
+  * stores a trade & updates cash & position
+  */
+  newtrade = newpositiontransaction + newtradeaccounttransactions + publishtrade + '\
+  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, milliseconds) \
+    redis.log(redis.LOG_WARNING, "newtrade") \
+    local brokerkey = "broker:" .. brokerid \
+    local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
+    if not tradeid then return 0 end \
+    redis.call("hmset", brokerkey .. ":trade:" .. tradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "finance", finance, "tradesettlestatusid", 0) \
+    redis.call("sadd", brokerkey .. ":trades", tradeid) \
+    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
+    redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
+    local cost \
+    local note \
+    if tonumber(side) == 1 then \
+      cost = settlcurramt \
+      note = "Bought " .. quantity .. " " .. symbolid .. " @ " .. price \
+    else \
+      quantity = -tonumber(quantity) \
+      cost = -tonumber(settlcurramt) \
+      note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
+    end \
+    local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side, milliseconds) \
+    newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, milliseconds) \
+    publishtrade(brokerid, tradeid, 6) \
+    return tradeid \
+  end \
+  ';
+
+  exports.newtrade = newtrade;
+
   /*** Scripts ***/
 
-  //
-  // get holidays for a market, i.e. "L" = London...assume "L" for the time being?
-  //
+  /*
+  *
+  * get holidays for a market, i.e. "L" = London...assume "L" for the time being?
+  */
   exports.scriptgetholidays = '\
   local tblresults = {} \
   local holidays = redis.call("smembers", "holidays:" .. ARGV[1]) \
@@ -962,10 +1020,11 @@ exports.registerScripts = function () {
   return cjson.encode(tblresults) \
   ';
 
-  //
-  // get quote requests for an account, most recent first
-  // params: accountid, brokerid
-  //
+  /*
+  * scriptgetquoterequests
+  * get quote requests for an account, most recent first
+  * params: accountid, brokerid
+  */
   exports.scriptgetquoterequests = gethashvalues + '\
   local tblresults = {} \
   local quoterequests = redis.call("sort", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":quoterequests", "DESC") \
@@ -976,10 +1035,11 @@ exports.registerScripts = function () {
   return cjson.encode(tblresults) \
   ';
 
-  //
-  // get quotes for an account, most recent first
-  // params: accountid, brokerid
-  //
+  /*
+  * scriptgetquotes
+  * get quotes for an account, most recent first
+  * params: accountid, brokerid
+  */
   exports.scriptgetquotes = gethashvalues + '\
   local tblresults = {} \
   local quotes = redis.call("sort", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":quotes", "DESC") \
@@ -990,10 +1050,11 @@ exports.registerScripts = function () {
   return cjson.encode(tblresults) \
   ';
 
-  //
-  // get orders for an account, most recent first
-  // params: accountid, brokerid
-  //
+  /*
+  * scriptgetorders
+  * get orders for an account, most recent first
+  * params: accountid, brokerid
+  */
   exports.scriptgetorders = gethashvalues + '\
   local tblresults = {} \
   local orders = redis.call("sort", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":orders", "DESC") \
@@ -1004,10 +1065,11 @@ exports.registerScripts = function () {
   return cjson.encode(tblresults) \
   ';
 
-  //
-  // get trades for an account, most recent first
-  // params: accountid, brokerid
-  //
+  /*
+  * scriptgettrades
+  * get trades for an account, most recent first
+  * params: accountid, brokerid
+  */
   exports.scriptgettrades = gethashvalues + '\
   local tblresults = {} \
   local trades = redis.call("sort", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":trades", "DESC") \
@@ -1029,14 +1091,40 @@ exports.registerScripts = function () {
   ';
 
   /*
-  // get positions for an account
-  // params: accountid, brokerid
-  // returns positions with their values
+  * scriptgetpositionvalues
+  * get positions for an account
+  * params: accountid, brokerid
+  * returns: positions with their values
   */
   exports.scriptgetpositionvalues = getpositionvalues + '\
   local positionvalues = getpositionvalues(ARGV[1], ARGV[2]) \
   return cjson.encode(positionvalues) \
   ';
+
+  /*
+  * scriptgetpositionsbysymbol
+  * get positions for a symbol
+  * params: brokerid, symbolid
+  * returns: a table of positions
+  */
+  exports.scriptgetpositionsbysymbol = getpositionsbysymbol + '\
+    redis.log(redis.LOG_WARNING, "scriptgetpositionsbysymbol") \
+    local positions = getpositionsbysymbol(ARGV[1], ARGV[2]) \
+    return positions \
+  ';
+
+  /*
+  * scriptgetpositionsbysymbolbydate
+  * get positions as at a date
+  * params: brokerid, symbolid, millisecond representation of the date
+  * returns: a table of positions
+  */
+  exports.scriptgetpositionsbysymbolbydate = getpositionsbysymbolbydate + '\
+    redis.log(redis.LOG_WARNING, "scriptgetpositionsbysymbolbydate") \
+    local positions = getpositionsbysymbolbydate(ARGV[1], ARGV[2], ARGV[3]) \
+    return positions \
+  ';
+
 
   /*
   * scriptgetpositionpostings
@@ -1222,14 +1310,13 @@ exports.registerScripts = function () {
   * params: brokerid, corporateactionid, timestamp, timestamp in milliseconds, exdate
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  // todo: consider currency impact of cdis
   exports.applycacashdividend = getpositionsbysymbolbydate + round + newtransaction + getbrokeraccountid + newposting + '\
     redis.log(redis.LOG_WARNING, "applycacashdividend") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
-    local timestamp = ARGV[3] \
-    local timestampmilli = ARGV[4] \
-    local exdate = ARGV[5] \
+    local exdate = ARGV[3] \
+    local timestamp = ARGV[4] \
+    local timestampms = ARGV[5] \
     local numaccountsupdated = 0 \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
@@ -1273,10 +1360,10 @@ exports.registerScripts = function () {
           end \
           --[[ create transactions & postings ]] \
           local transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, bankfundsbrokertransactiontype) \
-          newposting(bankfundsbroker, dividend, brokerid, dividend, transactionid, timestampmilli) \
+          newposting(bankfundsbroker, dividend, brokerid, dividend, transactionid, timestampms) \
           transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, nominalcorporateactionstransactiontype) \
-          newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampmilli) \
-          newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampmilli) \
+          newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampms) \
+          newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampms) \
           numaccountsupdated = numaccountsupdated + 1 \
         end \
       end \
@@ -1294,9 +1381,9 @@ exports.registerScripts = function () {
     redis.log(redis.LOG_WARNING, "applycadividendscrip") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
-    local timestamp = ARGV[3] \
-    local timestampmilli = ARGV[4] \
     local exdate = ARGV[5] \
+    local timestamp = ARGV[4] \
+    local timestampms = ARGV[5] \
     --[[ get the broker account ids ]] \
     local bankfundsclient = getbrokeraccountid(brokerid, corporateaction["currencyid"], "bankfundsclient") \
     local nominalcorporateactions = getbrokeraccountid(brokerid, corporateaction["currencyid"], "nominalcorporateactions") \
@@ -1321,34 +1408,78 @@ exports.registerScripts = function () {
       end \
       --[[ create transactions & postings ]] \
       local transactionid = newtransaction(dividend, brokerid, corporateaction["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
-      newposting(bankfundsclient, -dividend, brokerid, -dividend, transactionid, timestampmilli) \
-      newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampmilli) \
-      newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampmilli) \
+      newposting(bankfundsclient, -dividend, brokerid, -dividend, transactionid, timestampms) \
+      newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampms) \
+      newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampms) \
     end \
     return {0} \
   ';
 
   /*
-  * scriptgetpositionsbysymbol
-  * get positions for a symbol
-  * params: brokerid, symbolid
-  * returns: a table of positions
+  * applycarightsexdate()
+  * script to apply a rights issue
+  * params: brokerid, corporateactionid, exdate, timestamp, timestamp in milliseconds
+  * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.scriptgetpositionsbysymbol = getpositionsbysymbol + '\
-    redis.log(redis.LOG_WARNING, "scriptgetpositionsbysymbol") \
-    local positions = getpositionsbysymbol(ARGV[1], ARGV[2]) \
-    return positions \
-  ';
-
-  /*
-  * scriptgetpositionsbysymbolbydate
-  * get positions as at a date
-  * params: brokerid, symbolid, millisecond representation of the date
-  * returns: a table of positions
-  */
-  exports.scriptgetpositionsbysymbolbydate = getpositionsbysymbolbydate + '\
-    redis.log(redis.LOG_WARNING, "scriptgetpositionsbysymbolbydate") \
-    local positions = getpositionsbysymbolbydate(ARGV[1], ARGV[2], ARGV[3]) \
-    return positions \
+  exports.applycarightsexdate = getpositionsbysymbolbydate + round + getcloseprice + newtrade + newtransaction + newposting + '\
+    redis.log(redis.LOG_WARNING, "applycarightsexdate") \
+    local brokerid = ARGV[1] \
+    local corporateactionid = ARGV[2] \
+    local exdatems = ARGV[3] \
+    local timestamp = ARGV[4] \
+    local timestampms = ARGV[5] \
+    --[[ get the corporate action ]] \
+    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
+    if not corporateaction["corporateactionid"] then \
+      return {1, 1027} \
+    end \
+    --[[ get the symbol ]] \
+    local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
+    if not symbol["symbolid"] then \
+      return {1, 1015} \
+    end \
+    --[[ get the closing price for the stock ]] \
+    local closeprice = getcloseprice(corporateaction["symbolid"], exdatems) \
+    if not closeprice["bid"] then \
+      return {1, 1029} \
+    end \
+    --[[ get the relevant broker accounts ]] \
+    local nominalcorporateactions = getbrokeraccountid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
+    local bankfundsbroker = getbrokeraccountid(brokerid, symbol["currencyid"], "bankfundsbroker") \
+    if not nominalcorporateactions or not bankfundsbroker then \
+      return {1, 1027} \
+    end \
+    local note = "Rights issue remainder - " .. symbol["shortname"] \
+    --[[ get all positions in the stock of the corporate action as at the ex date ]] \
+    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
+    for i = 1, #positions do \
+      local posqty = tonumber(positions[i]["quantity"]) \
+      --[[ only interested in long positions ]] \
+      if posqty > 0 then \
+        redis.log(redis.LOG_WARNING, "accountid") \
+        redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
+        redis.log(redis.LOG_WARNING, "quantity") \
+        redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
+        local sharesdue = posqty * tonumber(corporateaction["sharespershare"]) \
+        local sharesdueround = round(sharesdue, 2) \
+        local sharesduerem = sharesdueround - sharesdue \
+        redis.log(redis.LOG_WARNING, "shares due") \
+        redis.log(redis.LOG_WARNING, sharesdueround) \
+        redis.log(redis.LOG_WARNING, "remainder") \
+        redis.log(redis.LOG_WARNING, sharesduerem) \
+        if sharesdueround > 0 then \
+          newtrade(symbolidnew) \
+        end \
+        if sharesduerem > 0 then \
+          --[[ create transactions & postings ]] \
+          local transactionid = newtransaction(sharesduerem, brokerid, symbol["currencyid"], sharesduerem, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AP") \
+          newposting(bankfundsbroker, sharesduerem, brokerid, sharesduerem, transactionid, timestampms) \
+          transactionid = newtransaction(sharesduerem, brokerid, symbol["currencyid"], sharesduerem, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
+          newposting(nominalcorporateactions, sharesduerem, brokerid, sharesduerem, transactionid, timestampms) \
+          newposting(positions[i]["accountid"], sharesduerem, brokerid, sharesduerem, transactionid, timestampms) \
+        end \
+      end \
+    end \
+    return 0 \
   ';
 }
