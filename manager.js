@@ -1993,9 +1993,9 @@ function applycorporateaction(corporateactionid) {
 function applycashdividend(corporateactionid) {
   console.log("applycashdividend");
   var brokerid = 1;
+  var exdatems = new Date("September 13, 2015 00:00:00").getTime();
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
-  var exdatems = new Date("September 13, 2015 00:00:00").getTime();
 
   console.log(corporateactionid);
   console.log(brokerid);
@@ -2006,6 +2006,19 @@ function applycashdividend(corporateactionid) {
     if (err) throw err;
     console.log(ret);
     console.log("Number of accounts updated: " + ret[1]);
+  });
+}
+
+function applycarightsexdate(corporateactionid) {
+  console.log("applycashdividend");
+  var brokerid = 1;
+  var exdatems = new Date("September 13, 2015 00:00:00").getTime();
+  var timestamp = new Date();
+  var timestampms = timestamp.getTime();
+
+  db.eval(commonbo.applycarightsexdate, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
   });
 }
 

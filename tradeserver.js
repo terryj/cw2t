@@ -416,7 +416,7 @@ function newOrder(order) {
       order.settlmnttypid = 0;
     }
   }
-  
+
   // store the order, get an id & credit check it
   db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, order.operatortype, order.operatorid, function(err, ret) {
     if (err) throw err;
@@ -987,22 +987,17 @@ nbt.on("businessReject", function(businessreject) {
 });
 
 function registerScripts() {
-  //var updateposition;
   var updateordermargin;
   var updatereserve;
   var removefromorderbook;
   var cancelorder;
-  //var newtrade;
   var getcosts;
   var rejectorder;
   var adjustmarginreserve;
-  //var creditcheck;
   //var getinitialmargin;
   //var updatetrademargin;
   var neworder;
   //var getreserve;
-  var closeposition;
-  var createposition;
 
   /*
   * getcosts()
@@ -1439,7 +1434,8 @@ function registerScripts() {
   * params: 1=accountid, 2=brokerid, 3=clientid, 4=symbolid, 5=side, 6=quantity, 7=price, 8=ordertype, 9=markettype, 10=futsettdate, 11=quoteid, 12=currencyid, 13=currencyratetoorg, 14=currencyindtoorg, 15=timestamp, 16=timeinforce, 17=expiredate, 18=expiretime, 19=settlcurrencyid, 20=settlcurrfxrate, 21=settlcurrfxratecalc, 22=operatortype, 23=operatorid
   * returns: orderid
   */
-  scriptneworder = getclientaccountid + neworder + creditcheck + publishorder + getproquotequote + commonbo.newtrade + '\
+  //commonbo.newtrade +
+  scriptneworder = getclientaccountid + neworder + creditcheck + publishorder + getproquotequote +  '\
   redis.log(redis.LOG_WARNING, "scriptneworder") \
   --[[ get trading accountid if not specified ]] \
   local accountid \
@@ -1480,8 +1476,8 @@ function registerScripts() {
       local rside = reverseside(side) \
       local finance = 0 \
       local hedgecosts = {0,0,0,0} \
-      tradeid = newtrade(accountid, brokerid, ARGV[3], orderid, symbolid, side, ARGV[6], ARGV[7], ARGV[12], ARGV[13], ARGV[14], cc[3], hedgebookid, counterpartytype, ARGV[9], "", ARGV[10], ARGV[15], lastmkt, "", ARGV[19], settlcurramt, ARGV[20], ARGV[21], cc[2], ARGV[22], ARGV[23], finance, milliseconds) \
-      hedgetradeid = newtrade(hedgebookid, brokerid, hedgeclientid, orderid, symbolid, side, ARGV[6], ARGV[7], ARGV[12], ARGV[13], ARGV[14], hedgecosts, accountid, counterpartytype, ARGV[9], "", ARGV[10], ARGV[15], lastmkt, "", ARGV[19], settlcurramt, ARGV[20], ARGV[21], cc[2], ARGV[22], ARGV[23], finance, milliseconds) \
+      --[[tradeid = newtrade(accountid, brokerid, ARGV[3], orderid, symbolid, side, ARGV[6], ARGV[7], ARGV[12], ARGV[13], ARGV[14], cc[3], hedgebookid, counterpartytype, ARGV[9], "", ARGV[10], ARGV[15], lastmkt, "", ARGV[19], settlcurramt, ARGV[20], ARGV[21], cc[2], ARGV[22], ARGV[23], finance, milliseconds) ]]\
+      --[[hedgetradeid = newtrade(hedgebookid, brokerid, hedgeclientid, orderid, symbolid, side, ARGV[6], ARGV[7], ARGV[12], ARGV[13], ARGV[14], hedgecosts, accountid, counterpartytype, ARGV[9], "", ARGV[10], ARGV[15], lastmkt, "", ARGV[19], settlcurramt, ARGV[20], ARGV[21], cc[2], ARGV[22], ARGV[23], finance, milliseconds) ]]\
       --[[ adjust order as filled ]] \
       redis.call("hmset", brokerkey .. ":order:" .. orderid, "remquantity", 0, "orderstatusid", 2) \
       --[[ todo: may need to adjust margin here ]] \

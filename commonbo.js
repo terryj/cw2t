@@ -290,18 +290,39 @@ exports.registerScripts = function () {
   exports.getmarkettype = getmarkettype;
 
   /*
-  * getsymbolkey()
+  * setsymbolkey()
   * creates a symbol key for positions, adding a settlement date for derivatives
-  * params: symbolid, futsettdate
+  * params: accountid, brokerid, futsettdate, positionid, symbolid
+  */
+  setsymbolkey = '\
+  local setsymbolkey = function(accountid, brokerid, futsettdate, positionid, symbolid) \
+    local symbolkey = symbolid \
+    --[[ add settlement date to symbol key for devivs ]] \
+    if futsettdate ~= "" then \
+      local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
+      if instrumenttypeid == "CFD" or instrumenttypeid == "SPD" or instrumenttypeid == "CCFD" then \
+        symbolkey = symbolkey .. ":" .. futsettdate \
+      end \
+    end \
+    redis.call("set", "broker:" .. brokerid .. ":account:" .. accountid .. ":symbol:" .. symbolkey, positionid) \
+  end \
+  ';
+
+  /*
+  * getsymbolkey()
+  * gets a symbol key for positions based on symbolid & futsettdate
+  * params: futsettdate, symbolid
   * returns: symbol key
   */
   getsymbolkey = '\
-  local getsymbolkey = function(symbolid, futsettdate) \
-    local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
+  local getsymbolkey = function(futsettdate, symbolid) \
     local symbolkey = symbolid \
     --[[ add settlement date to symbol key for devivs ]] \
-    if instrumenttypeid == "CFD" or instrumenttypeid == "SPD" then \
-      symbolkey = symbolkey .. ":" .. futsettdate \
+    if futsettdate ~= "" then \
+      local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
+      if instrumenttypeid == "CFD" or instrumenttypeid == "SPD" or instrumenttypeid == "CCFD" then \
+        symbolkey = symbolkey .. ":" .. futsettdate \
+      end \
     end \
     return symbolkey \
   end \
@@ -439,6 +460,19 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * getaccountfromclient()
+  * get a client from the account
+  * params: accountid, brokerid
+  * returns: clientid
+  */
+  getaccountfromclient = '\
+  local getaccountfromclient = function(accountid, brokerid) \
+    local clientid = redis.call("get", "broker:" .. brokerid .. ":account:" .. accountid .. ":client") \
+    return clientid \
+  end \
+  ';
+
+  /*
   * newposting()
   * creates a posting record & updates balances for an account
   * params: accountid, amount, brokerid, localamount, transactionid, timestamp in milliseconds
@@ -511,14 +545,13 @@ exports.registerScripts = function () {
   * newposition()
   * create a new position
   */
-  newposition = getsymbolkey + '\
+  newposition = setsymbolkey + '\
   local newposition = function(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
     redis.log(redis.LOG_WARNING, "newposition") \
     local brokerkey = "broker:" .. brokerid \
     local positionid = redis.call("hincrby", brokerkey, "lastpositionid", 1) \
     redis.call("hmset", brokerkey .. ":position:" .. positionid, "brokerid", brokerid, "accountid", accountid, "symbolid", symbolid, "quantity", quantity, "cost", cost, "positionid", positionid, "futsettdate", futsettdate) \
-    local symbolkey = getsymbolkey(symbolid, futsettdate) \
-    redis.call("set", brokerkey .. ":account:" .. accountid .. ":symbol:" .. symbolkey, positionid) \
+    setsymbolkey(accountid, brokerid, futsettdate, positionid, symbolid) \
     redis.call("sadd", brokerkey .. ":positions", positionid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":positions", positionid) \
     redis.call("sadd", brokerkey .. ":symbol:" .. symbolkey .. ":positions", positionid) \
@@ -545,6 +578,39 @@ exports.registerScripts = function () {
   ';
 
   exports.getposition = getposition;
+
+  /*
+  * publishposition()
+  * publish a position
+  * params: brokerid, positionid, channel
+  */
+  publishposition = getposition + '\
+  local publishposition = function(brokerid, positionid, channel) \
+    redis.log(redis.LOG_WARNING, "publishposition") \
+    local position = getposition(brokerid, positionid) \
+    redis.call("publish", channel, "{" .. cjson.encode("position") .. ":" .. cjson.encode(position) .. "}") \
+  end \
+  ';
+
+  /*
+  * updateposition()
+  * update an existing position
+  * quantity & cost can be +ve/-ve
+  */
+  updateposition = setsymbolkey + publishposition + '\
+  local updateposition = function(accountid, brokerid, cost, futsettdate, positionid, quantity, symbolid) \
+    redis.log(redis.LOG_WARNING, "updateposition") \
+    local positionkey = "broker:" .. brokerid .. ":position:" .. positionid \
+    local position = gethashvalues(positionkey) \
+    local updatedquantity = tonumber(position["quantity"]) + tonumber(quantity) \
+    local updatedcost = tonumber(position["cost"]) + tonumber(cost) \
+    redis.call("hmset", positionkey, "accountid", accountid, "symbolid", symbolid, "quantity", updatedquantity, "cost", updatedcost, "futsettdate", futsettdate) \
+    if symbolid ~= position["symbolid"] or futsettdate ~= position["futsettdate"] then \
+      setsymbolkey(accountid, brokerid, futsettdate, positionid, symbolid) \
+    end \
+    publishposition(brokerid, positionid, 10) \
+  end \
+  ';
 
   /*
   * newpositionposting()
@@ -583,42 +649,14 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * publishposition()
-  * publish a position
-  * params: brokerid, positionid, channel
-  */
-  publishposition = getposition + '\
-  local publishposition = function(brokerid, positionid, channel) \
-    redis.log(redis.LOG_WARNING, "publishposition") \
-    local position = getposition(brokerid, positionid) \
-    redis.call("publish", channel, "{" .. cjson.encode("position") .. ":" .. cjson.encode(position) .. "}") \
-  end \
-  ';
-
-  /*
-  * updateposition()
-  * quantity & cost can be +ve/-ve
-  */
-  //todo: do we need round?
-  updateposition = publishposition + '\
-  local updateposition = function(brokerid, cost, positionid, quantity) \
-    redis.log(redis.LOG_WARNING, "updateposition") \
-    local positionkey = "broker:" .. brokerid .. ":position:" .. positionid \
-    redis.call("hincrbyfloat", positionkey, "quantity", quantity) \
-    redis.call("hincrbyfloat", positionkey, "cost", cost) \
-    publishposition(brokerid, positionid, 10) \
-  end \
-  ';
-
-  /*
   * getpositionid()
   * gets a position id
-  * params: accountid, brokerid, symbolkey
+  * params: accountid, brokerid, symbolid, futsettdate
   * returns: positionid
   */
   getpositionid = getsymbolkey + '\
   local getpositionid = function(accountid, brokerid, symbolid, futsettdate) \
-    local symbolkey = getsymbolkey(symbolid, futsettdate) \
+    local symbolkey = getsymbolkey(futsettdate, symbolid) \
     local positionid = redis.call("get", "broker:" .. brokerid .. ":account:" .. accountid .. ":symbol:" .. symbolkey) \
     return positionid \
   end \
@@ -932,18 +970,15 @@ exports.registerScripts = function () {
   * newpositiontransaction()
   * a transaction to either create or update a position and create a position posting
   */
-  newpositiontransaction = getsymbolkey + updateposition + newposition + newpositionposting + '\
+  newpositiontransaction = getpositionid + newposition + updateposition + newpositionposting + '\
   local newpositiontransaction = function(accountid, brokerid, cost, futsettdate, linkid, positionpostingtypeid, quantity, symbolid, timestamp, milliseconds) \
-    local brokerkey = "broker:" .. brokerid \
-    local symbolkey = getsymbolkey(symbolid, futsettdate) \
-    --[[ see if we have a position in this instrument ]] \
-    local positionid = redis.call("get", brokerkey .. ":account:" .. accountid .. ":symbol:" .. symbolkey) \
+    local positionid = getpositionid(accountid, brokerid, symbolid, futsettdate) \
     if not positionid then \
       --[[ no positiion, so create a new one ]] \
       positionid = newposition(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
     else \
       --[[ just update it ]] \
-      updateposition(brokerid, cost, positionid, quantity) \
+      updateposition(accountid, brokerid, cost, futsettdate, positionid, quantity, symbolid) \
     end \
     newpositionposting(brokerid, cost, linkid, positionid, positionpostingtypeid, quantity, timestamp, milliseconds) \
   end \
@@ -1421,7 +1456,7 @@ exports.registerScripts = function () {
   * params: brokerid, corporateactionid, exdate, timestamp, timestamp in milliseconds
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycarightsexdate = getpositionsbysymbolbydate + round + getcloseprice + newtrade + newtransaction + newposting + '\
+  exports.applycarightsexdate = getpositionsbysymbolbydate + round + getcloseprice + newpositiontransaction + '\
     redis.log(redis.LOG_WARNING, "applycarightsexdate") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
@@ -1467,8 +1502,10 @@ exports.registerScripts = function () {
         redis.log(redis.LOG_WARNING, sharesdueround) \
         redis.log(redis.LOG_WARNING, "remainder") \
         redis.log(redis.LOG_WARNING, sharesduerem) \
+        local clientid = getaccountfromclient(accountid, brokerid) \
         if sharesdueround > 0 then \
-          newtrade(symbolidnew) \
+          --[[ create a position in the rights ]] \
+          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdueround, corporateaction["symbolidnew"], timestamp, timestampms) \
         end \
         if sharesduerem > 0 then \
           --[[ create transactions & postings ]] \
