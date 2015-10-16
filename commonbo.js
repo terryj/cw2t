@@ -32,16 +32,16 @@ exports.registerScripts = function () {
   exports.round = round;
 
   //
-  // returns a UTC datetime string from a passed date object
+  // returns a UTC datetime string in "YYYYMMDD-HH:MM:SS" format from a passed date object
   //
   function getUTCTimeStamp(timestamp) {
-    var year = timestamp.getUTCFullYear();
-    var month = timestamp.getUTCMonth() + 1; // flip 0-11 -> 1-12
-    var day = timestamp.getUTCDate();
-    var hours = timestamp.getUTCHours();
-    var minutes = timestamp.getUTCMinutes();
-    var seconds = timestamp.getUTCSeconds();
-    //var millis = timestamp.getUTCMilliseconds();
+    var year = timestamp.getFullYear();
+    var month = timestamp.getMonth() + 1; // flip 0-11 -> 1-12
+    var day = timestamp.getDate();
+    var hours = timestamp.getHours();
+    var minutes = timestamp.getMinutes();
+    var seconds = timestamp.getSeconds();
+    //var millis = timestamp.getMilliseconds();
 
     if (month < 10) {month = '0' + month;}
 
@@ -68,12 +68,12 @@ exports.registerScripts = function () {
   exports.getUTCTimeStamp = getUTCTimeStamp;
 
   //
-  // get a UTC date string from a passed date object
+  // get a UTC date string in "YYYYMMDD" format from a passed date object
   //
   function getUTCDateString(date) {
-    var year = date.getUTCFullYear();
-    var month = date.getUTCMonth() + 1; // flip 0-11 -> 1-12
-    var day = date.getUTCDate();
+    var year = date.getFullYear();
+    var month = date.getMonth() + 1; // flip 0-11 -> 1-12
+    var day = date.getDate();
 
     if (month < 10) {month = '0' + month;}
 
@@ -206,6 +206,9 @@ exports.registerScripts = function () {
       break;
     case 1029:
       desc = "No closing price for symbol found";
+      break;
+    case 1030:
+      desc = "New symbol required for rights";
       break;
     default:
       desc = "Unknown reason";
@@ -605,7 +608,7 @@ exports.registerScripts = function () {
     local updatedquantity = tonumber(position["quantity"]) + tonumber(quantity) \
     local updatedcost = tonumber(position["cost"]) + tonumber(cost) \
     redis.call("hmset", positionkey, "accountid", accountid, "symbolid", symbolid, "quantity", updatedquantity, "cost", updatedcost, "futsettdate", futsettdate) \
-    if symbolid ~= position["symbolid"] or futsettdate ~= position["futsettdate"] then \
+    if symbolid ~= position["symbolid"] or (futsettdate ~= "" and futsettdate ~= position["futsettdate"]) then \
       setsymbolkey(accountid, brokerid, futsettdate, positionid, symbolid) \
     end \
     publishposition(brokerid, positionid, 10) \
@@ -987,15 +990,15 @@ exports.registerScripts = function () {
   exports.newpositiontransaction = newpositiontransaction;
 
   /*
-  * getcloseprice()
-  * get closing price for a symbol as a date
-  * params: symbolid, date
-  * returns: bid, offer
+  * geteodprice()
+  * get end of day prices for a symbol as a date
+  * params: eoddate, symbolid
+  * returns: all fields in eodprices hash
   */
-  getcloseprice = '\
-  local getcloseprice = function(symbolid, datems) \
-  local closeprice \
-  return closeprice \
+  geteodprice = gethashvalues + '\
+  local geteodprice = function(eoddate, symbolid) \
+  local eodprice = gethashvalues("symbol:" .. symbolid .. ":eoddate:" .. eoddate) \
+  return eodprice \
   end \
   ';
 
@@ -1453,16 +1456,18 @@ exports.registerScripts = function () {
   /*
   * applycarightsexdate()
   * script to apply a rights issue
-  * params: brokerid, corporateactionid, exdate, timestamp, timestamp in milliseconds
+  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms
+  * note: exdate is actual exdate - 1 & exdatems is millisecond representation of time at the end of exdate - 1
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycarightsexdate = getpositionsbysymbolbydate + round + getcloseprice + newpositiontransaction + '\
+  exports.applycarightsexdate = getbrokeraccountid + getpositionsbysymbolbydate + getaccountfromclient + round + geteodprice + newpositiontransaction + newtransaction + newposting + '\
     redis.log(redis.LOG_WARNING, "applycarightsexdate") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
-    local exdatems = ARGV[3] \
-    local timestamp = ARGV[4] \
-    local timestampms = ARGV[5] \
+    local exdate = ARGV[3] \
+    local exdatems = ARGV[4] \
+    local timestamp = ARGV[5] \
+    local timestampms = ARGV[6] \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction["corporateactionid"] then \
@@ -1473,9 +1478,18 @@ exports.registerScripts = function () {
     if not symbol["symbolid"] then \
       return {1, 1015} \
     end \
-    --[[ get the closing price for the stock ]] \
-    local closeprice = getcloseprice(corporateaction["symbolid"], exdatems) \
-    if not closeprice["bid"] then \
+    --[[ make sure a symbol for the rights exists ]] \
+    if not corporateaction["symbolidnew"] then \
+      return {1, 1030} \
+    end \
+    --[[ get the symbol for the rights ]] \
+    local symbolnew = gethashvalues("symbol:" .. corporateaction["symbolidnew"]) \
+    if not symbolnew["symbolid"] then \
+      return {1, 1030} \
+    end \
+    --[[ get the closing price for the stock as at the exdate ]] \
+    local eodprice = geteodprice(exdate, corporateaction["symbolid"]) \
+    if not eodprice["bid"] then \
       return {1, 1029} \
     end \
     --[[ get the relevant broker accounts ]] \
@@ -1496,27 +1510,31 @@ exports.registerScripts = function () {
         redis.log(redis.LOG_WARNING, "quantity") \
         redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
         local sharesdue = posqty * tonumber(corporateaction["sharespershare"]) \
-        local sharesdueround = round(sharesdue, 2) \
-        local sharesduerem = sharesdueround - sharesdue \
-        redis.log(redis.LOG_WARNING, "shares due") \
-        redis.log(redis.LOG_WARNING, sharesdueround) \
+        local sharesdueint = math.floor(sharesdue) \
+        local sharesduerem = sharesdue - sharesdueint \
+        redis.log(redis.LOG_WARNING, "sharesdue") \
+        redis.log(redis.LOG_WARNING, sharesdue) \
+        redis.log(redis.LOG_WARNING, "sharesdueint") \
+        redis.log(redis.LOG_WARNING, sharesdueint) \
         redis.log(redis.LOG_WARNING, "remainder") \
         redis.log(redis.LOG_WARNING, sharesduerem) \
-        local clientid = getaccountfromclient(accountid, brokerid) \
-        if sharesdueround > 0 then \
+        local clientid = getaccountfromclient(positions[i]["accountid"], brokerid) \
+        if sharesdueint > 0 then \
           --[[ create a position in the rights ]] \
-          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdueround, corporateaction["symbolidnew"], timestamp, timestampms) \
+          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdueint, corporateaction["symbolidnew"], timestamp, timestampms) \
         end \
         if sharesduerem > 0 then \
+          --[[ calculate how much cash is due ]] \
+          local stubcash = round(sharesduerem * eodprice["bid"], 2) / 100 \
           --[[ create transactions & postings ]] \
-          local transactionid = newtransaction(sharesduerem, brokerid, symbol["currencyid"], sharesduerem, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AP") \
-          newposting(bankfundsbroker, sharesduerem, brokerid, sharesduerem, transactionid, timestampms) \
-          transactionid = newtransaction(sharesduerem, brokerid, symbol["currencyid"], sharesduerem, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
-          newposting(nominalcorporateactions, sharesduerem, brokerid, sharesduerem, transactionid, timestampms) \
-          newposting(positions[i]["accountid"], sharesduerem, brokerid, sharesduerem, transactionid, timestampms) \
+          local transactionid = newtransaction(stubcash, brokerid, symbol["currencyid"], stubcash, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AP") \
+          newposting(bankfundsbroker, stubcash, brokerid, stubcash, transactionid, timestampms) \
+          transactionid = newtransaction(stubcash, brokerid, symbol["currencyid"], stubcash, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
+          newposting(nominalcorporateactions, stubcash, brokerid, stubcash, transactionid, timestampms) \
+          newposting(positions[i]["accountid"], stubcash, brokerid, stubcash, transactionid, timestampms) \
         end \
       end \
     end \
-    return 0 \
+    return {0} \
   ';
 }

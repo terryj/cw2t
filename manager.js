@@ -217,6 +217,9 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
+      applyCorporateAction(1);
+
+
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
     var userid = "0";
@@ -229,9 +232,9 @@ function listen() {
     //testSettle();
     //testBrokerFundsTransfer();
     //testSupplierFundsTransfer();
-    testPositionPostings();
+    //testPositionPostings();
     //testStatement();
-    //applycorporateaction(1);
+    //applyCorporateAction(1);
 
     // data callback
     // todo: multiple messages in one data event
@@ -1975,8 +1978,8 @@ function testStatement() {
   });
 }
 
-function applycorporateaction(corporateactionid) {
-  console.log("applycorporateaction");
+function applyCorporateAction(corporateactionid) {
+  console.log("applyCorporateAction");
   db.hget("corporateaction:" + corporateactionid, "corporateactiontypeid", function(err, corporateactiontypeid) {
     if (err) {
       console.log("Error in applycorporateaction:" + err);
@@ -1985,13 +1988,15 @@ function applycorporateaction(corporateactionid) {
     console.log(corporateactiontypeid);
 
     if (corporateactiontypeid == "DVCA") {
-      applycashdividend(corporateactionid);
+      applyCashDividend(corporateactionid);
+    } else if (corporateactiontypeid == "RHTS") {
+      applyCARightsExdate(corporateactionid);
     }
   });
 }
 
-function applycashdividend(corporateactionid) {
-  console.log("applycashdividend");
+function applyCashDividend(corporateactionid) {
+  console.log("applyCashDividend");
   var brokerid = 1;
   var exdatems = new Date("September 13, 2015 00:00:00").getTime();
   var timestamp = new Date();
@@ -2009,16 +2014,34 @@ function applycashdividend(corporateactionid) {
   });
 }
 
-function applycarightsexdate(corporateactionid) {
-  console.log("applycashdividend");
+function applyCARightsExdate(corporateactionid) {
+  console.log("applyCARightsExdate");
   var brokerid = 1;
-  var exdatems = new Date("September 13, 2015 00:00:00").getTime();
+  var exdate = new Date("September 13, 2015");
+
+  // millisecond representation of exdate - don't need to subtract a day as this will give us the 00:00:00 time
+  var exdatems = exdate.getTime();
+
+  // we need exdate - 1
+  exdate.setDate(exdate.getDate() - 1);
+  console.log("exdate-1=" + exdate);
+
+  // get a UTC string version in "YYYYMMDD" format
+  var exdatestr = commonbo.getUTCDateString(exdate);
+  console.log("exdatestr=" + exdatestr);
+
+  // timestamp & millisecond representation
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
 
-  db.eval(commonbo.applycarightsexdate, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, function(err, ret) {
+  db.eval(commonbo.applycarightsexdate, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatestr, exdatems, timestamp, timestampms, function(err, ret) {
     if (err) throw err;
     console.log(ret);
+
+    if (ret[0] == 1) {
+      console.log("Error in applycarightsexdate: " + commonbo.getReasonDesc(ret[1]));
+      return;      
+    }
   });
 }
 

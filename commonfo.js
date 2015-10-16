@@ -1188,7 +1188,7 @@ exports.registerScripts = function () {
 
   //
   // add a symbol to a watchlist
-  // params: symbol, client id, server id, server type
+  // params: symbol, brokerid, clientid, serverid, servertype
   //
   scriptaddtowatchlist = subscribesymbolnbt + '\
     redis.call("sadd", ARGV[4] .. ":" .. ARGV[2] .. ":watchlist", ARGV[1]) \

@@ -1354,7 +1354,7 @@ function watchlistRequest(watchlist, clientid, conn) {
 
   if ("symbolid" in watchlist) {
     // add a symbol to the watchlist for this client
-    db.eval(commonfo.scriptaddtowatchlist, 0, watchlist.symbolid, clientid, serverid, servertype, function(err, ret) {
+    db.eval(commonfo.scriptaddtowatchlist, 1, "broker:" + brokerid, watchlist.symbolid, brokerid, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -1369,7 +1369,7 @@ function watchlistRequest(watchlist, clientid, conn) {
     });
   } else {
     // get the watchlist for this client
-    db.eval(commonfo.scriptgetwatchlist, 0, clientid, serverid, servertype, function(err, ret) {
+    db.eval(commonfo.scriptgetwatchlist, 1, "broker:" + brokerid, brokerid, clientid, serverid, servertype, function(err, ret) {
       if (err) {
         console.log(err);
         return;

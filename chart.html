@@ -554,9 +554,6 @@
             for (var i = 0; i < positions.length; i++) {
                 requestUnsubscribeSymbol(positions[i].symbolid);
             }
-
-            // request position
-            //sockjs.send("{\"unsubscribepositionsrequest\":" + JSON.stringify(unsubscribepositionsrequest) + "}");            
         }
 
         function requestAccountSummary() {
@@ -836,7 +833,7 @@
 
         function createMenu() {
             var data = [""];
-            var cols = ["Request Quotes", "Watchlist", "Portfolio", "Account Summary", "Statement", "Trades", "Out of Hours", "Logout"];
+            var cols = ["Request Quotes", "Watchlist", "Portfolio", "Account Summary", "Statement", "Trades", "Logout"];
 
             // create a table
             var tblmenu = d3.select("#divcontainer")
@@ -908,9 +905,9 @@
                                 requestStatement();
                             } else if (d == cols[5]) {
                                 requestTrades();
+                            //} else if (d == cols[6]) {
+                                //requestOpenQuoteRequests("");
                             } else if (d == cols[6]) {
-                                requestOpenQuoteRequests("");
-                            } else if (d == cols[7]) {
                                 logout();
                             }
                         });
