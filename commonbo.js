@@ -308,6 +308,7 @@ exports.registerScripts = function () {
       end \
     end \
     redis.call("set", "broker:" .. brokerid .. ":account:" .. accountid .. ":symbol:" .. symbolkey, positionid) \
+    redis.call("sadd", "broker:" .. brokerid .. ":symbol:" .. symbolkey .. ":positions", positionid) \
   end \
   ';
 
@@ -489,6 +490,8 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":postings", postingid) \
     --[[ add a sorted set for time based queries ]] \
     redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", milliseconds, postingid) \
+    redis.call("sadd", brokerkey .. ":postings", postingid) \
+    redis.call("sadd", brokerkey .. ":postingid", "posting:" .. postingid) \
     updateaccountbalance(accountid, amount, brokerid, localamount) \
   return postingid \
   end \
@@ -503,6 +506,8 @@ exports.registerScripts = function () {
   local newtransaction = function(amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid) \
     local transactionid = redis.call("hincrby", "broker:" .. brokerid, "lasttransactionid", 1) \
     redis.call("hmset", "broker:" .. brokerid .. ":transaction:" .. transactionid, "amount", amount, "brokerid", brokerid, "currencyid", currencyid, "localamount", localamount, "note", note, "rate", rate, "reference", reference, "timestamp", timestamp, "transactiontypeid", transactiontypeid, "transactionid", transactionid) \
+    redis.call("sadd", "broker:" .. brokerid .. ":transactions", transactionid) \
+    redis.call("sadd", "broker:" .. brokerid .. ":transactionid", "transaction:" .. transactionid) \
     return transactionid \
   end \
   ';
@@ -558,6 +563,7 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":positions", positionid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":positions", positionid) \
     redis.call("sadd", brokerkey .. ":symbol:" .. symbolkey .. ":positions", positionid) \
+    redis.call("sadd", brokerkey .. ":positionid", "position:" .. positionid) \
     return positionid \
   end \
   ';
@@ -627,6 +633,8 @@ exports.registerScripts = function () {
     redis.call("hmset", brokerkey .. ":positionposting:" .. positionpostingid, "brokerid", brokerid, "cost", cost, "linkid", linkid, "positionid", positionid, "positionpostingid", positionpostingid, "positionpostingtypeid", positionpostingtypeid, "quantity", quantity, "timestamp", timestamp) \
     redis.call("sadd", brokerkey .. ":position:" .. positionid .. ":positionpostings", positionpostingid) \
     redis.call("zadd", brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", milliseconds, positionpostingid) \
+    redis.call("sadd", brokerkey .. ":positionpostings", positionpostingid) \
+    redis.call("sadd", brokerkey .. ":positionpostingid", "positionposting:" .. positionpostingid) \
     return positionpostingid \
   end \
   ';
@@ -990,15 +998,15 @@ exports.registerScripts = function () {
   exports.newpositiontransaction = newpositiontransaction;
 
   /*
-  * geteodprice()
+  * getcloseprice()
   * get end of day prices for a symbol as a date
   * params: eoddate, symbolid
   * returns: all fields in eodprices hash
   */
-  geteodprice = gethashvalues + '\
-  local geteodprice = function(eoddate, symbolid) \
-  local eodprice = gethashvalues("symbol:" .. symbolid .. ":eoddate:" .. eoddate) \
-  return eodprice \
+  getcloseprice = gethashvalues + '\
+  local getcloseprice = function(eoddate, symbolid) \
+    local eodprice = gethashvalues("symbol:" .. symbolid .. ":eoddate:" .. eoddate) \
+    return eodprice \
   end \
   ';
 
@@ -1163,7 +1171,6 @@ exports.registerScripts = function () {
     return positions \
   ';
 
-
   /*
   * scriptgetpositionpostings
   * params: brokerid, positionid, startmilliseconds, endmilliseconds
@@ -1222,7 +1229,7 @@ exports.registerScripts = function () {
   * newClientFundsTransfer
   * script to handle client deposits & withdrawals
   * keys: broker:<brokerid>
-  * args: amount, bankaccountid, brokerid, clientaccountid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid, milliseconds
+  * args: amount, bankaccountid, brokerid, clientaccountid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid, timestampms
   * returns: 0
   */
   exports.newClientFundsTransfer = newtransaction + newposting + getbrokeraccountid + '\
@@ -1249,7 +1256,7 @@ exports.registerScripts = function () {
   /*
   * newTradeSettlementTransaction
   * script to handle settlement of trades
-  * params: amount, brokerid, currencyid, fromaccountid, localamount, note, rate, timestamp, toaccountid, tradeid, transactiontypeid, milliseconds
+  * params: amount, brokerid, currencyid, fromaccountid, localamount, note, rate, timestamp, toaccountid, tradeid, transactiontypeid, timestampms
   * returns: 0 if ok, else error message
   */
   exports.newTradeSettlementTransaction = newtransaction + newposting + '\
@@ -1278,7 +1285,7 @@ exports.registerScripts = function () {
   /*
   * newBrokerFundsTransfer
   * script to handle transfer of funds between broker and supplier
-  * params: amount, brokerid, currencyid, brokerbankaccountid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid, milliseconds
+  * params: amount, brokerid, currencyid, brokerbankaccountid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid, timestampms
   * returns 0
   */
   exports.newBrokerFundsTransfer = newtransaction + newposting + '\
@@ -1288,7 +1295,7 @@ exports.registerScripts = function () {
       newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, ARGV[12]) \
       newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid, ARGV[12]) \
     else \
-      newposting(ARGV[4], ARGV[1], ARGV[2], ARGV[5], transactionid, ARG[12]) \
+      newposting(ARGV[4], ARGV[1], ARGV[2], ARGV[5], transactionid, ARGV[12]) \
       newposting(ARGV[9], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, ARGV[12]) \
     end \
     return 0 \
@@ -1297,7 +1304,7 @@ exports.registerScripts = function () {
   /*
   * newSupplierFundsTransfer
   * script to handle receipts from and payments to a supplier
-  * params: amount, bankaccountid, brokerid, currencyid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid, milliseconds
+  * params: amount, bankaccountid, brokerid, currencyid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid, timestampms
   * returns: 0
   */
   exports.newSupplierFundsTransfer = newtransaction + newposting + '\
@@ -1460,7 +1467,7 @@ exports.registerScripts = function () {
   * note: exdate is actual exdate - 1 & exdatems is millisecond representation of time at the end of exdate - 1
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycarightsexdate = getbrokeraccountid + getpositionsbysymbolbydate + getaccountfromclient + round + geteodprice + newpositiontransaction + newtransaction + newposting + '\
+  exports.applycarightsexdate = getbrokeraccountid + getpositionsbysymbolbydate + getaccountfromclient + round + getcloseprice + newpositiontransaction + newtransaction + newposting + '\
     redis.log(redis.LOG_WARNING, "applycarightsexdate") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
@@ -1488,7 +1495,7 @@ exports.registerScripts = function () {
       return {1, 1030} \
     end \
     --[[ get the closing price for the stock as at the exdate ]] \
-    local eodprice = geteodprice(exdate, corporateaction["symbolid"]) \
+    local eodprice = getcloseprice(exdate, corporateaction["symbolid"]) \
     if not eodprice["bid"] then \
       return {1, 1029} \
     end \

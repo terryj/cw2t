@@ -26,7 +26,7 @@ var redispassword;
 var redislocal = true; // local or external server
 
 // globals
-var testmode; // 0 = off, 1 = on
+var testmode = 1; // 0 = off, 1 = on
 var quoteinterval = null;
 //var markettype; // comes from database, 0=normal market, 1=out of hours
 var holidays = {};
@@ -232,7 +232,7 @@ function quoteRequest(quoterequest) {
     quoterequest.exchangeid = ret[4];
 
 
-    if (testmode == "1") {
+    if (testmode == 1) {
       console.log("test response");
       testQuoteResponse(quoterequest);
     } else {
@@ -580,7 +580,7 @@ function processOrder(order) {
 
   // equity orders
   if (order.instrumenttypeid == "DE" || order.instrumenttypeid == "IE") {
-    if (testmode == "1") {
+    if (testmode == 1) {
       // test only
       testTradeResponse(order);
     } else {
@@ -590,7 +590,7 @@ function processOrder(order) {
     }
   } else if (order.instrumenttypeid == "CFD" || order.instrumenttypeid == "SPB" || order.instrumenttypeid == "CCFD") {
     if (order.hedgeorderid != "") {
-      if (testmode == "1") {
+      if (testmode == 1) {
         // test only
         testTradeResponse(order);
       } else {
@@ -600,7 +600,7 @@ function processOrder(order) {
         nbt.newOrder(order);
       }
     }
-  } else if (testmode == "1") {
+  } else if (testmode == 1) {
     // test only
     testTradeResponse(order);
   }
@@ -672,7 +672,9 @@ function getTestmode() {
       return;
     }
 
-    testmode = tm;
+    if (tm) {
+      testmode = tonumber(tm);
+    }
   });
 }
 
@@ -1018,7 +1020,7 @@ function registerScripts() {
     --[[ get costs for this instrument type & currency - will be set to zero if not found ]] \
     local costid = redis.call("get", brokerkey .. ":cost:" .. instrumenttypeid .. ":" .. currencyid) \
     if costid then \
-      local costs = gethashvalues(rokerkey .. ":cost:" .. costid) \
+      local costs = gethashvalues(brokerkey .. ":cost:" .. costid) \
       --[[ commission ]] \
       local commpercent = redis.call("hget", brokerkey .. ":client:" .. clientid, "commissionpercent") \
       if not commpercent or commpercent == "" then \
@@ -1395,6 +1397,7 @@ function registerScripts() {
     redis.call("hmset", brokerkey .. ":order:" .. orderid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "ordertype", ordertype, "remquantity", quantity, "orderstatusid", 0, "markettype", markettype, "futsettdate", futsettdate, "quoteid", quoteid, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "timestamp", timestamp, "margin", margin, "timeinforce", timeinforce, "expiredate", expiredate, "expiretime", expiretime, "settlcurrencyid", settlcurrencyid, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "orderid", orderid, "externalorderid", externalorderid, "execid", execid, "operatortype", operatortype, "operatorid", operatorid, "hedgeorderid", hedgeorderid, "orderrejectreasonid", "", "text", "") \
     --[[ add to set of orders ]] \
     redis.call("sadd", brokerkey .. ":orders", orderid) \
+    redis.call("sadd", brokerkey .. ":orderid", "order:" .. orderid) \
     --[[ add to set of orders for this account ]] \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":orders", orderid) \
     --[[ add order id to associated quote, if there is one ]] \
@@ -1787,8 +1790,9 @@ function registerScripts() {
   redis.call("hmset", KEYS[1] .. ":quoterequest:" .. quoterequestid, "accountid", accountid, "brokerid", ARGV[2], "cashorderqty", ARGV[3], "clientid", ARGV[4], "currencyid", ARGV[5], "futsettdate", ARGV[6], "operatorid", ARGV[7], "operatortype", ARGV[8], "quantity", ARGV[9], "quoterejectreasonid", "", "quoterequestid", quoterequestid, "quotestatusid", 0, "settlmnttypid", ARGV[10], "side", ARGV[11], "symbolid", ARGV[12], "timestamp", ARGV[13], "text", "", "settlcurrencyid", ARGV[14]) \
   --[[ add to set of quoterequests ]] \
   redis.call("sadd", KEYS[1] .. ":quoterequests", quoterequestid) \
+  redis.call("sadd", KEYS[1] .. ":quoterequestid", "quoterequest:" .. quoterequestid) \
   --[[ add to set of quoterequests for this account ]] \
-  redis.call("sadd", KEYS[1] .. ":accountid:" .. accountid .. ":quoterequests", quoterequestid) \
+  redis.call("sadd", KEYS[1] .. ":account:" .. accountid .. ":quoterequests", quoterequestid) \
   --[[ get required instrument values for external feed ]] \
   local symbol = gethashvalues("symbol:" .. ARGV[12]) \
   if not symbol["symbolid"] then \
@@ -1861,7 +1865,8 @@ function registerScripts() {
   redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", brokerid, "accountid", quoterequest["accountid"], "clientid", quoterequest["clientid"], "quoteid", quoteid, "symbolid", quoterequest["symbolid"], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", cashorderqty, "settledays", ARGV[18], "noseconds", ARGV[19], "settlmnttypid", ARGV[21], "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4]) \
   --[[ add to sets of quotes & quotes for this account ]] \
   redis.call("sadd", brokerkey .. ":quotes", quoteid) \
-  redis.call("sadd", brokerkey .. ":accountid:" .. quoterequest["accountid"] .. ":quotes", quoteid) \
+  redis.call("sadd", brokerkey .. ":account:" .. quoterequest["accountid"] .. ":quotes", quoteid) \
+  redis.call("sadd", brokerkey .. ":quoteid", "quote:" .. quoteid) \
   --[[ keep a list of quotes for the quoterequest ]] \
   redis.call("sadd", brokerkey .. ":quoterequest:" .. ARGV[1] .. ":quotes", quoteid) \
   local quotestatusid \
