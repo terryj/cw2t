@@ -673,7 +673,7 @@ function getTestmode() {
     }
 
     if (tm) {
-      testmode = tonumber(tm);
+      testmode = parseInt(tm);
     }
   });
 }

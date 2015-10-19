@@ -217,8 +217,13 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-      applyCorporateAction(1);
-
+    //applyCorporateAction(1);
+    //test();
+    //testtrade();
+    //testSettle();
+    //testSupplierFundsTransfer();
+    //testPositionPostings();
+    //testStatement();
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
@@ -226,15 +231,6 @@ function listen() {
     var brokerid = 1;
 
     console.log('new connection');
-
-    //test();
-    //testtrade();
-    //testSettle();
-    //testBrokerFundsTransfer();
-    //testSupplierFundsTransfer();
-    //testPositionPostings();
-    //testStatement();
-    //applyCorporateAction(1);
 
     // data callback
     // todo: multiple messages in one data event
@@ -554,7 +550,6 @@ function cashTrans(cashtrans, userid, conn) {
 
   cashtrans.bankaccountid = 999988;
   cashtrans.clientaccountid = 3;
-  cashtrans.currencyid = "GBP";
   cashtrans.localamount = cashtrans.amount;
   cashtrans.note = cashtrans.description;
   cashtrans.rate = 1;
@@ -565,25 +560,16 @@ function cashTrans(cashtrans, userid, conn) {
     cashtrans.transactiontypeid = "CW";    
   }
 
+  console.log(cashtrans);
+
   // milliseconds since epoch, used for scoring datetime indexes
   var milliseconds = new Date().getTime();
 
   // note we are passing the key in, so as to facilitate clustering
-  db.eval(commonbo.newClientFundsTransfer, 1, "broker:" + brokerid, cashtrans.amount, cashtrans.bankaccountid, brokerid, cashtrans.clientaccountid, cashtrans.currencyid, cashtrans.localamount, cashtrans.note, cashtrans.rate, cashtrans.reference, cashtrans.timestamp, cashtrans.transactiontypeid, milliseconds, function(err, ret) {
+  db.eval(commonbo.newClientFundsTransfer, 1, "broker:" + brokerid, cashtrans.amount, cashtrans.bankaccountid, brokerid, cashtrans.clientaccountid, cashtrans.localamount, cashtrans.note, cashtrans.rate, cashtrans.reference, cashtrans.timestamp, cashtrans.transactiontypeid, milliseconds, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });
-
-  /*db.eval(commonfo.scriptcashtrans, 0, cashtrans.clientid, cashtrans.currencyid, cashtrans.transtype, cashtrans.amount, cashtrans.drcr, cashtrans.description, cashtrans.reference, cashtrans.timestamp, cashtrans.futsettdate, operatortype, userid, function(err, ret) {
-    if (err) throw err;
-
-    if (ret[0] != 0) {
-      console.log("Error in scriptcashtrans:" + commonfo.getReasonDesc(ret[0]));
-      return;
-    }
-
-    getSendCashtrans(ret[1], conn);
-  });*/
 }
 
 function instUpdate(inst, userid, conn) {
@@ -1855,7 +1841,6 @@ function testSettle() {
 
   tradesettle.amount = 125;
   tradesettle.brokerid = 1;
-  tradesettle.currencyid = "GBP";
   tradesettle.fromaccountid = 1;
   tradesettle.localamount = 125;
   tradesettle.note = "Trade settlement";
@@ -1870,7 +1855,7 @@ function testSettle() {
   var milliseconds = tradesettle.timestamp.getTime();
 
   // note we are passing the key in, so as to facilitate clustering
-  db.eval(commonbo.newTradeSettlementTransaction, 1, "broker:" + brokerid, tradesettle.amount, tradesettle.brokerid, tradesettle.currencyid, tradesettle.fromaccountid, tradesettle.localamount, tradesettle.note, tradesettle.rate, tradesettle.timestamp, tradesettle.toaccountid, tradesettle.tradeid, tradesettle.transactiontypeid, milliseconds, function(err, ret) {
+  db.eval(commonbo.newTradeSettlementTransaction, 1, "broker:" + brokerid, tradesettle.amount, tradesettle.brokerid, tradesettle.fromaccountid, tradesettle.localamount, tradesettle.note, tradesettle.rate, tradesettle.timestamp, tradesettle.toaccountid, tradesettle.tradeid, tradesettle.transactiontypeid, milliseconds, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });
@@ -1910,7 +1895,6 @@ function testSupplierFundsTransfer() {
   sft.amount = 125;
   sft.brokerbankaccountid = 1;
   sft.brokerid = 1;
-  sft.currencyid = "GBP";
   sft.localamount = 125;
   sft.note = "supplier funds transfer test";
   sft.rate = 1;
@@ -1924,7 +1908,7 @@ function testSupplierFundsTransfer() {
   var milliseconds = sft.timestamp.getTime();
 
   // note we are passing the key in, so as to facilitate clustering
-  db.eval(commonbo.newSupplierFundsTransfer, 1, "broker:" + brokerid, sft.amount, sft.brokerbankaccountid, sft.brokerid, sft.currencyid, sft.localamount, sft.note, sft.rate, sft.reference, sft.supplieraccountid, sft.timestamp, sft.transactiontypeid, milliseconds, function(err, ret) {
+  db.eval(commonbo.newSupplierFundsTransfer, 1, "broker:" + brokerid, sft.amount, sft.brokerbankaccountid, sft.brokerid, sft.localamount, sft.note, sft.rate, sft.reference, sft.supplieraccountid, sft.timestamp, sft.transactiontypeid, milliseconds, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });

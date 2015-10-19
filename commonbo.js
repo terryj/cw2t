@@ -210,6 +210,9 @@ exports.registerScripts = function () {
     case 1030:
       desc = "New symbol required for rights";
       break;
+    case 1031:
+      desc = "Currency not found";
+      break;
     default:
       desc = "Unknown reason";
     }
@@ -1229,40 +1232,46 @@ exports.registerScripts = function () {
   * newClientFundsTransfer
   * script to handle client deposits & withdrawals
   * keys: broker:<brokerid>
-  * args: amount, bankaccountid, brokerid, clientaccountid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid, timestampms
-  * returns: 0
+  * args: amount, bankaccountid, brokerid, clientaccountid, localamount, note, rate, reference, timestamp, transactiontypeid, timestampms
+  * returns: 0 if successful, else 1 & an error message code if unsuccessful
   */
   exports.newClientFundsTransfer = newtransaction + newposting + getbrokeraccountid + '\
-    local controlclientaccountid = getbrokeraccountid(ARGV[3], ARGV[5], "controlclient") \
+    redis.log(redis.LOG_WARNING, "newClientFundsTransfer") \
+    local currencyid = redis.call("hget", "broker:" .. ARGV[3] .. ":account:" ..ARGV[4], "currencyid") \
+    if not currencyid then \
+      return {1, 1031} \
+    end \
+    local controlclientaccountid = getbrokeraccountid(ARGV[3], currencyid, "controlclient") \
     local amount \
     local localamount \
-    if ARGV[11] == "CD" then \
+    if ARGV[10] == "CD" then \
       amount = tonumber(ARGV[1]) \
-      localamount = tonumber(ARGV[6]) \
+      localamount = tonumber(ARGV[5]) \
     else \
       amount = -tonumber(ARGV[1]) \
-      localamount = -tonumber(ARGV[6]) \
+      localamount = -tonumber(ARGV[5]) \
     end \
-    local transactionid = newtransaction(ARGV[1], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11]) \
+    local transactionid = newtransaction(ARGV[1], ARGV[3], currencyid, ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10]) \
     --[[ update client account ]] \
-    newposting(ARGV[4], amount, ARGV[3], localamount, transactionid, ARGV[12]) \
+    newposting(ARGV[4], amount, ARGV[3], localamount, transactionid, ARGV[11]) \
     --[[ client control account ]] \
-    newposting(controlclientaccountid, amount, ARGV[3], localamount, transactionid, ARGV[12]) \
+    newposting(controlclientaccountid, amount, ARGV[3], localamount, transactionid, ARGV[11]) \
     --[[ update bank account ]] \
-    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[12]) \
-    return 0 \
+    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[11]) \
+    return {0} \
   ';
 
   /*
   * newTradeSettlementTransaction
   * script to handle settlement of trades
-  * params: amount, brokerid, currencyid, fromaccountid, localamount, note, rate, timestamp, toaccountid, tradeid, transactiontypeid, timestampms
+  * params: amount, brokerid, fromaccountid, localamount, note, rate, timestamp, toaccountid, tradeid, transactiontypeid, timestampms
   * returns: 0 if ok, else error message
   */
   exports.newTradeSettlementTransaction = newtransaction + newposting + '\
     redis.log(redis.LOG_WARNING, "newTradeSettlementTransaction") \
+    local currencyid = redis.call("hget", "broker:" .. ARGV[2] .. ":account:" ..ARGV[4], "currencyid") \
     --[[ transactiontypeid may be passed, else derive it ]] \
-    local transactiontypeid = ARGV[11] \
+    local transactiontypeid = ARGV[10] \
     if transactiontypeid == "" then \
       local brokeraccountkey = "broker:" .. ARGV[2] .. ":account:" \
       local fromaccountgroupid = redis.call("hget", brokeraccountkey .. ARGV[4], "accountgroupid") \
@@ -1276,51 +1285,33 @@ exports.registerScripts = function () {
         return "Invalid account group" \
       end \
     end \
-    local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[10], ARGV[8], transactiontypeid) \
-    newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, ARGV[12]) \
-    newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid, ARGV[12]) \
-    return 0 \
-  ';
-
-  /*
-  * newBrokerFundsTransfer
-  * script to handle transfer of funds between broker and supplier
-  * params: amount, brokerid, currencyid, brokerbankaccountid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid, timestampms
-  * returns 0
-  */
-  exports.newBrokerFundsTransfer = newtransaction + newposting + '\
-    redis.log(redis.LOG_WARNING, "newBrokerFundsTransfer") \
-    local transactionid = newtransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[10], ARGV[11]) \
-    if ARGV[11] == "BP" then \
-      newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, ARGV[12]) \
-      newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[5], transactionid, ARGV[12]) \
-    else \
-      newposting(ARGV[4], ARGV[1], ARGV[2], ARGV[5], transactionid, ARGV[12]) \
-      newposting(ARGV[9], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[5]), transactionid, ARGV[12]) \
-    end \
+    local transactionid = newtransaction(ARGV[1], ARGV[2], currencyid, ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[8], transactiontypeid) \
+    newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[3]), transactionid, ARGV[11]) \
+    newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[3], transactionid, ARGV[11]) \
     return 0 \
   ';
 
   /*
   * newSupplierFundsTransfer
   * script to handle receipts from and payments to a supplier
-  * params: amount, bankaccountid, brokerid, currencyid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid, timestampms
+  * params: amount, bankaccountid, brokerid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid, timestampms
   * returns: 0
   */
   exports.newSupplierFundsTransfer = newtransaction + newposting + '\
     redis.log(redis.LOG_WARNING, "newSupplierFundsTransfer") \
     local amount \
     local localamount \
-    if ARGV[11] == "SP" then \
+    local currencyid = redis.call("hget", "broker:" ..ARGV[3] .. ":account:" ..ARGV[8], "currencyid") \
+    if ARGV[10] == "SP" then \
       amount = -tonumber(ARGV[1]) \
-      localamount = -tonumber(ARGV[5]) \
+      localamount = -tonumber(ARGV[4]) \
     else \
       amount = ARGV[1] \
-      localamount = ARGV[5] \
+      localamount = ARGV[4] \
     end \
-    local transactionid = newtransaction(ARGV[1], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[10], ARGV[11]) \
-    newposting(ARGV[9], amount, ARGV[3], localamount, transactionid, ARGV[12]) \
-    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[12]) \
+    local transactionid = newtransaction(ARGV[1], ARGV[3], currencyid, ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10]) \
+    newposting(ARGV[8], amount, ARGV[3], localamount, transactionid, ARGV[11]) \
+    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[11]) \
     return 0 \
   ';
 
