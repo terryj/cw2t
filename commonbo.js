@@ -467,13 +467,13 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * getaccountfromclient()
+  * getclientfromaccount()
   * get a client from the account
   * params: accountid, brokerid
   * returns: clientid
   */
-  getaccountfromclient = '\
-  local getaccountfromclient = function(accountid, brokerid) \
+  getclientfromaccount = '\
+  local getclientfromaccount = function(accountid, brokerid) \
     local clientid = redis.call("get", "broker:" .. brokerid .. ":account:" .. accountid .. ":client") \
     return clientid \
   end \
@@ -1054,6 +1054,22 @@ exports.registerScripts = function () {
 
   exports.newtrade = newtrade;
 
+  /*
+  * getcorporateactionsclientdecisionbyclient()
+  * get a corporate action client decision
+  * params: brokerid, clientid, corporateactionid
+  * returns: corporateactiondecision hash
+  */
+  getcorporateactionsclientdecisionbyclient = '\
+  local getcorporateactionsclientdecisionbyclient = function(brokerid, clientid, corporateactionid) \
+    redis.log(redis.LOG_WARNING, "getcorporateactionsclientdecisionbyclient") \
+    local brokerkey = "broker:" .. brokerid \
+    local corporateactiondecisionid = redis.call("get", brokerkey .. ":client:" .. clientid .. ":corporateaction:" .. corporateactionid .. ":corporateactiondecision") \
+    local corporateactiondecision = redis.call("hget", brokerkey .. ":corporateactiondecision:" .. corporateactiondecisionid, "decision") \
+    return corporateactiondecision \
+  end \
+  ';
+
   /*** Scripts ***/
 
   /*
@@ -1453,12 +1469,12 @@ exports.registerScripts = function () {
 
   /*
   * applycarightsexdate()
-  * script to apply a rights issue
+  * script to apply the first part of a rights issue, as at ex-date
   * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms
   * note: exdate is actual exdate - 1 & exdatems is millisecond representation of time at the end of exdate - 1
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycarightsexdate = getbrokeraccountid + getpositionsbysymbolbydate + getaccountfromclient + round + getcloseprice + newpositiontransaction + newtransaction + newposting + '\
+  exports.applycarightsexdate = getbrokeraccountid + getpositionsbysymbolbydate + getclientfromaccount + round + getcloseprice + newpositiontransaction + newtransaction + newposting + '\
     redis.log(redis.LOG_WARNING, "applycarightsexdate") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
@@ -1516,7 +1532,7 @@ exports.registerScripts = function () {
         redis.log(redis.LOG_WARNING, sharesdueint) \
         redis.log(redis.LOG_WARNING, "remainder") \
         redis.log(redis.LOG_WARNING, sharesduerem) \
-        local clientid = getaccountfromclient(positions[i]["accountid"], brokerid) \
+        local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
         if sharesdueint > 0 then \
           --[[ create a position in the rights ]] \
           newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdueint, corporateaction["symbolidnew"], timestamp, timestampms) \
@@ -1532,6 +1548,53 @@ exports.registerScripts = function () {
           newposting(positions[i]["accountid"], stubcash, brokerid, stubcash, transactionid, timestampms) \
         end \
       end \
+    end \
+    return {0} \
+  ';
+
+  /*
+  * applycarightspaydate()
+  * script to apply the second part of a rights issue, as at pay-date
+  * params: brokerid, corporateactionid, paydate, paydatems, timestamp, timestampms, operatortype, operatorid
+  * note: paydate is actual paydate - 1 & paydatems is millisecond representation of time at the end of paydate - 1
+  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  */
+  exports.applycarightspaydate = getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecision + newtrade + newpositiontransaction + '\
+    redis.log(redis.LOG_WARNING, "applycarightspaydate") \
+    local brokerid = ARGV[1] \
+    local corporateactionid = ARGV[2] \
+    local paydate = ARGV[3] \
+    local paydatems = ARGV[4] \
+    local timestamp = ARGV[5] \
+    local timestampms = ARGV[6] \
+    local operatortype = ARGV[7] \
+    local operatorid = ARGV[8] \
+    local currencyratetoorg = 1 \
+    local currencyindtoorg = 1 \
+    local costs = {} \
+    local settlcurrfxrate = 1 \
+    local settlcurrfxratecalc = 1 \
+    --[[ get the corporate action ]] \
+    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
+    if not corporateaction["corporateactionid"] then \
+      return {1, 1027} \
+    end \
+    --[[ get the symbol ]] \
+    local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
+    if not symbol["symbolid"] then \
+      return {1, 1015} \
+    end \
+    --[[ get all positions in the rights symbol as at the pay date ]] \
+    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolidnew"], paydatems) \
+    for i = 1, #positions do \
+      --[[ get the client descision ]] \
+      local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
+      local corporateactiondecision = getcorporateactionsclientdecisionbyclient(brokerid, clientid, corporateactionid) \
+      if corporateactiondecision == "EXERCISE" then \
+        newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], 1, positions[i]["quantity"], 0, symbol["currencyid"], currencyratetoorg, currencyindtoorg, costs, "", "", 0, "", "", timestamp, "", "", symbol["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms) \
+      end \
+      --[[ zero the position in the rights ]] \
+      newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -tonumber(positions[i]["quantity"]), corporateaction["symbolidnew"], timestamp, timestampms) \
     end \
     return {0} \
   ';

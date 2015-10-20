@@ -217,7 +217,7 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-    //applyCorporateAction(1);
+    //applyCorporateAction(1, 1);
     //test();
     //testtrade();
     //testSettle();
@@ -1962,7 +1962,7 @@ function testStatement() {
   });
 }
 
-function applyCorporateAction(corporateactionid) {
+function applyCorporateAction(brokerid, corporateactionid) {
   console.log("applyCorporateAction");
   db.hget("corporateaction:" + corporateactionid, "corporateactiontypeid", function(err, corporateactiontypeid) {
     if (err) {
@@ -1972,9 +1972,9 @@ function applyCorporateAction(corporateactionid) {
     console.log(corporateactiontypeid);
 
     if (corporateactiontypeid == "DVCA") {
-      applyCashDividend(corporateactionid);
+      applyCashDividend(brokerid, corporateactionid);
     } else if (corporateactiontypeid == "RHTS") {
-      applyCARightsExdate(corporateactionid);
+      applyCARightsExdate(brokerid, corporateactionid);
     }
   });
 }
@@ -1998,9 +1998,8 @@ function applyCashDividend(corporateactionid) {
   });
 }
 
-function applyCARightsExdate(corporateactionid) {
+function applyCARightsExdate(brokerid, corporateactionid) {
   console.log("applyCARightsExdate");
-  var brokerid = 1;
   var exdate = new Date("September 13, 2015");
 
   // millisecond representation of exdate - don't need to subtract a day as this will give us the 00:00:00 time
@@ -2019,6 +2018,38 @@ function applyCARightsExdate(corporateactionid) {
   var timestampms = timestamp.getTime();
 
   db.eval(commonbo.applycarightsexdate, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatestr, exdatems, timestamp, timestampms, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    if (ret[0] == 1) {
+      console.log("Error in applycarightsexdate: " + commonbo.getReasonDesc(ret[1]));
+      return;      
+    }
+  });
+}
+
+function applyCARightsPayDate(brokerid, corporateactionid) {
+  console.log("applycarightspaydate");
+  var operatortype = 1;
+  var operatorid = 1;
+  var paydate = new Date("September 13, 2015");
+
+  // millisecond representation of exdate - don't need to subtract a day as this will give us the 00:00:00 time
+  var paydatems = paydate.getTime();
+
+  // we need exdate - 1
+  paydate.setDate(paydate.getDate() - 1);
+  console.log("paydate-1=" + paydate);
+
+  // get a UTC string version in "YYYYMMDD" format
+  var paydatestr = commonbo.getUTCDateString(paydate);
+  console.log("exdatestr=" + paydatestr);
+
+  // timestamp & millisecond representation
+  var timestamp = new Date();
+  var timestampms = timestamp.getTime();
+
+  db.eval(commonbo.applycarightspaydate, 1, "broker:" + brokerid, brokerid, corporateactionid, paydatestr, paydatems, timestamp, timestampms, operatortype, operatorid, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
