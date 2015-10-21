@@ -1568,20 +1568,18 @@ exports.registerScripts = function () {
   /*
   * applycarightspaydate()
   * script to apply the second part of a rights issue, as at pay-date
-  * params: brokerid, corporateactionid, paydate, paydatems, timestamp, timestampms, operatortype, operatorid
-  * note: paydate is actual paydate - 1 & paydatems is millisecond representation of time at the end of paydate - 1
-  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  * params: brokerid, corporateactionid, paydatems, timestamp, timestampms, operatortype, operatorid
+§  * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
   exports.applycarightspaydate = getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + newtrade + newpositiontransaction + '\
     redis.log(redis.LOG_WARNING, "applycarightspaydate") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
-    local paydate = ARGV[3] \
-    local paydatems = ARGV[4] \
-    local timestamp = ARGV[5] \
-    local timestampms = ARGV[6] \
-    local operatortype = ARGV[7] \
-    local operatorid = ARGV[8] \
+    local paydatems = ARGV[3] \
+    local timestamp = ARGV[4] \
+    local timestampms = ARGV[5] \
+    local operatortype = ARGV[6] \
+    local operatorid = ARGV[7] \
     local currencyratetoorg = 1 \
     local currencyindtoorg = 1 \
     local costs = {0,0,0,0} \

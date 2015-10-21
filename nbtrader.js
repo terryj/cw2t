@@ -377,7 +377,6 @@ Nbt.prototype.newOrder = function(order) {
 		+ '207=' + order.exchangeid + SOH
 		+ '54=' + order.side + SOH
 		+ '60=' + order.timestamp + SOH
-		// todo: is this right?
 		+ '63=' + order.settlmnttypid + SOH
 		+ '64=' + order.futsettdate + SOH
 		+ '59=' + order.timeinforce + SOH

@@ -202,13 +202,14 @@ function quoteRequest(quoterequest) {
     quoterequest.side = "";
   }
 
+  // default to GBP
   if (!('currencyid' in quoterequest)) {
     quoterequest.currencyid = "GBP";
   }
 
-  // todo - match settle currency with currency?
+  // match the settlement currency to the currency requested
   if (!('settlcurrencyid' in quoterequest)) {
-    quoterequest.settlcurrencyid = "GBP";
+    quoterequest.settlcurrencyid = quoterequest.currencyid;
   }
 
   // store the quote request & get an id
@@ -223,14 +224,12 @@ function quoteRequest(quoterequest) {
       console.log("Error in scriptQuoteRequest: " + commonbo.getReasonDesc(ret[0]));
       return;
     }
-    console.log("ere");
 
     // add the quote request id & symbol details required for the fix connection
     quoterequest.quoterequestid = ret[1];
     quoterequest.isin = ret[2];
     quoterequest.mnemonic = ret[3];
     quoterequest.exchangeid = ret[4];
-
 
     if (testmode == 1) {
       console.log("test response");
@@ -420,7 +419,6 @@ function newOrder(order) {
   // store the order, get an id & credit check it
   db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, order.operatortype, order.operatorid, function(err, ret) {
     if (err) throw err;
-    console.log(ret);
 
     // error check
     if (ret[0] == 0) {
@@ -1456,6 +1454,7 @@ function registerScripts() {
   local side = tonumber(ARGV[5]) \
   local settlcurramt = tonumber(ARGV[6]) * tonumber(ARGV[7]) \
   local cc = creditcheck(accountid, brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[19], ARGV[10]) \
+  cc[1] = 1 \
   if cc[1] == 0 then \
     --[[ publish the order back to the operatortype - the order contains the error ]] \
     publishorder(brokerid, orderid, ARGV[22]) \

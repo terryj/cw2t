@@ -1990,7 +1990,7 @@ function applyCorporateAction(brokerid, corporateactionid) {
 
 function applyCashDividend(brokerid, corporateactionid) {
   console.log("applyCashDividend");
-  var exdatems = new Date("September 13, 2015 00:00:00").getTime();
+  var exdatems = new Date("September 13, 2015").getTime();
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
 
@@ -2056,22 +2056,14 @@ function applyCARightsPayDate(brokerid, corporateactionid) {
   var operatorid = 1;
   var paydate = new Date("October 22, 2015");
 
-  // millisecond representation of exdate - don't need to subtract a day as this will give us the 00:00:00 time
+  // millisecond representation of paydate
   var paydatems = paydate.getTime();
-
-  // we need exdate - 1
-  paydate.getDate();
-  console.log("paydate-1=" + paydate);
-
-  // get a UTC string version in "YYYYMMDD" format
-  var paydatestr = commonbo.getUTCDateString(paydate);
-  console.log("paydatestr=" + paydatestr);
 
   // timestamp & millisecond representation
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
 
-  db.eval(commonbo.applycarightspaydate, 1, "broker:" + brokerid, brokerid, corporateactionid, paydatestr, paydatems, timestamp, timestampms, operatortype, operatorid, function(err, ret) {
+  db.eval(commonbo.applycarightspaydate, 1, "broker:" + brokerid, brokerid, corporateactionid, paydatems, timestamp, timestampms, operatortype, operatorid, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
