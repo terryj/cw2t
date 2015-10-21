@@ -217,7 +217,7 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-    //applyCorporateAction(1, 1);
+    applyCorporateAction(1, 1);
     //test();
     //testtrade();
     //testSettle();
@@ -1964,6 +1964,10 @@ function testStatement() {
 
 function applyCorporateAction(brokerid, corporateactionid) {
   console.log("applyCorporateAction");
+
+  // this variable determines whether the ex-date or pay-date part of the rights issue process is run, based on a user selection
+  var applyEXdate = 1;
+
   db.hget("corporateaction:" + corporateactionid, "corporateactiontypeid", function(err, corporateactiontypeid) {
     if (err) {
       console.log("Error in applycorporateaction:" + err);
@@ -1973,15 +1977,20 @@ function applyCorporateAction(brokerid, corporateactionid) {
 
     if (corporateactiontypeid == "DVCA") {
       applyCashDividend(brokerid, corporateactionid);
+    } else if (corporateactiontypeid == "DVSC") {
+      applyScripDividend(brokerid, corporateactionid);
     } else if (corporateactiontypeid == "RHTS") {
-      applyCARightsExdate(brokerid, corporateactionid);
+      if (applyEXdate == 1) {
+        applyCARightsExdate(brokerid, corporateactionid);
+      } else {
+        applyCARightsPayDate(brokerid, corporateactionid);
+      }
     }
   });
 }
 
-function applyCashDividend(corporateactionid) {
+function applyCashDividend(brokerid, corporateactionid) {
   console.log("applyCashDividend");
-  var brokerid = 1;
   var exdatems = new Date("September 13, 2015 00:00:00").getTime();
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
@@ -1992,6 +2001,24 @@ function applyCashDividend(corporateactionid) {
   console.log(exdatemilli);
 
   db.eval(commonbo.applycacashdividend, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+    console.log("Number of accounts updated: " + ret[1]);
+  });
+}
+
+function applyScripDividend(brokerid, corporateactionid) {
+  console.log("applyScripDividend");
+  var exdatems = new Date("September 13, 2015 00:00:00").getTime();
+  var timestamp = new Date();
+  var timestampms = timestamp.getTime();
+
+  console.log(corporateactionid);
+  console.log(brokerid);
+  console.log(timestamp);
+  console.log(exdatemilli);
+
+  db.eval(commonbo.applyscripdividend, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, function(err, ret) {
     if (err) throw err;
     console.log(ret);
     console.log("Number of accounts updated: " + ret[1]);
@@ -2029,21 +2056,20 @@ function applyCARightsExdate(brokerid, corporateactionid) {
 }
 
 function applyCARightsPayDate(brokerid, corporateactionid) {
-  console.log("applycarightspaydate");
-  var operatortype = 1;
+  console.log("applyCARightsPayDate");
   var operatorid = 1;
-  var paydate = new Date("September 13, 2015");
+  var paydate = new Date("October 22, 2015");
 
   // millisecond representation of exdate - don't need to subtract a day as this will give us the 00:00:00 time
   var paydatems = paydate.getTime();
 
   // we need exdate - 1
-  paydate.setDate(paydate.getDate() - 1);
+  paydate.getDate();
   console.log("paydate-1=" + paydate);
 
   // get a UTC string version in "YYYYMMDD" format
   var paydatestr = commonbo.getUTCDateString(paydate);
-  console.log("exdatestr=" + paydatestr);
+  console.log("paydatestr=" + paydatestr);
 
   // timestamp & millisecond representation
   var timestamp = new Date();
@@ -2054,7 +2080,7 @@ function applyCARightsPayDate(brokerid, corporateactionid) {
     console.log(ret);
 
     if (ret[0] == 1) {
-      console.log("Error in applycarightsexdate: " + commonbo.getReasonDesc(ret[1]));
+      console.log("Error in applycarightspaydate: " + commonbo.getReasonDesc(ret[1]));
       return;      
     }
   });

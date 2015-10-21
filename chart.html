@@ -623,6 +623,7 @@
         }
 
         function formatDate(utcdate) {
+            if (utcdate == "") return "";
             var utcdateformat = d3.time.format("%Y%m%d");
             var dt = utcdateformat.parse(utcdate);
 

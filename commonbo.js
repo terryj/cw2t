@@ -555,6 +555,8 @@ exports.registerScripts = function () {
   /*
   * newposition()
   * create a new position
+  * params: accountid, brokerid, cost, futsettdate, quantity, symbolid
+  * returns: positionid
   */
   newposition = setsymbolkey + '\
   local newposition = function(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
@@ -565,7 +567,6 @@ exports.registerScripts = function () {
     setsymbolkey(accountid, brokerid, futsettdate, positionid, symbolid) \
     redis.call("sadd", brokerkey .. ":positions", positionid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":positions", positionid) \
-    redis.call("sadd", brokerkey .. ":symbol:" .. symbolkey .. ":positions", positionid) \
     redis.call("sadd", brokerkey .. ":positionid", "position:" .. positionid) \
     return positionid \
   end \
@@ -1058,14 +1059,17 @@ exports.registerScripts = function () {
   * getcorporateactionsclientdecisionbyclient()
   * get a corporate action client decision
   * params: brokerid, clientid, corporateactionid
-  * returns: corporateactiondecision hash
+  * returns: corporateactiondecision as a string or nil if not found
   */
   getcorporateactionsclientdecisionbyclient = '\
   local getcorporateactionsclientdecisionbyclient = function(brokerid, clientid, corporateactionid) \
     redis.log(redis.LOG_WARNING, "getcorporateactionsclientdecisionbyclient") \
     local brokerkey = "broker:" .. brokerid \
     local corporateactiondecisionid = redis.call("get", brokerkey .. ":client:" .. clientid .. ":corporateaction:" .. corporateactionid .. ":corporateactiondecision") \
-    local corporateactiondecision = redis.call("hget", brokerkey .. ":corporateactiondecision:" .. corporateactiondecisionid, "decision") \
+    local corporateactiondecision \
+    if corporateactiondecisionid then \
+      corporateactiondecision = redis.call("hget", brokerkey .. ":corporateactiondecision:" .. corporateactiondecisionid, "decision") \
+    end \
     return corporateactiondecision \
   end \
   ';
@@ -1215,34 +1219,6 @@ exports.registerScripts = function () {
   table.insert(tblresults, {accountid=ARGV[1],balance=accountbalance,unrealisedpandl=totalpositionvalue["unrealisedpandl"],equity=equity,margin=totalpositionvalue["margin"],freemargin=freemargin}) \
   return cjson.encode(tblresults) \
   ';
-
-  //
-  // get positions for a client & subscribe client & server to the position symbols
-  // params: client id, server id
-  //
-  /*exports.scriptsubscribepositions = getunrealisedpandl + subscribesymbolnbt + getmargin + '\
-  local tblresults = {} \
-  local tblsubscribe = {} \
-  local positions = redis.call("smembers", "client:" .. ARGV[1] .. ":positions") \
-  local fields = {"clientid","symbolid","quantity","cost","currencyid","positionid","futsettdate"} \
-  local vals \
-  for index = 1, #positions do \
-    vals = redis.call("hmget", "client:" .. ARGV[1] .. ":position:" .. positions[index], unpack(fields)) \
-    --[[ todo: error msg ]] \
-    if vals[1] then \
-      local margin = getmargin(vals[2], vals[3]) \
-      --[[ value the position ]] \
-      local unrealisedpandl = getunrealisedpandl(vals[2], vals[3], vals[4]) \
-      table.insert(tblresults, {clientid=vals[1],symbolid=vals[2],quantity=vals[3],cost=vals[4],currencyid=vals[5],margin=margin,positionid=vals[6],futsettdate=vals[7],price=unrealisedpandl[2],unrealisedpandl=unrealisedpandl[1]}) \
-      --[[ subscribe to this symbol, so as to get prices to the f/e for p&l calc ]] \
-      local subscribe = subscribesymbolnbt(vals[2], ARGV[1], ARGV[2]) \
-      if subscribe[1] == 1 then \
-        table.insert(tblsubscribe, vals[2]) \
-      end \
-    end \
-  end \
-  return {cjson.encode(tblresults), tblsubscribe} \
-  ';*/
 
   /*
   * newClientFundsTransfer
@@ -1559,7 +1535,7 @@ exports.registerScripts = function () {
   * note: paydate is actual paydate - 1 & paydatems is millisecond representation of time at the end of paydate - 1
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycarightspaydate = getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecision + newtrade + newpositiontransaction + '\
+  exports.applycarightspaydate = getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + newtrade + newpositiontransaction + '\
     redis.log(redis.LOG_WARNING, "applycarightspaydate") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
@@ -1574,6 +1550,7 @@ exports.registerScripts = function () {
     local costs = {} \
     local settlcurrfxrate = 1 \
     local settlcurrfxratecalc = 1 \
+    local side = 1 \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction["corporateactionid"] then \
@@ -1587,14 +1564,21 @@ exports.registerScripts = function () {
     --[[ get all positions in the rights symbol as at the pay date ]] \
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolidnew"], paydatems) \
     for i = 1, #positions do \
-      --[[ get the client descision ]] \
-      local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
-      local corporateactiondecision = getcorporateactionsclientdecisionbyclient(brokerid, clientid, corporateactionid) \
-      if corporateactiondecision == "EXERCISE" then \
-        newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], 1, positions[i]["quantity"], 0, symbol["currencyid"], currencyratetoorg, currencyindtoorg, costs, "", "", 0, "", "", timestamp, "", "", symbol["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms) \
+      --[[ only interested in long positions ]] \
+      if tonumber(positions[i]["quantity"]) > 0 then \
+        --[[ get the client descision ]] \
+        local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
+        if not clientid then \
+          return {1, 1017} \
+        end \
+        local corporateactiondecision = getcorporateactionsclientdecisionbyclient(brokerid, clientid, corporateactionid) \
+        if corporateactiondecision == "EXERCISE" then \
+          --[[ create a trade in the original symbol at the rights price ]] \
+          newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, positions[i]["quantity"], corporateaction["price"], symbol["currencyid"], currencyratetoorg, currencyindtoorg, costs, "", "", 0, "", "", timestamp, "", "", symbol["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms) \
+        end \
+        --[[ zero the position in the rights ]] \
+        newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -tonumber(positions[i]["quantity"]), corporateaction["symbolidnew"], timestamp, timestampms) \
       end \
-      --[[ zero the position in the rights ]] \
-      newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -tonumber(positions[i]["quantity"]), corporateaction["symbolidnew"], timestamp, timestampms) \
     end \
     return {0} \
   ';
