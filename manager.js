@@ -1966,14 +1966,13 @@ function applyCorporateAction(brokerid, corporateactionid) {
   console.log("applyCorporateAction");
 
   // this variable determines whether the ex-date or pay-date part of the rights issue process is run, based on a user selection
-  var applyEXdate = 1;
+  var applyEXdate = 0;
 
   db.hget("corporateaction:" + corporateactionid, "corporateactiontypeid", function(err, corporateactiontypeid) {
     if (err) {
       console.log("Error in applycorporateaction:" + err);
       return;
     }
-    console.log(corporateactiontypeid);
 
     if (corporateactiontypeid == "DVCA") {
       applyCashDividend(brokerid, corporateactionid);
@@ -1995,10 +1994,9 @@ function applyCashDividend(brokerid, corporateactionid) {
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
 
+  console.log(exdatems);
   console.log(corporateactionid);
-  console.log(brokerid);
   console.log(timestamp);
-  console.log(exdatemilli);
 
   db.eval(commonbo.applycacashdividend, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, function(err, ret) {
     if (err) throw err;
@@ -2009,19 +2007,17 @@ function applyCashDividend(brokerid, corporateactionid) {
 
 function applyScripDividend(brokerid, corporateactionid) {
   console.log("applyScripDividend");
-  var exdatems = new Date("September 13, 2015 00:00:00").getTime();
+  var exdatems = new Date("September 13, 2015").getTime();
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
 
+  console.log(exdatems);
   console.log(corporateactionid);
-  console.log(brokerid);
   console.log(timestamp);
-  console.log(exdatemilli);
 
-  db.eval(commonbo.applyscripdividend, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, function(err, ret) {
+  db.eval(commonbo.applycadividendscrip, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, function(err, ret) {
     if (err) throw err;
     console.log(ret);
-    console.log("Number of accounts updated: " + ret[1]);
   });
 }
 

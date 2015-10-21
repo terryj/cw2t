@@ -1179,7 +1179,7 @@ function statementRequest(statementreq, clientid, conn) {
   console.log("statementRequest, account: " + statementreq.accountid);
 
   var startmilli = new Date("September 13, 2015 00:00:00").getTime();
-  var endmilli = new Date("September 19, 2015 00:00:00").getTime();
+  var endmilli = "inf";//new Date("September 19, 2015 00:00:00").getTime();
 
   console.log(startmilli);
   console.log(endmilli);

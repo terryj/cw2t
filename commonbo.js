@@ -1002,13 +1002,13 @@ exports.registerScripts = function () {
   exports.newpositiontransaction = newpositiontransaction;
 
   /*
-  * getcloseprice()
+  * geteodprice()
   * get end of day prices for a symbol as a date
   * params: eoddate, symbolid
   * returns: all fields in eodprices hash
   */
-  getcloseprice = gethashvalues + '\
-  local getcloseprice = function(eoddate, symbolid) \
+  geteodprice = gethashvalues + '\
+  local geteodprice = function(eoddate, symbolid) \
     local eodprice = gethashvalues("symbol:" .. symbolid .. ":eoddate:" .. eoddate) \
     return eodprice \
   end \
@@ -1071,6 +1071,28 @@ exports.registerScripts = function () {
       corporateactiondecision = redis.call("hget", brokerkey .. ":corporateactiondecision:" .. corporateactiondecisionid, "decision") \
     end \
     return corporateactiondecision \
+  end \
+  ';
+
+  /*
+  * getsharesdue()
+  * get the number of shares due & any remainder for a scrip issue
+  * params: position quantity, sharespershare ratio
+  * returns: whole number of shares due, remainder
+  */
+  getsharesdue = round + '\
+  local getsharesdue = function(posqty, sharespershare) \
+    redis.log(redis.LOG_WARNING, "getsharesdue") \
+    local sharesdue = round(tonumber(posqty) * tonumber(sharespershare), 2) \
+    local sharesdueint = math.floor(sharesdue) \
+    local sharesduerem = sharesdue - sharesdueint \
+    redis.log(redis.LOG_WARNING, "sharesdue") \
+    redis.log(redis.LOG_WARNING, sharesdue) \
+    redis.log(redis.LOG_WARNING, "sharesdueint") \
+    redis.log(redis.LOG_WARNING, sharesdueint) \
+    redis.log(redis.LOG_WARNING, "remainder") \
+    redis.log(redis.LOG_WARNING, sharesduerem) \
+    return {sharesdueint, sharesduerem} \
   end \
   ';
 
@@ -1335,14 +1357,14 @@ exports.registerScripts = function () {
   /*
   * applycacashdividend()
   * script to apply a cash dividend
-  * params: brokerid, corporateactionid, timestamp, timestamp in milliseconds, exdate
+  * params: brokerid, corporateactionid, exdatems, timestamp, timestampms
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
   exports.applycacashdividend = getpositionsbysymbolbydate + round + newtransaction + getbrokeraccountid + newposting + '\
     redis.log(redis.LOG_WARNING, "applycacashdividend") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
-    local exdate = ARGV[3] \
+    local exdatems = ARGV[3] \
     local timestamp = ARGV[4] \
     local timestampms = ARGV[5] \
     local numaccountsupdated = 0 \
@@ -1362,9 +1384,8 @@ exports.registerScripts = function () {
     if not nominalcorporateactions or not bankfundsbroker then \
       return {1, 1027} \
     end \
-    local note = "Dividend payment - " .. symbol["shortname"] \
-    --[[ get all positions in the stock of the corporate action as at the ex date ]] \
-    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdate) \
+    --[[ get all positions in the stock of the corporate action as at the ex-date ]] \
+    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
     for i = 1, #positions do \
       redis.log(redis.LOG_WARNING, "accountid") \
       redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
@@ -1387,9 +1408,9 @@ exports.registerScripts = function () {
             bankfundsbrokertransactiontype = "AR" \
           end \
           --[[ create transactions & postings ]] \
-          local transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, bankfundsbrokertransactiontype) \
+          local transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, bankfundsbrokertransactiontype) \
           newposting(bankfundsbroker, dividend, brokerid, dividend, transactionid, timestampms) \
-          transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, nominalcorporateactionstransactiontype) \
+          transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, nominalcorporateactionstransactiontype) \
           newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampms) \
           newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampms) \
           numaccountsupdated = numaccountsupdated + 1 \
@@ -1402,43 +1423,69 @@ exports.registerScripts = function () {
   /*
   * applycadividendscrip()
   * script to apply a scrip dividend
-  * params: brokerid, corporateactionid, timestamp, timestamp in milliseconds, exdate
+  * params: brokerid, corporateactionid, exdatems, timestamp, timestampms
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycadividendscrip = getpositionsbysymbolbydate + round + newtransaction + getbrokeraccountid + newposting + '\
+  exports.applycadividendscrip = getbrokeraccountid + getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + getsharesdue + newpositiontransaction + newtransaction + newposting + round + '\
     redis.log(redis.LOG_WARNING, "applycadividendscrip") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
-    local exdate = ARGV[5] \
+    local exdatems = ARGV[3] \
     local timestamp = ARGV[4] \
     local timestampms = ARGV[5] \
-    --[[ get the broker account ids ]] \
-    local bankfundsclient = getbrokeraccountid(brokerid, corporateaction["currencyid"], "bankfundsclient") \
-    local nominalcorporateactions = getbrokeraccountid(brokerid, corporateaction["currencyid"], "nominalcorporateactions") \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction then \
       return {1, 1028} \
     end \
     --[[ get the symbol ]] \
-    local symbol = gethashvalues(corporateaction["symbolid"]) \
-    if not symbol then \
+    local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
+    if not symbol["symbolid"] then \
       return {1, 1015} \
     end \
-    local note = "Dividend scrip - " .. symbol["shortname"] \
-    --[[ get all positions in the stock of the corporate action as at the ex date ]] \
-    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdate) \
+    --[[ get the broker account ids ]] \
+    local bankfundsbroker = getbrokeraccountid(brokerid, symbol["currencyid"], "bankfundsbroker") \
+    local nominalcorporateactions = getbrokeraccountid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
+    --[[ get all positions in the stock of the corporate action as at the ex-date ]] \
+    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
     for i = 1, #positions do \
-      --[[ calculate the shares due ]] \
-      local sharesdue = round(tonumber(positions[i]["quantity"]) * tonumber(corporateaction["sharespershare"]), 2) \
-      local sharestub = sharesdue % 1 \
-      if sharestub ~= 0 then \
+      redis.log(redis.LOG_WARNING, "accountid") \
+      redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
+      redis.log(redis.LOG_WARNING, "quantity") \
+      redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
+      if tonumber(positions[i]["quantity"]) > 0 then \
+        --[[ get the client ]] \
+        local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
+        if not clientid then \
+          return {1, 1017} \
+        end \
+        --[[ get the client decision to take cash or scrip, default is cash ]] \
+        local corporateactiondecision = getcorporateactionsclientdecisionbyclient(brokerid, clientid, corporateactionid) \
+        if corporateactiondecision == "SCRIP" then \
+          local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
+          if sharesdue[1] > 0 then \
+            --[[ add to position ]] \
+            newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
+          end \
+          if sharesdue[2] > 0 then \
+            --[[ create transactions & postings ]] \
+            local transactionid = newtransaction(sharesdue[2], brokerid, symbol["currencyid"], sharesdue[2], corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AP") \
+            newposting(bankfundsbroker, -sharesdue[2], brokerid, -sharesdue[2], transactionid, timestampms) \
+            transactionid = newtransaction(sharesdue[2], brokerid, symbol["currencyid"], sharesdue[2], corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
+            newposting(nominalcorporateactions, sharesdue[2], brokerid, sharesdue[2], transactionid, timestampms) \
+            newposting(positions[i]["accountid"], sharesdue[2], brokerid, sharesdue[2], transactionid, timestampms) \
+          end \
+        else \
+          local dividend = round(corporateaction["cashpershare"] * tonumber(positions[i]["quantity"]), 2) \
+          if dividend > 0 then \
+            --[[ create transactions & postings ]] \
+            local transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AP") \
+            newposting(bankfundsbroker, -dividend, brokerid, -dividend, transactionid, timestampms) \
+            newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampms) \
+            newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampms) \
+          end \
+        end \
       end \
-      --[[ create transactions & postings ]] \
-      local transactionid = newtransaction(dividend, brokerid, corporateaction["currencyid"], dividend, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
-      newposting(bankfundsclient, -dividend, brokerid, -dividend, transactionid, timestampms) \
-      newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampms) \
-      newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampms) \
     end \
     return {0} \
   ';
@@ -1450,7 +1497,7 @@ exports.registerScripts = function () {
   * note: exdate is actual exdate - 1 & exdatems is millisecond representation of time at the end of exdate - 1
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycarightsexdate = getbrokeraccountid + getpositionsbysymbolbydate + getclientfromaccount + round + getcloseprice + newpositiontransaction + newtransaction + newposting + '\
+  exports.applycarightsexdate = getbrokeraccountid + getpositionsbysymbolbydate + getsharesdue + geteodprice + newpositiontransaction + newtransaction + newposting + '\
     redis.log(redis.LOG_WARNING, "applycarightsexdate") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
@@ -1478,7 +1525,7 @@ exports.registerScripts = function () {
       return {1, 1030} \
     end \
     --[[ get the closing price for the stock as at the exdate ]] \
-    local eodprice = getcloseprice(exdate, corporateaction["symbolid"]) \
+    local eodprice = geteodprice(exdate, corporateaction["symbolid"]) \
     if not eodprice["bid"] then \
       return {1, 1029} \
     end \
@@ -1488,38 +1535,28 @@ exports.registerScripts = function () {
     if not nominalcorporateactions or not bankfundsbroker then \
       return {1, 1027} \
     end \
-    local note = "Rights issue remainder - " .. symbol["shortname"] \
     --[[ get all positions in the stock of the corporate action as at the ex date ]] \
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
     for i = 1, #positions do \
-      local posqty = tonumber(positions[i]["quantity"]) \
       --[[ only interested in long positions ]] \
-      if posqty > 0 then \
+      if tonumber(positions[i]["quantity"]) > 0 then \
         redis.log(redis.LOG_WARNING, "accountid") \
         redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
         redis.log(redis.LOG_WARNING, "quantity") \
         redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
-        local sharesdue = posqty * tonumber(corporateaction["sharespershare"]) \
-        local sharesdueint = math.floor(sharesdue) \
-        local sharesduerem = sharesdue - sharesdueint \
-        redis.log(redis.LOG_WARNING, "sharesdue") \
-        redis.log(redis.LOG_WARNING, sharesdue) \
-        redis.log(redis.LOG_WARNING, "sharesdueint") \
-        redis.log(redis.LOG_WARNING, sharesdueint) \
-        redis.log(redis.LOG_WARNING, "remainder") \
-        redis.log(redis.LOG_WARNING, sharesduerem) \
-        local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
-        if sharesdueint > 0 then \
+        --[[ get shares due & any remainder ]] \
+        local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
+        if sharesdue[1] > 0 then \
           --[[ create a position in the rights ]] \
-          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdueint, corporateaction["symbolidnew"], timestamp, timestampms) \
+          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolidnew"], timestamp, timestampms) \
         end \
-        if sharesduerem > 0 then \
+        if sharesdue[2] > 0 then \
           --[[ calculate how much cash is due ]] \
-          local stubcash = round(sharesduerem * eodprice["bid"], 2) / 100 \
+          local stubcash = round(sharesdue[2] * eodprice["bid"], 2) / 100 \
           --[[ create transactions & postings ]] \
-          local transactionid = newtransaction(stubcash, brokerid, symbol["currencyid"], stubcash, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AP") \
+          local transactionid = newtransaction(stubcash, brokerid, symbol["currencyid"], stubcash, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AP") \
           newposting(bankfundsbroker, stubcash, brokerid, stubcash, transactionid, timestampms) \
-          transactionid = newtransaction(stubcash, brokerid, symbol["currencyid"], stubcash, note, 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
+          transactionid = newtransaction(stubcash, brokerid, symbol["currencyid"], stubcash, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
           newposting(nominalcorporateactions, stubcash, brokerid, stubcash, transactionid, timestampms) \
           newposting(positions[i]["accountid"], stubcash, brokerid, stubcash, transactionid, timestampms) \
         end \
@@ -1547,7 +1584,7 @@ exports.registerScripts = function () {
     local operatorid = ARGV[8] \
     local currencyratetoorg = 1 \
     local currencyindtoorg = 1 \
-    local costs = {} \
+    local costs = {0,0,0,0} \
     local settlcurrfxrate = 1 \
     local settlcurrfxratecalc = 1 \
     local side = 1 \
@@ -1566,7 +1603,7 @@ exports.registerScripts = function () {
     for i = 1, #positions do \
       --[[ only interested in long positions ]] \
       if tonumber(positions[i]["quantity"]) > 0 then \
-        --[[ get the client descision ]] \
+        --[[ get the client decision ]] \
         local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
         if not clientid then \
           return {1, 1017} \
