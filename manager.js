@@ -1984,6 +1984,10 @@ function applyCorporateAction(brokerid, corporateactionid) {
       } else {
         applyCARightsPayDate(brokerid, corporateactionid);
       }
+    } else if (corporateactiontypeid == "SPLF" || corporateactiontypeid == "SPLR") {
+      applyCAStockSplit(corporateactionid);
+    } else if (corporateactiontypeid == "BONU") {
+      applyCAScripIssue(brokerid, corporateactionid);
     }
   });
 }
@@ -2069,6 +2073,62 @@ function applyCARightsPayDate(brokerid, corporateactionid) {
 
     if (ret[0] == 1) {
       console.log("Error in applycarightspaydate: " + commonbo.getReasonDesc(ret[1]));
+      return;      
+    }
+  });
+}
+
+function applyCAStockSplit(corporateactionid) {
+  console.log("applyCAStockSplit");
+  var exdate = new Date("September 13, 2015");
+
+  // millisecond representation of exdate
+  var exdatems = exdate.getTime();
+
+  // we need exdate - 1 for eod price
+  exdate.setDate(exdate.getDate() - 1);
+  var exdatestr = commonbo.getUTCDateString(exdate);
+
+  // timestamp & millisecond representation
+  var timestamp = new Date();
+  var timestampms = timestamp.getTime();
+
+  db.eval(commonbo.applycastocksplit, 0, corporateactionid, exdatestr, exdatems, timestamp, timestampms, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    if (ret[0] == 1) {
+      console.log("Error in applycastocksplit: " + commonbo.getReasonDesc(ret[1]));
+      return;      
+    }
+  });
+}
+
+function applyCAScripIssue(brokerid, corporateactionid) {
+  console.log("applyCAScripIssue");
+  var exdate = new Date("September 13, 2015");
+
+  // millisecond representation of exdate - don't need to subtract a day as this will give us the 00:00:00 time
+  var exdatems = exdate.getTime();
+
+  // we need exdate - 1 for eod price
+  exdate.setDate(exdate.getDate() - 1);
+  var exdatestr = commonbo.getUTCDateString(exdate);
+
+  // we need exdate - 1
+  exdate.setDate(exdate.getDate() - 1);
+  console.log("exdate-1=" + exdate);
+
+  // timestamp & millisecond representation
+  var timestamp = new Date();
+  var timestampms = timestamp.getTime();
+
+  db.eval(commonbo.applycascripissue, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatestr, exdatems, timestamp, timestampms, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    if (ret[0] == 1) {
+      console.log("Error in applycascripissue: " + commonbo.getReasonDesc(ret[1]));
       return;      
     }
   });

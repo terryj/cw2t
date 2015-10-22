@@ -1454,7 +1454,6 @@ function registerScripts() {
   local side = tonumber(ARGV[5]) \
   local settlcurramt = tonumber(ARGV[6]) * tonumber(ARGV[7]) \
   local cc = creditcheck(accountid, brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[19], ARGV[10]) \
-  cc[1] = 1 \
   if cc[1] == 0 then \
     --[[ publish the order back to the operatortype - the order contains the error ]] \
     publishorder(brokerid, orderid, ARGV[22]) \

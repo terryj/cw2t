@@ -468,7 +468,7 @@ exports.registerScripts = function () {
 
   /*
   * getclientfromaccount()
-  * get a client from the account
+  * get a client from an account
   * params: accountid, brokerid
   * returns: clientid
   */
@@ -1569,7 +1569,7 @@ exports.registerScripts = function () {
   * applycarightspaydate()
   * script to apply the second part of a rights issue, as at pay-date
   * params: brokerid, corporateactionid, paydatems, timestamp, timestampms, operatortype, operatorid
-§  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
   exports.applycarightspaydate = getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + newtrade + newpositiontransaction + '\
     redis.log(redis.LOG_WARNING, "applycarightspaydate") \
@@ -1613,6 +1613,140 @@ exports.registerScripts = function () {
         end \
         --[[ zero the position in the rights ]] \
         newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -tonumber(positions[i]["quantity"]), corporateaction["symbolidnew"], timestamp, timestampms) \
+      end \
+    end \
+    return {0} \
+  ';
+
+  /*
+  * applycastocksplit
+  * script to apply a stock split
+  * params: corporateactionid, exdate, exdatems, timestamp, timestampms
+  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  * note: this corporate action is applied across all brokers
+  */
+  exports.applycastocksplit = geteodprice + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + getbrokeraccountid + round + newtransaction + newposting + '\
+    redis.log(redis.LOG_WARNING, "applycastocksplit") \
+    local corporateactionid = ARGV[1] \
+    local exdate = ARGV[2] \
+    local exdatems = ARGV[3] \
+    local timestamp = ARGV[4] \
+    local timestampms = ARGV[5] \
+    --[[ get the corporate action ]] \
+    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
+    if not corporateaction["corporateactionid"] then \
+      return {1, 1027} \
+    end \
+    --[[ get the symbol ]] \
+    local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
+    if not symbol["symbolid"] then \
+      return {1, 1015} \
+    end \
+    --[[ get the closing price for the stock as at the exdate ]] \
+    local eodprice = geteodprice(exdate, corporateaction["symbolid"]) \
+    if not eodprice["bid"] then \
+      return {1, 1029} \
+    end \
+    --[[ we are applying the split across all positions, so need to interate through all brokers ]] \
+    local brokers = redis.call("smembers", "brokers") \
+    for j = 1, #brokers do \
+      --[[ get all positions in the stock of the corporate action as at the ex date for this broker ]] \
+      local positions = getpositionsbysymbolbydate(brokers[j], corporateaction["symbolid"], exdatems) \
+      for i = 1, #positions do \
+        --[[ only interested in long positions ]] \
+        if tonumber(positions[i]["quantity"]) > 0 then \
+          redis.log(redis.LOG_WARNING, "accountid") \
+          redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
+          redis.log(redis.LOG_WARNING, "quantity") \
+          redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
+          --[[ get shares due & any remainder ]] \
+          local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
+          if sharesdue[1] > 0 then \
+            --[[ update the position ]] \
+            newpositiontransaction(positions[i]["accountid"], brokers[j], 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
+          end \
+          if sharesdue[2] > 0 then \
+            --[[ get the relevant accounts for this broker ]] \
+            local nominalcorporateactions = getbrokeraccountid(brokers[j], symbol["currencyid"], "nominalcorporateactions") \
+            local bankfundsclient = getbrokeraccountid(brokers[j], symbol["currencyid"], "bankfundsclient") \
+            if not nominalcorporateactions or not bankfundsclient then \
+              return {1, 1027} \
+            end \
+            --[[ calculate how much cash is due ]] \
+            local stubcash = round(sharesdue[2] * eodprice["bid"], 2) / 100 \
+            --[[ create transaction & postings ]] \
+            local transactionid = newtransaction(stubcash, brokers[j], symbol["currencyid"], stubcash, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
+            newposting(nominalcorporateactions, stubcash, brokers[j], stubcash, transactionid, timestampms) \
+            newposting(bankfundsclient, stubcash, brokers[j], stubcash, transactionid, timestampms) \
+            newposting(positions[i]["accountid"], stubcash, brokers[j], stubcash, transactionid, timestampms) \
+          end \
+        end \
+      end \
+    end \
+    return {0} \
+  ';
+
+  /*
+  * applycascripissue()
+  * script to apply a scrip issue
+  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms
+  * note: exdate is actually exdate - 1 in "YYYYMMDD" format, exdatems is millisecond representation of time at the end of exdate - 1
+  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  */
+  exports.applycascripissue = geteodprice + getbrokeraccountid + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + newtransaction + newposting + '\
+    redis.log(redis.LOG_WARNING, "applycascripissue") \
+    local brokerid = ARGV[1] \
+    local corporateactionid = ARGV[2] \
+    local exdate = ARGV[3] \
+    local exdatems = ARGV[4] \
+    local timestamp = ARGV[5] \
+    local timestampms = ARGV[6] \
+    --[[ get the corporate action ]] \
+    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
+    if not corporateaction["corporateactionid"] then \
+      return {1, 1027} \
+    end \
+    --[[ get the symbol ]] \
+    local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
+    if not symbol["symbolid"] then \
+      return {1, 1015} \
+    end \
+    --[[ get the closing price for the stock as at the exdate ]] \
+    local eodprice = geteodprice(exdate, corporateaction["symbolid"]) \
+    if not eodprice["bid"] then \
+      return {1, 1029} \
+    end \
+    --[[ get the relevant broker accounts ]] \
+    local nominalcorporateactions = getbrokeraccountid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
+    local bankfundsbroker = getbrokeraccountid(brokerid, symbol["currencyid"], "bankfundsbroker") \
+    if not nominalcorporateactions or not bankfundsbroker then \
+      return {1, 1027} \
+    end \
+    --[[ get all positions in the stock of the corporate action as at the ex date ]] \
+    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
+    for i = 1, #positions do \
+      --[[ only interested in long positions ]] \
+      if tonumber(positions[i]["quantity"]) > 0 then \
+        redis.log(redis.LOG_WARNING, "accountid") \
+        redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
+        redis.log(redis.LOG_WARNING, "quantity") \
+        redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
+        --[[ get shares due & any remainder ]] \
+        local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
+        if sharesdue[1] > 0 then \
+          --[[ update the position ]] \
+          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
+        end \
+        if sharesdue[2] > 0 then \
+          --[[ calculate how much cash is due ]] \
+          local stubcash = round(sharesdue[2] * eodprice["bid"], 2) / 100 \
+          --[[ create transactions & postings ]] \
+          local transactionid = newtransaction(stubcash, brokerid, symbol["currencyid"], stubcash, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AP") \
+          newposting(bankfundsbroker, stubcash, brokerid, stubcash, transactionid, timestampms) \
+          transactionid = newtransaction(stubcash, brokerid, symbol["currencyid"], stubcash, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
+          newposting(nominalcorporateactions, stubcash, brokerid, stubcash, transactionid, timestampms) \
+          newposting(positions[i]["accountid"], stubcash, brokerid, stubcash, transactionid, timestampms) \
+        end \
       end \
     end \
     return {0} \
