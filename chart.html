@@ -3867,7 +3867,7 @@
                 .append("td")
                     .text(function(d, i, j) {
                         if (d.col == "amount") {
-                            if (statement[j].drcr == "1") {
+                            if (parseFloat(d.value) > 0) {
                                 return formatCurrency(d.value, 2);
                             } else {
                                 return formatCurrency(-d.value, 2);                                

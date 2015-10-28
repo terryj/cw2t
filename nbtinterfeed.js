@@ -5,9 +5,10 @@
 * Terry Johnston
 * August 2014
 *
-* real-time partial record i.e. "publish 7 rp:BARC.L"
-* real-time full record i.e. "publish 7 rf:BARC.L"
-* snap full record i.e. "publish 7 snap:L.B***"
+* To load symbols from a redis connection...
+* Real-time partial record i.e. "publish 7 rp:BARC.L"
+* Real-time full record i.e. "publish 7 rf:BARC.L"
+* Snap full record i.e. "publish 7 snap:L.B***"
 ****************/
 
 // node libraries
@@ -364,6 +365,9 @@ function updateDb(functioncode, instrumentcode, instrec) {
   // create a unix timestamp
   var now = new Date();
   instrec.timestamp = commonbo.getUTCTimeStamp(now);
+
+  console.log(functioncode);
+  console.log(instrec);
 
   // store a complete record for a symbol
   if (functioncode == "340") {

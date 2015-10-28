@@ -5424,10 +5424,10 @@
                     return;
                 }
 
-                if (seltranstype.selectedIndex == -1) {
+                /*if (seltranstype.selectedIndex == -1) {
                     alert("No transaction type selected. Please contact Support");
                     return;
-                }
+                }*/
 
                 if (!validateNumeric(inpamount, "Amount")) {
                     return;
@@ -5435,15 +5435,17 @@
 
                 cashtrans.clientid = inpclientid.value;
                 cashtrans.currencyid = selcurrency[selcurrency.selectedIndex].value;
-                cashtrans.transtype = seltranstype[seltranstype.selectedIndex].value;
+                //cashtrans.transtype = seltranstype[seltranstype.selectedIndex].value;
                 cashtrans.amount = inpamount.value;
                 cashtrans.description = inpdesc.value;
                 cashtrans.reference = inpref.value;
 
                 if (optdr.checked) {
-                    cashtrans.drcr = 1;
+                    cashtrans.drcr = 1;                    
+                    cashtrans.transtype = "CD";
                 } else {
                     cashtrans.drcr = 2;                    
+                    cashtrans.transtype = "CW";
                 }
 
                 cashtrans.settldate = formatToUTCDate(settlday[settlday.selectedIndex].value, settlmonth[settlmonth.selectedIndex].value, settlyear[settlyear.selectedIndex].value);

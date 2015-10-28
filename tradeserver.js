@@ -381,6 +381,7 @@ function newOrder(order) {
   var currencyindtoorg = 1;
   var settlcurrfxrate = 1; // settlement currency to product currency rate
   var settlcurrfxratecalc = 1;
+  var nosettdays = 2;
 
   var today = new Date();
 
@@ -404,7 +405,7 @@ function newOrder(order) {
 
   // get settlement date from T+n no. of days if not specified
   if (!('futsettdate' in order) || order.futsettdate == "") {
-    order.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, 2, holidays));
+    order.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, nosettdays, holidays));
   }
 
   if (order.ordertype == "D") {

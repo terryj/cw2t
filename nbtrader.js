@@ -367,6 +367,7 @@ Nbt.prototype.quoteRequest = function(quoterequest) {
 
 Nbt.prototype.newOrder = function(order) {
 	var delivertocompid = "";
+	console.log(order);
 
 	var msg = '11=' + order.brokerid + ":" + order.orderid + SOH
 		+ '21=' + handinst + SOH
@@ -378,7 +379,7 @@ Nbt.prototype.newOrder = function(order) {
 		+ '54=' + order.side + SOH
 		+ '60=' + order.timestamp + SOH
 		+ '63=' + order.settlmnttypid + SOH
-		+ '64=' + order.futsettdate + SOH
+		//+ '64=' + order.futsettdate + SOH
 		+ '59=' + order.timeinforce + SOH
 		+ '120=' + order.settlcurrencyid + SOH
 		+ '15=' + order.currencyid + SOH

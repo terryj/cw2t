@@ -299,7 +299,7 @@ function listen() {
       console.log("signIn");
 
       // add servertype i.e. email:client:emailaddr?
-      db.get(brokerkey + ":email:" + signin.email, function(err, cid) {
+      db.get(brokerkey + ":client:" + signin.email, function(err, cid) {
         if (err) {
           console.log("Error in signIn:" + err);
           return;

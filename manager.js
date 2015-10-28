@@ -217,7 +217,7 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-    applyCorporateAction(1, 1);
+    //applyCorporateAction(1, 1);
     //test();
     //testtrade();
     //testSettle();
@@ -549,7 +549,7 @@ function cashTrans(cashtrans, userid, conn) {
   console.log(cashtrans);
 
   cashtrans.bankaccountid = 999988;
-  cashtrans.clientaccountid = 3;
+  cashtrans.clientaccountid = 1;
   cashtrans.localamount = cashtrans.amount;
   cashtrans.note = cashtrans.description;
   cashtrans.rate = 1;
@@ -1930,7 +1930,15 @@ function quoteRequestReceived(quoterequest, userid) {
   quoterequest.operatortype = operatortype;
   quoterequest.operatorid = userid;
 
-  db.publish(commonbo.tradeserverchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
+  db.smembers("broker:" + brokerid + ":client:" + quoterequest.clientid + ":clientaccounts", function(err, clients) {
+    if (err) throw err;
+
+    console.log(clients);
+
+    quoterequest.accountid = clients[0];
+
+    db.publish(commonbo.tradeserverchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
+  });
 }
 
 function orderReceived(order, userid) {
@@ -2114,10 +2122,6 @@ function applyCAScripIssue(brokerid, corporateactionid) {
   // we need exdate - 1 for eod price
   exdate.setDate(exdate.getDate() - 1);
   var exdatestr = commonbo.getUTCDateString(exdate);
-
-  // we need exdate - 1
-  exdate.setDate(exdate.getDate() - 1);
-  console.log("exdate-1=" + exdate);
 
   // timestamp & millisecond representation
   var timestamp = new Date();
