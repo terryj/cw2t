@@ -367,7 +367,6 @@ Nbt.prototype.quoteRequest = function(quoterequest) {
 
 Nbt.prototype.newOrder = function(order) {
 	var delivertocompid = "";
-	console.log(order);
 
 	var msg = '11=' + order.brokerid + ":" + order.orderid + SOH
 		+ '21=' + handinst + SOH
@@ -389,6 +388,8 @@ Nbt.prototype.newOrder = function(order) {
 		// add quote id & who the quote was from
 		msg += '117=' + order.externalquoteid + SOH;
 		delivertocompid = order.quoterid;
+	} else if (parseInt(order.ordertype) == 1) { // market
+		delivertocompid = "BEST";
 	} else if (order.delivertocompid != "") {
 		delivertocompid = order.delivertocompid;
 	}
@@ -400,7 +401,7 @@ Nbt.prototype.newOrder = function(order) {
 		msg += '152=' + order.cashorderqty + SOH;				
 	}
 
-	// add price
+	// add price if specified
 	if (order.price != '') {
 		msg += '44=' + order.price + SOH;
 	}
@@ -409,6 +410,10 @@ Nbt.prototype.newOrder = function(order) {
 	if (order.timeinforce == '6') {
 		msg += '432=' + order.expiredate + SOH;
 			//+ '126=' + order.expiretime + SOH;
+	}
+
+	if (order.futsettdate != '') {
+		msg += '64=' + order.futsettdate + SOH;
 	}
 
 	sendMessage('D', onbehalfofcompid, delivertocompid, msg, false, null, null);

@@ -224,6 +224,7 @@ function listen() {
     //testSupplierFundsTransfer();
     //testPositionPostings();
     //testStatement();
+    testOrder(1);
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
@@ -1939,6 +1940,28 @@ function quoteRequestReceived(quoterequest, userid) {
 
     db.publish(commonbo.tradeserverchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
   });
+}
+
+function testOrder(userid) {
+  var order = {};
+
+  order.accountid = 1;
+  order.clientid = 1;
+  order.side = 1;
+  order.symbolid = 'BARC.L';
+  order.quantity = '';
+  //order.price = '1.25';
+  order.cashorderqty = 500;
+  order.currencyid = 'GBP';
+  order.ordertype = 1;
+  order.settlcurrencyid = 'GBP';
+  order.futsettdate = "";
+  order.timeinforce = "4";
+  order.expiredate = "";
+  order.expiretime = "";
+  order.settlmnttypid = 0;
+
+  orderReceived(order, userid);
 }
 
 function orderReceived(order, userid) {

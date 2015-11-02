@@ -154,7 +154,6 @@ nbt.on("initialised", function() {
 function connectToTrading() {
   // try to connect
   //winner.connect();
-
   nbt.connect();
 }
 
@@ -392,6 +391,10 @@ function newOrder(order) {
     order.accountid = "";
   }
 
+  if (!("cashorderqty" in order)) {
+    order.cashorderqty = "";
+  }
+
   // always put a price in the order
   if (!("price" in order)) {
     order.price = "";
@@ -418,8 +421,10 @@ function newOrder(order) {
   }
 
   // store the order, get an id & credit check it
-  db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, order.operatortype, order.operatorid, function(err, ret) {
+  db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, currencyratetoorg, currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, order.operatortype, order.operatorid, order.cashorderqty, function(err, ret) {
     if (err) throw err;
+
+    console.log(ret);
 
     // error check
     if (ret[0] == 0) {
@@ -1200,11 +1205,11 @@ function registerScripts() {
   /*
   * creditcheck()
   * credit checks an order
-  * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, futsettdate
+  * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, futsettdate, settlcurramt
   * returns: 0=fail/1=succeed, inialmargin, costs as a table
   */
   creditcheck = rejectorder + getinitialmargin + getcosts + commonbo.getpositionbysymbol + commonbo.getfreemargin + '\
-  local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, futsettdate) \
+  local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, cashorderqty, currencyid, futsettdate) \
     --[[ see if client is allowed to trade this product ]] \
     local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
     if not instrumenttypeid then \
@@ -1216,11 +1221,26 @@ function registerScripts() {
       --[[rejectorder(brokerid, orderid, 0, "Client not authorised to trade this type of product") ]]\
       --[[return {0} ]]\
     --[[end ]]\
+    --[[ get the consideration ]] \
+    local settlcurramt \
+    if quantity == "" then \
+      if cashorderqty == "" then \
+        rejectorder(brokerid, orderid, 0, "Either quantity or cashorderqty must be specified") \
+        return {0} \
+      else \
+        settlcurramt = cashorderqty \
+      end \
+    else \
+      if price == "" then \
+        rejectorder(brokerid, orderid, 0, "Price must be specified with quantity") \
+        return {0} \
+      else \
+        settlcurramt = tonumber(quantity) * tonumber(price) \
+      end \
+    end \
     side = tonumber(side) \
-    quantity = tonumber(quantity) \
-    local consid = tonumber(quantity) * tonumber(price) \
     --[[ calculate costs ]] \
-    local costs =  getcosts(brokerid, clientid, symbolid, side, consid, currencyid) \
+    local costs =  getcosts(brokerid, clientid, symbolid, side, settlcurramt, currencyid) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
     redis.log(redis.LOG_WARNING, "costs") \
     redis.log(redis.LOG_WARNING, costs[1]) \
@@ -1228,7 +1248,7 @@ function registerScripts() {
     redis.log(redis.LOG_WARNING, costs[3]) \
     redis.log(redis.LOG_WARNING, costs[4]) \
     --[[ calculate margin required for order ]] \
-    local initialmargin = getinitialmargin(brokerid, symbolid, consid, totalcost) \
+    local initialmargin = getinitialmargin(brokerid, symbolid, settlcurramt, totalcost) \
     --[[ get position, if there is one, as may be a closing buy or sell ]] \
     local position = getpositionbysymbol(accountid, brokerid, symbolid, futsettdate) \
     if position then \
@@ -1237,6 +1257,7 @@ function registerScripts() {
       redis.log(redis.LOG_WARNING, "posqty") \
       redis.log(redis.LOG_WARNING, posqty) \
       if (side == 1 and posqty < 0) or (side == 2 and posqty > 0) then \
+        quantity = tonumber(quantity) \
         if quantity <= math.abs(posqty) then \
           --[[ closing trade, so ok ]] \
           return {1, initialmargin, costs} \
@@ -1389,11 +1410,17 @@ function registerScripts() {
   * gets an orderid & saves the order
   */
   neworder = '\
-  local neworder = function(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid) \
+  local neworder = function(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid, cashorderqty) \
     local brokerkey = "broker:" .. brokerid \
+    local remquantity \
+    if quantity ~= "" then \
+      remquantity = quantity \
+    else \
+      remquantity = 0 \
+    end \
     --[[ get a new orderid & store the order ]] \
     local orderid = redis.call("hincrby", brokerkey, "lastorderid", 1) \
-    redis.call("hmset", brokerkey .. ":order:" .. orderid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "ordertype", ordertype, "remquantity", quantity, "orderstatusid", 0, "markettype", markettype, "futsettdate", futsettdate, "quoteid", quoteid, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "timestamp", timestamp, "margin", margin, "timeinforce", timeinforce, "expiredate", expiredate, "expiretime", expiretime, "settlcurrencyid", settlcurrencyid, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "orderid", orderid, "externalorderid", externalorderid, "execid", execid, "operatortype", operatortype, "operatorid", operatorid, "hedgeorderid", hedgeorderid, "orderrejectreasonid", "", "text", "") \
+    redis.call("hmset", brokerkey .. ":order:" .. orderid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "ordertype", ordertype, "remquantity", remquantity, "orderstatusid", 0, "markettype", markettype, "futsettdate", futsettdate, "quoteid", quoteid, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "timestamp", timestamp, "margin", margin, "timeinforce", timeinforce, "expiredate", expiredate, "expiretime", expiretime, "settlcurrencyid", settlcurrencyid, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "orderid", orderid, "externalorderid", externalorderid, "execid", execid, "operatortype", operatortype, "operatorid", operatorid, "hedgeorderid", hedgeorderid, "orderrejectreasonid", "", "text", "", "cashorderqty", cashorderqty) \
     --[[ add to set of orders ]] \
     redis.call("sadd", brokerkey .. ":orders", orderid) \
     redis.call("sadd", brokerkey .. ":orderid", "order:" .. orderid) \
@@ -1433,7 +1460,7 @@ function registerScripts() {
 
   /*
   * scriptneworder
-  * params: 1=accountid, 2=brokerid, 3=clientid, 4=symbolid, 5=side, 6=quantity, 7=price, 8=ordertype, 9=markettype, 10=futsettdate, 11=quoteid, 12=currencyid, 13=currencyratetoorg, 14=currencyindtoorg, 15=timestamp, 16=timeinforce, 17=expiredate, 18=expiretime, 19=settlcurrencyid, 20=settlcurrfxrate, 21=settlcurrfxratecalc, 22=operatortype, 23=operatorid
+  * params: 1=accountid, 2=brokerid, 3=clientid, 4=symbolid, 5=side, 6=quantity, 7=price, 8=ordertype, 9=markettype, 10=futsettdate, 11=quoteid, 12=currencyid, 13=currencyratetoorg, 14=currencyindtoorg, 15=timestamp, 16=timeinforce, 17=expiredate, 18=expiretime, 19=settlcurrencyid, 20=settlcurrfxrate, 21=settlcurrfxratecalc, 22=operatortype, 23=operatorid, 24=cashorderqty
   * returns: orderid
   */
   scriptneworder = getclientaccountid + neworder + creditcheck + commonbo.newtrade + publishorder + getproquotequote + '\
@@ -1448,13 +1475,12 @@ function registerScripts() {
   if not accountid then \
     return {0, 1025, "n/a"} \
   end \
-  local orderid = neworder(accountid, ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15], 0, ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], "", "", ARGV[22], ARGV[23], "") \
+  local orderid = neworder(accountid, ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15], 0, ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], "", "", ARGV[22], ARGV[23], "", ARGV[24]) \
   local brokerid = ARGV[2] \
   local brokerkey = "broker:" .. brokerid \
   local symbolid = ARGV[4] \
   local side = tonumber(ARGV[5]) \
-  local settlcurramt = tonumber(ARGV[6]) * tonumber(ARGV[7]) \
-  local cc = creditcheck(accountid, brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[19], ARGV[10]) \
+  local cc = creditcheck(accountid, brokerid, orderid, ARGV[3], symbolid, side, ARGV[6], ARGV[7], ARGV[24], ARGV[19], ARGV[10]) \
   if cc[1] == 0 then \
     --[[ publish the order back to the operatortype - the order contains the error ]] \
     publishorder(brokerid, orderid, ARGV[22]) \
