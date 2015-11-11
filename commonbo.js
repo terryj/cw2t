@@ -368,6 +368,10 @@ exports.registerScripts = function () {
 
   exports.getmargin = getmargin;
 
+  /*
+  * getunrealisedpandl()
+  * calculate the unrealised profit/loss for a position
+  */
   getunrealisedpandl = round + '\
   local getunrealisedpandl = function(symbolid, quantity, cost) \
     local unrealisedpandl = 0 \

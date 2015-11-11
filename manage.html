@@ -1487,17 +1487,17 @@
  
             if (order.status == "0" || order.status == "1") {
                 if (order.orderid in orders) {
-                    ordervol[key] -= parseInt(orders[order.orderid].remquantity);
+                    ordervol[key] -= parseInt(orders[order.orderid].leavesqty);
                 }
 
                 if (key in ordervol) {
-                    ordervol[key] += parseInt(order.remquantity);
+                    ordervol[key] += parseInt(order.leavesqty);
                 } else {
-                    ordervol[key] = parseInt(order.remquantity);
+                    ordervol[key] = parseInt(order.leavesqty);
                 }
             } else if (order.status == "2" || order.status == "4") {
                 if (order.orderid in orders) {
-                    ordervol[key] -= parseInt(orders[order.orderid].remquantity);
+                    ordervol[key] -= parseInt(orders[order.orderid].leavesqty);
                 }
             }
         }
@@ -1919,7 +1919,7 @@
 
             msg = "Cancel order #" + orderid;
             msg += " to " + getSideDesc(orders[orderid].side);
-            msg += " " + orders[orderid].remquantity;
+            msg += " " + orders[orderid].leavesqty;
             msg += " " + orders[orderid].symbolid;
             if ('price' in orders[orderid]) {
                 msg += " @ " + orders[orderid].price;
@@ -1943,7 +1943,7 @@
 
             msg = "Fill order #" + orderid;
             msg += " to " + getSideDesc(orders[orderid].side);
-            msg += " " + orders[orderid].remquantity;
+            msg += " " + orders[orderid].leavesqty;
             msg += " " + orders[orderid].symbolid;
             if ('price' in orders[orderid]) {
                 msg += " @ " + orders[orderid].price;
@@ -4239,8 +4239,8 @@
             }
 
             msg += ", T+" + order.nosettdays + ", " + getOrdertypeDesc(order.ordertype);
-            if (order.remquantity > 0) {
-                msg += ", " + order.remquantity  + " remaining";
+            if (order.leavesqty > 0) {
+                msg += ", " + order.leavesqty  + " remaining";
             }
             msg += ", order id " + order.orderid + ", at " + formatUTCDateTime(order.timestamp);
 
@@ -4248,7 +4248,7 @@
         }
 
         function orderRejectMsg(order) {
-            var msg = getSideDesc(order.side) + " " + order.remquantity + " " + order.symbolid;
+            var msg = getSideDesc(order.side) + " " + order.leavesqty + " " + order.symbolid;
 
             if ('price' in order) {
                 msg += " @ " + order.price;
@@ -4266,7 +4266,7 @@
         }
 
         function orderCancelMsg(order) {
-            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbolid + ", " + order.remquantity + " remaining";
+            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbolid + ", " + order.leavesqty + " remaining";
 
             if ('price' in order) {
                 msg += " @ " + order.price;
@@ -4278,7 +4278,7 @@
         }
 
         function orderExpireMsg(order) {
-            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbolid + ", " + order.remquantity + " remaining";
+            var msg = getSideDesc(order.side) + " " + order.quantity + " " + order.symbolid + ", " + order.leavesqty + " remaining";
 
             if ('price' in order) {
                 msg += " @ " + order.price;

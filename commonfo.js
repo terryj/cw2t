@@ -109,7 +109,7 @@ exports.broadcastLevelOne = broadcastLevelOne;
           if (order.price != lastprice || order.side != lastside) {
             if (parseInt(order.side) == 1) {
               level.bid = order.price;
-              level.bidsize = parseInt(order.remquantity);
+              level.bidsize = parseInt(order.leavesqty);
               orderbook.prices[bidlevel] = level;
               bidlevel++;
           } else {
@@ -121,10 +121,10 @@ exports.broadcastLevelOne = broadcastLevelOne;
 
             if (offerlevel <= bidlevel && !firstbid) {
               orderbook.prices[offerlevel].offer = order.price;
-              orderbook.prices[offerlevel].offersize = parseInt(order.remquantity);
+              orderbook.prices[offerlevel].offersize = parseInt(order.leavesqty);
             } else {
               level.offer = order.price;
-              level.offersize = parseInt(order.remquantity);
+              level.offersize = parseInt(order.leavesqty);
               orderbook.prices[offerlevel] = level;
             }
           }
@@ -133,9 +133,9 @@ exports.broadcastLevelOne = broadcastLevelOne;
           lastside = order.side;
         } else {
           if (parseInt(order.side) == 1) {
-            orderbook.prices[bidlevel].bidsize += parseInt(order.remquantity);
+            orderbook.prices[bidlevel].bidsize += parseInt(order.leavesqty);
           } else {
-            orderbook.prices[offerlevel].offersize += parseInt(order.remquantity);
+            orderbook.prices[offerlevel].offersize += parseInt(order.leavesqty);
           }
         }
 

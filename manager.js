@@ -224,7 +224,7 @@ function listen() {
     //testSupplierFundsTransfer();
     //testPositionPostings();
     //testStatement();
-    testOrder(1);
+    //testOrder(1);
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on

@@ -510,7 +510,7 @@ function getInstrumentType(nbinsttype) {
       insttype = "CW";
       break;
     default:
-      insttype = "unknown insttype: " + nbinsttype;
+      insttype = "77";
       break;
   }
 
