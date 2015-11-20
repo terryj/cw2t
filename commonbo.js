@@ -993,7 +993,7 @@ exports.registerScripts = function () {
   local newpositiontransaction = function(accountid, brokerid, cost, futsettdate, linkid, positionpostingtypeid, quantity, symbolid, timestamp, milliseconds) \
     local positionid = getpositionid(accountid, brokerid, symbolid, futsettdate) \
     if not positionid then \
-      --[[ no positiion, so create a new one ]] \
+      --[[ no position, so create a new one ]] \
       positionid = newposition(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
     else \
       --[[ just update it ]] \
@@ -1040,18 +1040,18 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
-    local cost \
+    local consideration \
     local note \
     if tonumber(side) == 1 then \
-      cost = settlcurramt \
+      consideration = settlcurramt \
       note = "Bought " .. quantity .. " " .. symbolid .. " @ " .. price \
     else \
       quantity = -tonumber(quantity) \
-      cost = -tonumber(settlcurramt) \
+      consideration = -tonumber(settlcurramt) \
       note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
     local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side, milliseconds) \
-    newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, milliseconds) \
+    newpositiontransaction(accountid, brokerid, consideration, futsettdate, tradeid, 1, quantity, symbolid, timestamp, milliseconds) \
     publishtrade(brokerid, tradeid, 6) \
     return tradeid \
   end \

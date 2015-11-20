@@ -3,7 +3,7 @@
 <head>
     <meta http-equiv="content-type" content="text/html;charset=utf-8"/>
     <title>TG-Online v0.9</title>
-    <script src="http://cdn.jsdelivr.net/sockjs/0.3.4/sockjs.min.js"></script>
+    <script src="http://localhost:8080/socket.io.js"></script>
     <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
 <style>
     .axis path,
@@ -387,8 +387,7 @@
 </head>
 <body lang="en">
     <script>
-        var sockjs_url = '/echo';
-        var sockjs;
+        var socketio;
         var ukx = [];
         var pricehist = [];
         var symbols = {};
@@ -475,7 +474,7 @@
             }
         };
 
-        var newconn = function() {
+        /*var newconn = function() {
             sockjs = new SockJS(sockjs_url);
 
             sockjs.onopen = function()  {
@@ -497,7 +496,17 @@
 
             sockjs.onheartbeat = function() {
             };
-        };
+        };*/
+
+        var newconn = function() {
+console.log("newconn");
+           socketio = io.connect();
+//           socketio = io('http://localhost');
+           socketio.on('connect', function() {
+              console.log(data);
+              socket.emit('my other event', {my: 'data'});
+           });
+        }
 
         // get a connection
         newconn();

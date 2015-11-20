@@ -215,8 +215,6 @@ function quoteRequest(quoterequest) {
   db.eval(scriptQuoteRequest, 1, "broker:" + quoterequest.brokerid, quoterequest.accountid, quoterequest.brokerid, quoterequest.cashorderqty, quoterequest.clientid, quoterequest.currencyid, quoterequest.futsettdate, quoterequest.operatorid, quoterequest.operatortype, quoterequest.quantity, quoterequest.settlmnttypid, quoterequest.side, quoterequest.symbolid, quoterequest.timestamp, quoterequest.settlcurrencyid, function(err, ret) {
     if (err) throw err;
 
-    console.log(ret);
-
     // todo:sort out
     if (ret[0] != 0) {
       // todo: send a quote ack to client
@@ -755,7 +753,7 @@ function newQuote(quote) {
   if (!('symbolid' in  quote)) {
     quote.symbolid = "";
   }
-
+console.log(quote);
   // quote script
   db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, function(err, ret) {
     if (err) {
@@ -1828,7 +1826,7 @@ function registerScripts() {
   end \
   --[[ store the quote request ]] \
   redis.call("hmset", KEYS[1] .. ":quoterequest:" .. quoterequestid, "accountid", accountid, "brokerid", ARGV[2], "cashorderqty", ARGV[3], "clientid", ARGV[4], "currencyid", ARGV[5], "futsettdate", ARGV[6], "operatorid", ARGV[7], "operatortype", ARGV[8], "quantity", ARGV[9], "quoterejectreasonid", "", "quoterequestid", quoterequestid, "quotestatusid", 0, "settlmnttypid", ARGV[10], "side", ARGV[11], "symbolid", ARGV[12], "timestamp", ARGV[13], "text", "", "settlcurrencyid", ARGV[14]) \
-  --[[ add to set of quoterequests ]] \
+  --[[ add to the set of quoterequests ]] \
   redis.call("sadd", KEYS[1] .. ":quoterequests", quoterequestid) \
   redis.call("sadd", KEYS[1] .. ":quoterequestid", "quoterequest:" .. quoterequestid) \
   --[[ add to set of quoterequests for this account ]] \
@@ -1856,6 +1854,11 @@ function registerScripts() {
   if not quoterequest["quoterequestid"] then \
     return 1014 \
   end \
+  --[[ get the client ]] \
+  local clientid = redis.call("get", brokerkey .. ":account:" .. quoterequest["accountid"] .. ":client") \
+  if not clientid then \
+    return 1017 \
+  end \
   --[[ get touch prices - using delayed - todo: may need to look up delayed/live ]] \
   local bestbid = 0 \
   local bestoffer = 0 \
@@ -1871,7 +1874,9 @@ function registerScripts() {
   local offerfinance = 0 \
   local cashorderqty \
   local side \
+  local costs = {0,0,0,0} \
   --[[ calculate the quantity from the cashorderqty, if necessary ]] \
+  --[[ note that the value of the quote may be greated than client cash - any order will be credit checked so does not matter ]] \
   if ARGV[3] == "" then \
     local offerprice = tonumber(ARGV[4]) \
     if quoterequest["quantity"] == "" then \
@@ -1893,14 +1898,10 @@ function registerScripts() {
     cashorderqty = bidquantity * bidprice \
     side = 2 \
   end \
+  --[[ get the costs ]] \
+  costs = getcosts(brokerid, clientid, quoterequest["symbolid"], side, cashorderqty, ARGV[10]) \
   --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
   local quoteid = redis.call("hincrby", brokerkey, "lastquoteid", 1) \
-  --[[ get the costs ]] \
-  local costs = {0,0,0,0} \
-  local clientid = redis.call("get", brokerkey .. ":account:" .. quoterequest["accountid"] .. ":client") \
-  if clientid then \
-    costs = getcosts(brokerid, clientid, quoterequest["symbolid"], side, cashorderqty, ARGV[10]) \
-  end \
   --[[ store the quote ]] \
   redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", brokerid, "accountid", quoterequest["accountid"], "clientid", quoterequest["clientid"], "quoteid", quoteid, "symbolid", quoterequest["symbolid"], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", cashorderqty, "settledays", ARGV[18], "noseconds", ARGV[19], "settlmnttypid", ARGV[21], "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4]) \
   --[[ add to sets of quotes & quotes for this account ]] \
@@ -1916,7 +1917,7 @@ function registerScripts() {
   else \
     quotestatusid = "0" \
   end \
-  --[[ add status to stored quoterequest ]] \
+  --[[ update status to stored quoterequest ]] \
   redis.call("hmset", brokerkey .. ":quoterequest:" .. ARGV[1], "quotestatusid", quotestatusid) \
   --[[ publish quote to operator type, with operator id, so can be forwarded as appropriate ]] \
   publishquote(brokerid, quoteid, quoterequest["operatortype"], quoterequest["operatorid"]) \

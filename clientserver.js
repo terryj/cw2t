@@ -6,20 +6,18 @@
 * September 2012
 ****************/
 
-// node libraries
-
 // http or https
 var http = require('http');
-var cw2tport = 8080; // client listen port
 //var https = require('https');
-//var cw2tport = 443; // client listen port
 
-var fs = require("fs");
+// comms
+var socketio = require('socket.io')(http);
+//var sockjs = require('sockjs');
 
-// external libraries
-var sockjs = require('sockjs');
+// other
 var node_static = require('node-static');
 var redis = require('redis');
+var fs = require("fs");
 
 // cw2t libraries
 var commonfo = require('./commonfo.js');
@@ -28,14 +26,14 @@ var commonbo = require('./commonbo.js');
 // globals
 var connections = {}; // added to if & when a client logs on
 var static_directory = new node_static.Server(__dirname); // static files server
-var ordertypes = {};
-var orgid = "1"; // todo: via logon
 var defaultnosettdays = 3;
 var serverid = 1; // must be unique, use .ini file?
 var servertype = "client";
 var feedtype = "nbtrader";
 var operatortype = 1;
-var brokerid = 1;
+var brokerid = 1; // get from signin
+var cw2tport = 8080; // http listen port
+//var cw2tport = 443; // https listen port
 
 // redis
 var redishost;
@@ -171,10 +169,28 @@ function pubsub() {
 
 // sockjs server
 // http
-var sockjs_opts = {sockjs_url: "http://cdn.sockjs.org/sockjs-0.3.min.js"};
+//var sockjs_opts = {sockjs_url: "http://cdn.sockjs.org/sockjs-0.3.min.js"};
 // https
 //var sockjs_opts = {sockjs_url: "https://d1fxtkz8shb9d2.cloudfront.net/sockjs-0.3.js"};
-var sockjs_svr = sockjs.createServer(sockjs_opts);
+//var sockjs_svr = sockjs.createServer(sockjs_opts);
+
+function handler(req, res) {
+console.log("handler");
+//  console.log(req);
+//  console.log(res);
+  fs.readFile(__dirname + '/chart.html',
+  function (err, data) {
+console.log(err);
+console.log(data);
+    if (err) {
+      res.writeHead(500);
+      return res.end('Error loading chart.html');
+    }
+
+    res.writeHead(200);
+    res.end(data);
+  });
+}
 
 // options for https server
 var options = {
@@ -182,34 +198,36 @@ var options = {
   cert: fs.readFileSync('cert.pem')
 };
 
-// https server
+// http/https server
 function listen() {
-  // http
-  var server = http.createServer();
-  // https
+console.log("listen");
+  var server = http.createServer(handler);
   //var server = https.createServer(options);
  
-  server.addListener('request', function(req, res) {
+  /*server.addListener('request', function(req, res) {
     static_directory.serve(req, res);
   });
   server.addListener('upgrade', function(req, res){
     res.end();
-  });
+  });*/
 
-  sockjs_svr.installHandlers(server, {prefix:'/echo'});
- 
+  //sockjs_svr.installHandlers(server, {prefix:'/echo'});
+   
   server.listen(cw2tport, function() {
     console.log('Listening on port ' + cw2tport);
   });
  
-  sockjs_svr.on('connection', function(conn) {
+  //sockjs_svr.on('connection', function(conn) {
+  socketio.on('connection', function(conn) {
     // this will be overwritten if & when a client logs on
     var clientid = "0";
 
     console.log('new connection');
 
+    conn.emit('news', {hello: 'world'});
+
     // data callback
-    conn.on('data', function(msg) {
+    conn.on('my other event', function(msg) {
       console.log('recd:' + msg);
 
       // just forward to trade server
@@ -629,7 +647,7 @@ function symbolRequest(instreq, clientid, conn) {
   console.log(instreq);
 
   // get alpha sorted set of instruments for this client
-  db.eval(scriptgetinst, 0, clientid, function(err, ret) {
+  db.eval(scriptgetinst, 1, "broker:" + brokerid, brokerid, clientid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -1194,7 +1212,7 @@ function statementRequest(statementreq, clientid, conn) {
 }
 
 function passwordRequest(clientid, pwdrequest, conn) {
-  db.eval(scriptupdatepassword, 3, clientid, pwdrequest.oldpwd, pwdrequest.newpwd, function(err, ret) {
+  db.eval(scriptupdatepassword, 1, "broker:" + brokerid, brokerid, clientid, pwdrequest.oldpwd, pwdrequest.newpwd, function(err, ret) {
     if (err) throw err;
     conn.write("{\"pwdupdate\":" + JSON.stringify(ret) + "}");
   });
@@ -1491,7 +1509,7 @@ function newOrder(order, clientid, conn) {
 function registerScripts() {
   //
   // get alpha sorted list of instruments for a specified client
-  // uses set of valid instrument types per client i.e. client:1:instrumenttypes CFD
+  // uses set of valid instrument types per client i.e. broker:client:1:instrumenttypes CFD
   //
   scriptgetinst = '\
   local symbols = redis.call("sort", "symbols", "ALPHA") \
@@ -1500,7 +1518,7 @@ function registerScripts() {
   local inst = {} \
   for index = 1, #symbols do \
     vals = redis.call("hmget", "symbol:" .. symbols[index], unpack(fields)) \
-    if redis.call("sismember", "client:" .. ARGV[1] .. ":instrumenttypes", vals[1]) == 1 then \
+    if redis.call("sismember", "broker:" .. ARGV[1] .. ":client:" .. ARGV[2] .. ":instrumenttypes", vals[1]) == 1 then \
       table.insert(inst, {symbolid = symbols[index], instrumenttypeid = vals[1], shortname = vals[2], currencyid = vals[3], marginpercent = vals[4]}) \
     end \
   end \
@@ -1509,9 +1527,10 @@ function registerScripts() {
 
   scriptupdatepassword = '\
     local retval = 0 \
-    local oldpwd = redis.call("hget", "client:" .. KEYS[1], "password") \
-    if oldpwd == KEYS[2] then \
-      redis.call("hset", "client:" .. KEYS[1], "password", KEYS[3]) \
+    local clientkey = "broker:" .. ARGV[1] .. ":client:" .. ARGV[2] \
+    local oldpwd = redis.call("hget", clientkey, "password") \
+    if oldpwd == ARGV[3] then \
+      redis.call("hset", clientkey, "password", ARGV[4]) \
       retval = 1 \
     end \
     return retval \
