@@ -212,7 +212,7 @@ function quoteRequest(quoterequest) {
   if (!('settlcurrencyid' in quoterequest)) {
     quoterequest.settlcurrencyid = quoterequest.currencyid;
   }
-
+  
   // store the quote request & get an id
   db.eval(scriptQuoteRequest, 1, "broker:" + quoterequest.brokerid, quoterequest.accountid, quoterequest.brokerid, quoterequest.cashorderqty, quoterequest.clientid, quoterequest.currencyid, quoterequest.futsettdate, quoterequest.operatorid, quoterequest.operatortype, quoterequest.quantity, quoterequest.settlmnttypid, quoterequest.side, quoterequest.symbolid, quoterequest.timestamp, quoterequest.settlcurrencyid, function(err, ret) {
     if (err) throw err;
@@ -586,7 +586,6 @@ function orderFillRequest(ofr) {
 }
 
 function processOrder(order) {
-  console.log("processOrder");
   //
   // the order has been credit checked
   // now, either forward or attempt to match the order, depending on the type of instrument & whether the market is open
@@ -605,7 +604,7 @@ function processOrder(order) {
       // test only
       testTradeResponse(order);
     } else {
-      console.log("Forwarding to market");
+      console.log("Forwarding order to market");
 
       // forward order to the market
       nbt.newOrder(order);
@@ -757,6 +756,7 @@ function newQuote(quote) {
     quote.symbolid = "";
   }
 
+console.log(quote);
   // quote script
   db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, function(err, ret) {
     if (err) {
@@ -767,7 +767,7 @@ function newQuote(quote) {
     //todo:sortout
     if (ret != 0) {
       // can't find quote request, so don't know which client to inform
-      console.log("Error in scriptquote:" + commonbo.getReasonDesc(ret[0]));
+      console.log("Error in scriptquote: " + commonbo.getReasonDesc(ret));
       return;
     }
 
@@ -1275,8 +1275,8 @@ function registerScripts() {
       local posqty = tonumber(position["quantity"]) \
       redis.log(redis.LOG_WARNING, "posqty") \
       redis.log(redis.LOG_WARNING, posqty) \
+      quantity = tonumber(quantity) \
       if (side == 1 and posqty < 0) or (side == 2 and posqty > 0) then \
-        quantity = tonumber(quantity) \
         if quantity <= math.abs(posqty) then \
           --[[ closing trade, so ok ]] \
           return {1, initialmargin, costs} \

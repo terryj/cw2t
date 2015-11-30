@@ -80,6 +80,10 @@ function initdb() {
   db.set("instrumenttype:SPB", "Spreadbet");
   db.set("instrumenttype:CCFD", "Convertible CFD");
 
+  db.hmset("symbol:BARC.L", "ask", "258.45", "bid", "258.4", "currencyid", "GBP", "exchangeid", "L", "hedgesymbolid", "1", "instrumenttypeid", "DE", "isin", "GB0031348658", "longname", "BARCLAYS PLC ORD 25P", "midnetchange", "5.075", "midpercentchange", "2", "mnemonic", "BARC", "nbtsymbol", "BARC.L", "shortname", "BARCLAYS", "symbolid", "BARC.L", "timezoneid", "310", "active", "1", "ptmexempt", "0", "timestamp", "Mon Nov 30 2015 13:04:50 GMT+0000 (UTC)");
+
+  db.sadd("symbols", "BARC.L");
+
   // indices
   db.sadd("index:UKX", "BARC.L");
 
@@ -125,7 +129,7 @@ function initdb() {
 
   // logon
   db.set("trading:ipaddress", "82.211.104.37");
-  db.set("trading:port", "60144");
+  db.set("trading:port", "60188");
   db.set("sendercompid", "CWTT_UAT");
   db.set("targetcompid", "NBT_UAT");
   db.set("onbehalfofcompid", "TGRANT");
