@@ -45,12 +45,17 @@ function initdb() {
   db.hset("broker:1", "lastaccountid", 0);
 
   // broker account ids
-  db.hset("broker:1", "clientcontrolaccountid", 99);
-  db.hset("broker:1", "bankcontrolaccountid", 98);
-  db.hset("broker:1", "nominaltradeaccountid", 97);
-  db.hset("broker:1", "nominalcommissionaccountid", 96);
-  db.hset("broker:1", "nominalptmaccountid", 95);
-  db.hset("broker:1", "nominalstampdutyaccountid", 94);
+  db.hset("broker:1", "bankfundsbroker", 99);
+  db.hset("broker:1", "bankfundsdesignatedclient", 98);
+  db.hset("broker:1", "brokerdividend", 97);
+  db.hset("broker:1", "brokertrading", 96);
+  db.hset("broker:1", "nominalcommission", 95);
+  db.hset("broker:1", "nominalconsideration", 94);
+  db.hset("broker:1", "nominalcorporateactions", 93);
+  db.hset("broker:1", "nominalptm", 92);
+  db.hset("broker:1", "nominalstampduty", 91);
+  db.hset("broker:1", "suppliercrest", 90);
+  db.hset("broker:1", "supplierptm", 89);
 
   // set of users
   db.sadd("broker:1:users", "1");

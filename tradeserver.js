@@ -51,8 +51,6 @@ var scriptordercancelrequest;
 var scriptordercancel;
 var scriptorderack;
 var scriptnewtrade;
-//var scriptQuote;
-//var scriptquoteack;
 var scriptrejectorder;
 var scriptgetinst;
 //var scriptgetholidays;
@@ -94,16 +92,16 @@ function pubsub() {
   dbsub = redis.createClient(redisport, redishost);
 
   dbsub.on("subscribe", function(channel, count) {
-    console.log("subscribed to:" + channel + ", num. channels:" + count);
+    console.log("Subscribed to channel: " + channel + ", num. channels:" + count);
   });
 
   dbsub.on("unsubscribe", function(channel, count) {
-    console.log("unsubscribed from:" + channel + ", num. channels:" + count);
+    console.log("Unsubscribed from channel: " + channel + ", num. channels:" + count);
   });
 
   dbsub.on("message", function(channel, message) {
     try {
-      console.log("channel:" + channel + " " + message);
+      console.log("Message received on channel: " + channel + " " + message);
       var obj = JSON.parse(message);
 
       if ("quoterequest" in obj) {
@@ -142,13 +140,17 @@ winner.on('finished', function(message) {
 // connection to NBTrader
 var nbt = new nbtrader.Nbt();
 nbt.on("connected", function() {
-  console.log("connected to " + externalconn);
+  console.log("Connected to " + externalconn);
 });
 nbt.on('finished', function(message) {
     console.log(message);
 });
 nbt.on("initialised", function() {
-  connectToTrading();
+   if (testmode == 0) {
+      connectToTrading();
+   } else {
+      console.log("Not trying to connect to market - to try, exit & set testmode=0");
+   }
 });
 
 function connectToTrading() {
@@ -177,7 +179,7 @@ function quoteInterval() {
 }
 
 function quoteRequest(quoterequest) {
-  console.log("quoterequest");
+  console.log("Quoterequest received");
   console.log(quoterequest);
 
   // create timestamp
@@ -229,10 +231,10 @@ function quoteRequest(quoterequest) {
     quoterequest.exchangeid = ret[4];
 
     if (testmode == 1) {
-      console.log("test response");
+      console.log("Test response");
       testQuoteResponse(quoterequest);
     } else {
-      console.log("forwarding to nbt");
+      console.log("Forwarding to market");
 
       // forward the request
       nbt.quoteRequest(quoterequest);
@@ -262,7 +264,7 @@ function testQuoteResponse(quoterequest) {
 // publish a test quote rejection
 //
 function testQuoteAck(quoterequest) {
-  console.log("testQuoteAck");
+  console.log("Publishing a testQuoteAck");
   var quoteack = {};
 
   console.log(quoterequest);
@@ -283,7 +285,7 @@ function testQuoteAck(quoterequest) {
 function testQuote(quoterequest, side) {
   var quote = {};
 
-  console.log("sending test quote");
+  console.log("Sending a test quote");
 
   if (side == 2) {
     quote.bidpx = "1.23";
@@ -376,7 +378,7 @@ function getFixDate(date) {
 }
 
 function newOrder(order) {
-  console.log("newOrder");
+  console.log("Order received");
   console.log(order);
 
   var currencyratetoorg = 1; // product currency to org currency rate
@@ -603,7 +605,8 @@ function processOrder(order) {
       // test only
       testTradeResponse(order);
     } else {
-      console.log("forwarding to nbt");
+      console.log("Forwarding to market");
+
       // forward order to the market
       nbt.newOrder(order);
     }
@@ -614,7 +617,7 @@ function processOrder(order) {
         testTradeResponse(order);
       } else {
         // todo: may need to change order id to hedge order id
-        console.log("forwarding hedge order:" + order.hedgeorderid + " to nbt");
+        console.log("Forwarding hedge order: " + order.hedgeorderid + " to market");
 
         nbt.newOrder(order);
       }
@@ -628,7 +631,7 @@ function processOrder(order) {
 function testTradeResponse(order) {
   var exereport = {};
 
-  console.log("test fill");
+  console.log("Sending a test fill");
 
   exereport.accountid = order.accountid;
   exereport.brokerid = order.brokerid;
@@ -753,15 +756,13 @@ function newQuote(quote) {
   if (!('symbolid' in  quote)) {
     quote.symbolid = "";
   }
-console.log(quote);
+
   // quote script
   db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
     }
-
-    console.log(ret);
 
     //todo:sortout
     if (ret != 0) {
@@ -782,10 +783,9 @@ console.log(quote);
 nbt.on("orderReject", function(exereport) {
   var text = "";
   var orderrejectreasonid = "";
-  console.log("order rejected");
-  console.log(exereport);
 
-  console.log("order rejected, id:" + exereport.clordid);
+  console.log("Order rejected, id: " + exereport.clordid);
+  console.log(exereport);
 
   // execution reports vary as to whether they contain a reject reason &/or text
   if ('ordrejreason' in exereport) {
@@ -817,7 +817,7 @@ nbt.on("orderReject", function(exereport) {
 //
 nbt.on("orderAck", function(exereport) {
   var text = "";
-  console.log("Order acknowledged, id:" + exereport.clordid);
+  console.log("Order acknowledged, id: " + exereport.clordid);
   console.log(exereport);
 
   if ('text' in exereport) {
@@ -833,14 +833,14 @@ nbt.on("orderAck", function(exereport) {
 });
 
 nbt.on("orderCancel", function(exereport) {
-  console.log("Order cancelled externally, ordercancelrequest id:" + exereport.clordid);
+  console.log("Order cancelled externally, ordercancelrequest id: " + exereport.clordid);
 
   db.eval(scriptordercancel, 1, exereport.clordid, function(err, ret) {
     if (err) throw err;
 
     if (ret[0] != 0) {
       // todo: send to client & sort out error
-      console.log("Error in scriptordercancel, reason:" + commonbo.getReasonDesc(ret[0]));
+      console.log("Error in scriptordercancel, reason: " + commonbo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -851,7 +851,7 @@ nbt.on("orderCancel", function(exereport) {
 
 nbt.on("orderExpired", function(exereport) {
   console.log(exereport);
-  console.log("order expired, id:" + exereport.clordid);
+  console.log("Order expired, id: " + exereport.clordid);
 
   db.eval(scriptorderexpire, 1, exereport.clordid, function(err, ret) {
     if (err) {
@@ -861,7 +861,7 @@ nbt.on("orderExpired", function(exereport) {
 
     if (ret[0] != 0) {
       // todo: send to client & sort out error
-      console.log("Error in scriptorderexpire, reason:" + commonbo.getReasonDesc(ret[0]));
+      console.log("Error in scriptorderexpire, reason: " + commonbo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -872,7 +872,7 @@ nbt.on("orderExpired", function(exereport) {
 
 // fill received from market
 nbt.on("orderFill", function(exereport) {
-  console.log("fill received");
+  console.log("Fill received");
   console.log(exereport);
 
   processTrade(exereport);
@@ -939,7 +939,7 @@ function processTrade(exereport) {
 nbt.on("orderCancelReject", function(ordercancelreject) {
   var text = "";
 
-  console.log("Order cancel reject, order cancel request id:" + ordercancelreject.clordid);
+  console.log("Order cancel reject, order cancel request id: " + ordercancelreject.clordid);
   console.log(ordercancelreject);
 
   if ('text' in ordercancelreject) {
@@ -958,7 +958,7 @@ nbt.on("orderCancelReject", function(ordercancelreject) {
 });
 
 nbt.on("quote", function(quote, header) {
-  console.log("quote received from market");
+  console.log("Quote received from market");
   console.log(quote);
 
   // check to see if the quote may be a duplicate &, if it is, reject messages older than a limit
@@ -981,7 +981,7 @@ nbt.on("quote", function(quote, header) {
 // quote rejection
 //
 nbt.on("quoteack", function(quoteack) {
-  console.log("quote ack, request id " + quoteack.quoterequestid);
+  console.log("Quote ack received, request id: " + quoteack.quoterequestid);
   console.log(quoteack);
 
   db.eval(scriptQuoteAck, 1, "broker:" + quoteack.brokerid, quoteack.brokerid, quoteack.quoterequestid, quoteack.quoteackstatus, quoteack.quoterejectreasonid, quoteack.text, function(err, ret) {
@@ -997,12 +997,12 @@ nbt.on("quoteack", function(quoteack) {
 // todo: get fix message & inform client
 //
 nbt.on("reject", function(reject) {
-  console.log("Error: reject received");
+  console.log("Message reject received");
   console.log(reject);
 
   if ('sessionrejectreason' in reject) {
     var reasondesc = nbt.getSessionRejectReason(reject.sessionrejectreason);
-    console.log("Reason:" + reasondesc);
+    console.log("Reason: " + reasondesc);
   }
 });
 
@@ -1474,7 +1474,7 @@ function registerScripts() {
   /*
   * scriptneworder
   * params: 1=accountid, 2=brokerid, 3=clientid, 4=symbolid, 5=side, 6=quantity, 7=price, 8=ordertype, 9=markettype, 10=futsettdate, 11=quoteid, 12=currencyid, 13=currencyratetoorg, 14=currencyindtoorg, 15=timestamp, 16=timeinforce, 17=expiredate, 18=expiretime, 19=settlcurrencyid, 20=settlcurrfxrate, 21=settlcurrfxratecalc, 22=operatortype, 23=operatorid, 24=cashorderqty
-  * returns: orderid
+  * returns: {success 0=fail, errorcode, orderid} or {success 1=ok, orderid, ...}
   */
   scriptneworder = getclientaccountid + neworder + creditcheck + commonbo.newtrade + publishorder + getproquotequote + '\
   redis.log(redis.LOG_WARNING, "scriptneworder") \

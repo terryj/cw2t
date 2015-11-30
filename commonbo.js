@@ -935,21 +935,23 @@ exports.registerScripts = function () {
   /*
   * newtradeaccounttransaction()
   * create transaction & postings for the cash side of a trade
-  * params: amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype, timestamp in milliseconds
+  * params: amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, contraaccountid, note, rate, timestamp, tradeid, transactiontype, timestamp in milliseconds
   */
-  newtradeaccounttransaction = newtransaction + newposting + getbrokeraccountid + '\
-  local newtradeaccounttransaction = function(amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, note, rate, timestamp, tradeid, transactiontype, milliseconds) \
-    local clientcontrolaccountid = getbrokeraccountid(brokerid, currencyid, "clientcontrolaccount") \
+  newtradeaccounttransaction = newtransaction + newposting + '\
+  local newtradeaccounttransaction = function(amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, contraaccountid, note, rate, timestamp, tradeid, transactiontype, milliseconds) \
+    --[[ local clientcontrolaccountid = getbrokeraccountid(brokerid, currencyid, "clientcontrolaccount") ]] \
     local transactionid = newtransaction(amount, brokerid, currencyid, localamount, note, rate, "trade:" .. tradeid, timestamp, transactiontype) \
     if transactiontype == "TR" then \
       --[[ receipt from broker point of view ]] \
       newposting(clientaccountid, -amount, brokerid, -localamount, transactionid, milliseconds) \
-      newposting(clientcontrolaccountid, -amount, brokerid, -localamount, transactionid, milliseconds) \
+      --[[ newposting(clientcontrolaccountid, -amount, brokerid, -localamount, transactionid, milliseconds) ]] \
+      newposting(contraaccountid, amount, brokerid, localamount, transactionid, milliseconds) \
       newposting(nominalaccountid, amount, brokerid, localamount, transactionid, milliseconds) \
     else \
       --[[ pay from broker point of view ]] \
       newposting(clientaccountid, amount, brokerid, localamount, transactionid, milliseconds) \
-      newposting(clientcontrolaccountid, amount, brokerid, localamount, transactionid, milliseconds) \
+      --[[ newposting(clientcontrolaccountid, amount, brokerid, localamount, transactionid, milliseconds) ]] \
+      newposting(contraaccountid, -amount, brokerid, -localamount, transactionid, milliseconds) \
       newposting(nominalaccountid, -amount, brokerid, -localamount, transactionid, milliseconds) \
     end \
   end \
@@ -960,25 +962,54 @@ exports.registerScripts = function () {
   * cash side of a client trade
   * creates a separate transaction for the consideration & each of the cost items
   */
-  newtradeaccounttransactions = newtradeaccounttransaction + '\
-  local newtradeaccounttransactions = function(consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side, milliseconds) \
+  newtradeaccounttransactions = newtradeaccounttransaction + getbrokeraccountid + '\
+  local newtradeaccounttransactions = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side, milliseconds) \
     redis.log(redis.LOG_WARNING, "newtradeaccounttransactions") \
-    local nominaltradeaccountid = getbrokeraccountid(brokerid, currencyid, "nominaltradeaccount") \
-    local nominalcommissionaccountid = getbrokeraccountid(brokerid, currencyid, "nominalcommissionaccount") \
-    local nominalptmaccountid = getbrokeraccountid(brokerid, currencyid, "nominalptmaccount") \
-    local nominalstampdutyaccountid = getbrokeraccountid(brokerid, currencyid, "nominalstampdutyaccount") \
+    --[[ get broker/supplier accounts ]] \
+    local nominalconsiderationid = getbrokeraccountid(brokerid, currencyid, "nominalconsideration") \
+    local nominalcommissionid = getbrokeraccountid(brokerid, currencyid, "nominalcommission") \
+    local nominalptmid = getbrokeraccountid(brokerid, currencyid, "nominalptm") \
+    local nominalstampdutyid = getbrokeraccountid(brokerid, currencyid, "nominalstampduty") \
+    local brokertradingid = getbrokeraccountid(brokerid, currencyid, "brokertrading") \
+    local suppliercrestid = getbrokeraccountid(brokerid, currencyid, "suppliercrest") \
+    local supplierptmid = getbrokeraccountid(brokerid, currencyid, "supplierptm") \
     --[[ side determines pay / receive ]] \
     if tonumber(side) == 1 then \
       --[[ client buy, so cash received from broker point of view ]] \
-      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominaltradeaccountid, note, rate, timestamp, tradeid, "TR", milliseconds) \
+      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominalconsiderationid, suppliercrestid, note, rate, timestamp, tradeid, "TR", milliseconds) \
     else \
-      --[[ cash paid from broker point of view ]] \
-      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominaltradeaccountid, note, rate, timestamp, tradeid, "TP", milliseconds) \
+      --[[ client sell, so cash paid from broker point of view ]] \
+      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominalconsiderationid, suppliercrestid, note, rate, timestamp, tradeid, "TP", milliseconds) \
     end \
     --[[ broker always receives costs ]] \
-    newtradeaccounttransaction(commission, brokerid, clientaccountid, currencyid, commission, nominalcommissionaccountid, note .. " Commission", rate, timestamp, tradeid, "TR", milliseconds) \
-    newtradeaccounttransaction(ptmlevy, brokerid, clientaccountid, currencyid, ptmlevy, nominalptmaccountid, note .. " PTM Levy", rate, timestamp, tradeid, "TR", milliseconds) \
-    newtradeaccounttransaction(stampduty, brokerid, clientaccountid, currencyid, stampduty, nominalstampdutyaccountid, note .. " Stamp Duty", rate, timestamp, tradeid, "TR", milliseconds) \
+    if tonumber(commission) > 0 then \
+       newtradeaccounttransaction(commission, brokerid, clientaccountid, currencyid, commission, nominalcommissionid, brokertradingid, note .. " Commission", rate, timestamp, tradeid, "TR", milliseconds) \
+    end \
+    if tonumber(ptmlevy) > 0 then \
+       newtradeaccounttransaction(ptmlevy, brokerid, clientaccountid, currencyid, ptmlevy, nominalptmid, supplierptmid, note .. " PTM Levy", rate, timestamp, tradeid, "TR", milliseconds) \
+    end \
+    if tonumber(stampduty) > 0 then \
+       newtradeaccounttransaction(stampduty, brokerid, clientaccountid, currencyid, stampduty, nominalstampdutyid, suppliercrestid, note .. "Stamp Duty", rate, timestamp, tradeid, "TR", milliseconds) \
+    end \
+    if tonumber(contractcharge) > 0 then \
+       newtradeaccounttransaction(contractcharge, brokerid, clientaccountid, currencyid, contractcharge, nominalcommissionid, brokertradingid, note .. " Contract Charge", rate, timestamp, tradeid, "TR", milliseconds) \
+    end \
+    return 0 \
+  end \
+  ';
+
+  exports.newtradeaccounttransactions = newtradeaccounttransactions;
+
+  /*
+  * newpositiontransaction()
+       newtradeaccounttransaction(ptmlevy, brokerid, clientaccountid, currencyid, ptmlevy, nominalptmaccountid, supplierptmaccount, note .. " PTM Levy", rate, timestamp, tradeid, "TR", milliseconds) \
+    end \
+    if tonumber(stampduty) > 0 then \
+       newtradeaccounttransaction(stampduty, brokerid, clientaccountid, currencyid, stampduty, nominalstampdutyaccountid, suppliercrestaccount, note .. "Stamp Duty", rate, timestamp, tradeid, "TR", milliseconds) \
+    end \
+    if tonumber(contractcharge) > 0 then \
+       newtradeaccounttransaction(contractcharge, brokerid, clientaccountid, currencyid, contractcharge, nominalcontractchargeaccountid, brokercommissionaccount, note .. " Contract Charge", rate, timestamp, tradeid, "TR", milliseconds) \
+    end \
     return 0 \
   end \
   ';
@@ -1037,21 +1068,22 @@ exports.registerScripts = function () {
     local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
     if not tradeid then return 0 end \
     redis.call("hmset", brokerkey .. ":trade:" .. tradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "finance", finance, "tradesettlestatusid", 0) \
+    redis.call("sadd", brokerkey .. ":tradeid", "trade:" .. tradeid) \
     redis.call("sadd", brokerkey .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
-    local consideration \
+    local cost \
     local note \
     if tonumber(side) == 1 then \
-      consideration = settlcurramt \
+      cost = settlcurramt \
       note = "Bought " .. quantity .. " " .. symbolid .. " @ " .. price \
     else \
       quantity = -tonumber(quantity) \
-      consideration = -tonumber(settlcurramt) \
+      cost = -tonumber(settlcurramt) \
       note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
-    local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side, milliseconds) \
-    newpositiontransaction(accountid, brokerid, consideration, futsettdate, tradeid, 1, quantity, symbolid, timestamp, milliseconds) \
+    local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], costs[4], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side, milliseconds) \
+    newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, milliseconds) \
     publishtrade(brokerid, tradeid, 6) \
     return tradeid \
   end \
@@ -1124,6 +1156,22 @@ exports.registerScripts = function () {
   local tblresults = {} \
   local quoterequests = redis.call("sort", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":quoterequests", "DESC") \
   for index = 1, #quoterequests do \
+    local quoterequest = gethashvalues("broker:" .. ARGV[1] .. ":quoterequest:" .. quoterequests[index]) \
+    table.insert(tblresults, quoterequest) \
+  end \
+  return cjson.encode(tblresults) \
+  ';
+
+  /*
+  * scriptgetquotes
+  * get quotes for an account, most recent first
+  * params: accountid, brokerid
+  */
+  exports.scriptgetquotes = gethashvalues + '\
+  local tblresults = {} \
+  local quotes = redis.call("sort", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":quotes", "DESC") \
+  for index = 1, #quotes do \
+    local quote = gethashvalues("broker:" .. ARGV[1] .. ":quote:" .. quotes[index]) \
     local quoterequest = gethashvalues("broker:" .. ARGV[1] .. ":quoterequest:" .. quoterequests[index]) \
     table.insert(tblresults, quoterequest) \
   end \
@@ -1723,22 +1771,6 @@ exports.registerScripts = function () {
     --[[ get the relevant broker accounts ]] \
     local nominalcorporateactions = getbrokeraccountid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
     local bankfundsbroker = getbrokeraccountid(brokerid, symbol["currencyid"], "bankfundsbroker") \
-    if not nominalcorporateactions or not bankfundsbroker then \
-      return {1, 1027} \
-    end \
-    --[[ get all positions in the stock of the corporate action as at the ex date ]] \
-    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
-    for i = 1, #positions do \
-      --[[ only interested in long positions ]] \
-      if tonumber(positions[i]["quantity"]) > 0 then \
-        redis.log(redis.LOG_WARNING, "accountid") \
-        redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
-        redis.log(redis.LOG_WARNING, "quantity") \
-        redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
-        --[[ get shares due & any remainder ]] \
-        local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
-        if sharesdue[1] > 0 then \
-          --[[ update the position ]] \
           newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
         end \
         if sharesdue[2] > 0 then \
