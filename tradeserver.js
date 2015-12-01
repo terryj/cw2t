@@ -146,11 +146,7 @@ nbt.on('finished', function(message) {
     console.log(message);
 });
 nbt.on("initialised", function() {
-   if (testmode == 0) {
-      connectToTrading();
-   } else {
-      console.log("Not trying to connect to market - to try, exit & set testmode=0");
-   }
+   connectToTrading();
 });
 
 function connectToTrading() {
