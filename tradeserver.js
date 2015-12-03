@@ -396,29 +396,25 @@ function newOrder(order) {
     order.cashorderqty = "";
   }
 
-  // always put a price in the order
   if (!("price" in order)) {
     order.price = "";
   }
 
-  // always have a quote id
-  // todo: not if not quoted order
   if (!("quoteid" in order)) {
     order.quoteid = "";
   }
 
-  // get settlement date from T+n no. of days if not specified
-  if (!('futsettdate' in order) || order.futsettdate == "") {
-    order.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, nosettdays, holidays));
+  // if there is no settlement type, set to regular
+  if (!("settlmnttypid" in order)) {
+    order.settlmnttypid = 0;
   }
 
-  if (order.ordertype == "D") {
-    order.settlmnttypid = 6;
-  } else {
-    // if there is no settlement type, set to standard
-    if (!("settlmnttypid" in order)) {
-      order.settlmnttypid = 0;
-    }
+  // get settlement date from T+n no. of days if not specified
+  // commonbo.getUTCDateString(commonbo.getSettDate(today, nosettdays, holidays));
+
+  // we are not setting a settlement date, just making sure there is one
+  if (!('futsettdate' in order)) {
+    order.futsettdate = "";
   }
 
   if (!('expiredate' in order)) {
