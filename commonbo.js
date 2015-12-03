@@ -1072,6 +1072,8 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
+    --[[ add a system wide set for CREST ]] \
+    redis.call("sadd", "unsettledtrades", tradeid) \
     local cost \
     local note \
     if tonumber(side) == 1 then \
