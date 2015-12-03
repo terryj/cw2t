@@ -1,4 +1,4 @@
-/****************
+****************
 * tradeserver.js
 * Front-office trading server
 * Cantwaittotrade Limited
@@ -412,9 +412,13 @@ function newOrder(order) {
   // get settlement date from T+n no. of days if not specified
   // commonbo.getUTCDateString(commonbo.getSettDate(today, nosettdays, holidays));
 
-  // we are not setting a settlement date, just making sure there is one
-  if (!('futsettdate' in order)) {
+  if (parseInt(order.settlmnttypid) != 6 && parseInt(order.settlmnttypid) != 8) {
     order.futsettdate = "";
+  } else {
+    // we are not setting a settlement date, just making sure there is one
+    if (!('futsettdate' in order)) {
+      order.futsettdate = "";
+    }
   }
 
   if (!('expiredate' in order)) {
