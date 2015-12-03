@@ -1,4 +1,4 @@
-****************
+/****************
 * tradeserver.js
 * Front-office trading server
 * Cantwaittotrade Limited
