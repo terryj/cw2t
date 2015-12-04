@@ -409,7 +409,7 @@ function newOrder(order) {
 * process an order based on a quote
 */
 function dealAtQuote(order) {
-  db.eval(scriptdealatquote, 1, "broker:" + order.brokerid, order.brokerid, order.ordertype, order.markettype, order.quoteid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforce, order.settlcurrfxrate, order.settlcurrfxratecalc, order.operatortype, order.operatorid, order.settlmnttypid, function(err, ret) {
+  db.eval(scriptdealatquote, 1, "broker:" + order.brokerid, order.brokerid, order.ordertype, order.markettype, order.quoteid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforce, order.settlcurrfxrate, order.settlcurrfxratecalc, order.operatortype, order.operatorid, function(err, ret) {
     if (err) throw err;
 
     // error check
@@ -430,6 +430,8 @@ function dealAtQuote(order) {
     order.hedgeorderid = ret[7];
     order.externalquoteid = ret[8];
     order.quoterid = ret[9];
+    order.futsettdate = ret[10];
+    order.settlmnttypid = ret[11];
 
     processOrder(order);
   });
@@ -1515,7 +1517,7 @@ function registerScripts() {
   * scriptdealatquote
   * place an order based on a quote
   * params:
-  * returns: brokerid, ordertype, markettype, quoteid, currencyratetoorg, currencyindtoorg, timestamp, timeinforce, settlcurrfxrate, settlcurrfxratecalc, operatortype, operatorid, settlmnttypid
+  * returns: brokerid, ordertype, markettype, quoteid, currencyratetoorg, currencyindtoorg, timestamp, timeinforce, settlcurrfxrate, settlcurrfxratecalc, operatortype, operatorid
   */ 
   scriptdealatquote = newordersingle + '\
   redis.log(redis.LOG_WARNING, "scriptdealatquote") \
@@ -1532,10 +1534,13 @@ function registerScripts() {
     quantity = quote["bidquantity"] \
     price = quote["bidpx"] \
   end \
-  local retval = newordersingle(quote["accountid"], ARGV[1], quote["clientid"], quote["symbolid"], side, quantity, price, ARGV[2], ARGV[3], quote["futsettdate"], ARGV[4], quote["currencyid"], ARGV[5], ARGV[6], ARGV[7], 0, ARGV[8], "", "", quote["settlcurrencyid"], ARGV[9], ARGV[10], "", "", ARGV[11], ARGV[12], "", quote["cashorderqty"], ARGV[13]) \
+  --[[ note: we store & forward settlement vales from the quote, which may be different from those of the quote request ]] \
+  local retval = newordersingle(quote["accountid"], ARGV[1], quote["clientid"], quote["symbolid"], side, quantity, price, ARGV[2], ARGV[3], quote["futsettdate"], ARGV[4], quote["currencyid"], ARGV[5], ARGV[6], ARGV[7], 0, ARGV[8], "", "", quote["settlcurrencyid"], ARGV[9], ARGV[10], "", "", ARGV[11], ARGV[12], "", quote["cashorderqty"], quote["settlmnttypid"]) \
   --[[ add required values for external feed ]] \
   table.insert(retval, quote["externalquoteid"]) \
   table.insert(retval, quote["quoterid"]) \
+  table.insert(retval, quote["futsettdate"]) \
+  table.insert(retval, quote["settlmnttypid"]) \
   return retval \
   ';
 
