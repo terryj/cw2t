@@ -258,6 +258,12 @@ exports.registerScripts = function () {
     case 1031:
       desc = "Currency not found";
       break;
+    case 1032:
+      desc = "Principle client account required for derivative products";
+      break;
+    case 1033:
+      desc = "Cannot calculate a consideration";
+      break;
     default:
       desc = "Unknown reason";
     }

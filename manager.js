@@ -224,7 +224,7 @@ function listen() {
     //testSupplierFundsTransfer();
     //testPositionPostings();
     //testStatement();
-    //testOrder(1);
+    testOrder(1);
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
@@ -1948,10 +1948,10 @@ function testOrder(userid) {
   order.accountid = 1;
   order.clientid = 1;
   order.side = 1;
-  order.symbolid = 'BARC.L';
-  order.quantity = '';
-  //order.price = '1.25';
-  order.cashorderqty = 500;
+  order.symbolid = 'BARC.L.CFD';
+  order.quantity = 100;
+  order.price = '1.25';
+  order.cashorderqty = '';//500;
   order.currencyid = 'GBP';
   order.ordertype = 1;
   order.settlcurrencyid = 'GBP';
@@ -1960,6 +1960,7 @@ function testOrder(userid) {
   order.expiredate = "";
   order.expiretime = "";
   order.settlmnttypid = 0;
+  order.quoteid = "";
 
   orderReceived(order, userid);
 }
@@ -2263,7 +2264,7 @@ function registerScripts() {
   //
   scriptgetinst = '\
   local symbols = redis.call("sort", "symbols", "ALPHA") \
-  local fields = {"instrumenttypeid", "shortname", "currencyid", "marginpercent", "exchangeid", "isin", "hedge", "ptmexempt"} \
+  local fields = {"instrumenttypeid", "shortname", "currencyid", "exchangeid", "isin", "hedge", "ptmexempt"} \
   local vals \
   local inst = {} \
   local marginpc \
@@ -2275,7 +2276,7 @@ function registerScripts() {
       else \
         marginpc = 100 \
       end \
-      table.insert(inst, {symbolid = symbols[index], shortname = vals[2], currencyid = vals[3], instrumenttypeid = vals[1], marginpercent = marginpc, exchangeid = vals[5], isin = vals[6], hedge = vals[7], ptmexempt=vals[8]}) \
+      table.insert(inst, {symbolid = symbols[index], shortname = vals[2], currencyid = vals[3], instrumenttypeid = vals[1], exchangeid = vals[5], isin = vals[6], hedge = vals[7], ptmexempt=vals[8]}) \
     end \
   end \
   return cjson.encode(inst) \
