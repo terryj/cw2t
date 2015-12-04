@@ -116,6 +116,51 @@ exports.registerScripts = function () {
 
   exports.getSeconds = getSeconds;
 
+  /*
+  * Convert dd-mmm-yyyy to FIX date format 'yyyymmdd'
+  */
+  function getFixDate(date) {
+    var month;
+
+    var day = date.substr(0,2);
+    var monthstr = date.substr(3,3);
+    var year = date.substr(7,4);
+
+    if (monthstr == "Jan") {
+      month = "1";
+    } else if (monthstr == "Feb") {
+      month = "2";
+    } else if (monthstr == "Mar") {
+      month = "3";
+    } else if (monthstr == "Apr") {
+      month = "4";
+    } else if (monthstr == "May") {
+      month = "5";
+    } else if (monthstr == "Jun") {
+      month = "6";
+    } else if (monthstr == "Jul") {
+      month = "7";
+    } else if (monthstr == "Aug") {
+      month = "8";
+    } else if (monthstr == "Sep") {
+      month = "9";
+    } else if (monthstr == "Oct") {
+      month = "10";
+    } else if (monthstr == "Nov") {
+      month = "11";
+    } else if (monthstr == "Dec") {
+      month = "12";
+    }
+
+    if (month.length == 1) {
+      month = "0" + month;
+    }
+
+    return year + month + day;
+  }
+
+  exports.getFixDate = getFixDate;
+
   function getReasonDesc(reason) {
     var desc;
 

@@ -174,6 +174,9 @@ function quoteInterval() {
   });
 }
 
+/*
+* Recieve a quote request
+*/
 function quoteRequest(quoterequest) {
   console.log("Quoterequest received");
   console.log(quoterequest);
@@ -238,9 +241,9 @@ function quoteRequest(quoterequest) {
   });
 }
 
-//
-// just testing
-//
+/*
+* Send a test quote
+*/
 function testQuoteResponse(quoterequest) {
   if (quoterequest.quantity == 99) {
     testQuoteAck(quoterequest);
@@ -256,9 +259,9 @@ function testQuoteResponse(quoterequest) {
   }
 }
 
-//
-// publish a test quote rejection
-//
+/*
+* Publish a test quote rejection
+*/
 function testQuoteAck(quoterequest) {
   console.log("Publishing a testQuoteAck");
   var quoteack = {};
@@ -279,7 +282,6 @@ function testQuoteAck(quoterequest) {
 }
 
 /*
-* testQuote()
 * Send a test quote
 */
 function testQuote(quoterequest, side) {
@@ -335,50 +337,6 @@ function testQuote(quoterequest, side) {
 }
 
 /*
-// Convert dd-mmm-yyyy to FIX date format 'yyyymmdd'
-*/
-function getFixDate(date) {
-  var month;
-
-  var day = date.substr(0,2);
-  var monthstr = date.substr(3,3);
-  var year = date.substr(7,4);
-
-  if (monthstr == "Jan") {
-    month = "1";
-  } else if (monthstr == "Feb") {
-    month = "2";
-  } else if (monthstr == "Mar") {
-    month = "3";
-  } else if (monthstr == "Apr") {
-    month = "4";
-  } else if (monthstr == "May") {
-    month = "5";
-  } else if (monthstr == "Jun") {
-    month = "6";
-  } else if (monthstr == "Jul") {
-    month = "7";
-  } else if (monthstr == "Aug") {
-    month = "8";
-  } else if (monthstr == "Sep") {
-    month = "9";
-  } else if (monthstr == "Oct") {
-    month = "10";
-  } else if (monthstr == "Nov") {
-    month = "11";
-  } else if (monthstr == "Dec") {
-    month = "12";
-  }
-
-  if (month.length == 1) {
-    month = "0" + month;
-  }
-
-  return year + month + day;
-}
-
-/*
-* newOrder()
 * Receive an order message
 */
 function newOrder(order) {
@@ -405,8 +363,7 @@ function newOrder(order) {
 }
 
 /*
-* dealAtQuote()
-* process an order based on a quote
+* Process an order based on a quote
 */
 function dealAtQuote(order) {
   db.eval(scriptdealatquote, 1, "broker:" + order.brokerid, order.brokerid, order.ordertype, order.markettype, order.quoteid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforce, order.settlcurrfxrate, order.settlcurrfxratecalc, order.operatortype, order.operatorid, function(err, ret) {
@@ -438,8 +395,7 @@ function dealAtQuote(order) {
 }
 
 /*
-* newOrderSingle()
-* process a regular order
+* Process a regular order
 */
 function newOrderSingle(order) {
   if (!("accountid" in order)) {
@@ -503,8 +459,7 @@ function newOrderSingle(order) {
 }
 
 /*
-* processOrder()
-* either forward or attempt to match the order, depending on the type of instrument & type of market
+* Either forward an order to the market or generate a test response, depending on the type of instrument & market
 */
 function processOrder(order) {
   // equity orders
@@ -537,7 +492,6 @@ function processOrder(order) {
 }
 
 /*
-* testTradeResponse()
 * Send a test response to an order
 */
 function testTradeResponse(order) {
@@ -668,6 +622,9 @@ function loadHolidays() {
   });
 }
 
+/*
+* Determine whether or not we are in test mode
+*/
 function getTestmode() {
   db.get("testmode", function(err, tm) {
     if (err) {
@@ -681,7 +638,9 @@ function getTestmode() {
   });
 }
 
-// quote received
+/*
+* A quote has been received
+*/
 function newQuote(quote) {
   if (!('bidpx' in quote)) {
     quote.bidpx = "";
@@ -761,6 +720,9 @@ function newQuote(quote) {
   });
 }
 
+/*
+* Order rejection reveived from the market
+*/
 nbt.on("orderReject", function(exereport) {
   var text = "";
   var orderrejectreasonid = "";
@@ -793,9 +755,9 @@ nbt.on("orderReject", function(exereport) {
   });
 });
 
-//
-// Limit order acknowledgement
-//
+/*
+* A Limit order acknowledgement has been received from the market
+*/
 nbt.on("orderAck", function(exereport) {
   var text = "";
   console.log("Order acknowledged, id: " + exereport.clordid);
@@ -813,6 +775,9 @@ nbt.on("orderAck", function(exereport) {
   });
 });
 
+/*
+* An order has been cancelled in the market
+*/
 nbt.on("orderCancel", function(exereport) {
   console.log("Order cancelled externally, ordercancelrequest id: " + exereport.clordid);
 
@@ -830,6 +795,9 @@ nbt.on("orderCancel", function(exereport) {
   });
 });
 
+/*
+* An order has expired
+*/
 nbt.on("orderExpired", function(exereport) {
   console.log(exereport);
   console.log("Order expired, id: " + exereport.clordid);
@@ -851,7 +819,9 @@ nbt.on("orderExpired", function(exereport) {
   });
 });
 
-// fill received from market
+/*
+* A fill has been received from the market
+*/
 nbt.on("orderFill", function(exereport) {
   console.log("Fill received");
   console.log(exereport);
@@ -859,6 +829,9 @@ nbt.on("orderFill", function(exereport) {
   processTrade(exereport);
 });
 
+/*
+* Store & process a trade
+*/
 function processTrade(exereport) {
   var currencyratetoorg = 1; // product currency rate back to org 
   var currencyindtoorg = 1;
@@ -914,9 +887,9 @@ function processTrade(exereport) {
   });
 }
 
-//
-// ordercancelrequest rejected
-//
+/*
+* An ordercancel request has been rejected
+*/
 nbt.on("orderCancelReject", function(ordercancelreject) {
   var text = "";
 
@@ -938,6 +911,9 @@ nbt.on("orderCancelReject", function(ordercancelreject) {
   });
 });
 
+/*
+* A quote has been received from the market
+*/
 nbt.on("quote", function(quote, header) {
   console.log("Quote received from market");
   console.log(quote);
@@ -958,9 +934,9 @@ nbt.on("quote", function(quote, header) {
   newQuote(quote);
 });
 
-//
-// quote rejection
-//
+/*
+* A quote request has been rejected
+*/
 nbt.on("quoteack", function(quoteack) {
   console.log("Quote ack received, request id: " + quoteack.quoterequestid);
   console.log(quoteack);
@@ -1408,7 +1384,7 @@ function registerScripts() {
 
   /*
   * neworder()
-  * gets an orderid & saves the order
+  * gets the next orderid for a broker & saves the order
   */
   neworder = '\
   local neworder = function(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid, cashorderqty, settlmnttypid) \
@@ -1430,8 +1406,10 @@ function registerScripts() {
   end \
   ';
 
-//    redis.call("hmset", brokerkey .. ":order:" .. orderid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "ordertype", ordertype, "leavesqty", quantity, "orderstatusid", 0, "markettype", markettype, "futsettdate", futsettdate, "quoteid", quoteid, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "timestamp", timestamp, "margin", margin, "timeinforce", timeinforce, "expiredate", expiredate, "expiretime", expiretime, "settlcurrencyid", settlcurrencyid, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "orderid", orderid, "externalorderid", externalorderid, "execid", execid, "operatortype", operatortype, "operatorid", operatorid, "hedgeorderid", hedgeorderid, "orderrejectreasonid", "", "text", "", "cashorderqty", cashorderqty) \
-
+  /*
+  * reverseside()
+  * function to reverse a side
+  */
   reverseside = '\
   local reverseside = function(side) \
     local rside \
