@@ -1003,36 +1003,36 @@ function registerScripts() {
     local contractcharge = 0 \
     local brokerkey = "broker:" .. brokerid \
     local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
-    --[[ see if there is a commission percentage for the client - this will override the standard one ]] \
+    --[[ use a commission percentage for this client if there is one ]] \
     local commpercent = redis.call("hget", brokerkey .. ":client:" .. clientid, "commissionpercent") \
     if not commpercent or commpercent == "" then \
       commpercent = 0 \
     else \
       commpercent = tonumber(commpercent) \
+      commission = round(consid * commpercent / 100, 2) \
     end \
     --[[ get costs for this instrument type & currency - will be set to zero if not found ]] \
     local costid = redis.call("get", brokerkey .. ":cost:" .. instrumenttypeid .. ":" .. currencyid) \
     if costid then \
       local costs = gethashvalues(brokerkey .. ":cost:" .. costid) \
       --[[ commission ]] \
-      --[[ use client commission rate, if there is one ]] \
-      if commpercent == 0 then \
-        --[[ otherwise use standard commission rate ]] \
+      if commission == 0 then \
+        --[[ use standard commission rate ]] \
         if costs["commissionpercent"] then commpercent = tonumber(costs["commissionpercent"]) end \
-      end \
-      commission = round(consid * commpercent / 100, 2) \
-      --[[ check commission against min commission ]] \
-      if costs["commissionmin"] and costs["commissionmin"] ~= "" then \
-        local mincommission = tonumber(costs["commissionmin"]) \
-        if commission < mincommission then \
-          commission = mincommission \
+        commission = round(consid * commpercent / 100, 2) \
+        --[[ check commission against min commission ]] \
+        if costs["commissionmin"] and costs["commissionmin"] ~= "" then \
+          local mincommission = tonumber(costs["commissionmin"]) \
+          if commission < mincommission then \
+            commission = mincommission \
+          end \
         end \
-      end \
-      --[[ check commission against max commission ]] \
-      if costs["commissionmax"] and costs["commissionmax"] ~= "" then \
-        local maxcommission = tonumber(costs["commissionmax"]) \
-        if commission > maxcommission then \
-          commission = maxcommission \
+        --[[ check commission against max commission ]] \
+        if costs["commissionmax"] and costs["commissionmax"] ~= "" then \
+          local maxcommission = tonumber(costs["commissionmax"]) \
+          if commission > maxcommission then \
+            commission = maxcommission \
+          end \
         end \
       end \
       --[[ ptm levy ]] \
