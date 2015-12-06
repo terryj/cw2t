@@ -1003,17 +1003,18 @@ function registerScripts() {
     local contractcharge = 0 \
     local brokerkey = "broker:" .. brokerid \
     local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
+    --[[ see if there is a commission percentage for the client - this will override the standard one ]] \
+    local commpercent = redis.call("hget", brokerkey .. ":client:" .. clientid, "commissionpercent") \
+    if not commpercent or commpercent == "" then \
+      commpercent = 0 \
+    else \
+      commpercent = tonumber(commpercent) \
+    end \
     --[[ get costs for this instrument type & currency - will be set to zero if not found ]] \
     local costid = redis.call("get", brokerkey .. ":cost:" .. instrumenttypeid .. ":" .. currencyid) \
     if costid then \
       local costs = gethashvalues(brokerkey .. ":cost:" .. costid) \
       --[[ commission ]] \
-      local commpercent = redis.call("hget", brokerkey .. ":client:" .. clientid, "commissionpercent") \
-      if not commpercent or commpercent == "" then \
-        commpercent = 0 \
-      else \
-        commpercent = tonumber(commpercent) \
-      end \
       --[[ use client commission rate, if there is one ]] \
       if commpercent == 0 then \
         --[[ otherwise use standard commission rate ]] \
