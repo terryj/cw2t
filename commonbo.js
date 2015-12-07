@@ -1225,22 +1225,6 @@ exports.registerScripts = function () {
   local quotes = redis.call("sort", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":quotes", "DESC") \
   for index = 1, #quotes do \
     local quote = gethashvalues("broker:" .. ARGV[1] .. ":quote:" .. quotes[index]) \
-    local quoterequest = gethashvalues("broker:" .. ARGV[1] .. ":quoterequest:" .. quoterequests[index]) \
-    table.insert(tblresults, quoterequest) \
-  end \
-  return cjson.encode(tblresults) \
-  ';
-
-  /*
-  * scriptgetquotes
-  * get quotes for an account, most recent first
-  * params: accountid, brokerid
-  */
-  exports.scriptgetquotes = gethashvalues + '\
-  local tblresults = {} \
-  local quotes = redis.call("sort", "broker:" .. ARGV[1] .. ":account:" .. ARGV[2] .. ":quotes", "DESC") \
-  for index = 1, #quotes do \
-    local quote = gethashvalues("broker:" .. ARGV[1] .. ":quote:" .. quotes[index]) \
     table.insert(tblresults, quote) \
   end \
   return cjson.encode(tblresults) \
