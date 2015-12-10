@@ -9,7 +9,7 @@
 * Real-time partial record i.e. "publish 7 rp:BARC.L"
 * Real-time full record i.e. "publish 7 rf:BARC.L"
 * Snap full record i.e. "publish 7 snap:L.B***"
-****************/
+*****************/
 
 // node libraries
 var net = require('net');
@@ -50,8 +50,6 @@ if (redislocal) {
   redispassword = "4dfeb4b84dbb9ce73f4dd0102cc7707a";
 }
 
-// redis scripts
-
 // set-up a redis client
 db = redis.createClient(redisport, redishost);
 if (redisauth) {
@@ -86,6 +84,7 @@ function initialise() {
   commonbo.registerScripts();
   registerScripts();
   pubsub();
+  start();
 }
 
 // pubsub connections
@@ -131,6 +130,14 @@ function tryToConnect() {
 
   conn.on('error', function(error) {
     console.log(error);
+  });
+}
+
+function start() {
+  console.log("subcribing to positions");
+
+  db.eval(commonbo.scriptgetpositions, 0, function(err, ret) {
+    if (err) throw err;
   });
 }
 

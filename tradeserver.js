@@ -392,6 +392,9 @@ console.log(ret);
     order.quoterid = ret[9];
     order.futsettdate = ret[10];
     order.settlmnttypid = ret[11];
+    order.side = ret[12];
+    order.quantity = ret[13];
+    order.price = ret[14];
 
     processOrder(order);
   });
@@ -1514,6 +1517,9 @@ function registerScripts() {
   table.insert(retval, quote["quoterid"]) \
   table.insert(retval, quote["futsettdate"]) \
   table.insert(retval, quote["settlmnttypid"]) \
+  table.insert(retval, side) \
+  table.insert(retval, quantity) \
+  table.insert(retval, price) \
   return retval \
   ';
 

@@ -224,7 +224,7 @@ function listen() {
     //testSupplierFundsTransfer();
     //testPositionPostings();
     //testStatement();
-    testOrder(1);
+    //testOrder(1);
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
@@ -1973,7 +1973,14 @@ function orderReceived(order, userid) {
   order.operatortype = operatortype;
   order.operatorid = userid;
 
-  db.publish(commonbo.tradeserverchannel, "{\"order\":" + JSON.stringify(order) + "}");
+  var testorder = {};
+  testorder.quoteid = order.quoteid;
+  testorder.brokerid = brokerid;
+  testorder.operatortype = operatortype;
+  testorder.operatorid = userid;
+  testorder.ordertype = 'D';
+
+  db.publish(commonbo.tradeserverchannel, "{\"order\":" + JSON.stringify(testorder) + "}");
 }
 
 function testStatement() {
