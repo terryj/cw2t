@@ -371,7 +371,7 @@ function newOrder(order) {
 function dealAtQuote(order) {
   db.eval(scriptdealatquote, 1, "broker:" + order.brokerid, order.brokerid, order.ordertype, order.markettype, order.quoteid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforce, order.settlcurrfxrate, order.settlcurrfxratecalc, order.operatortype, order.operatorid, order.timestampms, function(err, ret) {
     if (err) throw err;
-console.log(ret);
+
     // error check
     if (ret[0] == 0) {
       console.log("Error in scriptdealatquote, order #" + ret[2] + " - " + commonbo.getReasonDesc(ret[1]));
@@ -395,6 +395,11 @@ console.log(ret);
     order.side = ret[12];
     order.quantity = ret[13];
     order.price = ret[14];
+    order.currencyid = ret[15];
+    order.settlcurrencyid = ret[16];
+    order.accountid = ret[17];
+    order.clientid = ret[18];
+    order.symbolid = ret[19];
 
     processOrder(order);
   });
@@ -468,6 +473,8 @@ function newOrderSingle(order) {
 * Either forward an order to the market or generate a test response, depending on the type of instrument & market
 */
 function processOrder(order) {
+console.log("process order");
+console.log(order);
   // equity orders
   if (order.instrumenttypeid == "DE" || order.instrumenttypeid == "IE") {
     if (testmode == 1) {
@@ -1520,6 +1527,11 @@ function registerScripts() {
   table.insert(retval, side) \
   table.insert(retval, quantity) \
   table.insert(retval, price) \
+  table.insert(retval, quote["currencyid"]) \
+  table.insert(retval, quote["settlcurrencyid"]) \
+  table.insert(retval, quote["accountid"]) \
+  table.insert(retval, quote["clientid"]) \
+  table.insert(retval, quote["symbolid"]) \
   return retval \
   ';
 
