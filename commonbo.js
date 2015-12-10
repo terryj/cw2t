@@ -1790,6 +1790,22 @@ exports.registerScripts = function () {
     --[[ get the relevant broker accounts ]] \
     local nominalcorporateactions = getbrokeraccountid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
     local bankfundsbroker = getbrokeraccountid(brokerid, symbol["currencyid"], "bankfundsbroker") \
+    if not nominalcorporateactions or not bankfundsbroker then \
+      return {1, 1027} \
+    end \
+    --[[ get all positions in the stock of the corporate action as at the ex date ]] \
+    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
+    for i = 1, #positions do \
+      --[[ only interested in long positions ]] \
+      if tonumber(positions[i]["quantity"]) > 0 then \
+        redis.log(redis.LOG_WARNING, "accountid") \
+        redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
+        redis.log(redis.LOG_WARNING, "quantity") \
+        redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
+        --[[ get shares due & any remainder ]] \
+        local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
+        if sharesdue[1] > 0 then \
+          --[[ update the position ]] \
           newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
         end \
         if sharesdue[2] > 0 then \
