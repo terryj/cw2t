@@ -1053,22 +1053,6 @@ exports.registerScripts = function () {
 
   /*
   * newpositiontransaction()
-       newtradeaccounttransaction(ptmlevy, brokerid, clientaccountid, currencyid, ptmlevy, nominalptmaccountid, supplierptmaccount, note .. " PTM Levy", rate, timestamp, tradeid, "TR", milliseconds) \
-    end \
-    if tonumber(stampduty) > 0 then \
-       newtradeaccounttransaction(stampduty, brokerid, clientaccountid, currencyid, stampduty, nominalstampdutyaccountid, suppliercrestaccount, note .. "Stamp Duty", rate, timestamp, tradeid, "TR", milliseconds) \
-    end \
-    if tonumber(contractcharge) > 0 then \
-       newtradeaccounttransaction(contractcharge, brokerid, clientaccountid, currencyid, contractcharge, nominalcontractchargeaccountid, brokercommissionaccount, note .. " Contract Charge", rate, timestamp, tradeid, "TR", milliseconds) \
-    end \
-    return 0 \
-  end \
-  ';
-
-  exports.newtradeaccounttransactions = newtradeaccounttransactions;
-
-  /*
-  * newpositiontransaction()
   * a transaction to either create or update a position and create a position posting
   */
   newpositiontransaction = getpositionid + newposition + updateposition + newpositionposting + '\
@@ -1125,6 +1109,7 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
     --[[ add to a system wide list for CREST ]] \
     redis.call("rpush", "unsettledtrades", brokerid .. ":" .. tradeid) \
+    redis.call("rpush", "contractnotes", brokerid .. ":" .. tradeid) \
     local cost \
     local note \
     if tonumber(side) == 1 then \
@@ -1344,7 +1329,6 @@ exports.registerScripts = function () {
     if not currencyid then \
       return {1, 1031} \
     end \
-    local controlclientaccountid = getbrokeraccountid(ARGV[3], currencyid, "controlclient") \
     local amount \
     local localamount \
     if ARGV[10] == "CD" then \
@@ -1357,8 +1341,6 @@ exports.registerScripts = function () {
     local transactionid = newtransaction(ARGV[1], ARGV[3], currencyid, ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10]) \
     --[[ update client account ]] \
     newposting(ARGV[4], amount, ARGV[3], localamount, transactionid, ARGV[11]) \
-    --[[ client control account ]] \
-    newposting(controlclientaccountid, amount, ARGV[3], localamount, transactionid, ARGV[11]) \
     --[[ update bank account ]] \
     newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[11]) \
     return {0} \
