@@ -508,6 +508,18 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * getaccountbalanceuncleared()
+  * params: accountid, brokerid
+  * returns: uncleared account balance
+  */
+  getaccountbalanceuncleared = '\
+  local getaccountbalanceuncleared = function(accountid, brokerid) \
+    local accountbalanceuncleared = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid, "balanceuncleared") \
+    return accountbalanceuncleared \
+  end \
+  ';
+
+  /*
   * updateaccountbalance()
   * updates account balance & local currency balance
   * amount & localamount can be -ve
@@ -522,25 +534,26 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * getclientfromaccount()
-  * get a client from an account
-  * params: accountid, brokerid
-  * returns: clientid
+  * updateaccountbalanceuncleared()
+  * updates account balance & local currency balance
+  * amount & localamount can be -ve
   */
-  getclientfromaccount = '\
-  local getclientfromaccount = function(accountid, brokerid) \
-    local clientid = redis.call("get", "broker:" .. brokerid .. ":account:" .. accountid .. ":client") \
-    return clientid \
+  updateaccountbalanceuncleared = '\
+  local updateaccountbalanceuncleared = function(accountid, amount, brokerid, localamount) \
+    redis.log(redis.LOG_DEBUG, "updateaccountbalance") \
+    local accountkey = "broker:" .. brokerid .. ":account:" .. accountid \
+    redis.call("hincrbyfloat", accountkey, "balanceuncleared", amount) \
+    redis.call("hincrbyfloat", accountkey, "localbalanceuncleared", localamount) \
   end \
   ';
 
   /*
   * newposting()
   * creates a posting record & updates balances for an account
-  * params: accountid, amount, brokerid, localamount, transactionid, timestamp in milliseconds
+  * params: accountid, amount, brokerid, localamount, transactionid, timestamp in millisecond, transactiontypeid
   */
-  newposting = updateaccountbalance + '\
-  local newposting = function(accountid, amount, brokerid, localamount, transactionid, milliseconds) \
+  newposting = updateaccountbalance + updateaccountbalanceuncleared + '\
+  local newposting = function(accountid, amount, brokerid, localamount, transactionid, milliseconds, transactiontypeid) \
     local brokerkey = "broker:" .. brokerid \
     local postingid = redis.call("hincrby", brokerkey, "lastpostingid", 1) \
     redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", amount, "localamount", localamount, "postingid", postingid, "transactionid", transactionid) \
@@ -550,7 +563,12 @@ exports.registerScripts = function () {
     redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", milliseconds, postingid) \
     redis.call("sadd", brokerkey .. ":postings", postingid) \
     redis.call("sadd", brokerkey .. ":postingid", "posting:" .. postingid) \
-    updateaccountbalance(accountid, amount, brokerid, localamount) \
+    --[[ either update cleared or uncleared balances based on type ]] \
+    if transactiontypeid == "CC" then \
+      updateaccountbalanceuncleared(accountid, amount, brokerid, localamount) \
+    else \
+      updateaccountbalance(accountid, amount, brokerid, localamount) \
+    end \
   return postingid \
   end \
   ';
@@ -608,22 +626,15 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * newposition()
-  * create a new position
-  * params: accountid, brokerid, cost, futsettdate, quantity, symbolid
-  * returns: positionid
+  * getclientfromaccount()
+  * get a client from an account
+  * params: accountid, brokerid
+  * returns: clientid
   */
-  newposition = setsymbolkey + '\
-  local newposition = function(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
-    redis.log(redis.LOG_WARNING, "newposition") \
-    local brokerkey = "broker:" .. brokerid \
-    local positionid = redis.call("hincrby", brokerkey, "lastpositionid", 1) \
-    redis.call("hmset", brokerkey .. ":position:" .. positionid, "brokerid", brokerid, "accountid", accountid, "symbolid", symbolid, "quantity", quantity, "cost", cost, "positionid", positionid, "futsettdate", futsettdate) \
-    setsymbolkey(accountid, brokerid, futsettdate, positionid, symbolid) \
-    redis.call("sadd", brokerkey .. ":positions", positionid) \
-    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":positions", positionid) \
-    redis.call("sadd", brokerkey .. ":positionid", "position:" .. positionid) \
-    return positionid \
+  getclientfromaccount = '\
+  local getclientfromaccount = function(accountid, brokerid) \
+    local clientid = redis.call("get", "broker:" .. brokerid .. ":account:" .. accountid .. ":client") \
+    return clientid \
   end \
   ';
 
@@ -645,8 +656,6 @@ exports.registerScripts = function () {
   end \
   ';
 
-  exports.getposition = getposition;
-
   /*
   * publishposition()
   * publish a position
@@ -654,11 +663,33 @@ exports.registerScripts = function () {
   */
   publishposition = getposition + '\
   local publishposition = function(brokerid, positionid, channel) \
-    redis.log(redis.LOG_WARNING, "publishposition") \
     local position = getposition(brokerid, positionid) \
     redis.call("publish", channel, "{" .. cjson.encode("position") .. ":" .. cjson.encode(position) .. "}") \
   end \
   ';
+
+  /*
+  * newposition()
+  * create a new position
+  * params: accountid, brokerid, cost, futsettdate, quantity, symbolid
+  * returns: positionid
+  */
+  newposition = setsymbolkey + publishposition + '\
+  local newposition = function(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
+    redis.log(redis.LOG_WARNING, "newposition") \
+    local brokerkey = "broker:" .. brokerid \
+    local positionid = redis.call("hincrby", brokerkey, "lastpositionid", 1) \
+    redis.call("hmset", brokerkey .. ":position:" .. positionid, "brokerid", brokerid, "accountid", accountid, "symbolid", symbolid, "quantity", quantity, "cost", cost, "positionid", positionid, "futsettdate", futsettdate) \
+    setsymbolkey(accountid, brokerid, futsettdate, positionid, symbolid) \
+    redis.call("sadd", brokerkey .. ":positions", positionid) \
+    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":positions", positionid) \
+    redis.call("sadd", brokerkey .. ":positionid", "position:" .. positionid) \
+    publishposition(brokerid, positionid, 10) \
+    return positionid \
+  end \
+  ';
+
+  exports.getposition = getposition;
 
   /*
   * updateposition()
@@ -857,7 +888,6 @@ exports.registerScripts = function () {
 
   /*
   * get all the positions for a nominee account
-  *
   */
   getpositionsnominee = getpositions + '\
   local getpositionsnominee = function(brokerid, nomineeaccountid) \
@@ -866,6 +896,25 @@ exports.registerScripts = function () {
     for index = 1, #accounts do \
       local positions = getpositions(accounts[index], brokerid) \
       table.insert(tblresults, positions) \
+    end \
+    return tblresults \
+  end \
+  ';
+
+  /*
+  * getpositionsbybroker()
+  * gets all positions for a broker
+  * params: brokerid
+  * returns: a table of positions
+  */
+  getpositionsbybroker = getposition + '\
+  local getpositionsbybroker = function(brokerid) \
+    redis.log(redis.LOG_NOTICE, "getpositionsbybroker") \
+    local tblresults = {} \
+    local positions = redis.call("smembers", "broker:" .. brokerid .. ":positions") \
+    for index = 1, #positions do \
+      local vals = getposition(brokerid, positions[index]) \
+      table.insert(tblresults, vals) \
     end \
     return tblresults \
   end \
@@ -986,24 +1035,21 @@ exports.registerScripts = function () {
   /*
   * newtradeaccounttransaction()
   * create transaction & postings for the cash side of a trade
-  * params: amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, contraaccountid, note, rate, timestamp, tradeid, transactiontype, timestamp in milliseconds
+  * params: amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, contraaccountid, note, rate, timestamp, tradeid, transactiontypeid, timestamp in milliseconds
   */
   newtradeaccounttransaction = newtransaction + newposting + '\
-  local newtradeaccounttransaction = function(amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, contraaccountid, note, rate, timestamp, tradeid, transactiontype, milliseconds) \
-    --[[ local clientcontrolaccountid = getbrokeraccountid(brokerid, currencyid, "clientcontrolaccount") ]] \
-    local transactionid = newtransaction(amount, brokerid, currencyid, localamount, note, rate, "trade:" .. tradeid, timestamp, transactiontype) \
-    if transactiontype == "TR" then \
+  local newtradeaccounttransaction = function(amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, contraaccountid, note, rate, timestamp, tradeid, transactiontypeid, milliseconds) \
+    local transactionid = newtransaction(amount, brokerid, currencyid, localamount, note, rate, "trade:" .. tradeid, timestamp, transactiontypeid) \
+    if transactiontypeid == "TR" then \
       --[[ receipt from broker point of view ]] \
-      newposting(clientaccountid, -amount, brokerid, -localamount, transactionid, milliseconds) \
-      --[[ newposting(clientcontrolaccountid, -amount, brokerid, -localamount, transactionid, milliseconds) ]] \
-      newposting(contraaccountid, amount, brokerid, localamount, transactionid, milliseconds) \
-      newposting(nominalaccountid, amount, brokerid, localamount, transactionid, milliseconds) \
+      newposting(clientaccountid, -amount, brokerid, -localamount, transactionid, milliseconds, transactiontypeid) \
+      newposting(contraaccountid, amount, brokerid, localamount, transactionid, milliseconds, transactiontypeid) \
+      newposting(nominalaccountid, amount, brokerid, localamount, transactionid, milliseconds, transactiontypeid) \
     else \
       --[[ pay from broker point of view ]] \
-      newposting(clientaccountid, amount, brokerid, localamount, transactionid, milliseconds) \
-      --[[ newposting(clientcontrolaccountid, amount, brokerid, localamount, transactionid, milliseconds) ]] \
-      newposting(contraaccountid, -amount, brokerid, -localamount, transactionid, milliseconds) \
-      newposting(nominalaccountid, -amount, brokerid, -localamount, transactionid, milliseconds) \
+      newposting(clientaccountid, amount, brokerid, localamount, transactionid, milliseconds, transactiontypeid) \
+      newposting(contraaccountid, -amount, brokerid, -localamount, transactionid, milliseconds, transactiontypeid) \
+      newposting(nominalaccountid, -amount, brokerid, -localamount, transactionid, milliseconds, transactiontypeid) \
     end \
   end \
   ';
@@ -1273,7 +1319,6 @@ exports.registerScripts = function () {
   * returns: a table of positions
   */
   exports.scriptgetpositionsbysymbol = getpositionsbysymbol + '\
-    redis.log(redis.LOG_WARNING, "scriptgetpositionsbysymbol") \
     local positions = getpositionsbysymbol(ARGV[1], ARGV[2]) \
     return positions \
   ';
@@ -1285,9 +1330,19 @@ exports.registerScripts = function () {
   * returns: a table of positions
   */
   exports.scriptgetpositionsbysymbolbydate = getpositionsbysymbolbydate + '\
-    redis.log(redis.LOG_WARNING, "scriptgetpositionsbysymbolbydate") \
     local positions = getpositionsbysymbolbydate(ARGV[1], ARGV[2], ARGV[3]) \
     return positions \
+  ';
+
+  /*
+  * scriptgetpositionsbybroker
+  * get positions for a broker
+  * params: brokerid
+  * returns: a table of positions
+  */
+  exports.scriptgetpositionsbybroker = getpositionsbybroker + '\
+    local positions = getpositionsbybroker(ARGV[1]) \
+    return cjson.encode(positions) \
   ';
 
   /*
@@ -1340,9 +1395,9 @@ exports.registerScripts = function () {
     end \
     local transactionid = newtransaction(ARGV[1], ARGV[3], currencyid, ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10]) \
     --[[ update client account ]] \
-    newposting(ARGV[4], amount, ARGV[3], localamount, transactionid, ARGV[11]) \
+    newposting(ARGV[4], amount, ARGV[3], localamount, transactionid, ARGV[11], ARGV[10]) \
     --[[ update bank account ]] \
-    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[11]) \
+    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[11], ARGV[10]) \
     return {0} \
   ';
 
@@ -1371,8 +1426,8 @@ exports.registerScripts = function () {
       end \
     end \
     local transactionid = newtransaction(ARGV[1], ARGV[2], currencyid, ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[8], transactiontypeid) \
-    newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[3]), transactionid, ARGV[11]) \
-    newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[3], transactionid, ARGV[11]) \
+    newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[3]), transactionid, ARGV[11], transactiontypeid) \
+    newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[3], transactionid, ARGV[11], transactiontypeid) \
     return 0 \
   ';
 
@@ -1395,8 +1450,8 @@ exports.registerScripts = function () {
       localamount = ARGV[4] \
     end \
     local transactionid = newtransaction(ARGV[1], ARGV[3], currencyid, ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10]) \
-    newposting(ARGV[8], amount, ARGV[3], localamount, transactionid, ARGV[11]) \
-    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[11]) \
+    newposting(ARGV[8], amount, ARGV[3], localamount, transactionid, ARGV[11], ARGV[10]) \
+    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[11], ARGV[10]) \
     return 0 \
   ';
 
@@ -1480,10 +1535,10 @@ exports.registerScripts = function () {
           end \
           --[[ create transactions & postings ]] \
           local transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, bankfundsbrokertransactiontype) \
-          newposting(bankfundsbroker, dividend, brokerid, dividend, transactionid, timestampms) \
+          newposting(bankfundsbroker, dividend, brokerid, dividend, transactionid, timestampms, bankfundsbrokertransactiontype) \
           transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, nominalcorporateactionstransactiontype) \
-          newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampms) \
-          newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampms) \
+          newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampms, nominalcorporateactionstransactiontype) \
+          newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampms, nominalcorporateactionstransactiontype) \
           numaccountsupdated = numaccountsupdated + 1 \
         end \
       end \
@@ -1541,19 +1596,19 @@ exports.registerScripts = function () {
           if sharesdue[2] > 0 then \
             --[[ create transactions & postings ]] \
             local transactionid = newtransaction(sharesdue[2], brokerid, symbol["currencyid"], sharesdue[2], corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AP") \
-            newposting(bankfundsbroker, -sharesdue[2], brokerid, -sharesdue[2], transactionid, timestampms) \
+            newposting(bankfundsbroker, -sharesdue[2], brokerid, -sharesdue[2], transactionid, timestampms, "AP") \
             transactionid = newtransaction(sharesdue[2], brokerid, symbol["currencyid"], sharesdue[2], corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
-            newposting(nominalcorporateactions, sharesdue[2], brokerid, sharesdue[2], transactionid, timestampms) \
-            newposting(positions[i]["accountid"], sharesdue[2], brokerid, sharesdue[2], transactionid, timestampms) \
+            newposting(nominalcorporateactions, sharesdue[2], brokerid, sharesdue[2], transactionid, timestampms, "AR") \
+            newposting(positions[i]["accountid"], sharesdue[2], brokerid, sharesdue[2], transactionid, timestampms, "AR") \
           end \
         else \
           local dividend = round(corporateaction["cashpershare"] * tonumber(positions[i]["quantity"]), 2) \
           if dividend > 0 then \
             --[[ create transactions & postings ]] \
             local transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AP") \
-            newposting(bankfundsbroker, -dividend, brokerid, -dividend, transactionid, timestampms) \
-            newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampms) \
-            newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampms) \
+            newposting(bankfundsbroker, -dividend, brokerid, -dividend, transactionid, timestampms, "AP") \
+            newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampms, "AP") \
+            newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampms, "AP") \
           end \
         end \
       end \
@@ -1626,10 +1681,10 @@ exports.registerScripts = function () {
           local stubcash = round(sharesdue[2] * eodprice["bid"], 2) / 100 \
           --[[ create transactions & postings ]] \
           local transactionid = newtransaction(stubcash, brokerid, symbol["currencyid"], stubcash, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AP") \
-          newposting(bankfundsbroker, stubcash, brokerid, stubcash, transactionid, timestampms) \
+          newposting(bankfundsbroker, stubcash, brokerid, stubcash, transactionid, timestampms, "AP") \
           transactionid = newtransaction(stubcash, brokerid, symbol["currencyid"], stubcash, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
-          newposting(nominalcorporateactions, stubcash, brokerid, stubcash, transactionid, timestampms) \
-          newposting(positions[i]["accountid"], stubcash, brokerid, stubcash, transactionid, timestampms) \
+          newposting(nominalcorporateactions, stubcash, brokerid, stubcash, transactionid, timestampms, "AR") \
+          newposting(positions[i]["accountid"], stubcash, brokerid, stubcash, transactionid, timestampms, "AR") \
         end \
       end \
     end \
@@ -1747,9 +1802,9 @@ exports.registerScripts = function () {
             local stubcash = round(sharesdue[2] * eodprice["bid"], 2) / 100 \
             --[[ create transaction & postings ]] \
             local transactionid = newtransaction(stubcash, brokers[j], symbol["currencyid"], stubcash, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
-            newposting(nominalcorporateactions, stubcash, brokers[j], stubcash, transactionid, timestampms) \
-            newposting(bankfundsclient, stubcash, brokers[j], stubcash, transactionid, timestampms) \
-            newposting(positions[i]["accountid"], stubcash, brokers[j], stubcash, transactionid, timestampms) \
+            newposting(nominalcorporateactions, stubcash, brokers[j], stubcash, transactionid, timestampms, "AR") \
+            newposting(bankfundsclient, stubcash, brokers[j], stubcash, transactionid, timestampms, "AR") \
+            newposting(positions[i]["accountid"], stubcash, brokers[j], stubcash, transactionid, timestampms, "AR") \
           end \
         end \
       end \
@@ -1813,10 +1868,10 @@ exports.registerScripts = function () {
           local stubcash = round(sharesdue[2] * eodprice["bid"], 2) / 100 \
           --[[ create transactions & postings ]] \
           local transactionid = newtransaction(stubcash, brokerid, symbol["currencyid"], stubcash, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AP") \
-          newposting(bankfundsbroker, stubcash, brokerid, stubcash, transactionid, timestampms) \
+          newposting(bankfundsbroker, stubcash, brokerid, stubcash, transactionid, timestampms, "AP") \
           transactionid = newtransaction(stubcash, brokerid, symbol["currencyid"], stubcash, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, "AR") \
-          newposting(nominalcorporateactions, stubcash, brokerid, stubcash, transactionid, timestampms) \
-          newposting(positions[i]["accountid"], stubcash, brokerid, stubcash, transactionid, timestampms) \
+          newposting(nominalcorporateactions, stubcash, brokerid, stubcash, transactionid, timestampms, "AR") \
+          newposting(positions[i]["accountid"], stubcash, brokerid, stubcash, transactionid, timestampms, "AR") \
         end \
       end \
     end \

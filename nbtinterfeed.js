@@ -30,13 +30,13 @@ var redispassword;
 var redislocal = true; // local or external server
 
 // globals
-var markettype; // comes from database, 0=normal market, 1=out of hours
-var host = "85.133.96.85";
-var messageport = 50900;
+var host; // ip address, get from database
+var messageport; // port, get from database
 var buf = new Buffer(1024 * 2048); // incoming data buffer
 var bufbytesread = 0;
 var bytestoread = 0;
 
+// regular or authenticated connection to redis
 if (redislocal) {
   // local
   redishost = "127.0.0.1";
@@ -59,8 +59,7 @@ if (redisauth) {
       return;
     }
     console.log("Redis authenticated at " + redishost + " port " + redisport);
-    initialise();
-    tryToConnect();
+    start();
   });
 } else {
   db.on("connect", function(err) {
@@ -69,22 +68,29 @@ if (redisauth) {
       return;
     }
     console.log("connected to Redis at " + redishost + " port " + redisport);
-    initialise();
-    tryToConnect();
+    start();
   });
 }
-
 db.on("error", function(err) {
   console.log(err);
 });
 
+/*
+* this is the first routine
+*/
+function start() {
+  initialise();
+  startToConnect();
+}
+
+/*
+* initialisation routines
+*/
 function initialise() {
-  initDb();
   commonfo.registerScripts();
   commonbo.registerScripts();
   registerScripts();
   pubsub();
-  start();
 }
 
 // pubsub connections
@@ -101,22 +107,66 @@ function pubsub() {
 
   dbsub.on("message", function(channel, message) {
     console.log("received: " + message);
-    requestData(message);
+
+    try {
+      var obj = JSON.parse(message);
+
+      if ("position" in obj) {
+        positionReceived(obj.position);
+      } else if ("pricerequest" in obj) {
+        priceRequest(obj.pricerequest);
+      }
+    } catch (e) {
+      console.log(e);
+      console.log(message);
+      return;
+    }
   });
 
+  // listen for anything specifically for a price server
   dbsub.subscribe(commonbo.priceserverchannel);
+
+  // listen for position messages
+  dbsub.subscribe(commonbo.positionchannel);
 }
 
-//
-// try to connect
-//
+/*
+* get connection ip address & port & try to connect
+*/
+function startToConnect() {
+  db.get("pricing:ipaddress", function(err, ipaddress) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    host = ipaddress;
+
+    db.get("pricing:port", function(err, port) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      messageport = port;
+
+      // we have connection details, so we can try to connect
+      tryToConnect();
+    });
+  });
+}
+
+/*
+* try to connect to external feed
+*/
 function tryToConnect() {
   console.log("trying to connect to host: " + host + ", port:" + messageport);
 
   conn = net.connect(messageport, host, function() {
     console.log('connected to: ' + host);
 
-    subscriptions();
+    // we are connected, so can request subscriptions();
+    getSubscriptions();
   });
 
   conn.on('data', function(data) {
@@ -133,19 +183,54 @@ function tryToConnect() {
   });
 }
 
-function start() {
-  console.log("subcribing to positions");
+/*
+* get the symbols we need to subscribe to and subscribe to them
+*/
+function getSubscriptions() {
+  console.log("subscribing to positions");
 
-  db.eval(commonbo.scriptgetpositions, 0, function(err, ret) {
-    if (err) throw err;
+  // get the set of brokers
+  db.smembers("brokers", function(err, brokers) {
+    if (err) {
+      console.log("Error in getSubscriptions:" + err);
+      return;
+    }
+
+    // get all positions for this broker
+    for (var j = 0; j < brokers.length; ++j) {
+      db.eval(commonbo.scriptgetpositionsbybroker, 0, 1, function(err, ret) {
+        if (err) throw err;
+        var obj = JSON.parse(ret);
+
+        for (var i = 0; i < obj.length; ++i) {
+          // subscribe
+          subscribe(obj[i].symbolid);
+        }
+      });
+    }
   });
 }
 
-//
-// parse incoming data
-// we need to allow for receiving part-messages
-// and more than one message in a single receive event
-//
+/*
+* we have received notification of a new or updated position
+*/
+function positionReceived(position) {
+  console.log("positionReceived");
+  console.log(position);
+  subscribe(position.symbolid);
+}
+
+function priceRequest(pricerequest) {
+  console.log("request");
+
+  requestData(message);
+}
+
+/*
+* parse incoming data
+* we need to allow for receiving part-messages
+* and more than one message in a single receive event
+*/
 function parse(data) {
   var parsestate = 0;
   var fileseparator;
@@ -315,32 +400,42 @@ function parse(data) {
 //
 // just bid/offer & change requested as real-time loop
 //
-function subscribe(instcode) {
-  console.log("subscribe to " + instcode);
-  var instcodelen = instcode.length;
-  var buf = new Buffer(31+instcodelen);
+function subscribe(symbolid) {
+  console.log("subscribe to " + symbolid);
 
-  buf[0] = 0;
-  buf[1] = 0;
-  buf[2] = 0;
-  buf[3] = 27+instcodelen;
-  buf[4] = 28;
-  buf.write("332", 5);
-  buf[8] = 31;
-  buf.write("mtag", 9);
-  buf[13] = 29;
-  buf.write(instcode, 14);
-  buf[14+instcodelen] = 30;
-  buf.write("22", 15+instcodelen); // bid
-  buf[17+instcodelen] = 30;
-  buf.write("25", 18+instcodelen); // offer
-  buf[20+instcodelen] = 30;
-  buf.write("-374", 21+instcodelen); // midnetchange
-  buf[25+instcodelen] = 30;
-  buf.write("-375", 26+instcodelen); // midpercentchange
-  buf[30+instcodelen] = 28;
+  // get the nbtrader symbol
+  db.hget("symbol:" + symbolid, "nbtsymbol", function(err, nbtsymbol) {
+    if (err) {
+      console.log("Error in getSubscriptions:" + err);
+      return;
+    }
+
+    console.log("subscribe to " + nbtsymbol);
+    var nbtsymbollen = nbtsymbol.length;
+    var buf = new Buffer(31+nbtsymbollen);
+
+    buf[0] = 0;
+    buf[1] = 0;
+    buf[2] = 0;
+    buf[3] = 27+nbtsymbollen;
+    buf[4] = 28;
+    buf.write("332", 5);
+    buf[8] = 31;
+    buf.write("mtag", 9);
+    buf[13] = 29;
+    buf.write(nbtsymbol, 14);
+    buf[14+nbtsymbollen] = 30;
+    buf.write("22", 15+nbtsymbollen); // bid
+    buf[17+nbtsymbollen] = 30;
+    buf.write("25", 18+nbtsymbollen); // offer
+    buf[20+nbtsymbollen] = 30;
+    buf.write("-374", 21+nbtsymbollen); // midnetchange
+    buf[25+nbtsymbollen] = 30;
+    buf.write("-375", 26+nbtsymbollen); // midpercentchange
+    buf[30+nbtsymbollen] = 28;
   
-  conn.write(buf);
+    conn.write(buf);
+  });
 }
 
 //
@@ -368,7 +463,7 @@ function updateRec(fid, value, instrec) {
 
 function updateDb(functioncode, instrumentcode, instrec) {
   console.log("updateDb: " + instrumentcode);
-  //console.log(instrec);
+
   // create a unix timestamp
   var now = new Date();
   instrec.timestamp = commonbo.getUTCTimeStamp(now);
@@ -421,17 +516,10 @@ function updateDb(functioncode, instrumentcode, instrec) {
     }
   }
 
-  // test - todo - remove
-  //var start = +new Date();
-  //for (i=0; i<10000; i++) {
   // update price
   db.eval(commonfo.scriptpriceupdate, 0, instrumentcode, instrec.timestamp, instrec.bid, instrec.ask, instrec.midnetchange, instrec.midpercentchange, function(err, ret) {
     if (err) throw err;
-  //var end = +new Date();
-  //console.log("test took " + (end-start) + " ms");
-    //console.log(ret);
   });
-//}
 }
 
 function getDbInstrec(instrumentcode, instrec) {
@@ -639,21 +727,6 @@ function requestData(msg) {
 
     conn.write(buf);
   }
-}
-
-function initDb() {
-  getMarkettype();
-}
-
-function getMarkettype() {
-  db.get("markettype", function(err, mkttype) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    markettype = parseInt(mkttype);
-  });
 }
 
 function registerScripts() {
