@@ -1221,9 +1221,9 @@ function registerScripts() {
     --[[ calculate costs ]] \
     local costs =  getcosts(brokerid, clientid, symbolid, side, settlcurramt, currencyid) \
     local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
-    redis.log(redis.LOG_WARNING, "costs") \
-    redis.log(redis.LOG_WARNING, costs[1]) \
-    redis.log(redis.LOG_WARNING, costs[2]) \
+    redis.log(redis.LOG_NOTICE, "costs") \
+    redis.log(redis.LOG_NOTICE, costs[1]) \
+    redis.log(redis.LOG_NOTICE, costs[2]) \
     redis.log(redis.LOG_WARNING, costs[3]) \
     redis.log(redis.LOG_WARNING, costs[4]) \
     --[[ calculate margin required for order ]] \

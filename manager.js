@@ -223,7 +223,7 @@ function listen() {
     //testSettle();
     //testSupplierFundsTransfer();
     //testPositionPostings();
-    //testStatement();
+    testStatement();
     //testOrder(1);
 
   sockjs_svr.on('connection', function(conn) {
@@ -556,7 +556,7 @@ function cashTrans(cashtrans, userid, conn) {
   cashtrans.rate = 1;
   cashtrans.reference = cashtrans.reference;
   if (cashtrans.drcr == 1) {
-    cashtrans.transactiontypeid = "CD";
+    cashtrans.transactiontypeid = "CC";
   } else {
     cashtrans.transactiontypeid = "CW";    
   }
@@ -1229,7 +1229,7 @@ function accountSummaryRequest(acctreq, conn) {
   console.log("accountSummaryRequest");
 
   var brokerid = 1;
-  var accountid = 3;
+  var accountid = 1;
 
   db.eval(commonbo.scriptgetaccountsummary, 1, "broker:" + brokerid, accountid, brokerid, function(err, ret) {
     if (err) throw err;
@@ -1985,11 +1985,12 @@ function orderReceived(order, userid) {
 
 function testStatement() {
   var brokerid = 1;
-  var accountid = 3;
+  var accountid = 1;
 
   var startmilli = new Date("September 13, 2015 00:00:00").getTime();
   var endmilli = new Date("September 19, 2015 00:00:00").getTime();
-
+startmilli = '-inf';
+endmilli = '+inf';
   console.log(startmilli);
   console.log(endmilli);
 

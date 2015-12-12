@@ -520,13 +520,24 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * getaccount()
+  * params: accountid, brokerid
+  * returns: all fields in an account
+  */
+  getaccount = gethashvalues + '\
+  local getaccount = function(accountid, brokerid) \
+    local account = gethashvalues("broker:" .. brokerid .. ":account:" .. accountid) \
+    return account \
+  end \
+  ';
+
+  /*
   * updateaccountbalance()
   * updates account balance & local currency balance
   * amount & localamount can be -ve
   */
   updateaccountbalance = '\
   local updateaccountbalance = function(accountid, amount, brokerid, localamount) \
-    redis.log(redis.LOG_DEBUG, "updateaccountbalance") \
     local accountkey = "broker:" .. brokerid .. ":account:" .. accountid \
     redis.call("hincrbyfloat", accountkey, "balance", amount) \
     redis.call("hincrbyfloat", accountkey, "localbalance", localamount) \
@@ -540,7 +551,6 @@ exports.registerScripts = function () {
   */
   updateaccountbalanceuncleared = '\
   local updateaccountbalanceuncleared = function(accountid, amount, brokerid, localamount) \
-    redis.log(redis.LOG_DEBUG, "updateaccountbalance") \
     local accountkey = "broker:" .. brokerid .. ":account:" .. accountid \
     redis.call("hincrbyfloat", accountkey, "balanceuncleared", amount) \
     redis.call("hincrbyfloat", accountkey, "localbalanceuncleared", localamount) \
@@ -556,14 +566,14 @@ exports.registerScripts = function () {
   local newposting = function(accountid, amount, brokerid, localamount, transactionid, milliseconds, transactiontypeid) \
     local brokerkey = "broker:" .. brokerid \
     local postingid = redis.call("hincrby", brokerkey, "lastpostingid", 1) \
-    redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", amount, "localamount", localamount, "postingid", postingid, "transactionid", transactionid) \
+    redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", amount, "localamount", localamount, "postingid", postingid, "transactionid", transactionid, "transactiontypeid", transactiontypeid) \
     redis.call("sadd", brokerkey .. ":transaction:" .. transactionid .. ":postings", postingid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":postings", postingid) \
     --[[ add a sorted set for time based queries ]] \
     redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", milliseconds, postingid) \
     redis.call("sadd", brokerkey .. ":postings", postingid) \
     redis.call("sadd", brokerkey .. ":postingid", "posting:" .. postingid) \
-    --[[ either update cleared or uncleared balances based on type ]] \
+    --[[ update either cleared or uncleared balances based on type of transaction ]] \
     if transactiontypeid == "CC" then \
       updateaccountbalanceuncleared(accountid, amount, brokerid, localamount) \
     else \
@@ -618,7 +628,6 @@ exports.registerScripts = function () {
       posting["note"] = transaction["note"] \
       posting["reference"] = transaction["reference"] \
       posting["timestamp"] = transaction["timestamp"] \
-      posting["type"] = transaction["transactiontypeid"] \
       table.insert(tblpostings, posting) \
     end \
     return tblpostings \
@@ -1006,20 +1015,22 @@ exports.registerScripts = function () {
 
   /*
   * calculates free margin for an account
-  * balance = cash
+  * balance = cleared + uncleared cash
   * equity = balance + unrealised p&l
   * free margin = equity - margin used to hold positions
   */
-  getfreemargin = getaccountbalance + gettotalpositionvalue + '\
+  getfreemargin = getaccount + gettotalpositionvalue + '\
   local getfreemargin = function(accountid, brokerid) \
     redis.log(redis.LOG_WARNING, "getfreemargin") \
     local freemargin = 0 \
-    local accountbalance = getaccountbalance(accountid, brokerid) \
-    if accountbalance then \
+    local account = getaccount(accountid, brokerid) \
+    if account["balance"] then \
       redis.log(redis.LOG_WARNING, "balance") \
-      redis.log(redis.LOG_WARNING, accountbalance) \
+      redis.log(redis.LOG_WARNING, account["balance"]) \
+      redis.log(redis.LOG_WARNING, "balanceuncleared") \
+      redis.log(redis.LOG_WARNING, account["balanceuncleared"]) \
       local totalpositionvalue = gettotalpositionvalue(accountid, brokerid) \
-      local equity = tonumber(accountbalance) + totalpositionvalue["unrealisedpandl"] \
+      local equity = tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) + totalpositionvalue["unrealisedpandl"] \
       redis.log(redis.LOG_WARNING, "totunrealisedpandl") \
       redis.log(redis.LOG_WARNING, totalpositionvalue["unrealisedpandl"]) \
       redis.log(redis.LOG_WARNING, "margin") \
@@ -1359,15 +1370,18 @@ exports.registerScripts = function () {
   * scriptgetaccountsummary
   * calculates account p&l, margin & equity for a client
   * params: accountid, brokerid
+  * returns: array of values as JSON string
   */
-  exports.scriptgetaccountsummary = getaccountbalance + gettotalpositionvalue + '\
-  redis.log(redis.LOG_WARNING, "scriptgetaccountsummary") \
+  exports.scriptgetaccountsummary = getaccount + gettotalpositionvalue + '\
+  redis.log(redis.LOG_NOTICE, "scriptgetaccountsummary") \
   local tblresults = {} \
-  local accountbalance = getaccountbalance(ARGV[1], ARGV[2]) \
-  local totalpositionvalue = gettotalpositionvalue(ARGV[1], ARGV[2]) \
-  local equity = tonumber(accountbalance) + totalpositionvalue["unrealisedpandl"] \
-  local freemargin = equity - totalpositionvalue["margin"] \
-  table.insert(tblresults, {accountid=ARGV[1],balance=accountbalance,unrealisedpandl=totalpositionvalue["unrealisedpandl"],equity=equity,margin=totalpositionvalue["margin"],freemargin=freemargin}) \
+  local account = getaccount(ARGV[1], ARGV[2]) \
+  if account["balance"] then \
+    local totalpositionvalue = gettotalpositionvalue(ARGV[1], ARGV[2]) \
+    local equity = tonumber(account["balance"]) + totalpositionvalue["unrealisedpandl"] \
+    local freemargin = equity - totalpositionvalue["margin"] \
+    table.insert(tblresults, {accountid=ARGV[1],balance=account["balance"],unclearedbalance=account["balanceuncleared"],unrealisedpandl=totalpositionvalue["unrealisedpandl"],equity=equity,margin=totalpositionvalue["margin"],freemargin=freemargin}) \
+  end \
   return cjson.encode(tblresults) \
   ';
 
@@ -1386,18 +1400,19 @@ exports.registerScripts = function () {
     end \
     local amount \
     local localamount \
-    if ARGV[10] == "CD" then \
+    local transactiontypeid = ARGV[10] \
+    if transactiontypeid == "CD" or transactiontypeid == "CC" then \
       amount = tonumber(ARGV[1]) \
       localamount = tonumber(ARGV[5]) \
     else \
       amount = -tonumber(ARGV[1]) \
       localamount = -tonumber(ARGV[5]) \
     end \
-    local transactionid = newtransaction(ARGV[1], ARGV[3], currencyid, ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10]) \
+    local transactionid = newtransaction(ARGV[1], ARGV[3], currencyid, ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], transactiontypeid) \
     --[[ update client account ]] \
-    newposting(ARGV[4], amount, ARGV[3], localamount, transactionid, ARGV[11], ARGV[10]) \
+    newposting(ARGV[4], amount, ARGV[3], localamount, transactionid, ARGV[11], transactiontypeid) \
     --[[ update bank account ]] \
-    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[11], ARGV[10]) \
+    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[11], transactiontypeid) \
     return {0} \
   ';
 
@@ -1460,21 +1475,31 @@ exports.registerScripts = function () {
   * prepares a statement for an account between two dates
   * params: accountid, brokerid, start date, end date
   */
-  exports.scriptgetstatement = getaccountbalance + getpostingsbydate + '\
+  exports.scriptgetstatement = getaccount + getpostingsbydate + '\
     redis.log(redis.LOG_WARNING, "scriptgetstatement") \
     local tblresults = {} \
-    --[[ get the currenct account balance ]] \
-    local accountbalance = tonumber(getaccountbalance(ARGV[1], ARGV[2])) \
+    --[[ get the currenct account cleared and uncleared balances ]] \
+    local account = getaccount(ARGV[1], ARGV[2]) \
     --[[ get all the postings from the start date to now ]] \
     local postings = getpostingsbydate(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
     --[[ go backwards through the postings to calculate a start balance ]] \
     for index = #postings, 1, -1 do \
-      accountbalance = accountbalance - tonumber(postings[index]["amount"]) \
+      --[[ adjust cleared or uncleared balance based on type of transaction ]] \
+      if postings[index]["transactiontypeid"] == "CC" then \
+        account["balanceuncleared"] = account["balanceuncleared"] - tonumber(postings[index]["amount"]) \
+      else \
+        account["balance"] = account["balance"] - tonumber(postings[index]["amount"]) \
+      end \
     end \
     --[[ go forwards through the postings, calculating the account balance after each one ]]\
     for index = 1, #postings do \
-      accountbalance = accountbalance + tonumber(postings[index]["amount"]) \
-      postings[index]["balance"] = accountbalance \
+      if postings[index]["transactiontypeid"] == "CC" then \
+        account["balanceuncleared"] = account["balanceuncleared"] + tonumber(postings[index]["amount"]) \
+      else \
+        account["balance"] = account["balance"] + tonumber(postings[index]["amount"]) \
+      end \
+      postings[index]["balance"] = account["balance"] \
+      postings[index]["balanceuncleared"] = account["balanceuncleared"] \
       table.insert(tblresults, postings[index]) \
     end \
     return cjson.encode(tblresults) \
