@@ -140,11 +140,21 @@ function startToConnect() {
       return;
     }
 
+    if (ipaddress == null) {
+      console.log("Error: no ip address found - add key 'pricing:ipaddress'");
+      return;
+    }
+
     host = ipaddress;
 
     db.get("pricing:port", function(err, port) {
       if (err) {
         console.log(err);
+        return;
+      }
+
+      if (port == null) {
+        console.log("Error: no port found - add key 'pricing:port'");
         return;
       }
 
@@ -189,6 +199,9 @@ function tryToConnect() {
 function getSubscriptions() {
   console.log("subscribing to positions");
 
+  // todo: remove
+  // return;
+
   // get the set of brokers
   db.smembers("brokers", function(err, brokers) {
     if (err) {
@@ -221,9 +234,11 @@ function positionReceived(position) {
 }
 
 function priceRequest(pricerequest) {
-  console.log("request");
+  console.log("pricerequest");
 
-  requestData(message);
+  console.log(pricerequest);
+
+  requestData(pricerequest.request);
 }
 
 /*
@@ -622,7 +637,7 @@ function loginReceived(message) {
 
 function requestData(msg) {
   if (msg.substr(0, 2) == "rp") {
-    // real-time partial record i.e. "publish 7 rp:BARC.L"
+    // real-time partial record i.e. "rp:BARC.L"
 
     var instcode = msg.substr(3);
     subscribe(instcode);
@@ -647,7 +662,7 @@ function requestData(msg) {
   
     conn.write(buf);*/
   } else if (msg.substr(0, 2) == "rf") {
-    // real-time full record i.e. "publish 7 rf:BARC.L"
+    // real-time full record i.e. "rf:BARC.L"
 
     var instcode = msg.substr(3);
     var instcodelen = instcode.length;
@@ -667,7 +682,7 @@ function requestData(msg) {
 
     conn.write(buf);
   } else if (msg.substr(0, 4) == "snap") {
-    // snap full record i.e. "publish 7 snap:L.B***"
+    // snap full record i.e. "snap:L.B***"
 
     var instcode = msg.substr(5);
     var instcodelen = instcode.length;
