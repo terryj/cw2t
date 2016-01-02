@@ -501,7 +501,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
       var dbinstrec = getDbInstrec(instrumentcode, instrec);
 
       db.hmset("symbol:" + instrumentcode, dbinstrec);
-      db.sadd("symbols", instrumentcode);
+      db.sadd("symbol:symbolid", instrumentcode);
       db.sadd("nbtsymbol:" + dbinstrec.nbtsymbol + ":symbols", instrumentcode);
 
       // create tab delimitted text
