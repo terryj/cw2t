@@ -200,7 +200,7 @@ function getSubscriptions() {
   console.log("subscribing to positions");
 
   // todo: remove
-  // return;
+  return;
 
   // get the set of brokers
   db.smembers("brokers", function(err, brokers) {
