@@ -238,7 +238,7 @@ function priceRequest(pricerequest) {
 
   console.log(pricerequest);
 
-  requestData(pricerequest.request);
+  requestData(pricerequest);
 }
 
 /*
