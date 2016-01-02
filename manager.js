@@ -223,7 +223,7 @@ function listen() {
     //testSettle();
     //testSupplierFundsTransfer();
     //testPositionPostings();
-    testStatement();
+    //testStatement();
     //testOrder(1);
 
   sockjs_svr.on('connection', function(conn) {
@@ -1792,6 +1792,133 @@ function endOfDay(userid) {
 }
 
 function test() {
+console.log("test");
+
+var message = {
+	"versionNumber": "6",
+	"mode": "L",
+	"functionParticipantId": "789",
+	"dataParticipantId": "789",
+	"transactionReference": "15AA00016",
+	"tradeDate": "20151112",
+	"intendedSettlementDate": "20151116",
+	"brokerId": null,
+	"tradeSystemOfOrigin": "S",
+	"brokerReference": null,
+	"ncCondition": false,
+	"bargainConditions": "NNNNNNNNNN",
+	"traditionalOptions": null,
+	"sharedReference": null,
+	"tradeReference": null,
+	"tradeTime": "120100",
+	"specialPrice": false,
+	"agentIndicator": "A",
+	"participantNote": null,
+	"transactionStampStatus": null,
+	"stampableConsideration": {
+		"currency": null,
+		"amount": 0
+	},
+	"priority": "50",
+	"newDepositLink": false,
+	"stockDepositLinkDropNumber": 0,
+	"originTransactionId": null,
+	"originTransactionReference": null,
+	"marketClientInd": "M",
+	"clientMarketLink": null,
+	"dealingCapacity": "A",
+	"transactionReportMarker": "S",
+	"sundryTransactionInformation": 0,
+	"venueIdentification": "XLON",
+	"regSCertification": null,
+	"crestParticipants": [
+		{
+			"participantId": "789",
+			"sharedNote": null,
+			"accountId": "TGNOMS",
+			"charityId": null,
+			"buyingClientIdShared": null,
+			"buyingClientIdHidden": "I#0000680820000000001#",
+			"sellingClientIdShared": "B#MAGBGB21#",
+			"sellingClientIdHidden": null,
+			"nationalityDeclaration": null,
+			"partyTransactionStatus": null,
+			"partyDelayed": false,
+			"partyFrozen": false,
+			"inputTimestamp": "CCYYMMDDHHMMSSSSSSSS",
+			"dealingFirmId": null,
+			"tsoParticipantId": null,
+			"settlementFirmId": null,
+			"tsoDealingCapacity": null,
+			"houseClientIndicator": null,
+			"clearingMemberId": null
+		}
+	],
+	"crestStockMovements": [
+		{
+			"debitPartyStockId": "FNMAY",
+			"debitAccountId": null,
+			"debitBalanceType": null,
+			"otherDebitPartyId": null,
+			"otherDebitAccountId": null,
+			"creditPartyStockId": "789",
+			"creditAccountId": null,
+			"creditBalanceType": null,
+			"otherCreditPartyId": null,
+			"otherCreditAccountId": null,
+			"isin": {
+				"isin": "IE0005042456",
+				"type": "ISIN"
+			},
+			"quantity": "1000",
+			"specialCondition": false,
+			"badDeliveryReason": null,
+			"tradePrice": {
+				"currency": "GBP",
+				"amount": "6,2717"
+			},
+			"countryOfRegister": null,
+			"group1Units": 0,
+			"group2Units": 0
+		}
+	],
+	"crestCashMovements": [
+		{
+			"debitPartyCashId": "789",
+			"creditPartyCashId": "FNMAY",
+			"consideration": {
+				"currency": "GBP",
+				"amount": "6271,7"
+			},
+			"cashMovementType": "A",
+			"paymentType": "C"
+		}
+	],
+	"dependentTrade": false,
+	"internationalCsdId": null,
+	"internationalPartyReference": null,
+	"internationalParticipantId": null,
+	"internationalParticipantBic": null,
+	"internationalAccountId": null,
+	"crestCrossBorderDetails": [
+		{
+			"buyerOrSellerInd": null,
+			"underlyingClient1": null,
+			"underlyingClient2": null,
+			"underlyingClient3": null,
+			"underlyingClient4": null,
+			"underlyingClientBic": null,
+			"underlyingClientParty": null
+		}
+	]
+};
+console.log(message);
+console.log(message.functionParticipantId);
+var teststr = "abc" + JSON.stringify(message) + "xyz";
+console.log(teststr);
+}
+
+function testclientfundtransfer() {
   console.log("test");
 
   var amount = 1000;
@@ -1930,6 +2057,9 @@ function quoteRequestReceived(quoterequest, userid) {
   quoterequest.brokerid = brokerid;
   quoterequest.operatortype = operatortype;
   quoterequest.operatorid = userid;
+
+  quoterequest.cashorderqty = 1000;
+  quoterequest.quantity = 0;
 
   db.smembers("broker:" + brokerid + ":client:" + quoterequest.clientid + ":clientaccounts", function(err, clients) {
     if (err) throw err;

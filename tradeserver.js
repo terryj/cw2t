@@ -101,7 +101,6 @@ function pubsub() {
 
   dbsub.on("message", function(channel, message) {
     try {
-      console.log("Message received on channel: " + channel + " " + message);
       var obj = JSON.parse(message);
 
       if ("quoterequest" in obj) {
@@ -114,6 +113,9 @@ function pubsub() {
         orderCancelRequest(obj.ordercancelrequest);
       } else if ("orderfillrequest" in obj) {
         orderFillRequest(obj.orderfillrequest);
+      } else {
+        console.log("Unknown message received");
+        console.log(message);
       }
     } catch(e) {
       console.log(e);
@@ -200,6 +202,14 @@ function quoteRequest(quoterequest) {
 
   if (!("side" in quoterequest)) {
     quoterequest.side = "";
+  }
+
+  if (!("cashorderqty" in quoterequest)) {
+    quoterequest.cashorderqty = "";
+  }
+
+  if (!("quantity" in quoterequest)) {
+    quoterequest.quantity = "";
   }
 
   // default to GBP
@@ -1863,7 +1873,7 @@ function registerScripts() {
   --[[ get required instrument values for external feed ]] \
   local symbol = gethashvalues("symbol:" .. ARGV[12]) \
   if not symbol["symbolid"] then \
-    quoteack(ARGV[2], quoterequestid, 5, 99, "Symbol data not found") \
+    quoteack(ARGV[2], quoterequestid, 5, 99, "Symbol not found") \
     return {1016} \
   end \
   return {0, quoterequestid, symbol["isin"], symbol["mnemonic"], symbol["exchangeid"]} \
@@ -1908,7 +1918,7 @@ function registerScripts() {
   --[[ note that the value of the quote may be greated than client cash - any order will be credit checked so does not matter ]] \
   if ARGV[3] == "" then \
     local offerprice = tonumber(ARGV[4]) \
-    if quoterequest["quantity"] == "" then \
+    if quoterequest["quantity"] == "" or tonumber(quoterequest["quantity"]) == 0 then \
       offerquantity = round(tonumber(quoterequest["cashorderqty"]) / offerprice, 0) \
     else \
       offerquantity = tonumber(quoterequest["quantity"]) \
@@ -1918,7 +1928,7 @@ function registerScripts() {
     side = 1 \
   else \
     local bidprice = tonumber(ARGV[3]) \
-    if quoterequest["quantity"] == "" then \
+    if quoterequest["quantity"] == "" or tonumber(quoterequest["quantity"]) == 0 then \
       bidquantity = round(tonumber(quoterequest["cashorderqty"]) / bidprice, 0) \
     else \
       bidquantity = tonumber(quoterequest["quantity"]) \

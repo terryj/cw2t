@@ -573,8 +573,8 @@ exports.registerScripts = function () {
     redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", milliseconds, postingid) \
     redis.call("sadd", brokerkey .. ":postings", postingid) \
     redis.call("sadd", brokerkey .. ":postingid", "posting:" .. postingid) \
-    --[[ update either cleared or uncleared balances based on type of transaction ]] \
-    if transactiontypeid == "CC" then \
+    --[[ update either cleared or uncleared balance based on type of transaction ]] \
+    if transactiontypeid == "CC" or transactiontypeid == "CP" then \
       updateaccountbalanceuncleared(accountid, amount, brokerid, localamount) \
     else \
       updateaccountbalance(accountid, amount, brokerid, localamount) \
@@ -618,7 +618,7 @@ exports.registerScripts = function () {
   */
   getpostingsbydate = gettransaction + '\
   local getpostingsbydate = function(accountid, brokerid, startmilliseconds, endmilliseconds) \
-    redis.log(redis.LOG_WARNING, "getpostingsbydate") \
+    redis.log(redis.LOG_NOTICE, "getpostingsbydate") \
     local tblpostings = {} \
     local brokerkey = "broker:" .. brokerid \
     local postings = redis.call("zrangebyscore", brokerkey .. ":account:" .. accountid .. ":postingsbydate", startmilliseconds, endmilliseconds) \
@@ -1051,13 +1051,13 @@ exports.registerScripts = function () {
   newtradeaccounttransaction = newtransaction + newposting + '\
   local newtradeaccounttransaction = function(amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, contraaccountid, note, rate, timestamp, tradeid, transactiontypeid, milliseconds) \
     local transactionid = newtransaction(amount, brokerid, currencyid, localamount, note, rate, "trade:" .. tradeid, timestamp, transactiontypeid) \
-    if transactiontypeid == "TR" then \
-      --[[ receipt from broker point of view ]] \
+    if transactiontypeid == "CP" then \
+      --[[ payment from client point of view, receipt from broker point of view ]] \
       newposting(clientaccountid, -amount, brokerid, -localamount, transactionid, milliseconds, transactiontypeid) \
       newposting(contraaccountid, amount, brokerid, localamount, transactionid, milliseconds, transactiontypeid) \
       newposting(nominalaccountid, amount, brokerid, localamount, transactionid, milliseconds, transactiontypeid) \
     else \
-      --[[ pay from broker point of view ]] \
+      --[[ receipt from client point of view, payment from broker point of view ]] \
       newposting(clientaccountid, amount, brokerid, localamount, transactionid, milliseconds, transactiontypeid) \
       newposting(contraaccountid, -amount, brokerid, -localamount, transactionid, milliseconds, transactiontypeid) \
       newposting(nominalaccountid, -amount, brokerid, -localamount, transactionid, milliseconds, transactiontypeid) \
@@ -1072,7 +1072,7 @@ exports.registerScripts = function () {
   */
   newtradeaccounttransactions = newtradeaccounttransaction + getbrokeraccountid + '\
   local newtradeaccounttransactions = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side, milliseconds) \
-    redis.log(redis.LOG_WARNING, "newtradeaccounttransactions") \
+    redis.log(redis.LOG_NOTICE, "newtradeaccounttransactions") \
     --[[ get broker/supplier accounts ]] \
     local nominalconsiderationid = getbrokeraccountid(brokerid, currencyid, "nominalconsideration") \
     local nominalcommissionid = getbrokeraccountid(brokerid, currencyid, "nominalcommission") \
@@ -1083,24 +1083,24 @@ exports.registerScripts = function () {
     local supplierptmid = getbrokeraccountid(brokerid, currencyid, "supplierptm") \
     --[[ side determines pay / receive ]] \
     if tonumber(side) == 1 then \
-      --[[ client buy, so cash received from broker point of view ]] \
-      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominalconsiderationid, suppliercrestid, note, rate, timestamp, tradeid, "TR", milliseconds) \
+      --[[ client buy, so cash payment from client point of view ]] \
+      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominalconsiderationid, suppliercrestid, note, rate, timestamp, tradeid, "CP", milliseconds) \
     else \
-      --[[ client sell, so cash paid from broker point of view ]] \
-      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominalconsiderationid, suppliercrestid, note, rate, timestamp, tradeid, "TP", milliseconds) \
+      --[[ client sell, so cash received from client point of view ]] \
+      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominalconsiderationid, suppliercrestid, note, rate, timestamp, tradeid, "CR", milliseconds) \
     end \
-    --[[ broker always receives costs ]] \
+    --[[ client always pays costs ]] \
     if tonumber(commission) > 0 then \
-       newtradeaccounttransaction(commission, brokerid, clientaccountid, currencyid, commission, nominalcommissionid, brokertradingid, note .. " Commission", rate, timestamp, tradeid, "TR", milliseconds) \
+       newtradeaccounttransaction(commission, brokerid, clientaccountid, currencyid, commission, nominalcommissionid, brokertradingid, note .. " Commission", rate, timestamp, tradeid, "CP", milliseconds) \
     end \
     if tonumber(ptmlevy) > 0 then \
-       newtradeaccounttransaction(ptmlevy, brokerid, clientaccountid, currencyid, ptmlevy, nominalptmid, supplierptmid, note .. " PTM Levy", rate, timestamp, tradeid, "TR", milliseconds) \
+       newtradeaccounttransaction(ptmlevy, brokerid, clientaccountid, currencyid, ptmlevy, nominalptmid, supplierptmid, note .. " PTM Levy", rate, timestamp, tradeid, "CP", milliseconds) \
     end \
     if tonumber(stampduty) > 0 then \
-       newtradeaccounttransaction(stampduty, brokerid, clientaccountid, currencyid, stampduty, nominalstampdutyid, suppliercrestid, note .. "Stamp Duty", rate, timestamp, tradeid, "TR", milliseconds) \
+       newtradeaccounttransaction(stampduty, brokerid, clientaccountid, currencyid, stampduty, nominalstampdutyid, suppliercrestid, note .. "Stamp Duty", rate, timestamp, tradeid, "CP", milliseconds) \
     end \
     if tonumber(contractcharge) > 0 then \
-       newtradeaccounttransaction(contractcharge, brokerid, clientaccountid, currencyid, contractcharge, nominalcommissionid, brokertradingid, note .. " Contract Charge", rate, timestamp, tradeid, "TR", milliseconds) \
+       newtradeaccounttransaction(contractcharge, brokerid, clientaccountid, currencyid, contractcharge, nominalcommissionid, brokertradingid, note .. " Contract Charge", rate, timestamp, tradeid, "CP", milliseconds) \
     end \
     return 0 \
   end \
@@ -1155,7 +1155,7 @@ exports.registerScripts = function () {
   */
   newtrade = newpositiontransaction + newtradeaccounttransactions + publishtrade + '\
   local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, milliseconds) \
-    redis.log(redis.LOG_WARNING, "newtrade") \
+    redis.log(redis.LOG_NOTICE, "newtrade") \
     local brokerkey = "broker:" .. brokerid \
     local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
     if not tradeid then return 0 end \
@@ -1164,8 +1164,9 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
-    --[[ add to a system wide list for CREST ]] \
+    --[[ add to a system wide list of unsettled trades for CREST ]] \
     redis.call("rpush", "unsettledtrades", brokerid .. ":" .. tradeid) \
+    --[[ add to a system wide list of items for sending contract notes ]] \
     redis.call("rpush", "contractnotes", brokerid .. ":" .. tradeid) \
     local cost \
     local note \
@@ -1393,7 +1394,7 @@ exports.registerScripts = function () {
   * returns: 0 if successful, else 1 & an error message code if unsuccessful
   */
   exports.newClientFundsTransfer = newtransaction + newposting + getbrokeraccountid + '\
-    redis.log(redis.LOG_WARNING, "newClientFundsTransfer") \
+    redis.log(redis.LOG_NOTICE, "newClientFundsTransfer") \
     local currencyid = redis.call("hget", "broker:" .. ARGV[3] .. ":account:" ..ARGV[4], "currencyid") \
     if not currencyid then \
       return {1, 1031} \
@@ -1402,9 +1403,11 @@ exports.registerScripts = function () {
     local localamount \
     local transactiontypeid = ARGV[10] \
     if transactiontypeid == "CD" or transactiontypeid == "CC" then \
+      --[[ deposit or credit ]] \
       amount = tonumber(ARGV[1]) \
       localamount = tonumber(ARGV[5]) \
     else \
+      --[[ withdrawal ]] \
       amount = -tonumber(ARGV[1]) \
       localamount = -tonumber(ARGV[5]) \
     end \
