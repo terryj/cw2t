@@ -481,7 +481,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
 
   // create a unix timestamp
   var now = new Date();
-  instrec.timestamp = commonbo.getUTCTimeStamp(now);
+  instrec.timestamp = now; //commonbo.getUTCTimeStamp(now);
 
   console.log(functioncode);
   console.log(instrec);
@@ -495,17 +495,23 @@ function updateDb(functioncode, instrumentcode, instrec) {
 
     // create symbol & add to lists
     if ("insttype" in instrec) {
-      console.log("creating..." + instrumentcode);
-
       // we only want to store part of the instrument record
       var dbinstrec = getDbInstrec(instrumentcode, instrec);
 
+      // just equities for now, may need to add other instrument types
+      if (dbinstrec.instrumenttypeid != "DE") {
+        return;
+      }
+
+      console.log("creating..." + instrumentcode);
+
+      // create/update the symbol & related sets
       db.hmset("symbol:" + instrumentcode, dbinstrec);
       db.sadd("symbol:symbolid", instrumentcode);
       db.sadd("nbtsymbol:" + dbinstrec.nbtsymbol + ":symbols", instrumentcode);
 
       // create tab delimitted text
-      var txt = dbinstrec.ask + "\t"
+      /*var txt = dbinstrec.ask + "\t"
         + dbinstrec.bid + "\t"
         + dbinstrec.currencyid + "\t"
         + dbinstrec.exchangeid + "\t"
@@ -526,7 +532,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
       // & write to a file
       fs.appendFile('symbols.txt', txt, function (err) {
         if (err) return console.log(err);
-      });
+      });*/
     }
   }
 
@@ -554,9 +560,7 @@ function getDbInstrec(instrumentcode, instrec) {
   // add additional values we need
   dbinstrec.symbolid = instrumentcode;
   dbinstrec.nbtsymbol = instrumentcode;
-  dbinstrec.hedge = '0';
   dbinstrec.hedgesymbolid = "";
-  dbinstrec.marginpercent = '100';
   dbinstrec.exchangeid = "L";
 
   // add our own instrument type, as we use text not numeric
