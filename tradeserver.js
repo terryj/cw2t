@@ -386,7 +386,12 @@ function dealAtQuote(order) {
     if (ret[0] == 0) {
       console.log("Error in scriptdealatquote, order #" + ret[2] + " - " + commonbo.getReasonDesc(ret[1]));
 
-      // script will publish the order back to the operator type if an order was created
+      // if the orderid=0, no order was created & a message needs to be sent back to the user - todo
+      if (ret[2] == 0) {
+      }
+
+      // otherwise, script will publish the order back to the operator type
+
       return;
     }
 
@@ -1961,126 +1966,7 @@ function registerScripts() {
   --[[ publish quote to operator type, with operator id, so can be forwarded as appropriate ]] \
   publishquote(brokerid, quoteid, quoterequest["operatortype"], quoterequest["operatorid"]) \
   return errorcode \
-';
-
-  /*
-  * scriptQuote
-  * script to store and publish a quote
-  * params: 1=quoterequestid, 2=symbolid, 3=bidpx, 4=offerpx, 5=bidsize, 6=offersize, 7=validuntiltime, 8=transacttime, 9=currencyid, 10=settlcurrencyid, 11=quoterid, 12=quotertype, 13=futsettdate, 14=bidquotedepth, 15=offerquotedepth, 16=externalquoteid, 17=cashorderqty, 18=settledays, 19=noseconds, 20=brokerid, 21=settlmnttypid
-  */
-  /*scriptQuote = publishquote + getcosts + '\
-  redis.log(redis.LOG_NOTICE, "scriptQuote") \
-  local errorcode = 0 \
-  local brokerid = ARGV[20] \
-  local brokerkey = "broker:" .. brokerid \
-  --[[ get the quote request ]] \
-  local quoterequest = gethashvalues(brokerkey .. ":quoterequest:" .. ARGV[1]) \
-  if not quoterequest["quoterequestid"] then \
-    return 1014 \
-  end \
-  --[[ get the client ]] \
-  local clientid = redis.call("get", brokerkey .. ":account:" .. quoterequest["accountid"] .. ":client") \
-  if not clientid then \
-    return 1017 \
-  end \
-  --[[ get touch prices - using delayed - todo: may need to look up delayed/live ]] \
-  local bestbid = 0 \
-  local bestoffer = 0 \
-  local symbolfields = {"bid", "ask"} \
-  local symbolvals = redis.call("hmget", "symbol:" .. quoterequest["symbolid"], unpack(symbolfields)) \
-  if symbolvals[1] then \
-    bestbid = symbolvals[1] \
-    bestoffer = symbolvals[2] \
-  end \
-  local bidquantity = "" \
-  local offerquantity = "" \
-  local bidfinance = 0 \
-  local offerfinance = 0 \
-  local cashorderqty \
-  local side \
-  local costs = {0,0,0,0} \
-  --[[ calculate the quantity from the cashorderqty, if necessary ]] \
-  --[[ note that the value of the quote may be greater than client cash - any order will be credit checked so does not matter ]] \
-  if ARGV[3] == "" then \
-    local offerprice = tonumber(ARGV[4]) \
-    if quoterequest["quantity"] == "" or tonumber(quoterequest["quantity"]) == 0 then \
-      offerquantity = round(tonumber(quoterequest["cashorderqty"]) / offerprice, 0) \
-    else \
-      offerquantity = tonumber(quoterequest["quantity"]) \
-    end \
-    --[[ set the amount of cash based on the quoted price ]] \
-    cashorderqty = round(offerquantity * offerprice, 2) \
-    side = 1 \
-  else \
-    local bidprice = tonumber(ARGV[3]) \
-    if quoterequest["quantity"] == "" or tonumber(quoterequest["quantity"]) == 0 then \
-      bidquantity = round(tonumber(quoterequest["cashorderqty"]) / bidprice, 0) \
-    else \
-      bidquantity = tonumber(quoterequest["quantity"]) \
-    end \
-    --[[ set the amount of cash based on the quoted price ]] \
-    cashorderqty = round(bidquantity * bidprice, 2) \
-    side = 2 \
-  end \
-  redis.log(redis.LOG_NOTICE, cashorderqty) \  
-  --[[ get the costs ]] \
-  costs = getcosts(brokerid, clientid, quoterequest["symbolid"], side, cashorderqty, ARGV[10]) \
-  --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
-  local quoteid = redis.call("hincrby", brokerkey, "lastquoteid", 1) \
-  --[[ store the quote ]] \
-  redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", brokerid, "accountid", quoterequest["accountid"], "clientid", quoterequest["clientid"], "quoteid", quoteid, "symbolid", quoterequest["symbolid"], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", cashorderqty, "settledays", ARGV[18], "noseconds", ARGV[19], "settlmnttypid", ARGV[21], "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4]) \
-  --[[ add to sets of quotes & quotes for this account ]] \
-  redis.call("sadd", brokerkey .. ":quotes", quoteid) \
-  redis.call("sadd", brokerkey .. ":account:" .. quoterequest["accountid"] .. ":quotes", quoteid) \
-  redis.call("sadd", brokerkey .. ":quoteid", "quote:" .. quoteid) \
-  --[[ keep a list of quotes for the quoterequest ]] \
-  redis.call("sadd", brokerkey .. ":quoterequest:" .. ARGV[1] .. ":quotes", quoteid) \
-  local quotestatusid \
-  --[[ bid or offer size needs to be non-zero ]] \
-  if ARGV[5] == 0 and ARGV[6] == 0 then \
-    quotestatusid = "5" \
-  else \
-    quotestatusid = "0" \
-  end \
-  --[[ update status to stored quoterequest ]] \
-  redis.call("hmset", brokerkey .. ":quoterequest:" .. ARGV[1], "quotestatusid", quotestatusid) \
-  --[[ publish quote to operator type, with operator id, so can be forwarded as appropriate ]] \
-  publishquote(brokerid, quoteid, quoterequest["operatortype"], quoterequest["operatorid"]) \
-  return errorcode \
-  ';*/
-
-  /* finance
-  local bidquantity = "" \
-  local offerquantity = "" \
-  local bidfinance = 0 \
-  local offerfinance = 0 \
-  --[[ calculate the quantity from the cashorderqty, if necessary, & calculate any finance ]] \
-  if ARGV[3] == "" then \
-    local offerprice = tonumber(ARGV[4]) \
-    if vals[4] == "" then \
-      offerquantity = tonumber(ARGV[6]) \
-      --[[ offerquantity = round(tonumber(cashorderqty) / offerprice, 0) ]] \
-    else \
-      offerquantity = tonumber(vals[4]) \
-    end \
-    --[[ this needs revisiting ]]\
-    --[[offerfinance = calcfinance(instrumenttypeid, offerquantity * offerprice, vals[7], 1, vals[6]) ]]\
-  else \
-    local bidprice = tonumber(ARGV[3]) \
-    if vals[4] == "" then \
-      bidquantity = tonumber(ARGV[5]) \
-      --[[ bidquantity = round(tonumber(cashorderqty) / bidprice, 0) ]] \
-    else \
-      bidquantity = tonumber(vals[4]) \
-    end \
-    --[[ this needs revisiting ]]\
-    --[[bidfinance = calcfinance(instrumenttypeid, bidquantity * bidprice, vals[7], 2, vals[6]) ]]\
-  end \
-    --[[ this needs revisiting ]]\
-    --[[offerfinance = calcfinance(instrumenttypeid, offerquantity * offerprice, vals[7], 1, vals[6]) ]]\
-    --[[ this needs revisiting ]]\
-    --[[bidfinance = calcfinance(instrumenttypeid, bidquantity * bidprice, vals[7], 2, vals[6]) ]]\
-  */
+  ';
 
   /*
   * scriptQuoteAck
