@@ -1443,11 +1443,11 @@ function registerScripts() {
   /*
   * newordersingle
   * store & process order  * params: accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid, cashorderqty, settlmnttypid, timestampms)
-  * returns: {success 0=fail, errorcode, orderid} or {success 1=ok, orderid,     return {cc[1], orderid, isin, mnemonic, exchangeid, instrumenttypeid, hedgesymbolid, hedgeorderid} \
+  * returns: {fail 0=fail, errorcode, orderid} or {success 1=ok, orderid, isin, mnemonic, exchangeid, instrumenttypeid, hedgesymbolid, hedgeorderid} \
   */
   newordersingle = neworder + getsettlcurramt + creditcheck + reverseside + commonbo.newtrade + publishorder + '\
   local newordersingle = function(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid, cashorderqty, settlmnttypid, timestampms) \
-    redis.log(redis.LOG_WARNING, "newordersingle") \
+    redis.log(redis.LOG_NOTICE, "newordersingle") \
     local orderid = neworder(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid, cashorderqty, settlmnttypid) \
     local brokerkey = "broker:" .. brokerid \
     local settlcurramt = getsettlcurramt(quantity, cashorderqty, price) \
@@ -1463,7 +1463,7 @@ function registerScripts() {
       publishorder(brokerid, orderid, operatortype) \
       return {cc[1], 1026, orderid} \
     end \
-    redis.log(redis.LOG_WARNING, "credit check ok") \
+    redis.log(redis.LOG_NOTICE, "credit check ok") \
     local hedgeorderid = "" \
     local symbol = gethashvalues("symbol:" .. symbolid) \
     local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
@@ -1515,6 +1515,9 @@ function registerScripts() {
   scriptdealatquote = newordersingle + '\
   redis.log(redis.LOG_WARNING, "scriptdealatquote") \
   local quote = gethashvalues("broker:" .. ARGV[1] .. ":quote:" .. ARGV[4]) \
+  if not quote["quoteid"] then \
+    return {0, 1024, ''} \
+  end \
   local side \
   local quantity \
   local price \
