@@ -264,6 +264,9 @@ exports.registerScripts = function () {
     case 1033:
       desc = "Cannot calculate a consideration";
       break;
+    case 1034:
+      desc = "Either quantity or cashorderqty must be present";
+      break;
     default:
       desc = "Unknown reason";
     }

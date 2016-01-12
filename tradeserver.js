@@ -1878,6 +1878,11 @@ function registerScripts() {
   redis.call("sadd", KEYS[1] .. ":quoterequestid", "quoterequest:" .. quoterequestid) \
   --[[ add to set of quoterequests for this account ]] \
   redis.call("sadd", KEYS[1] .. ":account:" .. accountid .. ":quoterequests", quoterequestid) \
+  --[[ check there is some kind of quantity ]] \
+  if ARGV[3] == "" and ARGV[9] == "" then \
+    quoteack(ARGV[2], quoterequestid, 5, 99, "Either quantity or cashorderqty must be present") \
+    return {1034} \
+  end \
   --[[ get required instrument values for external feed ]] \
   local symbol = gethashvalues("symbol:" .. ARGV[12]) \
   if not symbol["symbolid"] then \
