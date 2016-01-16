@@ -276,17 +276,20 @@ exports.registerScripts = function () {
 
   exports.getReasonDesc = getReasonDesc;
 
-
+  /*
+  * isHoliday()
+  * checks whether a date is a holiday
+  * params: date object, set of holidays
+  * returns: true if the date is a holiday else false
+  */
   function isHoliday(datetocheck, holidays) {
-    var found = false;
-
     var datetocheckstr = getUTCDateString(datetocheck);
-
+console.log(datetocheckstr);
     if (datetocheckstr in holidays) {
-      found = true;
+      return true;
     }
 
-    return found;
+    return false;
   }
 
   /*
@@ -322,35 +325,6 @@ exports.registerScripts = function () {
   }
 
   exports.getSettDate = getSettDate;
-
-  //
-  // compare hour & minute with timezone open/close times to determine in/out of hours
-  // returns: 0=in hours, 1=ooh
-  // todo: review days
-  //
-  getmarkettype = '\
-  local getmarkettype = function(symbolid, hour, minute, day) \
-    local markettype = 0 \
-    local timezoneid = redis.call("hget", "symbol:" .. symbolid, "timezoneid") \
-    if not timezoneid then \
-      return markettype \
-    end \
-    local fields = {"openhour","openminute","closehour","closeminute"} \
-    local vals = redis.call("hmget", "timezone:" .. timezoneid, unpack(fields)) \
-    if tonumber(day) == 0 or tonumber(day) == 6 then \
-      markettype = 1 \
-    elseif tonumber(hour) < tonumber(vals[1]) or tonumber(hour) > tonumber(vals[3]) then \
-      markettype = 1 \
-    elseif tonumber(hour) == tonumber(vals[1]) and tonumber(minute) < tonumber(vals[2]) then \
-      markettype = 1 \
-    elseif tonumber(hour) == tonumber(vals[3]) and tonumber(minute) > tonumber(vals[4]) then \
-      markettype = 1 \
-    end \
-    return markettype \
-  end \
-  ';
-
-  exports.getmarkettype = getmarkettype;
 
   /*
   * setsymbolkey()
@@ -394,6 +368,12 @@ exports.registerScripts = function () {
 
   exports.getsymbolkey = getsymbolkey;
 
+  /*
+  * getmargin()
+  * calculates margin for a position
+  * params: symbol, quantity
+  * returns: margin
+  */
   getmargin = round + '\
   local getmargin = function(symbolid, quantity) \
     local margin = 0 \
@@ -504,7 +484,7 @@ exports.registerScripts = function () {
   /*
   * getaccountbalance()
   * params: accountid, brokerid
-  * returns: cleared & local currency balances
+  * returns: cleared & local currency cleared balances
   */
   getaccountbalance = '\
   local getaccountbalance = function(accountid, brokerid) \
@@ -517,7 +497,7 @@ exports.registerScripts = function () {
   /*
   * getaccountbalanceuncleared()
   * params: accountid, brokerid
-  * returns: uncleared balance & local currency balances
+  * returns: uncleared & local currency uncleared balances
   */
   getaccountbalanceuncleared = '\
   local getaccountbalanceuncleared = function(accountid, brokerid) \
@@ -1251,8 +1231,11 @@ exports.registerScripts = function () {
   */
   creditcheckwithdrawal = getaccountbalance + '\
   local creditcheckwithdrawal = function(brokerid, clientaccountid, withdrawalamount) \
+    redis.log(redis.LOG_NOTICE, "creditcheckwithdrawal") \
     local balance = getaccountbalance(clientaccountid, brokerid) \
-    if balance[0] >= withdrawalamount then \
+    if not balance[1] then \
+      return 1 \
+    elseif balance[1] >= withdrawalamount then \
       return 0 \
     else \
       return 1 \
@@ -1420,19 +1403,19 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * newClientFundsTransfer
+  * newclientfundstransfer
   * script to handle client deposits & withdrawals
   * keys: broker:<brokerid>
   * args: 1=action, 2=amount, 3=brokerid, 4=clientaccountid, 5=currencyid, 6=localamount, 7=note, 8=paymenttypeid, 9=rate, 10=reference, 11=timestamp, 12=timestampms, 13=clearancedate
   * returns: 0 if successful, else 1 & an error message code if unsuccessful
   */
-  exports.newClientFundsTransfer = newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + getbrokeraccountsmapid + addunclearedlistitem + creditcheckwithdrawal + '\
+  exports.newclientfundstransfer = newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + getbrokeraccountsmapid + addunclearedlistitem + creditcheckwithdrawal + '\
     redis.log(redis.LOG_NOTICE, "newClientFundsTransfer") \
     local action = tonumber(ARGV[1]) \
     local paymenttypeid = ARGV[8] \
     if paymenttypeid == "DCP" then \
       if action == 1 then \
-        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[8], ARGV[9], ARGV[10], "CRR") \
+        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CRR") \
         newposting(ARGV[4], ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
         updateaccountbalanceuncleared(ARGV[4], ARGV[2], ARGV[3], ARGV[6]) \
         local clientsettlementaccountid = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client Settlement") \
@@ -1447,7 +1430,7 @@ exports.registerScripts = function () {
         if creditcheckwithdrawal(ARGV[3], ARGV[4], ARGV[2]) == 1 then \
           return {1, "Insufficient cleared funds"} \
         end \
-        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[8], ARGV[9], ARGV[10], "CAP") \
+        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CAP") \
         newposting(ARGV[4], -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), transactionid, ARGV[12]) \
         updateaccountbalance(ARGV[4], -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
         local clientfundsaccount = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client Funds") \

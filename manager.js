@@ -567,7 +567,7 @@ function cashTrans(cashtrans, userid, conn) {
 
   timestamp = new Date();
 
-  newClientFundsTransfer(1, 100, 1, 1, "GBP", 100, "note about the item", "DCP", 1, "ref1", timestamp);
+  newClientFundsTransfer(2, 100, 1, 1, "GBP", 100, "note", "BAC", 1, "ref1", timestamp);
 }
 
 function loadHolidays() {
@@ -586,26 +586,27 @@ function newClientFundsTransfer(action, amount, brokerid, clientaccountid, curre
   // milliseconds since epoch, used for scoring datetime indexes
   var timestampms = timestamp.getTime();
 
+  // get the number of days for the payment to clear
   db.hget("paymenttypes:" + paymenttypeid, "clearancedays", function(err, clearancedays) {
     if (err) {
       console.log(err);
       return;
     }
-    console.log("days:" + clearancedays);
+
+    console.log("clearancedays:" + clearancedays);
 
     if (clearancedays == null) {
-      console.log("Clearance days not found for this payment type";
+      console.log("Clearance days not found for this payment type");
       return;
     }
 
     // calculate a clearance date from the number of clearance days
     var clearancedate = commonbo.getUTCDateString(commonbo.getSettDate(timestamp, clearancedays, holidays));
 
-    console.log("date:" + clearancedate);
-    //commonbo.getSettDate(timestamp, clearancedays, holidays);
+    console.log("pay date:" + timestamp);
+    console.log("clearance date:" + clearancedate);
 
-  // note we are passing the key in
-    db.eval(commonbo.newClientFundsTransfer, 1, "broker:" + brokerid, action, amount, brokerid, clientaccountid, currencyid, localamount, note, paymenttypeid, rate, reference, timestamp, timestampms, clearancedate, function(err, ret) {
+    db.eval(commonbo.newclientfundstransfer, 1, "broker:" + brokerid, action, amount, brokerid, clientaccountid, currencyid, localamount, note, paymenttypeid, rate, reference, timestamp, timestampms, clearancedate, function(err, ret) {
       if (err) throw err;
       console.log(ret);
     });
