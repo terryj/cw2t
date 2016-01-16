@@ -1026,47 +1026,60 @@ console.log(datetocheckstr);
   exports.getfreemargin = getfreemargin;
 
   /*
-  * newtradeaccounttransaction()
-  * create transaction & postings for the cash side of a trade
-  * params: amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, contraaccountid, note, rate, timestamp, tradeid, transactiontypeid, timestamp in milliseconds
-  */
-  newtradeaccounttransaction = newtransaction + newposting + '\
-  local newtradeaccounttransaction = function(amount, brokerid, clientaccountid, currencyid, localamount, nominalaccountid, contraaccountid, note, rate, timestamp, tradeid, transactiontypeid, milliseconds) \
-    local transactionid = newtransaction(amount, brokerid, currencyid, localamount, note, rate, "trade:" .. tradeid, timestamp, transactiontypeid) \
-    if transactiontypeid == "CP" then \
-      --[[ payment from client point of view, receipt from broker point of view ]] \
-      newposting(clientaccountid, -amount, brokerid, -localamount, transactionid, milliseconds, transactiontypeid) \
-      newposting(contraaccountid, amount, brokerid, localamount, transactionid, milliseconds, transactiontypeid) \
-      newposting(nominalaccountid, amount, brokerid, localamount, transactionid, milliseconds, transactiontypeid) \
-    else \
-      --[[ receipt from client point of view, payment from broker point of view ]] \
-      newposting(clientaccountid, amount, brokerid, localamount, transactionid, milliseconds, transactiontypeid) \
-      newposting(contraaccountid, -amount, brokerid, -localamount, transactionid, milliseconds, transactiontypeid) \
-      newposting(nominalaccountid, -amount, brokerid, -localamount, transactionid, milliseconds, transactiontypeid) \
-    end \
-  end \
-  ';
-
-  /*
-  * newtradeaccounttransactions()
+  * newtradetransaction()
   * cash side of a client trade
-  * creates a separate transaction for the consideration & each of the cost items
   */
-  newtradeaccounttransactions = newtradeaccounttransaction + getbrokeraccountsmapid + '\
-  local newtradeaccounttransactions = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side, milliseconds) \
-    redis.log(redis.LOG_NOTICE, "newtradeaccounttransactions") \
-    --[[ get broker/supplier accounts ]] \
-    local nominalconsiderationid = getbrokeraccountsmapid(brokerid, currencyid, "nominalconsideration") \
-    local nominalcommissionid = getbrokeraccountsmapid(brokerid, currencyid, "nominalcommission") \
-    local nominalptmid = getbrokeraccountsmapid(brokerid, currencyid, "nominalptm") \
-    local nominalstampdutyid = getbrokeraccountsmapid(brokerid, currencyid, "nominalstampduty") \
-    local brokertradingid = getbrokeraccountsmapid(brokerid, currencyid, "brokertrading") \
-    local suppliercrestid = getbrokeraccountsmapid(brokerid, currencyid, "suppliercrest") \
-    local supplierptmid = getbrokeraccountsmapid(brokerid, currencyid, "supplierptm") \
+  newtradetransaction = getbrokeraccountsmapid + newtransaction + newposting + '\
+  local newtradetransaction = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, note, rate, timestamp, tradeid, side, milliseconds) \
+    redis.log(redis.LOG_NOTICE, "newtradetransaction") \
+    --[[ get broker accounts ]] \
+    local considerationaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Stock B/S") \
+    local commissionaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Commission") \
+    local ptmaccountid = getbrokeraccountsmapid(brokerid, currencyid, "PTM levy") \
+    local sdrtaccountid = getbrokeraccountsmapid(brokerid, currencyid, "SDRT") \
     --[[ side determines pay / receive ]] \
     if tonumber(side) == 1 then \
-      --[[ client buy, so cash payment from client point of view ]] \
-      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominalconsiderationid, suppliercrestid, note, rate, timestamp, tradeid, "CP", milliseconds) \
+      local totalamount = consideration + commission + stampduty + ptmlevy \
+      local localamount = totalamount * rate \
+      local transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt", rate, "trade id: " .. tradeid, timestamp, "TRC") \
+      newposting(clientaccountid, totalamount, brokerid, localamount, transactionid) \
+      local fromcleared;
+      local fromuncleared;
+      local balance = getaccountbalance(clientaccountid, brokerid) \
+      if balance[1] >= totalamount then \
+        fromcleared = totalamount \
+        fromuncleared = 0 \
+      elseif balance[1] == 0 then \
+        fromcleared = 0 \
+        fromuncleared = totalamount \
+      else \
+        fromcleared = balance[1] \
+        fromuncleared = totalamount - fromcleared \ 
+      end \
+      if fromuncleared > 0 then \
+        updateaccountbalanceuncleared(clientaccountid, 0 -fromuncleared, brokerid, -localamount) \
+      end \
+      if fromcleared > 0 then \
+        updateAccountBalance(clientaccountid, -fromcleared, brokerid, -localamount) \
+      end if \
+      local considerationlocalamount = consideration * rate \
+      local commissionlocalamount = commission * rate \
+      local ptmlevylocalamount = ptmlevy * rate \
+      local stampdutylocalamount = stampduty * rate \
+      newposting(considerationaccountid, consideration, brokerid, considerationlocalamount, transactionid) \
+      updateaccountbalance(considerationaccountid, consideration, brokerid, considerationlocalamount) \
+      if commission > 0 then \
+        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid) \
+        updateaccountbalance(commissionaccountid, commission, brokerid, commissionlocalamount) \
+      endif \
+      if ptmlevy > 0 then \
+        newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid) \
+        updateaccountbalance(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount) \
+      endif \
+      if stampduty > 0 then \
+        newposting(sdrtaccountid, stampduty, brokerid, stampdutylocalamount, transactionid) \
+        updateaccountbalance(sdrtaccountid, stampduty, brokerid, stampdutylocalamount) \
+      endif \
     else \
       --[[ client sell, so cash received from client point of view ]] \
       newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominalconsiderationid, suppliercrestid, note, rate, timestamp, tradeid, "CR", milliseconds) \
@@ -1087,8 +1100,6 @@ console.log(datetocheckstr);
     return 0 \
   end \
   ';
-
-  exports.newtradeaccounttransactions = newtradeaccounttransactions;
 
   /*
   * newpositiontransaction()
@@ -1135,7 +1146,7 @@ console.log(datetocheckstr);
   * newtrade()
   * stores a trade & updates cash & position
   */
-  newtrade = newpositiontransaction + newtradeaccounttransactions + publishtrade + '\
+  newtrade = newtradetransaction + newpositiontransaction + publishtrade + '\
   local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, milliseconds) \
     redis.log(redis.LOG_NOTICE, "newtrade") \
     local brokerkey = "broker:" .. brokerid \
@@ -1160,7 +1171,7 @@ console.log(datetocheckstr);
       cost = -tonumber(settlcurramt) \
       note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
-    local retval = newtradeaccounttransactions(settlcurramt, costs[1], costs[2], costs[3], costs[4], brokerid, accountid, settlcurrencyid, settlcurramt, note, 1, timestamp, tradeid, side, milliseconds) \
+    local retval = newtradetransaction(settlcurramt, costs[1], costs[2], costs[3], costs[4], brokerid, accountid, settlcurrencyid, note, 1, timestamp, tradeid, side, milliseconds) \
     newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, milliseconds) \
     publishtrade(brokerid, tradeid, 6) \
     return tradeid \
