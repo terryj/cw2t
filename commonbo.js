@@ -1029,22 +1029,22 @@ console.log(datetocheckstr);
   * newtradetransaction()
   * cash side of a client trade
   */
-  newtradetransaction = getbrokeraccountsmapid + newtransaction + newposting + '\
-  local newtradetransaction = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, note, rate, timestamp, tradeid, side, milliseconds) \
+  newtradetransaction = getbrokeraccountsmapid + newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + addunclearedtradelistitem + '\
+  local newtradetransaction = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, note, rate, timestamp, tradeid, side, tsmilliseconds, futsettdate) \
     redis.log(redis.LOG_NOTICE, "newtradetransaction") \
     --[[ get broker accounts ]] \
     local considerationaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Stock B/S") \
     local commissionaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Commission") \
     local ptmaccountid = getbrokeraccountsmapid(brokerid, currencyid, "PTM levy") \
     local sdrtaccountid = getbrokeraccountsmapid(brokerid, currencyid, "SDRT") \
-    --[[ side determines pay / receive ]] \
+    --[[ process based on buy/sell ]] \
     if tonumber(side) == 1 then \
       local totalamount = consideration + commission + stampduty + ptmlevy \
       local localamount = totalamount * rate \
-      local transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt", rate, "trade id: " .. tradeid, timestamp, "TRC") \
-      newposting(clientaccountid, totalamount, brokerid, localamount, transactionid) \
-      local fromcleared;
-      local fromuncleared;
+      local transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt", rate, "Trade id: " .. tradeid, timestamp, "TRC") \
+      newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, tsmilliseconds) \
+      local fromcleared; \
+      local fromuncleared; \
       local balance = getaccountbalance(clientaccountid, brokerid) \
       if balance[1] >= totalamount then \
         fromcleared = totalamount \
@@ -1056,48 +1056,47 @@ console.log(datetocheckstr);
         fromcleared = balance[1] \
         fromuncleared = totalamount - fromcleared \ 
       end \
+      local localfromcleared = fromcleared * rate \
+      local localfromuncleared = fromuncleared * rate \
       if fromuncleared > 0 then \
-        updateaccountbalanceuncleared(clientaccountid, 0 -fromuncleared, brokerid, -localamount) \
+        updateaccountbalanceuncleared(clientaccountid, -fromuncleared, brokerid, -localfromcleared) \
       end \
       if fromcleared > 0 then \
-        updateAccountBalance(clientaccountid, -fromcleared, brokerid, -localamount) \
-      end if \
+        updateaccountbalance(clientaccountid, -fromcleared, brokerid, -localfromuncleared) \
+      end \
       local considerationlocalamount = consideration * rate \
       local commissionlocalamount = commission * rate \
       local ptmlevylocalamount = ptmlevy * rate \
       local stampdutylocalamount = stampduty * rate \
-      newposting(considerationaccountid, consideration, brokerid, considerationlocalamount, transactionid) \
+      newposting(considerationaccountid, consideration, brokerid, considerationlocalamount, transactionid, tsmilliseconds) \
       updateaccountbalance(considerationaccountid, consideration, brokerid, considerationlocalamount) \
       if commission > 0 then \
-        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid) \
+        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, tsmilliseconds) \
         updateaccountbalance(commissionaccountid, commission, brokerid, commissionlocalamount) \
       endif \
       if ptmlevy > 0 then \
-        newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid) \
+        newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid, tsmilliseconds) \
         updateaccountbalance(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount) \
       endif \
       if stampduty > 0 then \
-        newposting(sdrtaccountid, stampduty, brokerid, stampdutylocalamount, transactionid) \
+        newposting(sdrtaccountid, stampduty, brokerid, stampdutylocalamount, transactionid, tsmilliseconds) \
         updateaccountbalance(sdrtaccountid, stampduty, brokerid, stampdutylocalamount) \
       endif \
     else \
-      --[[ client sell, so cash received from client point of view ]] \
-      newtradeaccounttransaction(consideration, brokerid, clientaccountid, currencyid, localamount, nominalconsiderationid, suppliercrestid, note, rate, timestamp, tradeid, "CR", milliseconds) \
+      local totalamount = consideration - commission \
+      local localamount = totalamount * rate \
+      local touncleared = totalamount \
+      local transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, “Trade payment”, rate, "Trade id: " .. tradeid, timestamp, "TPC") \
+      newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, tsmilliseconds) \
+      updateaccountbalanceuncleared(clientaccountid, totalamount, brokerid, localamount) \
+      addunclearedtradelistitem(brokerid, futsettdate, clientaccountid, tradeid, transactionid) \
+      newposting(considerationaccountid, -consideration, brokerid, -considerationlocalamount, transactionid, tsmilliseconds) \
+      updateaccountbalance(considerationaccountid, -consideration, brokerid, -considerationlocalamount) \
+      if commission > 0 then \
+        newposting(commissionaccountid, commission, brokerid, commisionlocalamount, transactionid, tsmilliseconds) \
+        updateaccountbalance(commissionaccountid,  consideration, brokerid, commissionlocalamount) \
+      end \
     end \
-    --[[ client always pays costs ]] \
-    if tonumber(commission) > 0 then \
-       newtradeaccounttransaction(commission, brokerid, clientaccountid, currencyid, commission, nominalcommissionid, brokertradingid, note .. " Commission", rate, timestamp, tradeid, "CP", milliseconds) \
-    end \
-    if tonumber(ptmlevy) > 0 then \
-       newtradeaccounttransaction(ptmlevy, brokerid, clientaccountid, currencyid, ptmlevy, nominalptmid, supplierptmid, note .. " PTM Levy", rate, timestamp, tradeid, "CP", milliseconds) \
-    end \
-    if tonumber(stampduty) > 0 then \
-       newtradeaccounttransaction(stampduty, brokerid, clientaccountid, currencyid, stampduty, nominalstampdutyid, suppliercrestid, note .. "Stamp Duty", rate, timestamp, tradeid, "CP", milliseconds) \
-    end \
-    if tonumber(contractcharge) > 0 then \
-       newtradeaccounttransaction(contractcharge, brokerid, clientaccountid, currencyid, contractcharge, nominalcommissionid, brokertradingid, note .. " Contract Charge", rate, timestamp, tradeid, "CP", milliseconds) \
-    end \
-    return 0 \
   end \
   ';
 
@@ -1147,7 +1146,7 @@ console.log(datetocheckstr);
   * stores a trade & updates cash & position
   */
   newtrade = newtradetransaction + newpositiontransaction + publishtrade + '\
-  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, milliseconds) \
+  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, tsmilliseconds) \
     redis.log(redis.LOG_NOTICE, "newtrade") \
     local brokerkey = "broker:" .. brokerid \
     local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
@@ -1171,7 +1170,7 @@ console.log(datetocheckstr);
       cost = -tonumber(settlcurramt) \
       note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
-    local retval = newtradetransaction(settlcurramt, costs[1], costs[2], costs[3], costs[4], brokerid, accountid, settlcurrencyid, note, 1, timestamp, tradeid, side, milliseconds) \
+    local retval = newtradetransaction(settlcurramt, costs[1], costs[2], costs[3], costs[4], brokerid, accountid, settlcurrencyid, note, 1, timestamp, tradeid, side, tsmilliseconds, futsettdate) \
     newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, milliseconds) \
     publishtrade(brokerid, tradeid, 6) \
     return tradeid \
@@ -1229,9 +1228,23 @@ console.log(datetocheckstr);
   local addunclearedlistitem = function(brokerid, clearancedate, clientaccountid, transactionid) \
     redis.log(redis.LOG_NOTICE, "addunclearedlistitem") \
     local brokerkey = "broker:" .. brokerid \
-    local unclearedlistid = redis.call("hincrby", brokerkey, "unclearedlistid", 1) \
+    local unclearedlistid = redis.call("hincrby", brokerkey, "lastunclearedlistid", 1) \
     redis.call("hmset", brokerkey .. ":unclearedlist:" .. unclearedlistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "transactionid", transactionid, "unclearedlistid", unclearedlistid) \
     redis.call("sadd", brokerkey .. ":unclearedlist", unclearedlistid) \
+  end \
+  ';
+
+  /*
+  * addunclearedtradelistitem()
+  * add an item to the uncleared trade list
+  */
+  addunclearedtradelistitem = '\
+  local addunclearedtradelistitem = function(brokerid, clearancedate, clientaccountid, tradeid, transactionid) \
+    redis.log(redis.LOG_NOTICE, "addunclearedtradelistitem") \
+    local brokerkey = "broker:" .. brokerid \
+    local unclearedtradelistid = redis.call("hincrby", brokerkey, "lastunclearedtradelistid", 1) \ 
+    redis.call("hmset", brokerkey .. ":unclearedtradelist:" .. unclearedtradelistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "transactionid", transactionid, "unclearedtradelistid", unclearedtradelistid) \
+    redis.call("sadd", brokerkey .. ":unclearedtradelistid", unclearedtradelistid) \
   end \
   ';
 
