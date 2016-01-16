@@ -52,6 +52,7 @@ var serverid = 11; // must be unique, use .ini file?
 var servertype = "user";
 var serverstatus = {};
 var feedtype = "nbtrader";
+var holidays = {};
 
 // redis scripts
 var scriptgetclients;
@@ -549,6 +550,7 @@ function cashTrans(cashtrans, userid, conn) {
 
   console.log(cashtrans);
 
+  cashtrans.action = 1;
   cashtrans.bankaccountid = 999988;
   cashtrans.clientaccountid = 1;
   cashtrans.localamount = cashtrans.amount;
@@ -563,13 +565,50 @@ function cashTrans(cashtrans, userid, conn) {
 
   console.log(cashtrans);
 
-  // milliseconds since epoch, used for scoring datetime indexes
-  var milliseconds = new Date().getTime();
+  timestamp = new Date();
 
-  // note we are passing the key in, so as to facilitate clustering
-  db.eval(commonbo.newClientFundsTransfer, 1, "broker:" + brokerid, cashtrans.amount, cashtrans.bankaccountid, brokerid, cashtrans.clientaccountid, cashtrans.localamount, cashtrans.note, cashtrans.rate, cashtrans.reference, cashtrans.timestamp, cashtrans.transactiontypeid, milliseconds, function(err, ret) {
+  newClientFundsTransfer(1, 100, 1, 1, "GBP", 100, "note about the item", "DCP", 1, "ref1", timestamp);
+}
+
+function loadHolidays() {
+  db.smembers("holidays", function(err, ret) {
     if (err) throw err;
-    console.log(ret);
+
+    for (var i = 0; i < ret.length; ++i) {
+      holidays[ret[i]] = ret[i];
+    }
+  });
+}
+
+function newClientFundsTransfer(action, amount, brokerid, clientaccountid, currencyid, localamount, note, paymenttypeid, rate, reference, timestamp) {
+  console.log("newClientFundsTransfer");
+
+  // milliseconds since epoch, used for scoring datetime indexes
+  var timestampms = timestamp.getTime();
+
+  db.hget("paymenttypes:" + paymenttypeid, "clearancedays", function(err, clearancedays) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+    console.log("days:" + clearancedays);
+
+    if (clearancedays == null) {
+      console.log("Clearance days not found for this payment type";
+      return;
+    }
+
+    // calculate a clearance date from the number of clearance days
+    var clearancedate = commonbo.getUTCDateString(commonbo.getSettDate(timestamp, clearancedays, holidays));
+
+    console.log("date:" + clearancedate);
+    //commonbo.getSettDate(timestamp, clearancedays, holidays);
+
+  // note we are passing the key in
+    db.eval(commonbo.newClientFundsTransfer, 1, "broker:" + brokerid, action, amount, brokerid, clientaccountid, currencyid, localamount, note, paymenttypeid, rate, reference, timestamp, timestampms, clearancedate, function(err, ret) {
+      if (err) throw err;
+      console.log(ret);
+    });
   });
 }
 
@@ -1404,6 +1443,7 @@ function start(user, conn) {
   sendMarkets(conn);
   sendStatus();
   sendUserid(user.userid, conn);
+  loadHolidays();
 
   // make this the last one, as sends ready status to f/e
   sendClients(user.brokerid, conn);

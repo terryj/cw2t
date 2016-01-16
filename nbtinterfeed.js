@@ -509,6 +509,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
       db.hmset("symbol:" + instrumentcode, dbinstrec);
       db.sadd("symbol:symbolid", "symbol:" + instrumentcode);
       db.sadd("nbtsymbol:" + dbinstrec.nbtsymbol + ":symbols", instrumentcode);
+      db.set("isin:" + dbinstrec.isin, instrumentcode);
 
       // create tab delimitted text
       /*var txt = dbinstrec.ask + "\t"

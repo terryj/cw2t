@@ -289,10 +289,13 @@ exports.registerScripts = function () {
     return found;
   }
 
-  //
-  // returns valid trading day as date object, taking into account weekends and holidays
-  // from passed date, number of settlement days (i.e. T+n) and list of holidays
-  //
+  /*
+  * getSettDate()
+  * returns valid trading day as date object, taking into account weekends and holidays
+  * params: date object, number of settlement days
+  * returns: settlement date object
+  * note: this is in javascript as the lua date library is not available from redis
+  */
   function getSettDate(dt, nosettdays, holidays) {
     var days = 0;
 
@@ -501,24 +504,26 @@ exports.registerScripts = function () {
   /*
   * getaccountbalance()
   * params: accountid, brokerid
-  * returns: account balance
+  * returns: cleared & local currency balances
   */
   getaccountbalance = '\
   local getaccountbalance = function(accountid, brokerid) \
-    local accountbalance = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid, "balance") \
-    return accountbalance \
+    local fields = {"balance","localbalance"} \
+    local vals = redis.call("hmget", "broker:" .. brokerid .. ":account:" .. accountid, unpack(fields)) \
+    return vals \
   end \
   ';
 
   /*
   * getaccountbalanceuncleared()
   * params: accountid, brokerid
-  * returns: uncleared account balance
+  * returns: uncleared balance & local currency balances
   */
   getaccountbalanceuncleared = '\
   local getaccountbalanceuncleared = function(accountid, brokerid) \
-    local accountbalanceuncleared = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid, "balanceuncleared") \
-    return accountbalanceuncleared \
+    local fields = {"balanceuncleared","localbalanceuncleared"} \
+    local vals = redis.call("hmget", "broker:" .. brokerid .. ":account:" .. accountid, unpack(fields)) \
+    return vals \
   end \
   ';
 
@@ -536,8 +541,8 @@ exports.registerScripts = function () {
 
   /*
   * updateaccountbalance()
-  * updates account balance & local currency balance
-  * amount & localamount can be -ve
+  * updates cleared account balance & local currency balance
+  * note: amount & localamount can be -ve
   */
   updateaccountbalance = '\
   local updateaccountbalance = function(accountid, amount, brokerid, localamount) \
@@ -549,8 +554,8 @@ exports.registerScripts = function () {
 
   /*
   * updateaccountbalanceuncleared()
-  * updates account balance & local currency balance
-  * amount & localamount can be -ve
+  * updates uncleared account balance & local currency balance
+  * note: amount & localamount can be -ve
   */
   updateaccountbalanceuncleared = '\
   local updateaccountbalanceuncleared = function(accountid, amount, brokerid, localamount) \
@@ -562,27 +567,21 @@ exports.registerScripts = function () {
 
   /*
   * newposting()
-  * creates a posting record & updates balances for an account
-  * params: accountid, amount, brokerid, localamount, transactionid, timestamp in millisecond, transactiontypeid
+  * creates a posting record
+  * params: accountid, amount, brokerid, localamount, transactionid, timestamp in milliseconds
   */
-  newposting = updateaccountbalance + updateaccountbalanceuncleared + '\
-  local newposting = function(accountid, amount, brokerid, localamount, transactionid, milliseconds, transactiontypeid) \
+  newposting = '\
+  local newposting = function(accountid, amount, brokerid, localamount, transactionid, tsmilliseconds) \
     local brokerkey = "broker:" .. brokerid \
     local postingid = redis.call("hincrby", brokerkey, "lastpostingid", 1) \
-    redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", amount, "localamount", localamount, "postingid", postingid, "transactionid", transactionid, "transactiontypeid", transactiontypeid) \
+    redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", amount, "localamount", localamount, "postingid", postingid, "transactionid", transactionid) \
     redis.call("sadd", brokerkey .. ":transaction:" .. transactionid .. ":postings", postingid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":postings", postingid) \
     --[[ add a sorted set for time based queries ]] \
-    redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", milliseconds, postingid) \
+    redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", tsmilliseconds, postingid) \
     redis.call("sadd", brokerkey .. ":postings", postingid) \
     redis.call("sadd", brokerkey .. ":postingid", "posting:" .. postingid) \
-    --[[ update either cleared or uncleared balance based on type of transaction ]] \
-    if transactiontypeid == "CC" or transactiontypeid == "CP" then \
-      updateaccountbalanceuncleared(accountid, amount, brokerid, localamount) \
-    else \
-      updateaccountbalance(accountid, amount, brokerid, localamount) \
-    end \
-  return postingid \
+    return postingid \
   end \
   ';
 
@@ -974,13 +973,13 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * getbrokeraccountid()
+  * getbrokeraccountsmapid()
   * gets a broker accountid for a default broker account
   * params: brokerid, currencyid, account name
   * returns: accountid if found, else 0
   */
-  getbrokeraccountid = '\
-  local getbrokeraccountid = function(brokerid, currencyid, name) \
+  getbrokeraccountsmapid = '\
+  local getbrokeraccountsmapid = function(brokerid, currencyid, name) \
     local brokerkey = "broker:" .. brokerid \
     local brokeraccountsmapid = redis.call("get", brokerkey .. ":" .. name .. ":" .. currencyid) \
     local accountid = 0 \
@@ -991,7 +990,7 @@ exports.registerScripts = function () {
   end \
   ';
 
-  exports.getbrokeraccountid = getbrokeraccountid;
+  exports.getbrokeraccountsmapid = getbrokeraccountsmapid;
 
   /*
   * getclientaccountid()
@@ -1073,17 +1072,17 @@ exports.registerScripts = function () {
   * cash side of a client trade
   * creates a separate transaction for the consideration & each of the cost items
   */
-  newtradeaccounttransactions = newtradeaccounttransaction + getbrokeraccountid + '\
+  newtradeaccounttransactions = newtradeaccounttransaction + getbrokeraccountsmapid + '\
   local newtradeaccounttransactions = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, localamount, note, rate, timestamp, tradeid, side, milliseconds) \
     redis.log(redis.LOG_NOTICE, "newtradeaccounttransactions") \
     --[[ get broker/supplier accounts ]] \
-    local nominalconsiderationid = getbrokeraccountid(brokerid, currencyid, "nominalconsideration") \
-    local nominalcommissionid = getbrokeraccountid(brokerid, currencyid, "nominalcommission") \
-    local nominalptmid = getbrokeraccountid(brokerid, currencyid, "nominalptm") \
-    local nominalstampdutyid = getbrokeraccountid(brokerid, currencyid, "nominalstampduty") \
-    local brokertradingid = getbrokeraccountid(brokerid, currencyid, "brokertrading") \
-    local suppliercrestid = getbrokeraccountid(brokerid, currencyid, "suppliercrest") \
-    local supplierptmid = getbrokeraccountid(brokerid, currencyid, "supplierptm") \
+    local nominalconsiderationid = getbrokeraccountsmapid(brokerid, currencyid, "nominalconsideration") \
+    local nominalcommissionid = getbrokeraccountsmapid(brokerid, currencyid, "nominalcommission") \
+    local nominalptmid = getbrokeraccountsmapid(brokerid, currencyid, "nominalptm") \
+    local nominalstampdutyid = getbrokeraccountsmapid(brokerid, currencyid, "nominalstampduty") \
+    local brokertradingid = getbrokeraccountsmapid(brokerid, currencyid, "brokertrading") \
+    local suppliercrestid = getbrokeraccountsmapid(brokerid, currencyid, "suppliercrest") \
+    local supplierptmid = getbrokeraccountsmapid(brokerid, currencyid, "supplierptm") \
     --[[ side determines pay / receive ]] \
     if tonumber(side) == 1 then \
       --[[ client buy, so cash payment from client point of view ]] \
@@ -1231,15 +1230,46 @@ exports.registerScripts = function () {
   end \
   ';
 
+  /*
+  * addunclearedlistitem()
+  * add an item to the uncleared cash list
+  */ 
+  addunclearedlistitem = '\
+  local addunclearedlistitem = function(brokerid, clearancedate, clientaccountid, transactionid) \
+    redis.log(redis.LOG_NOTICE, "addunclearedlistitem") \
+    local brokerkey = "broker:" .. brokerid \
+    local unclearedlistid = redis.call("hincrby", brokerkey, "unclearedlistid", 1) \
+    redis.call("hmset", brokerkey .. ":unclearedlist:" .. unclearedlistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "transactionid", transactionid, "unclearedlistid", unclearedlistid) \
+    redis.call("sadd", brokerkey .. ":unclearedlist", unclearedlistid) \
+  end \
+  ';
+
+  /*
+  * creditcheckwithdrawal()
+  * checks a requested withdrawal amount against cleared cash balance
+  * returns: 0 if ok, 1 if fails
+  */
+  creditcheckwithdrawal = getaccountbalance + '\
+  local creditcheckwithdrawal = function(brokerid, clientaccountid, withdrawalamount) \
+    local balance = getaccountbalance(clientaccountid, brokerid) \
+    if balance[0] >= withdrawalamount then \
+      return 0 \
+    else \
+      return 1 \
+    end \
+  end \
+  ';
+
   /*** Scripts ***/
 
   /*
-  *
-  * get holidays for a market, i.e. "L" = London...assume "L" for the time being?
+  * scriptgetholidays
+  * get holidays
+  * note: assumes UK holidays
   */
   exports.scriptgetholidays = '\
   local tblresults = {} \
-  local holidays = redis.call("smembers", "holidays:" .. ARGV[1]) \
+  local holidays = redis.call("smembers", "holidays" .. ARGV[1]) \
   for index = 1, #holidays do \
     table.insert(tblresults, {holidays[index]}) \
   end \
@@ -1393,33 +1423,43 @@ exports.registerScripts = function () {
   * newClientFundsTransfer
   * script to handle client deposits & withdrawals
   * keys: broker:<brokerid>
-  * args: amount, bankaccountid, brokerid, clientaccountid, localamount, note, rate, reference, timestamp, transactiontypeid, timestampms
+  * args: 1=action, 2=amount, 3=brokerid, 4=clientaccountid, 5=currencyid, 6=localamount, 7=note, 8=paymenttypeid, 9=rate, 10=reference, 11=timestamp, 12=timestampms, 13=clearancedate
   * returns: 0 if successful, else 1 & an error message code if unsuccessful
   */
-  exports.newClientFundsTransfer = newtransaction + newposting + getbrokeraccountid + '\
+  exports.newClientFundsTransfer = newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + getbrokeraccountsmapid + addunclearedlistitem + creditcheckwithdrawal + '\
     redis.log(redis.LOG_NOTICE, "newClientFundsTransfer") \
-    local currencyid = redis.call("hget", "broker:" .. ARGV[3] .. ":account:" ..ARGV[4], "currencyid") \
-    if not currencyid then \
-      return {1, 1031} \
+    local action = tonumber(ARGV[1]) \
+    local paymenttypeid = ARGV[8] \
+    if paymenttypeid == "DCP" then \
+      if action == 1 then \
+        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[8], ARGV[9], ARGV[10], "CRR") \
+        newposting(ARGV[4], ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
+        updateaccountbalanceuncleared(ARGV[4], ARGV[2], ARGV[3], ARGV[6]) \
+        local clientsettlementaccountid = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client Settlement") \
+        newposting(clientsettlementaccountid, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), transactionid, ARGV[12]) \
+        updateaccountbalanceuncleared(clientsettlementaccountid, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
+        addunclearedlistitem(ARGV[3], ARGV[13], ARGV[4],  transactionid) \
+      else \
+      end \
+    elseif paymenttypeid == "BAC" then \
+      if action == 1 then \
+      else \
+        if creditcheckwithdrawal(ARGV[3], ARGV[4], ARGV[2]) == 1 then \
+          return {1, "Insufficient cleared funds"} \
+        end \
+        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[8], ARGV[9], ARGV[10], "CAP") \
+        newposting(ARGV[4], -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), transactionid, ARGV[12]) \
+        updateaccountbalance(ARGV[4], -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
+        local clientfundsaccount = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client Funds") \
+        newposting(clientfundsaccount, ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
+        updateaccountbalance(clientfundsaccount, ARGV[2], ARGV[3], ARGV[6]) \
+      end \
+    elseif paymenttypeid == "CHQ" then \
+      if action == 1 then \
+      else \
+      end \
     end \
-    local amount \
-    local localamount \
-    local transactiontypeid = ARGV[10] \
-    if transactiontypeid == "CD" or transactiontypeid == "CC" then \
-      --[[ deposit or credit ]] \
-      amount = tonumber(ARGV[1]) \
-      localamount = tonumber(ARGV[5]) \
-    else \
-      --[[ withdrawal ]] \
-      amount = -tonumber(ARGV[1]) \
-      localamount = -tonumber(ARGV[5]) \
-    end \
-    local transactionid = newtransaction(ARGV[1], ARGV[3], currencyid, ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], transactiontypeid) \
-    --[[ update client account ]] \
-    newposting(ARGV[4], amount, ARGV[3], localamount, transactionid, ARGV[11], transactiontypeid) \
-    --[[ update bank account ]] \
-    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[11], transactiontypeid) \
-    return {0} \
+   return {0} \
   ';
 
   /*
@@ -1517,7 +1557,7 @@ exports.registerScripts = function () {
   * params: brokerid, corporateactionid, exdatems, timestamp, timestampms
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycacashdividend = getpositionsbysymbolbydate + round + newtransaction + getbrokeraccountid + newposting + '\
+  exports.applycacashdividend = getpositionsbysymbolbydate + round + newtransaction + getbrokeraccountsmapid + newposting + '\
     redis.log(redis.LOG_WARNING, "applycacashdividend") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
@@ -1536,8 +1576,8 @@ exports.registerScripts = function () {
       return {1, 1015} \
     end \
     --[[ get the relevant broker accounts ]] \
-    local nominalcorporateactions = getbrokeraccountid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
-    local bankfundsbroker = getbrokeraccountid(brokerid, symbol["currencyid"], "bankfundsbroker") \
+    local nominalcorporateactions = getbrokeraccountsmapid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
+    local bankfundsbroker = getbrokeraccountsmapid(brokerid, symbol["currencyid"], "bankfundsbroker") \
     if not nominalcorporateactions or not bankfundsbroker then \
       return {1, 1027} \
     end \
@@ -1583,7 +1623,7 @@ exports.registerScripts = function () {
   * params: brokerid, corporateactionid, exdatems, timestamp, timestampms
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycadividendscrip = getbrokeraccountid + getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + getsharesdue + newpositiontransaction + newtransaction + newposting + round + '\
+  exports.applycadividendscrip = getbrokeraccountsmapid + getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + getsharesdue + newpositiontransaction + newtransaction + newposting + round + '\
     redis.log(redis.LOG_WARNING, "applycadividendscrip") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
@@ -1601,8 +1641,8 @@ exports.registerScripts = function () {
       return {1, 1015} \
     end \
     --[[ get the broker account ids ]] \
-    local bankfundsbroker = getbrokeraccountid(brokerid, symbol["currencyid"], "bankfundsbroker") \
-    local nominalcorporateactions = getbrokeraccountid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
+    local bankfundsbroker = getbrokeraccountsmapid(brokerid, symbol["currencyid"], "bankfundsbroker") \
+    local nominalcorporateactions = getbrokeraccountsmapid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
     --[[ get all positions in the stock of the corporate action as at the ex-date ]] \
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
     for i = 1, #positions do \
@@ -1654,7 +1694,7 @@ exports.registerScripts = function () {
   * note: exdate is actual exdate - 1 & exdatems is millisecond representation of time at the end of exdate - 1
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycarightsexdate = getbrokeraccountid + getpositionsbysymbolbydate + getsharesdue + geteodprice + newpositiontransaction + newtransaction + newposting + '\
+  exports.applycarightsexdate = getbrokeraccountsmapid + getpositionsbysymbolbydate + getsharesdue + geteodprice + newpositiontransaction + newtransaction + newposting + '\
     redis.log(redis.LOG_WARNING, "applycarightsexdate") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
@@ -1687,8 +1727,8 @@ exports.registerScripts = function () {
       return {1, 1029} \
     end \
     --[[ get the relevant broker accounts ]] \
-    local nominalcorporateactions = getbrokeraccountid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
-    local bankfundsbroker = getbrokeraccountid(brokerid, symbol["currencyid"], "bankfundsbroker") \
+    local nominalcorporateactions = getbrokeraccountsmapid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
+    local bankfundsbroker = getbrokeraccountsmapid(brokerid, symbol["currencyid"], "bankfundsbroker") \
     if not nominalcorporateactions or not bankfundsbroker then \
       return {1, 1027} \
     end \
@@ -1782,7 +1822,7 @@ exports.registerScripts = function () {
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   * note: this corporate action is applied across all brokers
   */
-  exports.applycastocksplit = geteodprice + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + getbrokeraccountid + round + newtransaction + newposting + '\
+  exports.applycastocksplit = geteodprice + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + getbrokeraccountsmapid + round + newtransaction + newposting + '\
     redis.log(redis.LOG_WARNING, "applycastocksplit") \
     local corporateactionid = ARGV[1] \
     local exdate = ARGV[2] \
@@ -1824,8 +1864,8 @@ exports.registerScripts = function () {
           end \
           if sharesdue[2] > 0 then \
             --[[ get the relevant accounts for this broker ]] \
-            local nominalcorporateactions = getbrokeraccountid(brokers[j], symbol["currencyid"], "nominalcorporateactions") \
-            local bankfundsclient = getbrokeraccountid(brokers[j], symbol["currencyid"], "bankfundsclient") \
+            local nominalcorporateactions = getbrokeraccountsmapid(brokers[j], symbol["currencyid"], "nominalcorporateactions") \
+            local bankfundsclient = getbrokeraccountsmapid(brokers[j], symbol["currencyid"], "bankfundsclient") \
             if not nominalcorporateactions or not bankfundsclient then \
               return {1, 1027} \
             end \
@@ -1850,7 +1890,7 @@ exports.registerScripts = function () {
   * note: exdate is actually exdate - 1 in "YYYYMMDD" format, exdatems is millisecond representation of time at the end of exdate - 1
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycascripissue = geteodprice + getbrokeraccountid + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + newtransaction + newposting + '\
+  exports.applycascripissue = geteodprice + getbrokeraccountsmapid + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + newtransaction + newposting + '\
     redis.log(redis.LOG_WARNING, "applycascripissue") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
@@ -1874,8 +1914,8 @@ exports.registerScripts = function () {
       return {1, 1029} \
     end \
     --[[ get the relevant broker accounts ]] \
-    local nominalcorporateactions = getbrokeraccountid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
-    local bankfundsbroker = getbrokeraccountid(brokerid, symbol["currencyid"], "bankfundsbroker") \
+    local nominalcorporateactions = getbrokeraccountsmapid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
+    local bankfundsbroker = getbrokeraccountsmapid(brokerid, symbol["currencyid"], "bankfundsbroker") \
     if not nominalcorporateactions or not bankfundsbroker then \
       return {1, 1027} \
     end \
