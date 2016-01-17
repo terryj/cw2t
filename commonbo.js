@@ -439,6 +439,10 @@ console.log(datetocheckstr);
 
   exports.getunrealisedpandl = getunrealisedpandl;
 
+  /*
+  * calcfinance()
+  * calculate finance for a trade
+  */
   calcfinance = round + '\
   local calcfinance = function(instrumenttypeid, consid, currencyid, side, nosettdays) \
     local finance = 0 \
@@ -468,6 +472,10 @@ console.log(datetocheckstr);
 
   exports.calcfinance = calcfinance;
 
+  /*
+  * gethashvalues()
+  * function to read all field values from a table for a given key
+  */
   gethashvalues = '\
   local gethashvalues = function(key) \
     local vals = {} \
@@ -630,6 +638,53 @@ console.log(datetocheckstr);
   ';
 
   /*
+  * addunclearedcashlistitem()
+  * add an item to the uncleared cash list
+  */
+  addunclearedcashlistitem = '\
+  local addunclearedcashlistitem = function(brokerid, clearancedate, clientaccountid, transactionid) \
+    redis.log(redis.LOG_NOTICE, "addunclearedcashlistitem") \
+    local brokerkey = "broker:" .. brokerid \
+    local unclearedlistid = redis.call("hincrby", brokerkey, "lastunclearedlistid", 1) \
+    redis.call("hmset", brokerkey .. ":unclearedlist:" .. unclearedlistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "transactionid", transactionid, "unclearedlistid", unclearedlistid) \
+    redis.call("sadd", brokerkey .. ":unclearedlist", unclearedlistid) \
+  end \
+  ';
+
+  /*
+  * addunclearedtradelistitem()
+  * add an item to the uncleared trade list
+  */
+  addunclearedtradelistitem = '\
+  local addunclearedtradelistitem = function(brokerid, clearancedate, clientaccountid, tradeid, transactionid) \
+    redis.log(redis.LOG_NOTICE, "addunclearedtradelistitem") \
+    local brokerkey = "broker:" .. brokerid \
+    local unclearedtradelistid = redis.call("hincrby", brokerkey, "lastunclearedtradelistid", 1) \
+    redis.call("hmset", brokerkey .. ":unclearedtradelist:" .. unclearedtradelistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "tradeid", tradeid, "transactionid", transactionid, "unclearedtradelistid", unclearedtradelistid) \
+    redis.call("sadd", brokerkey .. ":unclearedtradelist", unclearedtradelistid) \
+  end \
+  ';
+
+  /*
+  * creditcheckwithdrawal()
+  * checks a requested withdrawal amount against cleared cash balance
+  * returns: 0 if ok, 1 if fails
+  */
+  creditcheckwithdrawal = getaccountbalance + '\
+  local creditcheckwithdrawal = function(brokerid, clientaccountid, withdrawalamount) \
+    redis.log(redis.LOG_NOTICE, "creditcheckwithdrawal") \
+    local balance = getaccountbalance(clientaccountid, brokerid) \
+    if not balance[1] then \
+      return 1 \
+    elseif tonumber(balance[1]) >= tonumber(withdrawalamount) then \
+      return 0 \
+    else \
+      return 1 \
+    end \
+  end \
+  ';
+
+  /*
   * getposition()
   * gets a position
   * params: brokerid, positionid
@@ -667,7 +722,7 @@ console.log(datetocheckstr);
   */
   newposition = setsymbolkey + publishposition + '\
   local newposition = function(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
-    redis.log(redis.LOG_WARNING, "newposition") \
+    redis.log(redis.LOG_NOTICE, "newposition") \
     local brokerkey = "broker:" .. brokerid \
     local positionid = redis.call("hincrby", brokerkey, "lastpositionid", 1) \
     redis.call("hmset", brokerkey .. ":position:" .. positionid, "brokerid", brokerid, "accountid", accountid, "symbolid", symbolid, "quantity", quantity, "cost", cost, "positionid", positionid, "futsettdate", futsettdate) \
@@ -689,7 +744,7 @@ console.log(datetocheckstr);
   */
   updateposition = setsymbolkey + publishposition + '\
   local updateposition = function(accountid, brokerid, cost, futsettdate, positionid, quantity, symbolid) \
-    redis.log(redis.LOG_WARNING, "updateposition") \
+    redis.log(redis.LOG_NOTICE, "updateposition") \
     local positionkey = "broker:" .. brokerid .. ":position:" .. positionid \
     local position = gethashvalues(positionkey) \
     local updatedquantity = tonumber(position["quantity"]) + tonumber(quantity) \
@@ -708,7 +763,7 @@ console.log(datetocheckstr);
   */
   newpositionposting = '\
   local newpositionposting = function(brokerid, cost, linkid, positionid, positionpostingtypeid, quantity, timestamp, milliseconds) \
-    redis.log(redis.LOG_WARNING, "newpositionposting") \
+    redis.log(redis.LOG_NOTICE, "newpositionposting") \
     local brokerkey = "broker:" .. brokerid \
     local positionpostingid = redis.call("hincrby", brokerkey, "lastpositionpostingid", 1) \
     redis.call("hmset", brokerkey .. ":positionposting:" .. positionpostingid, "brokerid", brokerid, "cost", cost, "linkid", linkid, "positionid", positionid, "positionpostingid", positionpostingid, "positionpostingtypeid", positionpostingtypeid, "quantity", quantity, "timestamp", timestamp) \
@@ -728,7 +783,7 @@ console.log(datetocheckstr);
   */
   getpositionpostingsbydate = gethashvalues + '\
   local getpositionpostingsbydate = function(brokerid, positionid, startmilliseconds, endmilliseconds) \
-    redis.log(redis.LOG_WARNING, "getpositionpostingsbydate") \
+    redis.log(redis.LOG_NOTICE, "getpositionpostingsbydate") \
     local tblpositionpostings = {} \
     local brokerkey = "broker:" .. brokerid \
     local positionpostings = redis.call("zrangebyscore", brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", startmilliseconds, endmilliseconds) \
@@ -823,7 +878,7 @@ console.log(datetocheckstr);
   */
   getpositionvalues = getpositionvalue + '\
   local getpositionvalues = function(accountid, brokerid) \
-    redis.log(redis.LOG_WARNING, "getpositionvalues") \
+    redis.log(redis.LOG_NOTICE, "getpositionvalues") \
     local tblresults = {} \
     local positions = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. ":positions") \
     for index = 1, #positions do \
@@ -842,7 +897,7 @@ console.log(datetocheckstr);
   */
   getpositionsbysymbol = getposition + '\
   local getpositionsbysymbol = function(brokerid, symbolid) \
-    redis.log(redis.LOG_WARNING, "getpositionsbysymbol") \
+    redis.log(redis.LOG_NOTICE, "getpositionsbysymbol") \
     local tblresults = {} \
     local positions = redis.call("smembers", "broker:" .. brokerid .. ":symbol:" .. symbolid .. ":positions") \
     for index = 1, #positions do \
@@ -861,7 +916,7 @@ console.log(datetocheckstr);
   */
   getpositionsbysymbolbydate = getpositionsbysymbol + getpositionpostingsbydate + '\
   local getpositionsbysymbolbydate = function(brokerid, symbolid, milliseconds) \
-    redis.log(redis.LOG_WARNING, "getpositionsbysymbolbydate") \
+    redis.log(redis.LOG_NOTICE, "getpositionsbysymbolbydate") \
     local tblresults = {} \
     local positions = getpositionsbysymbol(brokerid, symbolid) \
     for i = 1, #positions do \
@@ -919,17 +974,17 @@ console.log(datetocheckstr);
   */
   gettotalpositionvalue = getpositionvalues + '\
   local gettotalpositionvalue = function(accountid, brokerid) \
-    redis.log(redis.LOG_WARNING, "gettotalpositionvalue") \
+    redis.log(redis.LOG_NOTICE, "gettotalpositionvalue") \
     local positionvalues = getpositionvalues(accountid, brokerid) \
     local totalpositionvalue = {} \
     totalpositionvalue["margin"] = 0 \
     totalpositionvalue["unrealisedpandl"] = 0 \
     for index = 1, #positionvalues do \
-      redis.log(redis.LOG_WARNING, positionvalues[index]["symbolid"]) \
-      redis.log(redis.LOG_WARNING, "price") \
-      redis.log(redis.LOG_WARNING, positionvalues[index]["price"]) \
-      redis.log(redis.LOG_WARNING, "unrealisedpandl") \
-      redis.log(redis.LOG_WARNING, positionvalues[index]["unrealisedpandl"]) \
+      redis.log(redis.LOG_NOTICE, positionvalues[index]["symbolid"]) \
+      redis.log(redis.LOG_NOTICE, "price") \
+      redis.log(redis.LOG_NOTICE, positionvalues[index]["price"]) \
+      redis.log(redis.LOG_NOTICE, "unrealisedpandl") \
+      redis.log(redis.LOG_NOTICE, positionvalues[index]["unrealisedpandl"]) \
       totalpositionvalue["margin"] = totalpositionvalue["margin"] + tonumber(positionvalues[index]["margin"]) \
       totalpositionvalue["unrealisedpandl"] = totalpositionvalue["unrealisedpandl"] + tonumber(positionvalues[index]["unrealisedpandl"]) \
     end \
@@ -1003,20 +1058,20 @@ console.log(datetocheckstr);
   */
   getfreemargin = getaccount + gettotalpositionvalue + '\
   local getfreemargin = function(accountid, brokerid) \
-    redis.log(redis.LOG_WARNING, "getfreemargin") \
+    redis.log(redis.LOG_NOTICE, "getfreemargin") \
     local freemargin = 0 \
     local account = getaccount(accountid, brokerid) \
     if account["balance"] then \
-      redis.log(redis.LOG_WARNING, "balance") \
-      redis.log(redis.LOG_WARNING, account["balance"]) \
-      redis.log(redis.LOG_WARNING, "balanceuncleared") \
-      redis.log(redis.LOG_WARNING, account["balanceuncleared"]) \
+      redis.log(redis.LOG_NOTICE, "balance") \
+      redis.log(redis.LOG_NOTICE, account["balance"]) \
+      redis.log(redis.LOG_NOTICE, "balanceuncleared") \
+      redis.log(redis.LOG_NOTICE, account["balanceuncleared"]) \
       local totalpositionvalue = gettotalpositionvalue(accountid, brokerid) \
       local equity = tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) + totalpositionvalue["unrealisedpandl"] \
-      redis.log(redis.LOG_WARNING, "totunrealisedpandl") \
-      redis.log(redis.LOG_WARNING, totalpositionvalue["unrealisedpandl"]) \
-      redis.log(redis.LOG_WARNING, "margin") \
-      redis.log(redis.LOG_WARNING, totalpositionvalue["margin"]) \
+      redis.log(redis.LOG_NOTICE, "totunrealisedpandl") \
+      redis.log(redis.LOG_NOTICE, totalpositionvalue["unrealisedpandl"]) \
+      redis.log(redis.LOG_NOTICE, "margin") \
+      redis.log(redis.LOG_NOTICE, totalpositionvalue["margin"]) \
       freemargin = equity - totalpositionvalue["margin"] \
     end \
     return freemargin \
@@ -1029,7 +1084,7 @@ console.log(datetocheckstr);
   * newtradetransaction()
   * cash side of a client trade
   */
-  newtradetransaction = getbrokeraccountsmapid + newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + addunclearedtradelistitem + '\
+  newtradetransaction = getbrokeraccountsmapid + newtransaction + newposting + getaccountbalance + updateaccountbalanceuncleared + updateaccountbalance + addunclearedtradelistitem + '\
   local newtradetransaction = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, note, rate, timestamp, tradeid, side, tsmilliseconds, futsettdate) \
     redis.log(redis.LOG_NOTICE, "newtradetransaction") \
     --[[ get broker accounts ]] \
@@ -1037,24 +1092,31 @@ console.log(datetocheckstr);
     local commissionaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Commission") \
     local ptmaccountid = getbrokeraccountsmapid(brokerid, currencyid, "PTM levy") \
     local sdrtaccountid = getbrokeraccountsmapid(brokerid, currencyid, "SDRT") \
-    --[[ process based on buy/sell ]] \
+    --[[ calculate amounts in broker currency ]] \
+    consideration = tonumber(consideration) \
+    local considerationlocalamount = consideration * rate \
+    local commissionlocalamount = commission * rate \
     if tonumber(side) == 1 then \
+      --[[ buy includes all costs ]] \
       local totalamount = consideration + commission + stampduty + ptmlevy \
       local localamount = totalamount * rate \
-      local transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt", rate, "Trade id: " .. tradeid, timestamp, "TRC") \
+      --[[ the transaction ]] \
+      local transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt", rate, "trade:" .. tradeid, timestamp, "TRC") \
+      --[[ client account posting ]] \
       newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, tsmilliseconds) \
-      local fromcleared; \
-      local fromuncleared; \
+      --[[ update cleared/uncleared balances ]] \
+      local fromcleared \
+      local fromuncleared \
       local balance = getaccountbalance(clientaccountid, brokerid) \
-      if balance[1] >= totalamount then \
+      if tonumber(balance[1]) >= totalamount then \
         fromcleared = totalamount \
         fromuncleared = 0 \
-      elseif balance[1] == 0 then \
+      elseif tonumber(balance[1]) == 0 then \
         fromcleared = 0 \
         fromuncleared = totalamount \
       else \
-        fromcleared = balance[1] \
-        fromuncleared = totalamount - fromcleared \ 
+        fromcleared = tonumber(balance[1]) \
+        fromuncleared = totalamount - fromcleared \
       end \
       local localfromcleared = fromcleared * rate \
       local localfromuncleared = fromuncleared * rate \
@@ -1064,39 +1126,46 @@ console.log(datetocheckstr);
       if fromcleared > 0 then \
         updateaccountbalance(clientaccountid, -fromcleared, brokerid, -localfromuncleared) \
       end \
-      local considerationlocalamount = consideration * rate \
-      local commissionlocalamount = commission * rate \
+      --[[ more amounts in broker currency if we are buying ]] \
       local ptmlevylocalamount = ptmlevy * rate \
       local stampdutylocalamount = stampduty * rate \
+      --[[ consideration posting ]] \
       newposting(considerationaccountid, consideration, brokerid, considerationlocalamount, transactionid, tsmilliseconds) \
       updateaccountbalance(considerationaccountid, consideration, brokerid, considerationlocalamount) \
+      --[[ commission posting ]] \
       if commission > 0 then \
         newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, tsmilliseconds) \
         updateaccountbalance(commissionaccountid, commission, brokerid, commissionlocalamount) \
-      endif \
+      end \
+      --[[ ptm levy posting ]] \
       if ptmlevy > 0 then \
         newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid, tsmilliseconds) \
         updateaccountbalance(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount) \
-      endif \
+      end \
+      --[[ sdrt posting ]] \
       if stampduty > 0 then \
         newposting(sdrtaccountid, stampduty, brokerid, stampdutylocalamount, transactionid, tsmilliseconds) \
         updateaccountbalance(sdrtaccountid, stampduty, brokerid, stampdutylocalamount) \
-      endif \
-    else \
+      end \
+   else \
+      --[[ we are selling so only commission applies ]] \
       local totalamount = consideration - commission \
       local localamount = totalamount * rate \
-      local touncleared = totalamount \
-      local transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, “Trade payment”, rate, "Trade id: " .. tradeid, timestamp, "TPC") \
+      --[[ the transaction ]] \
+      local transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade payment", rate, "trade:" .. tradeid, timestamp, "TPC") \
+      --[[ client account posting ]] \
       newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, tsmilliseconds) \
       updateaccountbalanceuncleared(clientaccountid, totalamount, brokerid, localamount) \
       addunclearedtradelistitem(brokerid, futsettdate, clientaccountid, tradeid, transactionid) \
+      --[[ consideration posting ]] \
       newposting(considerationaccountid, -consideration, brokerid, -considerationlocalamount, transactionid, tsmilliseconds) \
       updateaccountbalance(considerationaccountid, -consideration, brokerid, -considerationlocalamount) \
+      --[[ commission posting ]] \
       if commission > 0 then \
-        newposting(commissionaccountid, commission, brokerid, commisionlocalamount, transactionid, tsmilliseconds) \
-        updateaccountbalance(commissionaccountid,  consideration, brokerid, commissionlocalamount) \
+        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, tsmilliseconds) \
+        updateaccountbalance(commissionaccountid, consideration, brokerid, commissionlocalamount) \
       end \
-    end \
+   end \
   end \
   ';
 
@@ -1133,9 +1202,13 @@ console.log(datetocheckstr);
   end \
   ';
 
+  /*
+  * publishtrade()
+  * publish a trade
+  */
   publishtrade = gethashvalues + '\
   local publishtrade = function(brokerid, tradeid, channel) \
-    redis.log(redis.LOG_WARNING, "publishtrade") \
+    redis.log(redis.LOG_NOTICE, "publishtrade") \
     local trade = gethashvalues("broker:" .. brokerid .. ":trade:" .. tradeid) \
     redis.call("publish", channel, "{" .. cjson.encode("trade") .. ":" .. cjson.encode(trade) .. "}") \
   end \
@@ -1171,7 +1244,7 @@ console.log(datetocheckstr);
       note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
     local retval = newtradetransaction(settlcurramt, costs[1], costs[2], costs[3], costs[4], brokerid, accountid, settlcurrencyid, note, 1, timestamp, tradeid, side, tsmilliseconds, futsettdate) \
-    newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, milliseconds) \
+    newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, tsmilliseconds) \
     publishtrade(brokerid, tradeid, 6) \
     return tradeid \
   end \
@@ -1187,7 +1260,7 @@ console.log(datetocheckstr);
   */
   getcorporateactionsclientdecisionbyclient = '\
   local getcorporateactionsclientdecisionbyclient = function(brokerid, clientid, corporateactionid) \
-    redis.log(redis.LOG_WARNING, "getcorporateactionsclientdecisionbyclient") \
+    redis.log(redis.LOG_NOTICE, "getcorporateactionsclientdecisionbyclient") \
     local brokerkey = "broker:" .. brokerid \
     local corporateactiondecisionid = redis.call("get", brokerkey .. ":client:" .. clientid .. ":corporateaction:" .. corporateactionid .. ":corporateactiondecision") \
     local corporateactiondecision \
@@ -1206,64 +1279,17 @@ console.log(datetocheckstr);
   */
   getsharesdue = round + '\
   local getsharesdue = function(posqty, sharespershare) \
-    redis.log(redis.LOG_WARNING, "getsharesdue") \
+    redis.log(redis.LOG_NOTICE, "getsharesdue") \
     local sharesdue = round(tonumber(posqty) * tonumber(sharespershare), 2) \
     local sharesdueint = math.floor(sharesdue) \
     local sharesduerem = sharesdue - sharesdueint \
-    redis.log(redis.LOG_WARNING, "sharesdue") \
-    redis.log(redis.LOG_WARNING, sharesdue) \
-    redis.log(redis.LOG_WARNING, "sharesdueint") \
-    redis.log(redis.LOG_WARNING, sharesdueint) \
-    redis.log(redis.LOG_WARNING, "remainder") \
-    redis.log(redis.LOG_WARNING, sharesduerem) \
+    redis.log(redis.LOG_NOTICE, "sharesdue") \
+    redis.log(redis.LOG_NOTICE, sharesdue) \
+    redis.log(redis.LOG_NOTICE, "sharesdueint") \
+    redis.log(redis.LOG_NOTICE, sharesdueint) \
+    redis.log(redis.LOG_NOTICE, "remainder") \
+    redis.log(redis.LOG_NOTICE, sharesduerem) \
     return {sharesdueint, sharesduerem} \
-  end \
-  ';
-
-  /*
-  * addunclearedlistitem()
-  * add an item to the uncleared cash list
-  */ 
-  addunclearedlistitem = '\
-  local addunclearedlistitem = function(brokerid, clearancedate, clientaccountid, transactionid) \
-    redis.log(redis.LOG_NOTICE, "addunclearedlistitem") \
-    local brokerkey = "broker:" .. brokerid \
-    local unclearedlistid = redis.call("hincrby", brokerkey, "lastunclearedlistid", 1) \
-    redis.call("hmset", brokerkey .. ":unclearedlist:" .. unclearedlistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "transactionid", transactionid, "unclearedlistid", unclearedlistid) \
-    redis.call("sadd", brokerkey .. ":unclearedlist", unclearedlistid) \
-  end \
-  ';
-
-  /*
-  * addunclearedtradelistitem()
-  * add an item to the uncleared trade list
-  */
-  addunclearedtradelistitem = '\
-  local addunclearedtradelistitem = function(brokerid, clearancedate, clientaccountid, tradeid, transactionid) \
-    redis.log(redis.LOG_NOTICE, "addunclearedtradelistitem") \
-    local brokerkey = "broker:" .. brokerid \
-    local unclearedtradelistid = redis.call("hincrby", brokerkey, "lastunclearedtradelistid", 1) \ 
-    redis.call("hmset", brokerkey .. ":unclearedtradelist:" .. unclearedtradelistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "transactionid", transactionid, "unclearedtradelistid", unclearedtradelistid) \
-    redis.call("sadd", brokerkey .. ":unclearedtradelistid", unclearedtradelistid) \
-  end \
-  ';
-
-  /*
-  * creditcheckwithdrawal()
-  * checks a requested withdrawal amount against cleared cash balance
-  * returns: 0 if ok, 1 if fails
-  */
-  creditcheckwithdrawal = getaccountbalance + '\
-  local creditcheckwithdrawal = function(brokerid, clientaccountid, withdrawalamount) \
-    redis.log(redis.LOG_NOTICE, "creditcheckwithdrawal") \
-    local balance = getaccountbalance(clientaccountid, brokerid) \
-    if not balance[1] then \
-      return 1 \
-    elseif balance[1] >= withdrawalamount then \
-      return 0 \
-    else \
-      return 1 \
-    end \
   end \
   ';
 
@@ -1433,7 +1459,7 @@ console.log(datetocheckstr);
   * args: 1=action, 2=amount, 3=brokerid, 4=clientaccountid, 5=currencyid, 6=localamount, 7=note, 8=paymenttypeid, 9=rate, 10=reference, 11=timestamp, 12=timestampms, 13=clearancedate
   * returns: 0 if successful, else 1 & an error message code if unsuccessful
   */
-  exports.newclientfundstransfer = newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + getbrokeraccountsmapid + addunclearedlistitem + creditcheckwithdrawal + '\
+  exports.newclientfundstransfer = newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + getbrokeraccountsmapid + addunclearedcashlistitem + creditcheckwithdrawal + '\
     redis.log(redis.LOG_NOTICE, "newClientFundsTransfer") \
     local action = tonumber(ARGV[1]) \
     local paymenttypeid = ARGV[8] \
@@ -1445,7 +1471,7 @@ console.log(datetocheckstr);
         local clientsettlementaccountid = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client Settlement") \
         newposting(clientsettlementaccountid, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), transactionid, ARGV[12]) \
         updateaccountbalanceuncleared(clientsettlementaccountid, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
-        addunclearedlistitem(ARGV[3], ARGV[13], ARGV[4],  transactionid) \
+        addunclearedcashlistitem(ARGV[3], ARGV[13], ARGV[4],  transactionid) \
       else \
       end \
     elseif paymenttypeid == "BAC" then \
@@ -1476,7 +1502,7 @@ console.log(datetocheckstr);
   * returns: 0 if ok, else error message
   */
   exports.newTradeSettlementTransaction = newtransaction + newposting + '\
-    redis.log(redis.LOG_WARNING, "newTradeSettlementTransaction") \
+    redis.log(redis.LOG_NOTICE, "newTradeSettlementTransaction") \
     local currencyid = redis.call("hget", "broker:" .. ARGV[2] .. ":account:" ..ARGV[4], "currencyid") \
     --[[ transactiontypeid may be passed, else derive it ]] \
     local transactiontypeid = ARGV[10] \
@@ -1506,7 +1532,7 @@ console.log(datetocheckstr);
   * returns: 0
   */
   exports.newSupplierFundsTransfer = newtransaction + newposting + '\
-    redis.log(redis.LOG_WARNING, "newSupplierFundsTransfer") \
+    redis.log(redis.LOG_NOTICE, "newSupplierFundsTransfer") \
     local amount \
     local localamount \
     local currencyid = redis.call("hget", "broker:" ..ARGV[3] .. ":account:" ..ARGV[8], "currencyid") \
@@ -1529,7 +1555,7 @@ console.log(datetocheckstr);
   * params: accountid, brokerid, start date, end date
   */
   exports.scriptgetstatement = getaccount + getpostingsbydate + '\
-    redis.log(redis.LOG_WARNING, "scriptgetstatement") \
+    redis.log(redis.LOG_NOTICE, "scriptgetstatement") \
     local tblresults = {} \
     --[[ get the currenct account cleared and uncleared balances ]] \
     local account = getaccount(ARGV[1], ARGV[2]) \
@@ -1565,7 +1591,7 @@ console.log(datetocheckstr);
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
   exports.applycacashdividend = getpositionsbysymbolbydate + round + newtransaction + getbrokeraccountsmapid + newposting + '\
-    redis.log(redis.LOG_WARNING, "applycacashdividend") \
+    redis.log(redis.LOG_NOTICE, "applycacashdividend") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
     local exdatems = ARGV[3] \
@@ -1591,16 +1617,16 @@ console.log(datetocheckstr);
     --[[ get all positions in the stock of the corporate action as at the ex-date ]] \
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
     for i = 1, #positions do \
-      redis.log(redis.LOG_WARNING, "accountid") \
-      redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
-      redis.log(redis.LOG_WARNING, "quantity") \
-      redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
+      redis.log(redis.LOG_NOTICE, "accountid") \
+      redis.log(redis.LOG_NOTICE, positions[i]["accountid"]) \
+      redis.log(redis.LOG_NOTICE, "quantity") \
+      redis.log(redis.LOG_NOTICE, positions[i]["quantity"]) \
       local posqty = tonumber(positions[i]["quantity"]) \
       --[[ may have a position with no quantity ]] \
       if posqty ~= 0 then \
         local dividend = round(posqty * tonumber(corporateaction["cashpershare"]), 2) \
-        redis.log(redis.LOG_WARNING, "dividend") \
-        redis.log(redis.LOG_WARNING, dividend) \
+        redis.log(redis.LOG_NOTICE, "dividend") \
+        redis.log(redis.LOG_NOTICE, dividend) \
         if dividend ~= 0 then \
           local nominalcorporateactionstransactiontype \
           local bankfundsbrokertransactiontype \
@@ -1631,7 +1657,7 @@ console.log(datetocheckstr);
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
   exports.applycadividendscrip = getbrokeraccountsmapid + getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + getsharesdue + newpositiontransaction + newtransaction + newposting + round + '\
-    redis.log(redis.LOG_WARNING, "applycadividendscrip") \
+    redis.log(redis.LOG_NOTICE, "applycadividendscrip") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
     local exdatems = ARGV[3] \
@@ -1653,10 +1679,10 @@ console.log(datetocheckstr);
     --[[ get all positions in the stock of the corporate action as at the ex-date ]] \
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
     for i = 1, #positions do \
-      redis.log(redis.LOG_WARNING, "accountid") \
-      redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
-      redis.log(redis.LOG_WARNING, "quantity") \
-      redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
+      redis.log(redis.LOG_NOTICE, "accountid") \
+      redis.log(redis.LOG_NOTICE, positions[i]["accountid"]) \
+      redis.log(redis.LOG_NOTICE, "quantity") \
+      redis.log(redis.LOG_NOTICE, positions[i]["quantity"]) \
       if tonumber(positions[i]["quantity"]) > 0 then \
         --[[ get the client ]] \
         local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
@@ -1702,7 +1728,7 @@ console.log(datetocheckstr);
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
   exports.applycarightsexdate = getbrokeraccountsmapid + getpositionsbysymbolbydate + getsharesdue + geteodprice + newpositiontransaction + newtransaction + newposting + '\
-    redis.log(redis.LOG_WARNING, "applycarightsexdate") \
+    redis.log(redis.LOG_NOTICE, "applycarightsexdate") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
     local exdate = ARGV[3] \
@@ -1744,10 +1770,10 @@ console.log(datetocheckstr);
     for i = 1, #positions do \
       --[[ only interested in long positions ]] \
       if tonumber(positions[i]["quantity"]) > 0 then \
-        redis.log(redis.LOG_WARNING, "accountid") \
-        redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
-        redis.log(redis.LOG_WARNING, "quantity") \
-        redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
+        redis.log(redis.LOG_NOTICE, "accountid") \
+        redis.log(redis.LOG_NOTICE, positions[i]["accountid"]) \
+        redis.log(redis.LOG_NOTICE, "quantity") \
+        redis.log(redis.LOG_NOTICE, positions[i]["quantity"]) \
         --[[ get shares due & any remainder ]] \
         local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
         if sharesdue[1] > 0 then \
@@ -1776,7 +1802,7 @@ console.log(datetocheckstr);
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
   exports.applycarightspaydate = getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + newtrade + newpositiontransaction + '\
-    redis.log(redis.LOG_WARNING, "applycarightspaydate") \
+    redis.log(redis.LOG_NOTICE, "applycarightspaydate") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
     local paydatems = ARGV[3] \
@@ -1830,7 +1856,7 @@ console.log(datetocheckstr);
   * note: this corporate action is applied across all brokers
   */
   exports.applycastocksplit = geteodprice + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + getbrokeraccountsmapid + round + newtransaction + newposting + '\
-    redis.log(redis.LOG_WARNING, "applycastocksplit") \
+    redis.log(redis.LOG_NOTICE, "applycastocksplit") \
     local corporateactionid = ARGV[1] \
     local exdate = ARGV[2] \
     local exdatems = ARGV[3] \
@@ -1859,10 +1885,10 @@ console.log(datetocheckstr);
       for i = 1, #positions do \
         --[[ only interested in long positions ]] \
         if tonumber(positions[i]["quantity"]) > 0 then \
-          redis.log(redis.LOG_WARNING, "accountid") \
-          redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
-          redis.log(redis.LOG_WARNING, "quantity") \
-          redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
+          redis.log(redis.LOG_NOTICE, "accountid") \
+          redis.log(redis.LOG_NOTICE, positions[i]["accountid"]) \
+          redis.log(redis.LOG_NOTICE, "quantity") \
+          redis.log(redis.LOG_NOTICE, positions[i]["quantity"]) \
           --[[ get shares due & any remainder ]] \
           local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
           if sharesdue[1] > 0 then \
@@ -1898,7 +1924,7 @@ console.log(datetocheckstr);
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
   exports.applycascripissue = geteodprice + getbrokeraccountsmapid + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + newtransaction + newposting + '\
-    redis.log(redis.LOG_WARNING, "applycascripissue") \
+    redis.log(redis.LOG_NOTICE, "applycascripissue") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
     local exdate = ARGV[3] \
@@ -1931,10 +1957,10 @@ console.log(datetocheckstr);
     for i = 1, #positions do \
       --[[ only interested in long positions ]] \
       if tonumber(positions[i]["quantity"]) > 0 then \
-        redis.log(redis.LOG_WARNING, "accountid") \
-        redis.log(redis.LOG_WARNING, positions[i]["accountid"]) \
-        redis.log(redis.LOG_WARNING, "quantity") \
-        redis.log(redis.LOG_WARNING, positions[i]["quantity"]) \
+        redis.log(redis.LOG_NOTICE, "accountid") \
+        redis.log(redis.LOG_NOTICE, positions[i]["accountid"]) \
+        redis.log(redis.LOG_NOTICE, "quantity") \
+        redis.log(redis.LOG_NOTICE, positions[i]["quantity"]) \
         --[[ get shares due & any remainder ]] \
         local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
         if sharesdue[1] > 0 then \

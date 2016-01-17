@@ -1516,7 +1516,7 @@ function registerScripts() {
   * place an order based on a quote
   * params: 1=brokerid, 2=ordertype, 3=markettype, 4=quoteid, 5=currencyratetoorg, 6=currencyindtoorg, 7=timestamp, 8=timeinforce, 9=settlcurrfxrate, 10=settlcurrfxratecalc, 11=operatortype, 12=operatorid, 13=timestampms
   * returns: see newordersingle
-  */ 
+  */
   scriptdealatquote = newordersingle + '\
   redis.log(redis.LOG_NOTICE, "scriptdealatquote") \
   local quote = gethashvalues("broker:" .. ARGV[1] .. ":quote:" .. ARGV[4]) \
@@ -1553,7 +1553,7 @@ function registerScripts() {
   return retval \
   ';
 
-  /*
+ /*
   * scriptneworder
   * params: 1=accountid, 2=brokerid, 3=clientid, 4=symbolid, 5=side, 6=quantity, 7=price, 8=ordertype, 9=markettype, 10=futsettdate, 11=quoteid, 12=currencyid, 13=currencyratetoorg, 14=currencyindtoorg, 15=timestamp, 16=timeinforce, 17=expiredate, 18=expiretime, 19=settlcurrencyid, 20=settlcurrfxrate, 21=settlcurrfxratecalc, 22=operatortype, 23=operatorid, 24=cashorderqty, 25=settlmnttypid, 26=timestampms
   * returns: see newordersingle

@@ -567,7 +567,7 @@ function cashTrans(cashtrans, userid, conn) {
 
   timestamp = new Date();
 
-  newClientFundsTransfer(2, 100, 1, 1, "GBP", 100, "note", "BAC", 1, "ref1", timestamp);
+  newClientFundsTransfer(1, 100, 1, 1, "GBP", 100, "note", "DCP", 1, "ref1", timestamp);
 }
 
 function loadHolidays() {
@@ -593,8 +593,6 @@ function newClientFundsTransfer(action, amount, brokerid, clientaccountid, curre
       return;
     }
 
-    console.log("clearancedays:" + clearancedays);
-
     if (clearancedays == null) {
       console.log("Clearance days not found for this payment type");
       return;
@@ -602,9 +600,6 @@ function newClientFundsTransfer(action, amount, brokerid, clientaccountid, curre
 
     // calculate a clearance date from the number of clearance days
     var clearancedate = commonbo.getUTCDateString(commonbo.getSettDate(timestamp, clearancedays, holidays));
-
-    console.log("pay date:" + timestamp);
-    console.log("clearance date:" + clearancedate);
 
     db.eval(commonbo.newclientfundstransfer, 1, "broker:" + brokerid, action, amount, brokerid, clientaccountid, currencyid, localamount, note, paymenttypeid, rate, reference, timestamp, timestampms, clearancedate, function(err, ret) {
       if (err) throw err;
