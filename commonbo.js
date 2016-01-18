@@ -284,7 +284,6 @@ exports.registerScripts = function () {
   */
   function isHoliday(datetocheck, holidays) {
     var datetocheckstr = getUTCDateString(datetocheck);
-console.log(datetocheckstr);
     if (datetocheckstr in holidays) {
       return true;
     }
@@ -526,6 +525,8 @@ console.log(datetocheckstr);
     return account \
   end \
   ';
+
+  exports.getaccount = getaccount;
 
   /*
   * updateaccountbalance()
