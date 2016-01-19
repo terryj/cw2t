@@ -134,6 +134,10 @@ function initdb() {
   db.set("targetcompid", "NBT_UAT");
   db.set("onbehalfofcompid", "TGRANT");
 
+  // payment types
+  db.hset("paymenttypes:BAC", "clearancedays", 1);
+  db.hset("paymenttypes:DCP", "clearancedays", 2);
+
   // testing
   db.set("testmode", "0");
 }

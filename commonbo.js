@@ -604,7 +604,7 @@ exports.registerScripts = function () {
   /*
   * getpostingsbydate()
   * gets postings for an account between two dates, sorted by datetime
-  * params: accountid, brokerid, positionid, start of period, end of period - datetimes expressed in milliseconds
+  * params: accountid, brokerid, start of period, end of period - datetimes expressed in milliseconds
   * returns: array of postings
   */
   getpostingsbydate = gettransaction + '\
@@ -614,11 +614,14 @@ exports.registerScripts = function () {
     local brokerkey = "broker:" .. brokerid \
     local postings = redis.call("zrangebyscore", brokerkey .. ":account:" .. accountid .. ":postingsbydate", startmilliseconds, endmilliseconds) \
     for i = 1, #postings do \
+      --[[ get the posting ]] \
       local posting = gethashvalues(brokerkey .. ":posting:" .. postings[i]) \
+      --[[ get additional details from the transaction ]] \
       local transaction = gettransaction(brokerid, posting["transactionid"]) \
       posting["note"] = transaction["note"] \
       posting["reference"] = transaction["reference"] \
       posting["timestamp"] = transaction["timestamp"] \
+      posting["transactiontypeid"] = transaction["transactiontypeid"] \
       table.insert(tblpostings, posting) \
     end \
     return tblpostings \
@@ -981,11 +984,6 @@ exports.registerScripts = function () {
     totalpositionvalue["margin"] = 0 \
     totalpositionvalue["unrealisedpandl"] = 0 \
     for index = 1, #positionvalues do \
-      redis.log(redis.LOG_NOTICE, positionvalues[index]["symbolid"]) \
-      redis.log(redis.LOG_NOTICE, "price") \
-      redis.log(redis.LOG_NOTICE, positionvalues[index]["price"]) \
-      redis.log(redis.LOG_NOTICE, "unrealisedpandl") \
-      redis.log(redis.LOG_NOTICE, positionvalues[index]["unrealisedpandl"]) \
       totalpositionvalue["margin"] = totalpositionvalue["margin"] + tonumber(positionvalues[index]["margin"]) \
       totalpositionvalue["unrealisedpandl"] = totalpositionvalue["unrealisedpandl"] + tonumber(positionvalues[index]["unrealisedpandl"]) \
     end \
@@ -1104,7 +1102,7 @@ exports.registerScripts = function () {
       --[[ the transaction ]] \
       local transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt", rate, "trade:" .. tradeid, timestamp, "TRC") \
       --[[ client account posting ]] \
-      newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, tsmilliseconds) \
+      newposting(clientaccountid, -totalamount, brokerid, -localamount, transactionid, tsmilliseconds) \
       --[[ update cleared/uncleared balances ]] \
       local fromcleared \
       local fromuncleared \
@@ -1122,10 +1120,10 @@ exports.registerScripts = function () {
       local localfromcleared = fromcleared * rate \
       local localfromuncleared = fromuncleared * rate \
       if fromuncleared > 0 then \
-        updateaccountbalanceuncleared(clientaccountid, -fromuncleared, brokerid, -localfromcleared) \
+        updateaccountbalanceuncleared(clientaccountid, -fromuncleared, brokerid, -localfromuncleared) \
       end \
       if fromcleared > 0 then \
-        updateaccountbalance(clientaccountid, -fromcleared, brokerid, -localfromuncleared) \
+        updateaccountbalance(clientaccountid, -fromcleared, brokerid, -localfromcleared) \
       end \
       --[[ more amounts in broker currency if we are buying ]] \
       local ptmlevylocalamount = ptmlevy * rate \
@@ -1461,7 +1459,7 @@ exports.registerScripts = function () {
   * returns: 0 if successful, else 1 & an error message code if unsuccessful
   */
   exports.newclientfundstransfer = newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + getbrokeraccountsmapid + addunclearedcashlistitem + creditcheckwithdrawal + '\
-    redis.log(redis.LOG_NOTICE, "newClientFundsTransfer") \
+    redis.log(redis.LOG_NOTICE, "newclientfundstransfer") \
     local action = tonumber(ARGV[1]) \
     local paymenttypeid = ARGV[8] \
     if paymenttypeid == "DCP" then \
@@ -1469,7 +1467,7 @@ exports.registerScripts = function () {
         local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CRR") \
         newposting(ARGV[4], ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
         updateaccountbalanceuncleared(ARGV[4], ARGV[2], ARGV[3], ARGV[6]) \
-        local clientsettlementaccountid = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client Settlement") \
+        local clientsettlementaccountid = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client settlement") \
         newposting(clientsettlementaccountid, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), transactionid, ARGV[12]) \
         updateaccountbalanceuncleared(clientsettlementaccountid, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
         addunclearedcashlistitem(ARGV[3], ARGV[13], ARGV[4],  transactionid) \
@@ -1484,7 +1482,7 @@ exports.registerScripts = function () {
         local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CAP") \
         newposting(ARGV[4], -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), transactionid, ARGV[12]) \
         updateaccountbalance(ARGV[4], -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
-        local clientfundsaccount = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client Funds") \
+        local clientfundsaccount = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client funds") \
         newposting(clientfundsaccount, ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
         updateaccountbalance(clientfundsaccount, ARGV[2], ARGV[3], ARGV[6]) \
       end \
@@ -1555,31 +1553,38 @@ exports.registerScripts = function () {
   * prepares a statement for an account between two dates
   * params: accountid, brokerid, start date, end date
   */
-  exports.scriptgetstatement = getaccount + getpostingsbydate + '\
+  exports.scriptgetstatement = getpostingsbydate + '\
     redis.log(redis.LOG_NOTICE, "scriptgetstatement") \
     local tblresults = {} \
-    --[[ get the currenct account cleared and uncleared balances ]] \
-    local account = getaccount(ARGV[1], ARGV[2]) \
-    --[[ get all the postings from the start date to now ]] \
-    local postings = getpostingsbydate(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
-    --[[ go backwards through the postings to calculate a start balance ]] \
-    for index = #postings, 1, -1 do \
-      --[[ adjust cleared or uncleared balance based on type of transaction ]] \
-      if postings[index]["transactiontypeid"] == "CC" then \
-        account["balanceuncleared"] = account["balanceuncleared"] - tonumber(postings[index]["amount"]) \
-      else \
-        account["balance"] = account["balance"] - tonumber(postings[index]["amount"]) \
-      end \
-    end \
-    --[[ go forwards through the postings, calculating the account balance after each one ]]\
+    local balance = 0 \
+    local balanceuncleared = 0 \
+    --[[ get all the postings up to the end date ]] \
+    local postings = getpostingsbydate(ARGV[1], ARGV[2], "-inf", ARGV[4]) \
+    --[[ go through all the postings, adjusting the cleared/uncleared balances as we go ]] \
     for index = 1, #postings do \
-      if postings[index]["transactiontypeid"] == "CC" then \
-        account["balanceuncleared"] = account["balanceuncleared"] + tonumber(postings[index]["amount"]) \
-      else \
-        account["balance"] = account["balance"] + tonumber(postings[index]["amount"]) \
+      if postings[index]["transactiontypeid"] == "CRR" or postings[index]["transactiontypeid"] == "TPC" then \
+        balanceuncleared = balanceuncleared + tonumber(postings[index]["amount"]) \
+      elseif postings[index]["transactiontypeid"] == "CAP" then \
+        balance = balance + tonumber(postings[index]["amount"]) \
+      elseif postings[index]["transactiontypeid"] == "TRC" then \
+        local amount = math.abs(tonumber(postings[index]["amount"])) \
+        local fromcleared = 0 \
+        local fromuncleared = 0 \
+        if balance >= amount then \
+          fromcleared = amount \
+          fromuncleared = 0 \
+        elseif balance == 0 then \
+          fromcleared = 0 \
+          fromuncleared = amount \
+        else \
+          fromcleared = balance \
+          fromuncleared = amount - fromcleared \
+        end \
+        balance = balance - fromcleared \
+        balanceuncleared = balanceuncleared - fromuncleared \
       end \
-      postings[index]["balance"] = account["balance"] \
-      postings[index]["balanceuncleared"] = account["balanceuncleared"] \
+      postings[index]["balance"] = balance \
+      postings[index]["balanceuncleared"] = balanceuncleared \
       table.insert(tblresults, postings[index]) \
     end \
     return cjson.encode(tblresults) \

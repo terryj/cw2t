@@ -224,7 +224,7 @@ function listen() {
     //testSettle();
     //testSupplierFundsTransfer();
     //testPositionPostings();
-    //testStatement();
+    testStatement();
     //testOrder(1);
 
   sockjs_svr.on('connection', function(conn) {
@@ -567,7 +567,11 @@ function cashTrans(cashtrans, userid, conn) {
 
   timestamp = new Date();
 
-  newClientFundsTransfer(1, 100, 1, 1, "GBP", 100, "note", "DCP", 1, "ref1", timestamp);
+  if (cashtrans.drcr == 1) {
+    newClientFundsTransfer(1, 1000, 1, 1, "GBP", 1000, "note1", "DCP", 1, "ref1", timestamp);
+  } else {
+    newClientFundsTransfer(2, 100, 1, 1, "GBP", 100, "note2", "BAC", 1, "ref2", timestamp);
+  }
 }
 
 function loadHolidays() {
