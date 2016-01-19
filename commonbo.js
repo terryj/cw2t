@@ -533,11 +533,13 @@ exports.registerScripts = function () {
   * updates cleared account balance & local currency balance
   * note: amount & localamount can be -ve
   */
-  updateaccountbalance = '\
+  updateaccountbalance = getaccountbalance + '\
   local updateaccountbalance = function(accountid, amount, brokerid, localamount) \
-    local accountkey = "broker:" .. brokerid .. ":account:" .. accountid \
-    redis.call("hincrbyfloat", accountkey, "balance", amount) \
-    redis.call("hincrbyfloat", accountkey, "localbalance", localamount) \
+    local vals = getaccountbalance(accountid, brokerid) \
+    if not vals[1] then return end \
+    local balance = tonumber(vals[1]) + tonumber(amount) \
+    local localbalance = tonumber(vals[2]) + tonumber(localamount) \
+    redis.call("hmset", "broker:" .. brokerid .. ":account:" .. accountid, "balance", balance, "localbalance", localbalance) \
   end \
   ';
 
@@ -546,11 +548,13 @@ exports.registerScripts = function () {
   * updates uncleared account balance & local currency balance
   * note: amount & localamount can be -ve
   */
-  updateaccountbalanceuncleared = '\
+  updateaccountbalanceuncleared = getaccountbalanceuncleared + '\
   local updateaccountbalanceuncleared = function(accountid, amount, brokerid, localamount) \
-    local accountkey = "broker:" .. brokerid .. ":account:" .. accountid \
-    redis.call("hincrbyfloat", accountkey, "balanceuncleared", amount) \
-    redis.call("hincrbyfloat", accountkey, "localbalanceuncleared", localamount) \
+    local vals = getaccountbalanceuncleared(accountid, brokerid) \
+    if not vals[1] then return end \
+    local balanceuncleared = tonumber(vals[1]) + tonumber(amount) \
+    local localbalanceuncleared = tonumber(vals[2]) + tonumber(localamount) \
+    redis.call("hmset", "broker:" .. brokerid .. ":account:" .. accountid, "balanceuncleared", balanceuncleared, "localbalanceuncleared", localbalanceuncleared) \
   end \
   ';
 

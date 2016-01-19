@@ -2098,8 +2098,8 @@ function quoteRequestReceived(quoterequest, userid) {
   quoterequest.operatortype = operatortype;
   quoterequest.operatorid = userid;
 
-  quoterequest.cashorderqty = 1000;
-  quoterequest.quantity = 0;
+  //quoterequest.cashorderqty = 1000;
+  //quoterequest.quantity = 0;
 
   db.smembers("broker:" + brokerid + ":client:" + quoterequest.clientid + ":clientaccounts", function(err, clients) {
     if (err) throw err;

@@ -125,8 +125,9 @@ exports.registerScripts = function () {
   redis.call("set", KEYS[1] .. ":client:" .. ARGV[3], clientid) \
   --[[ add default accountid ]] \
   local accountid = redis.call("hincrby", KEYS[1], "lastaccountid", 1) \
-  redis.call("hmset", KEYS[1] .. ":account:" .. accountid, "accountid", accountid, "brokerid", ARGV[1], "balance", 0, "localbalance", 0, "currencyid", "GBP", "accounttypeid", 1, "accountgroupid", 3) \
+  redis.call("hmset", KEYS[1] .. ":account:" .. accountid, "accountid", accountid, "brokerid", ARGV[1], "balance", 0, "localbalance", 0, "currencyid", "GBP", "accounttypeid", 1, "accountgroupid", 3, "balanceuncleared", 0, "localbalanceuncleared", 0) \
   redis.call("sadd", KEYS[1] .. ":client:" .. clientid .. ":clientaccounts", accountid) \
+  redis.call("set", KEYS[1] .. ":account:" .. accountid .. ":client", clientid) \
   --[[ add tradeable instrument types ]] \
   if ARGV[8] ~= "" then \
     local insttypes = stringsplit(ARGV[8], ",") \
