@@ -1263,7 +1263,7 @@ function registerScripts() {
       else \
         --[[ allow ifa certificated equity sells ]] \
         if instrumenttypeid == "DE" then \
-          if redis.call("hget", "client:" .. clientid, "type") == "3" then \
+          if redis.call("hget", "broker:" .. brokerid .. ":client:" .. clientid, "clienttypeid") == "3" then \
             return {1, initialmargin} \
           end \
         end \
