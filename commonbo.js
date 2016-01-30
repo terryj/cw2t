@@ -414,6 +414,7 @@ exports.registerScripts = function () {
     local price = 0 \
     local qty = tonumber(quantity) \
     if qty > 0 then \
+      --[[ positive quantity, so we would sell, so use the bid price ]] \
       local bidprice = redis.call("hget", "symbol:" .. symbolid, "bid") \
       if bidprice and tonumber(bidprice) ~= 0 then \
         --[[ show price as pounds rather than pence ]] \
@@ -422,7 +423,8 @@ exports.registerScripts = function () {
           unrealisedpandl = round(qty * price - cost, 2) \
         end \
       end \
-    else \
+    elseif qty < 0 then \
+      --[[ negative quantity, so we would buy, so use the ask price ]] \
       local askprice = redis.call("hget", "symbol:" .. symbolid, "ask") \
       if askprice and tonumber(askprice) ~= 0 then \
         --[[ show price as pounds rather than pence ]] \
