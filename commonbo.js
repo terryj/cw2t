@@ -757,9 +757,16 @@ exports.registerScripts = function () {
     redis.log(redis.LOG_NOTICE, "updateposition") \
     local positionkey = "broker:" .. brokerid .. ":position:" .. positionid \
     local position = gethashvalues(positionkey) \
-    local updatedquantity = tonumber(position["quantity"]) + tonumber(quantity) \
-    local updatedcost = tonumber(position["cost"]) + tonumber(cost) \
-    redis.call("hmset", positionkey, "accountid", accountid, "symbolid", symbolid, "quantity", updatedquantity, "cost", updatedcost, "futsettdate", futsettdate) \
+    local newquantity = tonumber(position["quantity"]) + tonumber(quantity) \
+    local newcost \
+    if newquantity == 0 then \
+      newcost = 0 \
+    elseif tonumber(quantity) > 0 then \
+      newcost = tonumber(position["cost"]) + tonumber(cost) \
+    else \
+      newcost = newquantity / tonumber(position["quantity"]) * tonumber(position["cost"]) \
+    end \
+    redis.call("hmset", positionkey, "accountid", accountid, "symbolid", symbolid, "quantity", newquantity, "cost", newcost, "futsettdate", futsettdate) \
     if symbolid ~= position["symbolid"] or (futsettdate ~= "" and futsettdate ~= position["futsettdate"]) then \
       setsymbolkey(accountid, brokerid, futsettdate, positionid, symbolid) \
     end \
