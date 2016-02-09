@@ -608,12 +608,35 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * gettradedescription()
+  * get a description of a trade for a client statement
+  * params: trade reference i.e. broker:1:trade:1
+  * returns: a description of the trade or empty string if not found
+  */
+  gettradedescription = gethashvalues + '\
+  local gettradedescription = function(traderef) \
+    local desc = "" \
+    local trade = gethashvalues(traderef) \
+    if trade["tradeid"] then \
+      local symbol = gethashvalues("symbol:" .. trade["symbolid"]) \
+      if tonumber(trade["side"]) == 1 then \
+        desc = "Bought " \
+      else \
+        desc = "Sold " \
+      end \
+      desc = desc .. trade["quantity"] .. " " .. symbol["shortname"] .. " @ " .. trade["price"] \
+    end \
+    return desc \
+  end \
+  ';
+
+  /*
   * getpostingsbydate()
   * gets postings for an account between two dates, sorted by datetime
   * params: accountid, brokerid, start of period, end of period - datetimes expressed in milliseconds
   * returns: array of postings
   */
-  getpostingsbydate = gettransaction + '\
+  getpostingsbydate = gettransaction + gettradedescription + '\
   local getpostingsbydate = function(accountid, brokerid, startmilliseconds, endmilliseconds) \
     redis.log(redis.LOG_NOTICE, "getpostingsbydate") \
     local tblpostings = {} \
@@ -625,7 +648,13 @@ exports.registerScripts = function () {
       --[[ get additional details from the transaction ]] \
       local transaction = gettransaction(brokerid, posting["transactionid"]) \
       posting["note"] = transaction["note"] \
-      posting["reference"] = transaction["reference"] \
+      local transactionref \
+      if transaction["transactiontypeid"] == "TPC" or transaction["transactiontypeid"] == "TRC" then \
+        transactionref = gettradedescription(brokerkey .. ":" .. transaction["reference"]) \
+      else \
+        transactionref = transaction["reference"] \
+      end \
+      posting["reference"] = transactionref \
       posting["timestamp"] = transaction["timestamp"] \
       posting["transactiontypeid"] = transaction["transactiontypeid"] \
       table.insert(tblpostings, posting) \
