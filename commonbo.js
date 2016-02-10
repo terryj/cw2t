@@ -1606,7 +1606,8 @@ exports.registerScripts = function () {
     for index = 1, #postings do \
       if postings[index]["transactiontypeid"] == "CRR" or postings[index]["transactiontypeid"] == "TPC" then \
         balanceuncleared = balanceuncleared + tonumber(postings[index]["amount"]) \
-      elseif postings[index]["transactiontypeid"] == "CAP" then \
+      elseif postings[index]["transactiontypeid"] == "CRS" or postings[index]["transactiontypeid"] == "SRC" or postings[index]["transactiontypeid"] == "SPC" then \
+        balanceuncleared = balanceuncleared + tonumber(postings[index]["amount"]) \
         balance = balance + tonumber(postings[index]["amount"]) \
       elseif postings[index]["transactiontypeid"] == "TRC" then \
         local amount = math.abs(tonumber(postings[index]["amount"])) \
@@ -1624,6 +1625,8 @@ exports.registerScripts = function () {
         end \
         balance = balance - fromcleared \
         balanceuncleared = balanceuncleared - fromuncleared \
+      else \
+        balance = balance + tonumber(postings[index]["amount"]) \
       end \
       postings[index]["balance"] = balance \
       postings[index]["balanceuncleared"] = balanceuncleared \
