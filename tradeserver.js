@@ -327,14 +327,14 @@ function testQuote(quoterequest, side) {
   quote.settledays = 2;
   quote.settlmnttypid = 0;
 
-  if ('futsettdate' in quoterequest) {
-    quote.futsettdate = quoterequest.futsettdate;
-  } else {
-    quote.futsettdate = "";
-  }
-
   var today = new Date();
   quote.transacttime = commonbo.getUTCTimeStamp(today);
+
+  if ('futsettdate' in quoterequest && quoterequest.futsettdate != '') {
+    quote.futsettdate = quoterequest.futsettdate;
+  } else {
+    quote.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, quote.settledays, holidays));
+  }
 
   var validuntiltime = today;
   quote.noseconds = 30;
