@@ -647,14 +647,14 @@ exports.registerScripts = function () {
       local posting = gethashvalues(brokerkey .. ":posting:" .. postings[i]) \
       --[[ get additional details from the transaction ]] \
       local transaction = gettransaction(brokerid, posting["transactionid"]) \
-      posting["note"] = transaction["note"] \
-      local transactionref \
+      local note \
       if transaction["transactiontypeid"] == "TPC" or transaction["transactiontypeid"] == "TRC" then \
-        transactionref = gettradedescription(brokerkey .. ":" .. transaction["reference"]) \
+        note = gettradedescription(brokerkey .. ":" .. transaction["reference"]) \
       else \
-        transactionref = transaction["reference"] \
+        note = transaction["note"] \
       end \
-      posting["reference"] = transactionref \
+      posting["note"] = note \
+      posting["reference"] = transaction["reference"] \
       posting["timestamp"] = transaction["timestamp"] \
       posting["transactiontypeid"] = transaction["transactiontypeid"] \
       table.insert(tblpostings, posting) \
