@@ -1271,7 +1271,7 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
     --[[ add to a system wide list of unsettled trades for CREST ]] \
-    redis.call("rpush", "unsettledtrades", brokerid .. ":" .. tradeid) \
+    redis.call("rpush", "unclearedtrades", brokerid .. ":" .. tradeid) \
     --[[ add to a system wide list of items for sending contract notes ]] \
     redis.call("rpush", "contractnotes", brokerid .. ":" .. tradeid) \
     local cost \
