@@ -1197,7 +1197,6 @@ exports.registerScripts = function () {
       --[[ client account posting ]] \
       newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, tsmilliseconds) \
       updateaccountbalanceuncleared(clientaccountid, totalamount, brokerid, localamount) \
-      addunclearedtradelistitem(brokerid, futsettdate, clientaccountid, tradeid, transactionid) \
       --[[ consideration posting ]] \
       newposting(considerationaccountid, -consideration, brokerid, -considerationlocalamount, transactionid, tsmilliseconds) \
       updateaccountbalance(considerationaccountid, -consideration, brokerid, -considerationlocalamount) \
@@ -1207,6 +1206,7 @@ exports.registerScripts = function () {
         updateaccountbalance(commissionaccountid, consideration, brokerid, commissionlocalamount) \
       end \
    end \
+   addunclearedtradelistitem(brokerid, futsettdate, clientaccountid, tradeid, transactionid) \
   end \
   ';
 
@@ -1271,7 +1271,7 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
     --[[ add to a system wide list of unsettled trades for CREST ]] \
-    redis.call("rpush", "unclearedtrades", brokerid .. ":" .. tradeid) \
+    redis.call("rpush", "unsettledtrades", brokerid .. ":" .. tradeid) \
     --[[ add to a system wide list of items for sending contract notes ]] \
     redis.call("rpush", "contractnotes", brokerid .. ":" .. tradeid) \
     local cost \
