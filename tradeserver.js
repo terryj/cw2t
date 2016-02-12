@@ -326,20 +326,19 @@ function testQuote(quoterequest, side) {
   quote.externalquoteid = "";
   quote.settledays = 2;
   quote.settlmnttypid = 0;
+  quote.noseconds = 30;
 
   var today = new Date();
   quote.transacttime = commonbo.getUTCTimeStamp(today);
+  var validuntiltime = today;
+  validuntiltime.setSeconds(today.getSeconds() + quote.noseconds);
+  quote.validuntiltime = commonbo.getUTCTimeStamp(validuntiltime);
 
   if ('futsettdate' in quoterequest && quoterequest.futsettdate != '') {
     quote.futsettdate = quoterequest.futsettdate;
   } else {
     quote.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, quote.settledays, holidays));
   }
-
-  var validuntiltime = today;
-  quote.noseconds = 30;
-  validuntiltime.setSeconds(today.getSeconds() + quote.noseconds);
-  quote.validuntiltime = commonbo.getUTCTimeStamp(validuntiltime);
 
   console.log(quote);
 

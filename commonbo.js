@@ -1137,39 +1137,19 @@ exports.registerScripts = function () {
     consideration = tonumber(consideration) \
     local considerationlocalamount = consideration * rate \
     local commissionlocalamount = commission * rate \
+    local transactionid \
     if tonumber(side) == 1 then \
       --[[ buy includes all costs ]] \
       local totalamount = consideration + commission + stampduty + ptmlevy \
+      --[[ calculate amounts in local currency ]] \
       local localamount = totalamount * rate \
-      --[[ the transaction ]] \
-      local transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt", rate, "trade:" .. tradeid, timestamp, "TRC") \
-      --[[ client account posting ]] \
-      newposting(clientaccountid, -totalamount, brokerid, -localamount, transactionid, tsmilliseconds) \
-      --[[ update cleared/uncleared balances ]] \
-      local fromcleared \
-      local fromuncleared \
-      local balance = getaccountbalance(clientaccountid, brokerid) \
-      if tonumber(balance[1]) >= totalamount then \
-        fromcleared = totalamount \
-        fromuncleared = 0 \
-      elseif tonumber(balance[1]) == 0 then \
-        fromcleared = 0 \
-        fromuncleared = totalamount \
-      else \
-        fromcleared = tonumber(balance[1]) \
-        fromuncleared = totalamount - fromcleared \
-      end \
-      local localfromcleared = fromcleared * rate \
-      local localfromuncleared = fromuncleared * rate \
-      if fromuncleared > 0 then \
-        updateaccountbalanceuncleared(clientaccountid, -fromuncleared, brokerid, -localfromuncleared) \
-      end \
-      if fromcleared > 0 then \
-        updateaccountbalance(clientaccountid, -fromcleared, brokerid, -localfromcleared) \
-      end \
-      --[[ more amounts in broker currency if we are buying ]] \
       local ptmlevylocalamount = ptmlevy * rate \
       local stampdutylocalamount = stampduty * rate \
+      --[[ the transaction ]] \
+      transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt", rate, "trade:" .. tradeid, timestamp, "TRC") \
+      --[[ client account posting ]] \
+      newposting(clientaccountid, -totalamount, brokerid, -localamount, transactionid, tsmilliseconds) \
+      updateaccountbalance(clientaccountid, -totalamount, brokerid, -localamount) \
       --[[ consideration posting ]] \
       newposting(considerationaccountid, consideration, brokerid, considerationlocalamount, transactionid, tsmilliseconds) \
       updateaccountbalance(considerationaccountid, consideration, brokerid, considerationlocalamount) \
@@ -1193,7 +1173,7 @@ exports.registerScripts = function () {
       local totalamount = consideration - commission \
       local localamount = totalamount * rate \
       --[[ the transaction ]] \
-      local transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade payment", rate, "trade:" .. tradeid, timestamp, "TPC") \
+      transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade payment", rate, "trade:" .. tradeid, timestamp, "TPC") \
       --[[ client account posting ]] \
       newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, tsmilliseconds) \
       updateaccountbalanceuncleared(clientaccountid, totalamount, brokerid, localamount) \
