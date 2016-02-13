@@ -1147,7 +1147,7 @@ exports.registerScripts = function () {
       local stampdutylocalamount = stampduty * rate \
       --[[ the transaction ]] \
       transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt", rate, "trade:" .. tradeid, timestamp, "TRC") \
-      --[[ client account posting ]] \
+      --[[ client account posting - note: update cleared balance ]] \
       newposting(clientaccountid, -totalamount, brokerid, -localamount, transactionid, tsmilliseconds) \
       updateaccountbalance(clientaccountid, -totalamount, brokerid, -localamount) \
       --[[ consideration posting ]] \
@@ -1174,7 +1174,7 @@ exports.registerScripts = function () {
       local localamount = totalamount * rate \
       --[[ the transaction ]] \
       transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade payment", rate, "trade:" .. tradeid, timestamp, "TPC") \
-      --[[ client account posting ]] \
+      --[[ client account posting - note: update uncleared balance ]] \
       newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, tsmilliseconds) \
       updateaccountbalanceuncleared(clientaccountid, totalamount, brokerid, localamount) \
       --[[ consideration posting ]] \
@@ -1589,22 +1589,6 @@ exports.registerScripts = function () {
       elseif postings[index]["transactiontypeid"] == "CRS" or postings[index]["transactiontypeid"] == "SRC" or postings[index]["transactiontypeid"] == "SPC" then \
         balanceuncleared = balanceuncleared + tonumber(postings[index]["amount"]) \
         balance = balance + tonumber(postings[index]["amount"]) \
-      elseif postings[index]["transactiontypeid"] == "TRC" then \
-        local amount = math.abs(tonumber(postings[index]["amount"])) \
-        local fromcleared = 0 \
-        local fromuncleared = 0 \
-        if balance >= amount then \
-          fromcleared = amount \
-          fromuncleared = 0 \
-        elseif balance == 0 then \
-          fromcleared = 0 \
-          fromuncleared = amount \
-        else \
-          fromcleared = balance \
-          fromuncleared = amount - fromcleared \
-        end \
-        balance = balance - fromcleared \
-        balanceuncleared = balanceuncleared - fromuncleared \
       else \
         balance = balance + tonumber(postings[index]["amount"]) \
       end \
