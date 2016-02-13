@@ -1605,7 +1605,7 @@ exports.registerScripts = function () {
   * params: brokerid, corporateactionid, exdatems, timestamp, timestampms
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycacashdividend = getpositionsbysymbolbydate + round + newtransaction + getbrokeraccountsmapid + newposting + '\
+  exports.applycacashdividend = getpositionsbysymbolbydate + round + newtransaction + getbrokeraccountsmapid + newposting + updateaccountbalance + '\
     redis.log(redis.LOG_NOTICE, "applycacashdividend") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
@@ -1624,12 +1624,13 @@ exports.registerScripts = function () {
       return {1, 1015} \
     end \
     --[[ get the relevant broker accounts ]] \
-    local nominalcorporateactions = getbrokeraccountsmapid(brokerid, symbol["currencyid"], "nominalcorporateactions") \
-    local bankfundsbroker = getbrokeraccountsmapid(brokerid, symbol["currencyid"], "bankfundsbroker") \
-    if not nominalcorporateactions or not bankfundsbroker then \
+    local clientfundsaccount = getbrokeraccountsmapid(brokerid, symbol["currencyid"], "Client funds") \
+    if not clientfundsaccount then \
       return {1, 1027} \
     end \
-    --[[ get all positions in the stock of the corporate action as at the ex-date ]] \
+    --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
+    local rate = 1 \
+    --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
     for i = 1, #positions do \
       redis.log(redis.LOG_NOTICE, "accountid") \
@@ -1642,22 +1643,16 @@ exports.registerScripts = function () {
         local dividend = round(posqty * tonumber(corporateaction["cashpershare"]), 2) \
         redis.log(redis.LOG_NOTICE, "dividend") \
         redis.log(redis.LOG_NOTICE, dividend) \
+        local dividendlocal = dividend * rate \
         if dividend ~= 0 then \
-          local nominalcorporateactionstransactiontype \
-          local bankfundsbrokertransactiontype \
-          if dividend > 0 then \
-            nominalcorporateactionstransactiontype = "AR" \
-            bankfundsbrokertransactiontype = "AP" \
-          else \
-            nominalcorporateactionstransactiontype = "AP" \
-            bankfundsbrokertransactiontype = "AR" \
-          end \
-          --[[ create transactions & postings ]] \
-          local transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, bankfundsbrokertransactiontype) \
-          newposting(bankfundsbroker, dividend, brokerid, dividend, transactionid, timestampms, bankfundsbrokertransactiontype) \
-          transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividend, corporateaction["description"], 1, "corporateaction:" .. corporateactionid, timestamp, nominalcorporateactionstransactiontype) \
-          newposting(nominalcorporateactions, dividend, brokerid, dividend, transactionid, timestampms, nominalcorporateactionstransactiontype) \
-          newposting(positions[i]["accountid"], dividend, brokerid, dividend, transactionid, timestampms, nominalcorporateactionstransactiontype) \
+          --[[ create the transaction ]] \
+          local transactionid = newtransaction(dividend, brokerid, symbol["currencyid"], dividendlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "DVP") \
+          --[[ client posting ]] \
+          newposting(positions[i]["accountid"], dividend, brokerid, dividendlocal, transactionid, timestampms) \
+          updateaccountbalance(positions[i]["accountid"], dividend, brokerid, dividendlocal) \
+          --[[ broker posting ]] \
+          newposting(clientfundsaccount, -dividend, brokerid, -dividendlocal, transactionid, timestampms) \
+          updateaccountbalance(clientfundsaccount, -dividend, brokerid, -dividendlocal) \
           numaccountsupdated = numaccountsupdated + 1 \
         end \
       end \
