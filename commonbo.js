@@ -1522,6 +1522,12 @@ exports.registerScripts = function () {
       end \
     elseif paymenttypeid == "BAC" then \
       if action == 1 then \
+        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CAR") \
+        newposting(ARGV[4], ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
+        updateaccountbalance(ARGV[4], ARGV[2], ARGV[3], ARGV[6]) \
+        local clientfundsaccount = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client funds") \
+        newposting(clientfundsaccount, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), transactionid, ARGV[12]) \
+        updateaccountbalance(clientfundsaccount, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
       else \
         if creditcheckwithdrawal(ARGV[3], ARGV[4], ARGV[2]) == 1 then \
           return {1, "Insufficient cleared funds"} \
@@ -1878,7 +1884,7 @@ exports.registerScripts = function () {
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   * note: this corporate action is applied across all brokers
   */
-  exports.applycastocksplit = geteodprice + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + newpositiontransaction + transactiondividend + round + '\
+  exports.applycastocksplit = geteodprice + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + transactiondividend + round + '\
     redis.log(redis.LOG_NOTICE, "applycastocksplit") \
     local corporateactionid = ARGV[1] \
     local exdate = ARGV[2] \
