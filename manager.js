@@ -218,13 +218,13 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-    //applyCorporateAction(1, 1);
+    applyCorporateAction(1, 1);
     //test();
     //testtrade();
     //testSettle();
     //testSupplierFundsTransfer();
     //testPositionPostings();
-    testStatement();
+    //testStatement();
     //testOrder(1);
 
   sockjs_svr.on('connection', function(conn) {
@@ -2204,7 +2204,7 @@ function applyCorporateAction(brokerid, corporateactionid) {
 
 function applyCashDividend(brokerid, corporateactionid) {
   console.log("applyCashDividend");
-  var exdatems = new Date("September 13, 2015").getTime();
+  var exdatems = new Date("February 12, 2016").getTime();
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
 
@@ -2215,13 +2215,17 @@ function applyCashDividend(brokerid, corporateactionid) {
   db.eval(commonbo.applycacashdividend, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, function(err, ret) {
     if (err) throw err;
     console.log(ret);
-    console.log("Number of accounts updated: " + ret[1]);
+    if (ret[0] == 1) {
+      console.log("error");
+    } else {
+      console.log("Number of accounts updated: " + ret[1]);
+    }
   });
 }
 
 function applyScripDividend(brokerid, corporateactionid) {
   console.log("applyScripDividend");
-  var exdatems = new Date("September 13, 2015").getTime();
+  var exdatems = new Date("February 12, 2016").getTime();
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
 
@@ -2237,7 +2241,7 @@ function applyScripDividend(brokerid, corporateactionid) {
 
 function applyCARightsExdate(brokerid, corporateactionid) {
   console.log("applyCARightsExdate");
-  var exdate = new Date("September 13, 2015");
+  var exdate = new Date("February 12, 2016");
 
   // millisecond representation of exdate - don't need to subtract a day as this will give us the 00:00:00 time
   var exdatems = exdate.getTime();
@@ -2268,7 +2272,7 @@ function applyCARightsExdate(brokerid, corporateactionid) {
 function applyCARightsPayDate(brokerid, corporateactionid) {
   console.log("applyCARightsPayDate");
   var operatorid = 1;
-  var paydate = new Date("October 22, 2015");
+  var paydate = new Date("February 16, 2016");
 
   // millisecond representation of paydate
   var paydatems = paydate.getTime();
@@ -2290,7 +2294,7 @@ function applyCARightsPayDate(brokerid, corporateactionid) {
 
 function applyCAStockSplit(corporateactionid) {
   console.log("applyCAStockSplit");
-  var exdate = new Date("September 13, 2015");
+  var exdate = new Date("February 16, 2016");
 
   // millisecond representation of exdate
   var exdatems = exdate.getTime();
@@ -2316,7 +2320,7 @@ function applyCAStockSplit(corporateactionid) {
 
 function applyCAScripIssue(brokerid, corporateactionid) {
   console.log("applyCAScripIssue");
-  var exdate = new Date("September 13, 2015");
+  var exdate = new Date("February 12, 2016");
 
   // millisecond representation of exdate - don't need to subtract a day as this will give us the 00:00:00 time
   var exdatems = exdate.getTime();
