@@ -1548,60 +1548,6 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * newTradeSettlementTransaction
-  * script to handle settlement of trades
-  * params: amount, brokerid, fromaccountid, localamount, note, rate, timestamp, toaccountid, tradeid, transactiontypeid, timestampms
-  * returns: 0 if ok, else error message
-  */
-  exports.newTradeSettlementTransaction = newtransaction + newposting + '\
-    redis.log(redis.LOG_NOTICE, "newTradeSettlementTransaction") \
-    local currencyid = redis.call("hget", "broker:" .. ARGV[2] .. ":account:" ..ARGV[4], "currencyid") \
-    --[[ transactiontypeid may be passed, else derive it ]] \
-    local transactiontypeid = ARGV[10] \
-    if transactiontypeid == "" then \
-      local brokeraccountkey = "broker:" .. ARGV[2] .. ":account:" \
-      local fromaccountgroupid = redis.call("hget", brokeraccountkey .. ARGV[4], "accountgroupid") \
-      local toaccountgroupid = redis.call("hget", brokeraccountkey .. ARGV[9], "accountgroupid") \
-      if not fromaccountgroupid or not toaccountgroupid then return "Account not found" end \
-      if tonumber(fromaccountgroupid) == 1 and tonumber(toaccountgroupid) == 5 then \
-        transactiontypeid = "BP" \
-      elseif tonumber(fromaccountgroupid) == 5 and tonumber(toaccountgroupid) == 1 then \
-        transactiontypeid = "BR" \
-      else \
-        return "Invalid account group" \
-      end \
-    end \
-    local transactionid = newtransaction(ARGV[1], ARGV[2], currencyid, ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[8], transactiontypeid) \
-    newposting(ARGV[4], -tonumber(ARGV[1]), ARGV[2], -tonumber(ARGV[3]), transactionid, ARGV[11], transactiontypeid) \
-    newposting(ARGV[9], ARGV[1], ARGV[2], ARGV[3], transactionid, ARGV[11], transactiontypeid) \
-    return 0 \
-  ';
-
-  /*
-  * newSupplierFundsTransfer
-  * script to handle receipts from and payments to a supplier
-  * params: amount, bankaccountid, brokerid, localamount, note, rate, reference, supplieraccountid, timestamp, transactiontypeid, timestampms
-  * returns: 0
-  */
-  exports.newSupplierFundsTransfer = newtransaction + newposting + '\
-    redis.log(redis.LOG_NOTICE, "newSupplierFundsTransfer") \
-    local amount \
-    local localamount \
-    local currencyid = redis.call("hget", "broker:" ..ARGV[3] .. ":account:" ..ARGV[8], "currencyid") \
-    if ARGV[10] == "SP" then \
-      amount = -tonumber(ARGV[1]) \
-      localamount = -tonumber(ARGV[4]) \
-    else \
-      amount = ARGV[1] \
-      localamount = ARGV[4] \
-    end \
-    local transactionid = newtransaction(ARGV[1], ARGV[3], currencyid, ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10]) \
-    newposting(ARGV[8], amount, ARGV[3], localamount, transactionid, ARGV[11], ARGV[10]) \
-    newposting(ARGV[2], amount, ARGV[3], localamount, transactionid, ARGV[11], ARGV[10]) \
-    return 0 \
-  ';
-
-  /*
   * scriptgetstatement
   * prepares a statement for an account between two dates
   * params: accountid, brokerid, start date, end date
