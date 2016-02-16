@@ -1491,7 +1491,7 @@ exports.registerScripts = function () {
   local account = getaccount(ARGV[1], ARGV[2]) \
   if account["balance"] then \
     local totalpositionvalue = gettotalpositionvalue(ARGV[1], ARGV[2]) \
-    local equity = tonumber(account["balance"]) + totalpositionvalue["unrealisedpandl"] \
+    local equity = tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) + totalpositionvalue["unrealisedpandl"] \
     local freemargin = equity - totalpositionvalue["margin"] \
     table.insert(tblresults, {accountid=ARGV[1],balance=account["balance"],unclearedbalance=account["balanceuncleared"],unrealisedpandl=totalpositionvalue["unrealisedpandl"],equity=equity,margin=totalpositionvalue["margin"],freemargin=freemargin}) \
   end \
