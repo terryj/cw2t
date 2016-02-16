@@ -1049,6 +1049,59 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * Account Summary Notes:
+  * balance = cleared + uncleared cash
+  * equity = balance + unrealised p&l across all positions
+  * free margin = equity - margin used to hold positions
+  */
+
+  /*
+  * getaccountsummary()
+  * calculates account p&l, margin & equity for a client account
+  * params: accountid, brokerid
+  * returns: account cash balances, unrealised p&l, equity, free margin
+  */
+  getaccountsummary = getaccount + gettotalpositionvalue + '\
+  local getaccountsummary = function(accountid, brokerid) \
+    redis.log(redis.LOG_NOTICE, "getaccountsummary") \
+    local accountsummary = {} \
+    local account = getaccount(accountid, brokerid) \
+    if account["balance"] then \
+      local totalpositionvalue = gettotalpositionvalue(accountid, brokerid) \
+      local equity = tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) + totalpositionvalue["unrealisedpandl"] \
+      local freemargin = equity - totalpositionvalue["margin"] \
+      accountsummary["balance"] = account["balance"] \
+      accountsummary["balanceuncleared"] = account["balanceuncleared"] \
+      accountsummary["unrealisedpandl"] = totalpositionvalue["unrealisedpandl"] \
+      accountsummary["equity"] = equity \
+      accountsummary["margin"] = totalpositionvalue["margin"] \
+      accountsummary["freemargin"] = freemargin \
+    end \
+    return accountsummary \
+  end \
+  ';
+
+ /*
+  * getfreemargin()
+  * calculates free margin for an account
+  * params: accountid, brokerid
+  * returns: accounnt free margin if ok, else 0
+ */
+  getfreemargin = getaccountsummary + '\
+  local getfreemargin = function(accountid, brokerid) \
+    redis.log(redis.LOG_NOTICE, "getfreemargin") \
+    local accountsummary = getaccountsummary(accountid, brokerid) \
+    if accountsummary["freemargin"] then \
+      return accountsummary["freemargin"] \
+    else \
+      return 0 \
+    end \
+  end \
+  ';
+
+  exports.getfreemargin = getfreemargin;
+
+  /*
   * getbrokeraccountsmapid()
   * gets a broker accountid for a default broker account
   * params: brokerid, currencyid, account name
@@ -1090,36 +1143,6 @@ exports.registerScripts = function () {
   ';
 
   exports.getclientaccountid = getclientaccountid; 
-
-  /*
-  * calculates free margin for an account
-  * balance = cleared + uncleared cash
-  * equity = balance + unrealised p&l
-  * free margin = equity - margin used to hold positions
-  */
-  getfreemargin = getaccount + gettotalpositionvalue + '\
-  local getfreemargin = function(accountid, brokerid) \
-    redis.log(redis.LOG_NOTICE, "getfreemargin") \
-    local freemargin = 0 \
-    local account = getaccount(accountid, brokerid) \
-    if account["balance"] then \
-      redis.log(redis.LOG_NOTICE, "balance") \
-      redis.log(redis.LOG_NOTICE, account["balance"]) \
-      redis.log(redis.LOG_NOTICE, "balanceuncleared") \
-      redis.log(redis.LOG_NOTICE, account["balanceuncleared"]) \
-      local totalpositionvalue = gettotalpositionvalue(accountid, brokerid) \
-      local equity = tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) + totalpositionvalue["unrealisedpandl"] \
-      redis.log(redis.LOG_NOTICE, "totunrealisedpandl") \
-      redis.log(redis.LOG_NOTICE, totalpositionvalue["unrealisedpandl"]) \
-      redis.log(redis.LOG_NOTICE, "margin") \
-      redis.log(redis.LOG_NOTICE, totalpositionvalue["margin"]) \
-      freemargin = equity - totalpositionvalue["margin"] \
-    end \
-    return freemargin \
-  end \
-  ';
-
-  exports.getfreemargin = getfreemargin;
 
   /*
   * newtradetransaction()
@@ -1485,17 +1508,10 @@ exports.registerScripts = function () {
   * params: accountid, brokerid
   * returns: array of values as JSON string
   */
-  exports.scriptgetaccountsummary = getaccount + gettotalpositionvalue + '\
+  exports.scriptgetaccountsummary = getaccountsummary + '\
   redis.log(redis.LOG_NOTICE, "scriptgetaccountsummary") \
-  local tblresults = {} \
-  local account = getaccount(ARGV[1], ARGV[2]) \
-  if account["balance"] then \
-    local totalpositionvalue = gettotalpositionvalue(ARGV[1], ARGV[2]) \
-    local equity = tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) + totalpositionvalue["unrealisedpandl"] \
-    local freemargin = equity - totalpositionvalue["margin"] \
-    table.insert(tblresults, {accountid=ARGV[1],balance=account["balance"],unclearedbalance=account["balanceuncleared"],unrealisedpandl=totalpositionvalue["unrealisedpandl"],equity=equity,margin=totalpositionvalue["margin"],freemargin=freemargin}) \
-  end \
-  return cjson.encode(tblresults) \
+  local accountsummary = getaccountsummary(ARGV[1], ARGV[2]) \
+  return cjson.encode(accountsummary) \
   ';
 
   /*
