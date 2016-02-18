@@ -684,9 +684,11 @@ exports.registerScripts = function () {
   local addunclearedcashlistitem = function(brokerid, clearancedate, clientaccountid, transactionid) \
     redis.log(redis.LOG_NOTICE, "addunclearedcashlistitem") \
     local brokerkey = "broker:" .. brokerid \
-    local unclearedlistid = redis.call("hincrby", brokerkey, "lastunclearedlistid", 1) \
-    redis.call("hmset", brokerkey .. ":unclearedlist:" .. unclearedlistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "transactionid", transactionid, "unclearedlistid", unclearedlistid) \
-    redis.call("sadd", brokerkey .. ":unclearedlist", unclearedlistid) \
+    local unclearedcashlistid = redis.call("hincrby", brokerkey, "lastunclearedcashlistid", 1) \
+    redis.call("hmset", brokerkey .. ":unclearedcashlist:" .. unclearedcashlistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "transactionid", transactionid, "unclearedcashlistid", unclearedcashlistid) \
+    redis.call("sadd", brokerkey .. ":unclearedcashlist", unclearedcashlistid) \
+    redis.call("sadd", brokerkey .. ":unclearedcashlistid", "unclearedcashlist:" .. unclearedcashlistid) \
+    redis.call("zadd", brokerkey .. ":unclearedcashlist:unclearedcashlistbydate", clearancedate, unclearedcashlistid) \
   end \
   ';
 
@@ -701,6 +703,8 @@ exports.registerScripts = function () {
     local unclearedtradelistid = redis.call("hincrby", brokerkey, "lastunclearedtradelistid", 1) \
     redis.call("hmset", brokerkey .. ":unclearedtradelist:" .. unclearedtradelistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "tradeid", tradeid, "transactionid", transactionid, "unclearedtradelistid", unclearedtradelistid) \
     redis.call("sadd", brokerkey .. ":unclearedtradelist", unclearedtradelistid) \
+    redis.call("sadd", brokerkey .. ":unclearedtradelistid", "unclearedtradelist:" .. unclearedtradelistid) \
+    redis.call("zadd", brokerkey .. ":unclearedtradelist:unclearedtradelistbydate", clearancedate, unclearedtradelistid) \
   end \
   ';
 
@@ -1467,7 +1471,7 @@ exports.registerScripts = function () {
   */
   exports.scriptgetpositionsbysymbol = getpositionsbysymbol + '\
     local positions = getpositionsbysymbol(ARGV[1], ARGV[2]) \
-    return positions \
+    return cjson.encode(positions) \
   ';
 
   /*
@@ -1478,7 +1482,7 @@ exports.registerScripts = function () {
   */
   exports.scriptgetpositionsbysymbolbydate = getpositionsbysymbolbydate + '\
     local positions = getpositionsbysymbolbydate(ARGV[1], ARGV[2], ARGV[3]) \
-    return positions \
+    return cjson.encode(positions) \
   ';
 
   /*
@@ -1893,7 +1897,7 @@ exports.registerScripts = function () {
             local stubcash = round(sharesdue[2] * eodprice["bid"], 2) / 100 \
             local stubcashlocal = stubcash * rate \
             --[[ todo: this may need a rights issue equivalent function ]] \
-            local retval = transactiondividend(positions[i]["accountid"], stubcash, brokerid, symbol["currencyid"], stubcashlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+            local retval = transactiondividend(positions[i]["accountid"], stubcash, brokers[j], symbol["currencyid"], stubcashlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
             if retval[1] == 1 then \
               return retval \
             end \
