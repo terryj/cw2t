@@ -177,7 +177,7 @@ function quoteInterval() {
 }
 
 /*
-* Recieve a quote request
+* Receive a quote request
 */
 function quoteRequest(quoterequest) {
   console.log("Quoterequest received");
@@ -211,8 +211,8 @@ function quoteRequest(quoterequest) {
   if (!("quantity" in quoterequest)) {
     quoterequest.quantity = "";
   }
-
-  // default to GBP
+  
+  // default currency to GBP
   if (!('currencyid' in quoterequest)) {
     quoterequest.currencyid = "GBP";
   }
@@ -221,7 +221,7 @@ function quoteRequest(quoterequest) {
   if (!('settlcurrencyid' in quoterequest)) {
     quoterequest.settlcurrencyid = quoterequest.currencyid;
   }
-  
+
   // store the quote request & get an id
   db.eval(scriptQuoteRequest, 1, "broker:" + quoterequest.brokerid, quoterequest.accountid, quoterequest.brokerid, quoterequest.cashorderqty, quoterequest.clientid, quoterequest.currencyid, quoterequest.futsettdate, quoterequest.operatorid, quoterequest.operatortype, quoterequest.quantity, quoterequest.settlmnttypid, quoterequest.side, quoterequest.symbolid, quoterequest.timestamp, quoterequest.settlcurrencyid, function(err, ret) {
     if (err) throw err;
@@ -303,20 +303,25 @@ function testQuote(quoterequest, side) {
     quote.bidpx = "1.23";
     quote.bidsize = quoterequest.quantity;
     quote.bidquotedepth = "1";
+    quote.bidspotrate = 0;
     quote.offerpx = "";
     quote.offersize = "";
     quote.offerquotedepth = "";
+    quote.offerspotrate = "";
+    quote.cashorderqty = quote.bidsize * quote.bidpx;
   } else {
     quote.bidpx = "";
     quote.bidsize = "";
     quote.bidquotedepth = "";
+    quote.bidspotrate = "";
     quote.offerpx = "1.25";
+    quote.offerspotrate = 0;
     quote.offersize = quoterequest.quantity;
     quote.offerquotedepth = "1";
+    quote.cashorderqty = quote.offersize * quote.offerpx;
   }
 
   quote.brokerid = quoterequest.brokerid;
-  quote.cashorderqty = quoterequest.cashorderqty;
   quote.quoterequestid = quoterequest.quoterequestid;
   quote.symbolid = quoterequest.symbolid;
   quote.currencyid = "GBP";
@@ -354,8 +359,6 @@ function newOrder(order) {
 
   order.currencyratetoorg = 1; // product currency to org currency rate
   order.currencyindtoorg = 1;
-  order.settlcurrfxrate = 1; // settlement currency to product currency rate
-  order.settlcurrfxratecalc = 1;
   var today = new Date();
   order.timestamp = commonbo.getUTCTimeStamp(today);
   order.timestampms = today.getTime();
@@ -378,7 +381,7 @@ function newOrder(order) {
 * Process an order based on a quote
 */
 function dealAtQuote(order) {
-  db.eval(scriptdealatquote, 1, "broker:" + order.brokerid, order.brokerid, order.ordertype, order.markettype, order.quoteid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforce, order.settlcurrfxrate, order.settlcurrfxratecalc, order.operatortype, order.operatorid, order.timestampms, function(err, ret) {
+  db.eval(scriptdealatquote, 1, "broker:" + order.brokerid, order.brokerid, order.ordertype, order.markettype, order.quoteid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforce, order.operatortype, order.operatorid, order.timestampms, function(err, ret) {
     if (err) throw err;
 
     // error check
@@ -459,6 +462,20 @@ function newOrderSingle(order) {
     order.expiretime = "";
   }
 
+  if (!('currencyid' in order)) {
+    order.currencyid = "GBP";
+  }
+
+  if (!('settlcurrencyid' in order)) {
+    order.settlcurrencyid = "GBP";
+  }
+
+  // settlement currency to product currency rate
+  if (!('settlcurrfxrate' in order)) {
+    order.settlcurrfxrate = 1;
+    order.settlcurrfxratecalc = 0;
+  }
+
   db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforce, order.expiredate, order.expiretime, order.settlcurrencyid, order.settlcurrfxrate, order.settlcurrfxratecalc, order.operatortype, order.operatorid, order.cashorderqty, order.settlmnttypid, order.timestampms, function(err, ret) {
     if (err) throw err;
 
@@ -487,8 +504,9 @@ function newOrderSingle(order) {
 * Either forward an order to the market or generate a test response, depending on the type of instrument & market
 */
 function processOrder(order) {
-console.log("process order");
-console.log(order);
+  console.log("process order");
+  console.log(order);
+
   // equity orders
   if (order.instrumenttypeid == "DE" || order.instrumenttypeid == "IE") {
     if (testmode == 1) {
@@ -547,8 +565,8 @@ function testTradeResponse(order) {
   exereport.orderid = "";
   exereport.settlcurrencyid = "GBP";
   exereport.settlcurramt = parseFloat(order.price) * parseInt(order.quantity);
-  exereport.settlcurrfxrate = 1;
-  exereport.settlcurrfxratecalc = 1;
+  exereport.settlcurrfxrate = order.settlcurrfxrate;
+  exereport.settlcurrfxratecalc = order.settlcurrfxratecalc;
 
   processTrade(exereport);
 }
@@ -675,10 +693,12 @@ function newQuote(quote) {
   if (!('bidpx' in quote)) {
     quote.bidpx = "";
     quote.bidsize = "";
+    quote.bidspotrate = "";
   }
   if (!('offerpx' in quote)) {
     quote.offerpx = "";
     quote.offersize = "";
+    quote.offerspotrate = "";
   }
 
   if (!('bidquotedepth' in quote)) {
@@ -728,7 +748,7 @@ function newQuote(quote) {
   }
 
   // quote script
-  db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, function(err, ret) {
+  db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, quote.bidspotrate, quote.offerspotrate, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -881,7 +901,7 @@ function processTrade(exereport) {
   }
 
   if (!('settlcurrfxratecalc' in exereport)) {
-    exereport.settlcurrfxratecalc = 1;
+    exereport.settlcurrfxratecalc = 0;
   }
 
   // will have a mnemonic & isin from market
@@ -1534,7 +1554,7 @@ function registerScripts() {
   /*
   * scriptdealatquote
   * place an order based on a quote
-  * params: 1=brokerid, 2=ordertype, 3=markettype, 4=quoteid, 5=currencyratetoorg, 6=currencyindtoorg, 7=timestamp, 8=timeinforce, 9=settlcurrfxrate, 10=settlcurrfxratecalc, 11=operatortype, 12=operatorid, 13=timestampms
+  * params: 1=brokerid, 2=ordertype, 3=markettype, 4=quoteid, 5=currencyratetoorg, 6=currencyindtoorg, 7=timestamp, 8=timeinforce, 9=operatortype, 10=operatorid, 11=timestampms
   * returns: see newordersingle
   */
   scriptdealatquote = newordersingle + '\
@@ -1546,17 +1566,33 @@ function registerScripts() {
   local side \
   local quantity \
   local price \
+  local settlcurrfxrate \
+  local settlcurrfxratecalc \
   if quote["bidpx"] == "" then \
     side = 1 \
     quantity = quote["offerquantity"] \
     price = quote["offerpx"] \
+    if tonumber(quote["offerspotrate"]) ~= 0 then \
+      settlcurrfxrate = quote["offerspotrate"] \
+      settlcurrfxratecalc = 0 \
+    else \
+      settlcurrfxrate = 1 \
+      settlcurrfxratecalc = 0 \
+    end \
   else \
     side = 2 \
     quantity = quote["bidquantity"] \
     price = quote["bidpx"] \
+    if tonumber(quote["bidspotrate"]) ~= 0 then \
+      settlcurrfxrate = quote["bidspotrate"] \
+      settlcurrfxratecalc = 0 \
+    else \
+      settlcurrfxrate = 1 \
+      settlcurrfxratecalc = 0 \
+    end \
   end \
   --[[ note: we store & forward settlement vales from the quote, which may be different from those of the quote request ]] \
-  local retval = newordersingle(quote["accountid"], ARGV[1], quote["clientid"], quote["symbolid"], side, quantity, price, ARGV[2], ARGV[3], quote["futsettdate"], ARGV[4], quote["currencyid"], ARGV[5], ARGV[6], ARGV[7], 0, ARGV[8], "", "", quote["settlcurrencyid"], ARGV[9], ARGV[10], "", "", ARGV[11], ARGV[12], "", quote["cashorderqty"], quote["settlmnttypid"], ARGV[13]) \
+  local retval = newordersingle(quote["accountid"], ARGV[1], quote["clientid"], quote["symbolid"], side, quantity, price, ARGV[2], ARGV[3], quote["futsettdate"], ARGV[4], quote["currencyid"], ARGV[5], ARGV[6], ARGV[7], 0, ARGV[8], "", "", quote["settlcurrencyid"], settlcurrfxrate, settlcurrfxratecalc, "", "", ARGV[9], ARGV[10], "", quote["cashorderqty"], quote["settlmnttypid"], ARGV[11]) \
   --[[ add required values for external feed ]] \
   table.insert(retval, quote["externalquoteid"]) \
   table.insert(retval, quote["quoterid"]) \
@@ -1712,6 +1748,8 @@ function registerScripts() {
   local clientid = ARGV[3] \
   local orderid = ARGV[4] \
   local symbolid = ARGV[5] \
+  local settlcurrfxrate = ARGV[22] \
+  local settlcurrfxratecalc = ARGV[23] \
   local operatortype = ARGV[25] \
   local operatorid = ARGV[26] \
   local leavesqty = ARGV[27] \
@@ -1725,6 +1763,9 @@ function registerScripts() {
     accountid = order["accountid"] \
     clientid = order["clientid"] \
     symbolid = order["symbolid"] \
+    --[[ use fx rate from order, as this is copied from the quote & we do not get one from a fill ]] \
+    settlcurrfxrate = order["settlcurrfxrate"] \
+    settlcurrfxratecalc = order["settlcurrfxratecalc"] \
     operatortype = order["operatortype"] \
     operatorid = order["operatorid"] \
   end \
@@ -1735,7 +1776,7 @@ function registerScripts() {
   local finance = 0 \
   local margin = 0 \
   --[[ create trade ]] \
-  local tradeid = newtrade(accountid, ARGV[2], clientid, orderid, symbolid, ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], costs, ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], ARGV[22], ARGV[23], margin, operatortype, operatorid, finance, ARGV[24]) \
+  local tradeid = newtrade(accountid, ARGV[2], clientid, orderid, symbolid, ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], costs, ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, ARGV[24]) \
   --[[ adjust order remaining quantity & status ]] \
   if orderid ~= "" then \
     local orderstatusid \
@@ -1972,7 +2013,7 @@ function registerScripts() {
   --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
   local quoteid = redis.call("hincrby", brokerkey, "lastquoteid", 1) \
   --[[ store the quote ]] \
-  redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", brokerid, "accountid", quoterequest["accountid"], "clientid", quoterequest["clientid"], "quoteid", quoteid, "symbolid", quoterequest["symbolid"], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", cashorderqty, "settledays", ARGV[18], "noseconds", ARGV[19], "settlmnttypid", ARGV[21], "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4]) \
+  redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", brokerid, "accountid", quoterequest["accountid"], "clientid", quoterequest["clientid"], "quoteid", quoteid, "symbolid", quoterequest["symbolid"], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", cashorderqty, "settledays", ARGV[18], "noseconds", ARGV[19], "settlmnttypid", ARGV[21], "commission", costs[1], "ptmlevy", costs[2], "stampduty", costs[3], "contractcharge", costs[4], "bidspotrate", ARGV[22], "offerspotrate", ARGV[23]) \
   --[[ add to sets of quotes & quotes for this account ]] \
   redis.call("sadd", brokerkey .. ":quotes", quoteid) \
   redis.call("sadd", brokerkey .. ":account:" .. quoterequest["accountid"] .. ":quotes", quoteid) \
