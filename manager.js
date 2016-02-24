@@ -226,6 +226,7 @@ function listen() {
     //testPositionPostings();
     //testStatement();
     //testOrder(1);
+    //testValuation();
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
@@ -2084,7 +2085,7 @@ function testSupplierFundsTransfer() {
 
 function testPositionPostings() {
   var brokerid = 1;
-  var positionid = 12;
+  var positionid = 1;
 
   db.eval(commonbo.scriptgetpositionpostings, 1, "broker:" + brokerid, brokerid, positionid, "-inf", "inf", function(err, ret) {
     if (err) throw err;
@@ -2172,6 +2173,21 @@ endmilli = '+inf';
   });
 }
 
+function testValuation() {
+  var brokerid = 1;
+  var accountid = 1;
+
+  var dtmilli = new Date("February 24, 2016 00:00:00").getTime();
+  console.log(dtmilli);
+
+  db.eval(commonbo.scriptvaluation, 1, "broker:" + brokerid, accountid, brokerid, dtmilli, function(err, ret) {
+    if (err) throw err;
+
+    var obj = JSON.parse(ret);
+    console.log(obj);
+  });
+}
+
 function applyCorporateAction(brokerid, corporateactionid) {
   console.log("applyCorporateAction");
 
@@ -2204,7 +2220,7 @@ function applyCorporateAction(brokerid, corporateactionid) {
 
 function applyCashDividend(brokerid, corporateactionid) {
   console.log("applyCashDividend");
-  var exdatems = new Date("February 12, 2016").getTime();
+  var exdatems = new Date("February 25, 2016").getTime();
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
 

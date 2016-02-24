@@ -930,14 +930,42 @@ exports.registerScripts = function () {
   local getpositionvalues = function(accountid, brokerid) \
     redis.log(redis.LOG_NOTICE, "getpositionvalues") \
     local tblresults = {} \
-    local positions = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. ":positions") \
-    for index = 1, #positions do \
-      local vals = getpositionvalue(brokerid, positions[index]) \
+    local positionids = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. ":positions") \
+    for index = 1, #positionids do \
+      local vals = getpositionvalue(brokerid, positionids[index]) \
       table.insert(tblresults, vals) \
     end \
     return tblresults \
   end \
   ';
+
+  /*
+  * getpositionbydate()
+  * gets a position as at a point in time
+  * params: brokerid, positionid, datetime in milliseconds
+  * returns: the position
+  */
+  getpositionbydate = getposition + getpositionpostingsbydate + '\
+  local getpositionbydate = function(brokerid, positionid, dtmilli) \
+    --[[ get the position ]] \
+    local position = getposition(brokerid, positionid) \
+    --[[ get the position postings for this position since the date ]] \
+    local positionpostings = getpositionpostingsbydate(brokerid, positionid, dtmilli, "inf") \
+    --[[ adjust the position to reflect these postings ]] \
+    for i = #positionpostings, 1, -1 do \
+      local positionquantity = tonumber(position["quantity"]) \
+      position["quantity"] = positionquantity - tonumber(positionpostings[i]["quantity"]) \
+      if tonumber(positionpostings[i]["quantity"]) > 0 then \
+        position["cost"] = tonumber(position["cost"]) - tonumber(positionpostings[i]["cost"]) \
+      elseif positionquantity == 0 then  \
+        position["cost"] = tonumber(positionpostings[i]["cost"]) \
+      else \
+        position["cost"] = position["quantity"] / positionquantity * tonumber(position["cost"]) \
+      end \
+    end \
+    return position \
+  end \
+ ';
 
   /*
   * getpositionsbysymbol()
@@ -964,19 +992,15 @@ exports.registerScripts = function () {
   * params: brokerid, symbolid, date in milliseconds
   * returns: a table of positions
   */
-  getpositionsbysymbolbydate = getpositionsbysymbol + getpositionpostingsbydate + '\
+  getpositionsbysymbolbydate = getpositionbydate + '\
   local getpositionsbysymbolbydate = function(brokerid, symbolid, milliseconds) \
     redis.log(redis.LOG_NOTICE, "getpositionsbysymbolbydate") \
     local tblresults = {} \
-    local positions = getpositionsbysymbol(brokerid, symbolid) \
-    for i = 1, #positions do \
-      --[[ get the position postings for this position since the date ]] \
-      local positionpostings = getpositionpostingsbydate(brokerid, positions[i]["positionid"], milliseconds, "inf") \
-      --[[ adjust the position to reflect these postings ]] \
-      for j = #positionpostings, 1, -1 do \
-        positions[i]["quantity"] = tonumber(positions[i]["quantity"]) - tonumber(positionpostings[j]["quantity"]) \
-      end \
-      table.insert(tblresults, positions[i]) \
+    --[[ get position ids ]] \
+    local positionids = redis.call("smembers", "broker:" .. brokerid .. ":symbol:" .. symbolid .. ":positions") \
+    for i = 1, #positionids do \
+      local position = getpositionbydate(brokerid, positionids[i], milliseconds) \
+      table.insert(tblresults, position) \
     end \
     return tblresults \
   end \
@@ -1038,19 +1062,6 @@ exports.registerScripts = function () {
   ';
 
   exports.gettotalpositionvalue = gettotalpositionvalue;
-
-  /*
-  * getpositionsatadate()
-  * gets all positions for a specified stock and date
-  * params: brokerid, date, symbolid
-  * returns: all position records as a table
-  */
-  getpositionsatadate = getpositions + '\
-  local getpositions = function(brokerid, exdate, symbolid) \
-    local tblresults = {} \
-    return tblresults \
-  end \
-  ';
 
   /*
   * Account Summary Notes:
@@ -1331,13 +1342,7 @@ exports.registerScripts = function () {
     local sharesdue = round(tonumber(posqty) * tonumber(sharespershare), 2) \
     local sharesdueint = math.floor(sharesdue) \
     local sharesduerem = sharesdue - sharesdueint \
-    redis.log(redis.LOG_NOTICE, "sharesdue") \
-    redis.log(redis.LOG_NOTICE, sharesdue) \
-    redis.log(redis.LOG_NOTICE, "sharesdueint") \
-    redis.log(redis.LOG_NOTICE, sharesdueint) \
-    redis.log(redis.LOG_NOTICE, "remainder") \
-    redis.log(redis.LOG_NOTICE, sharesduerem) \
-    return {sharesdueint, sharesduerem} \
+   return {sharesdueint, sharesduerem} \
   end \
   ';
 
@@ -1518,6 +1523,26 @@ exports.registerScripts = function () {
   return cjson.encode(accountsummary) \
   ';
 
+ /*
+  * scriptvaluation
+  * value a portfolio as at a date
+  * params: accountid, brokerid, end of valuation date in milliseconds
+  * returns: array of positions with their associated values in JSON
+  */
+  exports.scriptvaluation = getpositionbydate + '\
+    redis.log(redis.LOG_NOTICE, "scriptvaluation") \
+    local tblvaluation = {} \
+    --[[ get the ids for the positions held by this account ]] \
+    local positionids = redis.call("smembers", "broker:" .. ARGV[2] .. ":account:" .. ARGV[1] .. ":positions") \
+    --[[ calculate each position as at the passed date ]] \
+    for index = 1, #positionids do \
+      local position = getpositionbydate(ARGV[2], positionids[index], ARGV[3]) \
+      --[[ todo: need to value as at the date ]] \
+      table.insert(tblvaluation, position) \
+    end \
+    return cjson.encode(tblvaluation) \
+  ';
+
   /*
   * newclientfundstransfer
   * script to handle client deposits & withdrawals
@@ -1529,7 +1554,7 @@ exports.registerScripts = function () {
     redis.log(redis.LOG_NOTICE, "newclientfundstransfer") \
     local action = tonumber(ARGV[1]) \
     local paymenttypeid = ARGV[8] \
-    if paymenttypeid == "DCP" then \
+    if paymenttypeid == "DCR" then \
       if action == 1 then \
         local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CRR") \
         newposting(ARGV[4], ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
