@@ -1,11 +1,16 @@
 /****************
 * nbtinterfeed.js
-* NBTrader Interfeed Market data link
+* Market data feed using NBTrader Interfeed
 * Cantwaittotrade Limited
 * Terry Johnston
 * August 2014
 *
-* To load symbols from a redis connection...
+* This server should be running at all times.
+* It makes a connection to the service and then sits waiting for any requests via the price server channel.
+* Requests will be forwarded and the results will update Redis directly and may be published,
+* so that any listening applications can receive them.
+*
+* To request symbols from a Redis connection...
 * Real-time partial record i.e. "publish 7 rp:BARC.L"
 * Real-time full record i.e. "publish 7 rf:BARC.L"
 * Snap full record i.e. "publish 7 snap:L.B***"
@@ -89,7 +94,6 @@ function start() {
 function initialise() {
   commonfo.registerScripts();
   commonbo.registerScripts();
-  registerScripts();
   pubsub();
 }
 
@@ -197,28 +201,6 @@ function tryToConnect() {
 * get the symbols we need to subscribe to and subscribe to them
 */
 function getSubscriptions() {
-  console.log("subscribing to positions");
-
-  // get the set of brokers
-  db.smembers("brokers", function(err, brokers) {
-    if (err) {
-      console.log("Error in getSubscriptions:" + err);
-      return;
-    }
-
-    // get all positions for this broker
-    for (var j = 0; j < brokers.length; ++j) {
-      db.eval(commonbo.scriptgetpositionsbybroker, 0, 1, function(err, ret) {
-        if (err) throw err;
-        var obj = JSON.parse(ret);
-
-        for (var i = 0; i < obj.length; ++i) {
-          // subscribe
-          subscribe(obj[i].symbolid);
-        }
-      });
-    }
-  });
 }
 
 /*
@@ -418,7 +400,7 @@ function subscribe(symbolid) {
   // get the nbtrader symbol
   db.hget("symbol:" + symbolid, "nbtsymbol", function(err, nbtsymbol) {
     if (err) {
-      console.log("Error in getSubscriptions:" + err);
+      console.log("Error in subscribe():" + err);
       return;
     }
 
@@ -1336,5 +1318,3 @@ function getError(errorcode) {
   return desc;
 }
 
-function registerScripts() {
-}
