@@ -115,9 +115,7 @@ function pubsub() {
     try {
       var obj = JSON.parse(message);
 
-      if ("position" in obj) {
-        positionReceived(obj.position);
-      } else if ("pricerequest" in obj) {
+      if ("pricerequest" in obj) {
         priceRequest(obj.pricerequest);
       }
     } catch (e) {
@@ -201,15 +199,6 @@ function tryToConnect() {
 * get the symbols we need to subscribe to and subscribe to them
 */
 function getSubscriptions() {
-}
-
-/*
-* we have received notification of a new or updated position
-*/
-function positionReceived(position) {
-  console.log("positionReceived");
-  console.log(position);
-  subscribe(position.symbolid);
 }
 
 function priceRequest(pricerequest) {
