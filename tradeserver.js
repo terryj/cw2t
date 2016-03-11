@@ -211,7 +211,7 @@ function quoteRequest(quoterequest) {
   if (!("quantity" in quoterequest)) {
     quoterequest.quantity = "";
   }
-  
+
   // default currency to GBP
   if (!('currencyid' in quoterequest)) {
     quoterequest.currencyid = "GBP";
@@ -1496,7 +1496,7 @@ function registerScripts() {
     side = tonumber(side) \
     local hedgeorderid = "" \
     --[[ calculate the consideration ]] \
-    local settlcurramt = getsettlcurramt(quantity, cashorderqty, price) \
+    local settlcurramt = round(tonumber(getsettlcurramt(quantity, cashorderqty, price)), 2) \
     if settlcurramt == 0 then \
       --[[ publish the order back to the operatortype - the order contains the error ]] \
       publishorder(brokerid, orderid, operatortype) \
@@ -1753,6 +1753,7 @@ function registerScripts() {
   local operatortype = ARGV[25] \
   local operatorid = ARGV[26] \
   local leavesqty = ARGV[27] \
+  local settlcurramt = round(tonumber(ARGV[21]), 2) \
   local order \
   --[[ if there is an orderid, get the order & update unknown values for the fill ]] \
   if orderid ~= "" then \
@@ -1776,7 +1777,7 @@ function registerScripts() {
   local finance = 0 \
   local margin = 0 \
   --[[ create trade ]] \
-  local tradeid = newtrade(accountid, ARGV[2], clientid, orderid, symbolid, ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], costs, ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, ARGV[24]) \
+  local tradeid = newtrade(accountid, ARGV[2], clientid, orderid, symbolid, ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], costs, ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, ARGV[24]) \
   --[[ adjust order remaining quantity & status ]] \
   if orderid ~= "" then \
     local orderstatusid \

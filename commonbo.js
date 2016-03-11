@@ -418,7 +418,7 @@ exports.registerScripts = function () {
       local bidprice = redis.call("hget", "symbol:" .. symbolid, "bid") \
       if bidprice and tonumber(bidprice) ~= 0 then \
         --[[ show price as pounds rather than pence ]] \
-        price = tonumber(bidprice) / 100 \
+        price = tonumber(bidprice) \
         if price ~= 0 then \
           unrealisedpandl = round(qty * price - cost, 2) \
         end \
@@ -428,7 +428,7 @@ exports.registerScripts = function () {
       local askprice = redis.call("hget", "symbol:" .. symbolid, "ask") \
       if askprice and tonumber(askprice) ~= 0 then \
         --[[ show price as pounds rather than pence ]] \
-        price = tonumber(askprice) / 100 \
+        price = tonumber(askprice) \
         if price ~= 0 then \
           unrealisedpandl = round(qty * price + cost, 2) \
         end \
@@ -541,7 +541,7 @@ exports.registerScripts = function () {
     if not vals[1] then return end \
     local balance = tonumber(vals[1]) + tonumber(amount) \
     local localbalance = tonumber(vals[2]) + tonumber(localamount) \
-    redis.call("hmset", "broker:" .. brokerid .. ":account:" .. accountid, "balance", balance, "localbalance", localbalance) \
+    redis.call("hmset", "broker:" .. brokerid .. ":account:" .. accountid, "balance", tostring(balance), "localbalance", tostring(localbalance)) \
   end \
   ';
 
@@ -556,7 +556,7 @@ exports.registerScripts = function () {
     if not vals[1] then return end \
     local balanceuncleared = tonumber(vals[1]) + tonumber(amount) \
     local localbalanceuncleared = tonumber(vals[2]) + tonumber(localamount) \
-    redis.call("hmset", "broker:" .. brokerid .. ":account:" .. accountid, "balanceuncleared", balanceuncleared, "localbalanceuncleared", localbalanceuncleared) \
+    redis.call("hmset", "broker:" .. brokerid .. ":account:" .. accountid, "balanceuncleared", tostring(balanceuncleared), "localbalanceuncleared", tostring(localbalanceuncleared)) \
   end \
   ';
 
@@ -569,7 +569,7 @@ exports.registerScripts = function () {
   local newposting = function(accountid, amount, brokerid, localamount, transactionid, tsmilliseconds) \
     local brokerkey = "broker:" .. brokerid \
     local postingid = redis.call("hincrby", brokerkey, "lastpostingid", 1) \
-    redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", amount, "localamount", localamount, "postingid", postingid, "transactionid", transactionid) \
+    redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", tostring(amount), "localamount", tostring(localamount), "postingid", postingid, "transactionid", transactionid) \
     redis.call("sadd", brokerkey .. ":transaction:" .. transactionid .. ":postings", postingid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":postings", postingid) \
     --[[ add a sorted set for time based queries ]] \
@@ -588,7 +588,7 @@ exports.registerScripts = function () {
   newtransaction = '\
   local newtransaction = function(amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid) \
     local transactionid = redis.call("hincrby", "broker:" .. brokerid, "lasttransactionid", 1) \
-    redis.call("hmset", "broker:" .. brokerid .. ":transaction:" .. transactionid, "amount", amount, "brokerid", brokerid, "currencyid", currencyid, "localamount", localamount, "note", note, "rate", rate, "reference", reference, "timestamp", timestamp, "transactiontypeid", transactiontypeid, "transactionid", transactionid) \
+    redis.call("hmset", "broker:" .. brokerid .. ":transaction:" .. transactionid, "amount", tostring(amount), "brokerid", brokerid, "currencyid", currencyid, "localamount", tostring(localamount), "note", note, "rate", rate, "reference", reference, "timestamp", timestamp, "transactiontypeid", transactiontypeid, "transactionid", transactionid) \
     redis.call("sadd", "broker:" .. brokerid .. ":transactions", transactionid) \
     redis.call("sadd", "broker:" .. brokerid .. ":transactionid", "transaction:" .. transactionid) \
     return transactionid \
@@ -980,7 +980,9 @@ exports.registerScripts = function () {
     local positions = redis.call("smembers", "broker:" .. brokerid .. ":symbol:" .. symbolid .. ":positions") \
     for index = 1, #positions do \
       local vals = getposition(brokerid, positions[index]) \
-      table.insert(tblresults, vals) \
+      if tonumber(vals["quantity"]) > 0 then \
+        table.insert(tblresults, vals) \
+      end \
     end \
     return tblresults \
   end \
@@ -1000,7 +1002,9 @@ exports.registerScripts = function () {
     local positionids = redis.call("smembers", "broker:" .. brokerid .. ":symbol:" .. symbolid .. ":positions") \
     for i = 1, #positionids do \
       local position = getpositionbydate(brokerid, positionids[i], milliseconds) \
-      table.insert(tblresults, position) \
+      if tonumber(position["quantity"]) > 0 then \
+        table.insert(tblresults, position) \
+      end \
     end \
     return tblresults \
   end \
@@ -1283,7 +1287,7 @@ exports.registerScripts = function () {
     local brokerkey = "broker:" .. brokerid \
     local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
     if not tradeid then return 0 end \
-    redis.call("hmset", brokerkey .. ":trade:" .. tradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", tostring(costs[1]), "ptmlevy", tostring(costs[2]), "stampduty", tostring(costs[3]), "contractcharge", tostring(costs[4]), "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "finance", finance, "tradesettlestatusid", 0) \
+    redis.call("hmset", brokerkey .. ":trade:" .. tradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", tostring(costs[1]), "ptmlevy", tostring(costs[2]), "stampduty", tostring(costs[3]), "contractcharge", tostring(costs[4]), "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", tostring(settlcurramt), "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "finance", finance, "tradesettlestatusid", 0) \
     redis.call("sadd", brokerkey .. ":tradeid", "trade:" .. tradeid) \
     redis.call("sadd", brokerkey .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
@@ -1561,7 +1565,7 @@ exports.registerScripts = function () {
         updateaccountbalanceuncleared(ARGV[4], ARGV[2], ARGV[3], ARGV[6]) \
         local clientsettlementaccountid = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client settlement") \
         newposting(clientsettlementaccountid, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), transactionid, ARGV[12]) \
-        updateaccountbalanceuncleared(clientsettlementaccountid, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
+        updateaccountbalance(clientsettlementaccountid, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
         addunclearedcashlistitem(ARGV[3], ARGV[13], ARGV[4],  transactionid) \
       else \
       end \
@@ -1601,26 +1605,35 @@ exports.registerScripts = function () {
     redis.log(redis.LOG_NOTICE, "scriptgetstatement") \
     local tblresults = {} \
     local balance = 0 \
-    local balanceuncleared = 0 \
     --[[ get all the postings up to the end date ]] \
     local postings = getpostingsbydate(ARGV[1], ARGV[2], "-inf", ARGV[4]) \
     --[[ go through all the postings, adjusting the cleared/uncleared balances as we go ]] \
     for index = 1, #postings do \
-      if postings[index]["transactiontypeid"] == "CRR" or postings[index]["transactiontypeid"] == "TPC" then \
-        balanceuncleared = balanceuncleared + tonumber(postings[index]["amount"]) \
-      elseif postings[index]["transactiontypeid"] == "CRS" or postings[index]["transactiontypeid"] == "SRC" or postings[index]["transactiontypeid"] == "SPC" then \
-        balanceuncleared = balanceuncleared + tonumber(postings[index]["amount"]) \
-        balance = balance + tonumber(postings[index]["amount"]) \
-      else \
-        balance = balance + tonumber(postings[index]["amount"]) \
-      end \
+      balance = balance + tonumber(postings[index]["amount"]) \
       postings[index]["balance"] = balance \
-      postings[index]["balanceuncleared"] = balanceuncleared \
       table.insert(tblresults, postings[index]) \
     end \
     return cjson.encode(tblresults) \
   ';
-
+  /*
+  * scriptgethistory
+  * prepares a history for an account from beginning to now
+  * params: accountid, brokerid
+  */
+  exports.scriptsgethistory = getpostingsbydate + '\
+    redis.log(redis.LOG_NOTICE, "scriptsgethistory") \
+    local tblresults = {} \
+    local balance = 0 \
+    --[[ get all the postings up to the end date ]] \
+    local postings = getpostingsbydate(ARGV[1], ARGV[2], "-inf", "+inf") \
+    --[[ go through all the postings, adjusting the cleared/uncleared balances as we go ]] \
+    for index = 1, #postings do \
+      balance = balance + tonumber(postings[index]["amount"]) \
+      postings[index]["balance"] = balance \
+      table.insert(tblresults, postings[index]) \
+    end \
+    return cjson.encode(tblresults) \
+  ';
   /*
   * applycacashdividend()
   * script to apply a cash dividend
