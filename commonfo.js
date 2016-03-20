@@ -1066,7 +1066,7 @@ exports.registerScripts = function () {
     if currencyid == "GBP" then \
       bid = bid / 100 \
       ask = ask / 100 \
-    end \ 
+    end \
     local pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbolid") .. ":" .. cjson.encode(symbols[index]) \
     --[[ may get all or none of params ]] \
     if ARGV[3] ~= "" then \
