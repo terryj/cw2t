@@ -1056,27 +1056,33 @@ exports.registerScripts = function () {
   //
   scriptpriceupdate = round + '\
   local nbtsymbol = ARGV[1] \
-  local bid = ARGV[3] \
-  local ask = ARGV[4] \
+  local bid = tonumber(ARGV[3]) \
+  local ask = tonumber(ARGV[4]) \
   local publish = false \
   local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbols") \
   for index = 1, #symbols do \
+    --[[ adjust prices from pence to pounds if currency is GBP ]] \
+    local currencyid = redis.call("hget", "symbol:" .. symbols[index], "currencyid") \
+    if currencyid == "GBP" then \
+      bid = bid / 100 \
+      ask = ask / 100 \
+    end \ 
     local pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbolid") .. ":" .. cjson.encode(symbols[index]) \
     --[[ may get all or none of params ]] \
     if ARGV[3] ~= "" then \
       local oldbid = redis.call("hget", "symbol:" .. symbols[index], "bid") \
       if not oldbid then oldbid = 0 end \
-      local bidchange = round(tonumber(ARGV[3]) - tonumber(oldbid), 4) \
-      pricemsg = pricemsg .. "," .. cjson.encode("bid") .. ":" .. ARGV[3] .. "," .. cjson.encode("bidchange") .. ":" .. bidchange \
-      redis.call("hmset", "symbol:" .. symbols[index], "bid", ARGV[3], "timestamp", ARGV[2]) \
+      local bidchange = round(bid - tonumber(oldbid), 4) \
+      pricemsg = pricemsg .. "," .. cjson.encode("bid") .. ":" .. tostring(bid) .. "," .. cjson.encode("bidchange") .. ":" .. bidchange \
+      redis.call("hmset", "symbol:" .. symbols[index], "bid", tostring(bid), "timestamp", ARGV[2]) \
       publish = true \
     end \
     if ARGV[4] ~= "" then \
       local oldask = redis.call("hget", "symbol:" .. symbols[index], "ask") \
       if not oldask then oldask = 0 end \
-      local askchange = round(tonumber(ARGV[4]) - tonumber(oldask), 4) \
-      pricemsg = pricemsg .. "," .. cjson.encode("ask") .. ":" .. ARGV[4] .. "," .. cjson.encode("askchange") .. ":" .. askchange \
-      redis.call("hmset", "symbol:" .. symbols[index], "ask", ARGV[4], "timestamp", ARGV[2]) \
+      local askchange = round(ask - tonumber(oldask), 4) \
+      pricemsg = pricemsg .. "," .. cjson.encode("ask") .. ":" .. tostring(ask) .. "," .. cjson.encode("askchange") .. ":" .. askchange \
+      redis.call("hmset", "symbol:" .. symbols[index], "ask", tostring(ask), "timestamp", ARGV[2]) \
       publish = true \
     end \
     if ARGV[5] ~= "" then \
