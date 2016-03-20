@@ -405,36 +405,77 @@ exports.registerScripts = function () {
   exports.getmargin = getmargin;
 
   /*
-  * getunrealisedpandl()
-  * calculate the unrealised profit/loss for a position
+  * getcurrencyrate()
+  * gets current mid price between two currencies
+  * params: currency id 1, currency id 2
+  * returns: midprice if symbol is found, else 0
   */
-  getunrealisedpandl = round + '\
-  local getunrealisedpandl = function(symbolid, quantity, cost) \
-    local unrealisedpandl = 0 \
-    local price = 0 \
-    local qty = tonumber(quantity) \
-    if qty > 0 then \
-      --[[ positive quantity, so we would sell, so use the bid price ]] \
-      local bidprice = redis.call("hget", "symbol:" .. symbolid, "bid") \
-      if bidprice and tonumber(bidprice) ~= 0 then \
-        --[[ show price as pounds rather than pence ]] \
-        price = tonumber(bidprice) \
-        if price ~= 0 then \
-          unrealisedpandl = round(qty * price - cost, 2) \
-        end \
-      end \
-    elseif qty < 0 then \
-      --[[ negative quantity, so we would buy, so use the ask price ]] \
-      local askprice = redis.call("hget", "symbol:" .. symbolid, "ask") \
-      if askprice and tonumber(askprice) ~= 0 then \
-        --[[ show price as pounds rather than pence ]] \
-        price = tonumber(askprice) \
-        if price ~= 0 then \
-          unrealisedpandl = round(qty * price + cost, 2) \
-        end \
+  getcurrencyrate = '\
+  local getcurrencyrate = function(currencyid1, currencyid2) \
+    local midprice = 1 \
+    if currencyid1 ~= currencyid2 then \
+      midprice = redis.call("hget", "symbol:" .. currencyid1 .. "/" .. currencyid2, "midprice") \
+      if not midprice then \
+        midprice = 0 \
       end \
     end \
-    return {unrealisedpandl, price} \
+    return midprice \
+  end \
+  ';
+
+  /*
+  * getunrealisedpandl()
+  * calculate the unrealised profit/loss for a position
+  * params: symbolid, position quantity, cost of position, account currency
+  * returns: table as follows:
+  * price = price of stock in account currency
+  * value = value of positon in account currency
+  * unrealisedpandl = unrealised p&l in account currency
+  * symbolcurrencyid = currency of symbol  
+  * symbolcurrencyprice = price in currency of symbol
+  * currencyrate - currency rate used to convert price 
+  */
+  getunrealisedpandl = getcurrencyrate + round + '\
+  local getunrealisedpandl = function(symbolid, quantity, cost, accountcurrencyid) \
+    local ret = {} \
+    ret["price"] = 0 \
+    ret["value"] = 0 \
+    ret["unrealisedpandl"] = 0 \
+    --[[ get the symbol currency as may be different from account currency ]] \
+    ret["symbolcurrencyid"] = redis.call("hget", "symbol:" .. symbolid, "currencyid") \
+    ret["symbolcurrencyprice"] = 0 \
+    ret["currencyrate"] = 1 \
+    local qty = tonumber(quantity) \
+    if qty > 0 then \
+      --[[ position is long, so we would sell, so use the bid price ]] \
+      local bidprice = redis.call("hget", "symbol:" .. symbolid, "bid") \
+      if bidprice and tonumber(bidprice) ~= 0 then \
+        ret["price"] = tonumber(bidprice) \
+        if ret["symbolcurrencyid"] ~= accountcurrencyid then \
+          --[[ get currency rate & adjust price ]] \
+          ret["currencyrate"] = getcurrencyrate(ret["symbolcurrencyid"], accountcurrencyid) \
+          ret["symbolcurrencyprice"] = ret["price"] \
+          ret["price"] = ret["price"] * ret["currencyrate"] \
+        end \
+        ret["value"] = qty * ret["price"] \
+        ret["unrealisedpandl"] = round(ret["value"] - cost, 2) \
+      end \
+    elseif qty < 0 then \
+      --[[ position is short, so we would buy, so use the ask price ]] \
+      local askprice = redis.call("hget", "symbol:" .. symbolid, "ask") \
+      if askprice and tonumber(askprice) ~= 0 then \
+        ret["price"] = tonumber(askprice) \
+        if ret["symbolcurrencyid"] ~= accountcurrencyid then \
+          --[[ get currency rate & adjust price ]] \
+          ret["currencyrate"] = getcurrencyrate(ret["symbolcurrencyid"], accountcurrencyid) \
+          ret["symbolcurrencyprice"] = ret["price"] \
+          ret["price"] = ret["price"] * ret["currencyrate"] \
+        end \
+        ret["value"] = qty * ret["price"] \
+        ret["unrealisedpandl"] = round(ret["value"] + cost, 2) \
+      end \
+    end \
+    return ret \
   end \
   ';
 
@@ -890,11 +931,17 @@ exports.registerScripts = function () {
   local getpositionvalue = function(brokerid, positionid) \
     local position = getposition(brokerid, positionid) \
     if position["positionid"] then \
+      --[[ get the account currency id as symbol may be priced in a different currency ]] \
+      local accountcurrencyid = redis.call("hget", "broker:" .. brokerid .. ":account:" .. position["accountid"], "currencyid") \
       local margin = getmargin(position["symbolid"], position["quantity"]) \
-      local unrealisedpandl = getunrealisedpandl(position["symbolid"], position["quantity"], position["cost"]) \
+      local upandl = getunrealisedpandl(position["symbolid"], position["quantity"], position["cost"], accountcurrencyid) \
       position["margin"] = margin \
-      position["price"] = unrealisedpandl[2] \
-      position["unrealisedpandl"] = unrealisedpandl[1] \
+      position["price"] = upandl["price"] \
+      position["value"] = upandl["value"] \
+      position["unrealisedpandl"] = upandl["unrealisedpandl"] \
+      position["symbolcurrencyid"] = upandl["symbolcurrencyid"] \
+      position["symbolcurrencyprice"] = upandl["symbolcurrencyprice"] \
+      position["currencyrate"] = upandl["currencyrate"] \
     end \
     return position \
   end \
@@ -1056,9 +1103,13 @@ exports.registerScripts = function () {
     local positionvalues = getpositionvalues(accountid, brokerid) \
     local totalpositionvalue = {} \
     totalpositionvalue["margin"] = 0 \
+    totalpositionvalue["cost"] = 0 \
+    totalpositionvalue["value"] = 0 \
     totalpositionvalue["unrealisedpandl"] = 0 \
     for index = 1, #positionvalues do \
       totalpositionvalue["margin"] = totalpositionvalue["margin"] + tonumber(positionvalues[index]["margin"]) \
+      totalpositionvalue["cost"] = totalpositionvalue["cost"] + tonumber(positionvalues[index]["cost"]) \
+      totalpositionvalue["value"] = totalpositionvalue["value"] + tonumber(positionvalues[index]["value"]) \
       totalpositionvalue["unrealisedpandl"] = totalpositionvalue["unrealisedpandl"] + tonumber(positionvalues[index]["unrealisedpandl"]) \
     end \
     return totalpositionvalue \
@@ -1091,6 +1142,8 @@ exports.registerScripts = function () {
       local freemargin = equity - totalpositionvalue["margin"] \
       accountsummary["balance"] = account["balance"] \
       accountsummary["balanceuncleared"] = account["balanceuncleared"] \
+      accountsummary["positioncost"] = totalpositionvalue["cost"] \
+      accountsummary["positionvalue"] = totalpositionvalue["value"] \
       accountsummary["unrealisedpandl"] = totalpositionvalue["unrealisedpandl"] \
       accountsummary["equity"] = equity \
       accountsummary["margin"] = totalpositionvalue["margin"] \
@@ -1522,7 +1575,6 @@ exports.registerScripts = function () {
   * returns: array of values as JSON string
   */
   exports.scriptgetaccountsummary = getaccountsummary + '\
-  redis.log(redis.LOG_NOTICE, "scriptgetaccountsummary") \
   local accountsummary = getaccountsummary(ARGV[1], ARGV[2]) \
   return cjson.encode(accountsummary) \
   ';

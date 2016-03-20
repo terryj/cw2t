@@ -514,8 +514,11 @@ function updateDb(functioncode, instrumentcode, instrec) {
 function getDbInstrec(instrumentcode, instrec) {
   var dbinstrec = {};
 
-  dbinstrec.ask = instrec.ask;
-  dbinstrec.bid = instrec.bid;
+  // adjust prices to £
+  if (instrec.currencyid == "GBX") {
+    dbinstrec.ask = instrec.ask / 100;
+    dbinstrec.bid = instrec.bid / 100;
+  }
   dbinstrec.currencyid = instrec.currencyid;
   dbinstrec.isin = instrec.isin;
   dbinstrec.longname = instrec.longname;
