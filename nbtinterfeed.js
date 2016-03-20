@@ -515,7 +515,7 @@ function getDbInstrec(instrumentcode, instrec) {
   var dbinstrec = {};
 
   // adjust prices to £
-  if (instrec.currencyid == "GBX") {
+  if (instrec.currencyid == "GBP") {
     dbinstrec.ask = instrec.ask / 100;
     dbinstrec.bid = instrec.bid / 100;
   }
