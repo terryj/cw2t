@@ -602,37 +602,86 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * updatefieldindexes()
+  * creates/updates sorted sets to enable searching/sorting on fields in hash tables
+  * params: brokerid, table name, table of field/score/key
+  */
+  updatefieldindexes = '\
+  local updatefieldindexes = function(brokerid, tblname, fieldscorekeys) \
+    for i = 1, #fieldscorekeys, 3 do \
+      redis.call("zadd", "broker:" .. brokerid .. ":" .. tblname .. ":" .. fieldscorekeys[i], fieldscorekeys[i+1], fieldscorekeys[i+2]) \
+    end \
+  end \
+  ';
+
+  /*
+  * updatetradesettlestatusindex()
+  * creates/updates system wide sorted set for trade settlement status
+  * note: uses fixed score so as to use lexigraphical indexing as settlement status is character based
+  * params: brokerid, tradeid, tradesettlestatusid
+  */
+  updatetradesettlestatusindex = '\
+  local updatetradesettlestatusindex = function(brokerid, tradeid, tradesettlestatusid) \
+    redis.call("zadd", "trade:tradesettlestatus", 0, tradesettlestatusid .. ":" .. brokerid .. ":" .. tradeid) \
+  end \
+  ';
+
+  /*
+  * gettradesbysettlementstatus()
+  * gets trades sorted by settlement status
+  * params: minimum tradesettlementstatusid, maximum tradesettlementstatusid
+  * returns: table of trades
+  */
+  gettradesbysettlementstatus = '\
+  local gettradesbysettlementstatus = function(mintradesettlementstatusid, maxtradesettlementstatusid) \
+    local tbltrades = {} \
+    local nextchar = string.byte(maxtradesettlementstatusid) + 1 \
+    local trades = redis.call("zrangebylex", "trade:tradesettlestatus", "[" .. mintradesettlementstatusid, "(" .. nextchar) \
+    for i = 1, #trades do \
+      local brokertradeids = split(trades[i], ":") \
+      local trade = gethashvalues("broker:" .. brokertradeids[1] .. ":trade:" .. brokertradeids[2]) \
+      table.insert(tbltrades, trade]) \
+    end \
+    return tbltrades \
+  end \
+  ';
+
+  /*
   * newposting()
   * creates a posting record
   * params: accountid, amount, brokerid, localamount, transactionid, timestamp in milliseconds
   */
   newposting = '\
-  local newposting = function(accountid, amount, brokerid, localamount, transactionid, tsmilliseconds) \
+  local newposting = function(accountid, amount, brokerid, localamount, transactionid, timestampms) \
     local brokerkey = "broker:" .. brokerid \
     local postingid = redis.call("hincrby", brokerkey, "lastpostingid", 1) \
     redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", tostring(amount), "localamount", tostring(localamount), "postingid", postingid, "transactionid", transactionid) \
     redis.call("sadd", brokerkey .. ":transaction:" .. transactionid .. ":postings", postingid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":postings", postingid) \
-    --[[ add a sorted set for time based queries ]] \
-    redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", tsmilliseconds, postingid) \
+    --[[ add a sorted set for time based queries by account ]] \
+    redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", timestampms, postingid) \
     redis.call("sadd", brokerkey .. ":postings", postingid) \
     redis.call("sadd", brokerkey .. ":postingid", "posting:" .. postingid) \
-    return postingid \
+   return postingid \
   end \
   ';
 
   /*
   * newtransaction()
   * creates a transaction record
-  * params: amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid
+  * params: amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid, timestamp in milliseconds
   */
-  newtransaction = '\
-  local newtransaction = function(amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid) \
+  newtransaction = updatefieldindexes + '\
+  local newtransaction = function(amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid, timestampms) \
     local transactionid = redis.call("hincrby", "broker:" .. brokerid, "lasttransactionid", 1) \
-    redis.call("hmset", "broker:" .. brokerid .. ":transaction:" .. transactionid, "amount", tostring(amount), "brokerid", brokerid, "currencyid", currencyid, "localamount", tostring(localamount), "note", note, "rate", rate, "reference", reference, "timestamp", timestamp, "transactiontypeid", transactiontypeid, "transactionid", transactionid) \
-    redis.call("sadd", "broker:" .. brokerid .. ":transactions", transactionid) \
-    redis.call("sadd", "broker:" .. brokerid .. ":transactionid", "transaction:" .. transactionid) \
-    return transactionid \
+    local brokerkey = "broker:" .. brokerid \
+    redis.call("hmset", brokerkey .. ":transaction:" .. transactionid, "amount", tostring(amount), "brokerid", brokerid, "currencyid", currencyid, "localamount", tostring(localamount), "note", note, "rate", rate, "reference", reference, "timestamp", timestamp, "transactiontypeid", transactiontypeid, "transactionid", transactionid) \
+    redis.call("sadd", brokerkey .. ":transactions", transactionid) \
+    redis.call("sadd", brokerkey .. ":transactionid", "transaction:" .. transactionid) \
+    --[[ add sorted sets for columns that require sorting capability ]] \
+    local fieldscorekeys = {"amount", tostring(amount), transactionid, "timestamp", timestampms, transactionid, "transactiontypeid", 0, transactiontypeid .. ":" .. transactionid} \
+    updatefieldindexes(brokerid, "transaction", fieldscorekeys) \
+   return transactionid \
   end \
   ';
 
@@ -1221,7 +1270,7 @@ exports.registerScripts = function () {
   * cash side of a client trade
   */
   newtradetransaction = getbrokeraccountsmapid + newtransaction + newposting + getaccountbalance + updateaccountbalanceuncleared + updateaccountbalance + addunclearedtradelistitem + '\
-  local newtradetransaction = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, note, rate, timestamp, tradeid, side, tsmilliseconds, futsettdate) \
+  local newtradetransaction = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, note, rate, timestamp, tradeid, side, timestampms, futsettdate) \
     redis.log(redis.LOG_NOTICE, "newtradetransaction") \
     --[[ get broker accounts ]] \
     local considerationaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Stock B/S") \
@@ -1241,26 +1290,26 @@ exports.registerScripts = function () {
       local ptmlevylocalamount = ptmlevy * rate \
       local stampdutylocalamount = stampduty * rate \
       --[[ the transaction ]] \
-      transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt", rate, "trade:" .. tradeid, timestamp, "TRC") \
+      transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt", rate, "trade:" .. tradeid, timestamp, "TRC", timestampms) \
       --[[ client account posting - note: update cleared balance ]] \
-      newposting(clientaccountid, -totalamount, brokerid, -localamount, transactionid, tsmilliseconds) \
+      newposting(clientaccountid, -totalamount, brokerid, -localamount, transactionid, timestampms) \
       updateaccountbalance(clientaccountid, -totalamount, brokerid, -localamount) \
       --[[ consideration posting ]] \
-      newposting(considerationaccountid, consideration, brokerid, considerationlocalamount, transactionid, tsmilliseconds) \
+      newposting(considerationaccountid, consideration, brokerid, considerationlocalamount, transactionid, timestampms) \
       updateaccountbalance(considerationaccountid, consideration, brokerid, considerationlocalamount) \
       --[[ commission posting ]] \
       if commission > 0 then \
-        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, tsmilliseconds) \
+        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, timestampms) \
         updateaccountbalance(commissionaccountid, commission, brokerid, commissionlocalamount) \
       end \
       --[[ ptm levy posting ]] \
       if ptmlevy > 0 then \
-        newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid, tsmilliseconds) \
+        newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid, timestampms) \
         updateaccountbalance(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount) \
       end \
       --[[ sdrt posting ]] \
       if stampduty > 0 then \
-        newposting(sdrtaccountid, stampduty, brokerid, stampdutylocalamount, transactionid, tsmilliseconds) \
+        newposting(sdrtaccountid, stampduty, brokerid, stampdutylocalamount, transactionid, timestampms) \
         updateaccountbalance(sdrtaccountid, stampduty, brokerid, stampdutylocalamount) \
       end \
    else \
@@ -1268,20 +1317,20 @@ exports.registerScripts = function () {
       local totalamount = consideration - commission \
       local localamount = totalamount * rate \
       --[[ the transaction ]] \
-      transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade payment", rate, "trade:" .. tradeid, timestamp, "TPC") \
+      transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade payment", rate, "trade:" .. tradeid, timestamp, "TPC", timestampms) \
       --[[ client account posting - note: update uncleared balance ]] \
-      newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, tsmilliseconds) \
+      newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, timestampms) \
       updateaccountbalanceuncleared(clientaccountid, totalamount, brokerid, localamount) \
       --[[ consideration posting ]] \
-      newposting(considerationaccountid, -consideration, brokerid, -considerationlocalamount, transactionid, tsmilliseconds) \
+      newposting(considerationaccountid, -consideration, brokerid, -considerationlocalamount, transactionid, timestampms) \
       updateaccountbalance(considerationaccountid, -consideration, brokerid, -considerationlocalamount) \
       --[[ commission posting ]] \
       if commission > 0 then \
-        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, tsmilliseconds) \
+        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, timestampms) \
         updateaccountbalance(commissionaccountid, consideration, brokerid, commissionlocalamount) \
       end \
    end \
-   addunclearedtradelistitem(brokerid, futsettdate, clientaccountid, tradeid, transactionid) \
+  addunclearedtradelistitem(brokerid, futsettdate, clientaccountid, tradeid, transactionid) \
   end \
   ';
 
@@ -1334,8 +1383,8 @@ exports.registerScripts = function () {
   * newtrade()
   * stores a trade & updates cash & position
   */
-  newtrade = newtradetransaction + newpositiontransaction + publishtrade + '\
-  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, tsmilliseconds) \
+  newtrade = newtradetransaction + newpositiontransaction + updatetradesettlestatusindex + updatefieldindexes + publishtrade + '\
+  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms) \
     redis.log(redis.LOG_NOTICE, "newtrade") \
     local brokerkey = "broker:" .. brokerid \
     local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
@@ -1345,10 +1394,13 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
-    --[[ add to a system wide list of unsettled trades for CREST ]] \
-    redis.call("rpush", "unsettledtrades", brokerid .. ":" .. tradeid) \
+    --[[ add to a system wide index of trades by settlementstatus for CREST ]] \
+    updatetradesettlestatusindex(brokerid, tradeid, 0) \
     --[[ add to a system wide list of items for sending contract notes ]] \
     redis.call("rpush", "contractnotes", brokerid .. ":" .. tradeid) \
+    --[[ add sorted sets for columns that require sorting capability ]] \
+    local fieldscorekeys = {"symbolid", 0, symbolid .. ":" .. tradeid, "timestamp", timestampms, tradeid, "settlcurramt", tostring(settlcurramt), tradeid} \
+    updatefieldindexes(brokerid, "trade", fieldscorekeys) \
     local cost \
     local note \
     if tonumber(side) == 1 then \
@@ -1359,8 +1411,8 @@ exports.registerScripts = function () {
       cost = -tonumber(settlcurramt) \
       note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
-    local retval = newtradetransaction(settlcurramt, costs[1], costs[2], costs[3], costs[4], brokerid, accountid, settlcurrencyid, note, 1, timestamp, tradeid, side, tsmilliseconds, futsettdate) \
-    newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, tsmilliseconds) \
+    local retval = newtradetransaction(settlcurramt, costs[1], costs[2], costs[3], costs[4], brokerid, accountid, settlcurrencyid, note, 1, timestamp, tradeid, side, timestampms, futsettdate) \
+    newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, timestampms) \
     publishtrade(brokerid, tradeid, 6) \
     return tradeid \
   end \
@@ -1417,7 +1469,7 @@ exports.registerScripts = function () {
       return {1, 1027} \
     end \
     --[[ create the transaction ]] \
-    local transactionid = newtransaction(dividend, brokerid, currencyid, dividendlocal, description, rate, reference, timestamp, "DVP") \
+    local transactionid = newtransaction(dividend, brokerid, currencyid, dividendlocal, description, rate, reference, timestamp, "DVP", timestampms) \
     --[[ client posting ]] \
     newposting(clientaccountid, dividend, brokerid, dividendlocal, transactionid, timestampms) \
     updateaccountbalance(clientaccountid, dividend, brokerid, dividendlocal) \
@@ -1612,7 +1664,7 @@ exports.registerScripts = function () {
     local paymenttypeid = ARGV[8] \
     if paymenttypeid == "DCR" then \
       if action == 1 then \
-        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CRR") \
+        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CRR", ARGV[12]) \
         newposting(ARGV[4], ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
         updateaccountbalanceuncleared(ARGV[4], ARGV[2], ARGV[3], ARGV[6]) \
         local clientsettlementaccountid = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client settlement") \
@@ -1623,7 +1675,7 @@ exports.registerScripts = function () {
       end \
     elseif paymenttypeid == "BAC" then \
       if action == 1 then \
-        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CAR") \
+        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CAR", ARGV[12]) \
         newposting(ARGV[4], ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
         updateaccountbalance(ARGV[4], ARGV[2], ARGV[3], ARGV[6]) \
         local clientfundsaccount = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client funds") \
@@ -1633,7 +1685,7 @@ exports.registerScripts = function () {
         if creditcheckwithdrawal(ARGV[3], ARGV[4], ARGV[2]) == 1 then \
           return {1, "Insufficient cleared funds"} \
         end \
-        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CAP") \
+        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CAP", ARGV[12]) \
         newposting(ARGV[4], -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), transactionid, ARGV[12]) \
         updateaccountbalance(ARGV[4], -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
         local clientfundsaccount = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client funds") \
