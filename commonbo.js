@@ -634,6 +634,7 @@ exports.registerScripts = function () {
   */
   gettradesbysettlementstatus = '\
   local gettradesbysettlementstatus = function(mintradesettlementstatusid, maxtradesettlementstatusid) \
+    redis.log(redis.LOG_NOTICE, "gettradesbysettlementstatus") \
     local tbltrades = {} \
     local nextchar = string.byte(maxtradesettlementstatusid) + 1 \
     local trades = redis.call("zrangebylex", "trade:tradesettlestatus", "[" .. mintradesettlementstatusid, "(" .. nextchar) \
@@ -2110,5 +2111,10 @@ exports.registerScripts = function () {
       end \
     end \
     return {0} \
+  ';
+
+  exports.scriptgettradesbysettlementstatus = gettradesbysettlementstatus + '\
+    local trades = gettradesbysettlementstatus(ARGV[1], ARGV[2]) \
+    return cjson.encode(trades) \
   ';
 }
