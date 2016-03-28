@@ -645,13 +645,18 @@ exports.registerScripts = function () {
   * gettransactionsbytransactiontype()
   * gets transactions sorted by transaction type
   * params: brokerid, minimum transaction type, maximum transaction type
-  * returns: table of trades
+  * returns: table of transactions
   */
   gettransactionsbytransactiontype = split + gethashvalues + '\
   local gettransactionsbytransactiontype = function(brokerid, mintransactiontypeid, maxtransactiontypeid) \
-    local tbltransactions = {} \
     redis.log(redis.LOG_NOTICE, "gettransactionsbytransactiontype") \
-    local transactions = redis.call("zrangebylex", "broker:" .. brokerid .. ":transaction:transactiontype", "[" .. mintransactiontypeid, "(" .. maxtransactiontypeid) \
+    local tbltransactions = {} \
+    --[[ replace last character of string with next ascii char for end of search ]] \
+    local len = string.len(maxtransactiontypeid) \
+    local lastchar = string.sub(maxtransactiontypeid, len) \
+    local nextchar = string.char(string.byte(lastchar) + 1) \
+    local endofsearch = string.sub(maxtransactiontypeid, 0, len-1) .. nextchar \
+    local transactions = redis.call("zrangebylex", "broker:" .. brokerid .. ":transaction:transactiontype", "[" .. mintransactiontypeid, "(" .. endofsearch) \
     for i = 1, #transactions do \
       local transactionsids = split(transactions[i], ":") \
       local transaction = gethashvalues("broker:" .. brokerid .. ":transaction:" .. transactionsids[2]) \
@@ -2158,5 +2163,16 @@ exports.registerScripts = function () {
   exports.scriptgettradesbysettlementstatus = gettradesbysettlementstatus + '\
     local trades = gettradesbysettlementstatus(ARGV[1], ARGV[2]) \
     return cjson.encode(trades) \
+  ';
+
+  /*
+  * scriptgettransactionsbytransactiontype
+  * script to get transactions sorted by transaction type
+  * params: brokerid, minimum transaction type, maximum transaction type
+  * returns: list of transactions in JSON format
+  */
+  exports.scriptgettransactionsbytransactiontype = gettransactionsbytransactiontype + '\
+    local transactions = gettransactionsbytransactiontype(ARGV[1], ARGV[2], ARGV[3]) \
+    return cjson.encode(transactions) \
   ';
 }
