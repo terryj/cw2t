@@ -642,6 +642,26 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * gettransactionsbytransactiontype()
+  * gets transactions sorted by transaction type
+  * params: brokerid, minimum transaction type, maximum transaction type
+  * returns: table of trades
+  */
+  gettransactionsbytransactiontype = split + gethashvalues + '\
+  local gettransactionsbytransactiontype = function(brokerid, mintransactiontypeid, maxtransactiontypeid) \
+    local tbltransactions = {} \
+    redis.log(redis.LOG_NOTICE, "gettransactionsbytransactiontype") \
+    local transactions = redis.call("zrangebylex", "broker:" .. brokerid .. ":transaction:transactiontype", "[" .. mintransactiontypeid, "(" .. maxtransactiontypeid) \
+    for i = 1, #transactions do \
+      local transactionsids = split(transactions[i], ":") \
+      local transaction = gethashvalues("broker:" .. brokerid .. ":transaction:" .. transactionsids[2]) \
+      table.insert(tbltransactions, transaction) \
+    end \
+    return tbltransactions \
+  end \
+  ';
+
+  /*
   * gettradesbysettlementstatus()
   * gets trades sorted by settlement status
   * params: minimum tradesettlementstatusid, maximum tradesettlementstatusid
@@ -651,6 +671,7 @@ exports.registerScripts = function () {
   local gettradesbysettlementstatus = function(mintradesettlementstatusid, maxtradesettlementstatusid) \
     local tbltrades = {} \
     redis.log(redis.LOG_NOTICE, "gettradesbysettlementstatus") \
+    --[[ get the character beyond the maximum requested to mark the end of the search ]] \
     local nextchar = string.char(string.byte(maxtradesettlementstatusid) + 1) \
     local trades = redis.call("zrangebylex", "trade:tradesettlestatus", "[" .. mintradesettlementstatusid, "(" .. nextchar) \
     for i = 1, #trades do \
@@ -2128,6 +2149,12 @@ exports.registerScripts = function () {
     return {0} \
   ';
 
+  /*
+  * scriptgettradesbysettlementstatus
+  * script to get trades sorted by settlement status
+  * params: minimum trade settlement status, maximum trade settlement status
+  * returns: list of trades in JSON format
+  */
   exports.scriptgettradesbysettlementstatus = gettradesbysettlementstatus + '\
     local trades = gettradesbysettlementstatus(ARGV[1], ARGV[2]) \
     return cjson.encode(trades) \
