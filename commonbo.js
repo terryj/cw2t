@@ -333,8 +333,8 @@ exports.registerScripts = function () {
   split = '\
   local split = function(str, sep) \
     local t = {} \
-    for k in string.gmatch(str, "(%w+)" .. sep.. "(%w+)") do \
-      t[k] = v \
+    for k in string.gmatch(str, "[^" .. sep .. "]+") do \
+      table.insert(t, k) \
     end \
     return t \
   end \
@@ -647,7 +647,7 @@ exports.registerScripts = function () {
   * params: minimum tradesettlementstatusid, maximum tradesettlementstatusid
   * returns: table of trades
   */
-  gettradesbysettlementstatus = split + '\
+  gettradesbysettlementstatus = split + gethashvalues + '\
   local gettradesbysettlementstatus = function(mintradesettlementstatusid, maxtradesettlementstatusid) \
     local tbltrades = {} \
     redis.log(redis.LOG_NOTICE, "gettradesbysettlementstatus") \
@@ -655,23 +655,14 @@ exports.registerScripts = function () {
     local trades = redis.call("zrangebylex", "trade:tradesettlestatus", "[" .. mintradesettlementstatusid, "(" .. nextchar) \
     for i = 1, #trades do \
       local brokertradeids = split(trades[i], ":") \
-    redis.log(redis.LOG_NOTICE, trades[i]) \
-    redis.log(redis.LOG_NOTICE, brokertradeids) \
+      local trade = gethashvalues("broker:" .. brokertradeids[2] .. ":trade:" .. brokertradeids[3]) \
+      table.insert(tbltrades, trade) \
     end \
     return tbltrades \
   end \
   ';
 
-/*    for i = 1, #trades do \
-      local brokertradeids = split(trades[i], ":") \
-      local trade = gethashvalues("broker:" .. brokertradeids[1] .. ":trade:" .. brokertradeids[2]) \
-      table.insert(tbltrades, trade]) \
-    end \
-    return tbltrades \
-  end \
-  ';
-*/
-  /*
+ /*
   * newposting()
   * creates a posting record
   * params: accountid, amount, brokerid, localamount, transactionid, timestamp in milliseconds
