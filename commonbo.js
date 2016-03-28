@@ -326,6 +326,21 @@ exports.registerScripts = function () {
   exports.getSettDate = getSettDate;
 
   /*
+  * function to split a string based on a pattern
+  * params: string, pattern
+  * returns: table of strings
+  */
+  split = '\
+  local split = function(str, sep) \
+    local t = {} \
+    for k in string.gmatch(str, "(%w+)" .. sep.. "(%w+)") do \
+      t[k] = v \
+    end \
+    return t \
+  end \
+  ';
+
+  /*
   * setsymbolkey()
   * creates a symbol key for positions, adding a settlement date for derivatives
   * params: accountid, brokerid, futsettdate, positionid, symbolid
@@ -632,13 +647,22 @@ exports.registerScripts = function () {
   * params: minimum tradesettlementstatusid, maximum tradesettlementstatusid
   * returns: table of trades
   */
-  gettradesbysettlementstatus = '\
+  gettradesbysettlementstatus = split + '\
   local gettradesbysettlementstatus = function(mintradesettlementstatusid, maxtradesettlementstatusid) \
-    redis.log(redis.LOG_NOTICE, "gettradesbysettlementstatus") \
     local tbltrades = {} \
-    local nextchar = string.byte(maxtradesettlementstatusid) + 1 \
+    redis.log(redis.LOG_NOTICE, "gettradesbysettlementstatus") \
+    local nextchar = string.char(string.byte(maxtradesettlementstatusid) + 1) \
     local trades = redis.call("zrangebylex", "trade:tradesettlestatus", "[" .. mintradesettlementstatusid, "(" .. nextchar) \
     for i = 1, #trades do \
+      local brokertradeids = split(trades[i], ":") \
+    redis.log(redis.LOG_NOTICE, trades[i]) \
+    redis.log(redis.LOG_NOTICE, brokertradeids) \
+    end \
+    return tbltrades \
+  end \
+  ';
+
+/*    for i = 1, #trades do \
       local brokertradeids = split(trades[i], ":") \
       local trade = gethashvalues("broker:" .. brokertradeids[1] .. ":trade:" .. brokertradeids[2]) \
       table.insert(tbltrades, trade]) \
@@ -646,7 +670,7 @@ exports.registerScripts = function () {
     return tbltrades \
   end \
   ';
-
+*/
   /*
   * newposting()
   * creates a posting record
