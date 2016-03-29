@@ -630,14 +630,46 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * updatetradesettlestatusindex()
-  * creates/updates system wide sorted set for trade settlement status
-  * note: uses fixed score so as to use lexigraphical indexing as settlement status is character based
-  * params: brokerid, tradeid, tradesettlestatusid
+  * getrecordsbyfieldindex()
+  * gets a range of records sorted by a numeric field
+  * params: brokerid, table name, field name, minimum score, maximum score
+  * returns: table of records for specified hash table
   */
-  updatetradesettlestatusindex = '\
-  local updatetradesettlestatusindex = function(brokerid, tradeid, tradesettlestatusid) \
-    redis.call("zadd", "trade:tradesettlestatus", 0, tradesettlestatusid .. ":" .. brokerid .. ":" .. tradeid) \
+  getrecordsbyfieldindex = gethashvalues + '\
+  local getrecordsbyfieldindex = function(brokerid, tblname, fldname, min, max) \
+    redis.log(redis.LOG_NOTICE, "getrecordsbyfieldindex") \
+    local tblrecords = {} \
+    local ids = redis.call("zrangebyscore", "broker:" .. brokerid .. ":" .. tblname .. ":" .. fldname, min, max) \
+    for i = 1, #ids do \
+      local record = gethashvalues("broker:" .. brokerid .. ":" .. tblname .. ":" .. ids[i]) \
+      table.insert(tblrecords, record) \
+    end \
+    return tblrecords \
+  end \
+  ';
+
+  /*
+  * getrecordsbystringfieldindex()
+  * gets a range of records sorted by a string field
+  * params: brokerid, table name, field name, start of range, end of range
+  * returns: table of records for specified hash table
+  */
+  getrecordsbystringfieldindex = split + gethashvalues + '\
+  local getrecordsbystringfieldindex = function(brokerid, tblname, fldname, min, max) \
+    redis.log(redis.LOG_NOTICE, "getrecordsbystringfieldindex") \
+    local tblrecords = {} \
+    --[[ replace last character of string with next ascii char for end of search ]] \
+    local len = string.len(max) \
+    local lastchar = string.sub(max, len) \
+    local nextchar = string.char(string.byte(lastchar) + 1) \
+    local endofsearch = string.sub(max, 0, len-1) .. nextchar \
+    local valids = redis.call("zrangebylex", "broker:" .. brokerid .. ":" .. tblname .. ":" .. fldname, "[" .. min, "(" .. endofsearch) \
+    for i = 1, #valids do \
+      local id = split(valids[i], ":") \
+      local record = gethashvalues("broker:" .. brokerid .. ":" .. tblname .. ":" .. id) \
+      table.insert(tblrecords, record) \
+    end \
+    return tblrecords \
   end \
   ';
 
@@ -647,7 +679,7 @@ exports.registerScripts = function () {
   * params: brokerid, minimum transaction type, maximum transaction type
   * returns: table of transactions
   */
-  gettransactionsbytransactiontype = split + gethashvalues + '\
+/*  gettransactionsbytransactiontype = split + gethashvalues + '\
   local gettransactionsbytransactiontype = function(brokerid, mintransactiontypeid, maxtransactiontypeid) \
     redis.log(redis.LOG_NOTICE, "gettransactionsbytransactiontype") \
     local tbltransactions = {} \
@@ -663,6 +695,18 @@ exports.registerScripts = function () {
       table.insert(tbltransactions, transaction) \
     end \
     return tbltransactions \
+  end \
+  ';
+*/
+  /*
+  * updatetradesettlestatusindex()
+  * creates/updates system wide sorted set for trade settlement status
+  * note: uses fixed score so as to use lexigraphical indexing as settlement status is character based
+  * params: brokerid, tradeid, tradesettlestatusid
+  */
+  updatetradesettlestatusindex = '\
+  local updatetradesettlestatusindex = function(brokerid, tradeid, tradesettlestatusid) \
+    redis.call("zadd", "trade:tradesettlestatus", 0, tradesettlestatusid .. ":" .. brokerid .. ":" .. tradeid) \
   end \
   ';
 
@@ -717,11 +761,13 @@ exports.registerScripts = function () {
   local newtransaction = function(amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid, timestampms) \
     local transactionid = redis.call("hincrby", "broker:" .. brokerid, "lasttransactionid", 1) \
     local brokerkey = "broker:" .. brokerid \
-    redis.call("hmset", brokerkey .. ":transaction:" .. transactionid, "amount", tostring(amount), "brokerid", brokerid, "currencyid", currencyid, "localamount", tostring(localamount), "note", note, "rate", rate, "reference", reference, "timestamp", timestamp, "transactiontypeid", transactiontypeid, "transactionid", transactionid) \
+    local stramount = tostring(amount) \
+    redis.call("hmset", brokerkey .. ":transaction:" .. transactionid, "amount", stramount, "brokerid", brokerid, "currencyid", currencyid, "localamount", tostring(localamount), "note", note, "rate", rate, "reference", reference, "timestamp", timestamp, "transactiontypeid", transactiontypeid, "transactionid", transactionid) \
     redis.call("sadd", brokerkey .. ":transactions", transactionid) \
     redis.call("sadd", brokerkey .. ":transactionid", "transaction:" .. transactionid) \
     --[[ add sorted sets for columns that require sorting capability ]] \
-    local fieldscorekeys = {"amount", tostring(amount), transactionid, "timestamp", timestampms, transactionid, "transactiontypeid", 0, transactiontypeid .. ":" .. transactionid} \
+    local indexamount = tonumber(stramount) * 100 \
+    local fieldscorekeys = {"amount", indexamount, transactionid, "timestamp", timestampms, transactionid, "transactiontypeid", 0, transactiontypeid .. ":" .. transactionid} \
     updatefieldindexes(brokerid, "transaction", fieldscorekeys) \
    return transactionid \
   end \
@@ -821,22 +867,6 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":unclearedcashlist", unclearedcashlistid) \
     redis.call("sadd", brokerkey .. ":unclearedcashlistid", "unclearedcashlist:" .. unclearedcashlistid) \
     redis.call("zadd", brokerkey .. ":unclearedcashlist:unclearedcashlistbydate", clearancedate, unclearedcashlistid) \
-  end \
-  ';
-
-  /*
-  * addunclearedtradelistitem()
-  * add an item to the uncleared trade list
-  */
-  addunclearedtradelistitem = '\
-  local addunclearedtradelistitem = function(brokerid, clearancedate, clientaccountid, tradeid, transactionid) \
-    redis.log(redis.LOG_NOTICE, "addunclearedtradelistitem") \
-    local brokerkey = "broker:" .. brokerid \
-    local unclearedtradelistid = redis.call("hincrby", brokerkey, "lastunclearedtradelistid", 1) \
-    redis.call("hmset", brokerkey .. ":unclearedtradelist:" .. unclearedtradelistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "tradeid", tradeid, "transactionid", transactionid, "unclearedtradelistid", unclearedtradelistid) \
-    redis.call("sadd", brokerkey .. ":unclearedtradelist", unclearedtradelistid) \
-    redis.call("sadd", brokerkey .. ":unclearedtradelistid", "unclearedtradelist:" .. unclearedtradelistid) \
-    redis.call("zadd", brokerkey .. ":unclearedtradelist:unclearedtradelistbydate", clearancedate, unclearedtradelistid) \
   end \
   ';
 
@@ -1311,7 +1341,7 @@ exports.registerScripts = function () {
   * newtradetransaction()
   * cash side of a client trade
   */
-  newtradetransaction = getbrokeraccountsmapid + newtransaction + newposting + getaccountbalance + updateaccountbalanceuncleared + updateaccountbalance + addunclearedtradelistitem + '\
+  newtradetransaction = getbrokeraccountsmapid + newtransaction + newposting + getaccountbalance + updateaccountbalanceuncleared + updateaccountbalance + '\
   local newtradetransaction = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, note, rate, timestamp, tradeid, side, timestampms, futsettdate) \
     redis.log(redis.LOG_NOTICE, "newtradetransaction") \
     --[[ get broker accounts ]] \
@@ -1372,7 +1402,6 @@ exports.registerScripts = function () {
         updateaccountbalance(commissionaccountid, consideration, brokerid, commissionlocalamount) \
       end \
    end \
-  addunclearedtradelistitem(brokerid, futsettdate, clientaccountid, tradeid, transactionid) \
   end \
   ';
 
@@ -1431,7 +1460,8 @@ exports.registerScripts = function () {
     local brokerkey = "broker:" .. brokerid \
     local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
     if not tradeid then return 0 end \
-    redis.call("hmset", brokerkey .. ":trade:" .. tradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", tostring(costs[1]), "ptmlevy", tostring(costs[2]), "stampduty", tostring(costs[3]), "contractcharge", tostring(costs[4]), "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", tostring(settlcurramt), "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "finance", finance, "tradesettlestatusid", 0) \
+    local strsettlcurramt = tostring(settlcurramt) \
+    redis.call("hmset", brokerkey .. ":trade:" .. tradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", tostring(costs[1]), "ptmlevy", tostring(costs[2]), "stampduty", tostring(costs[3]), "contractcharge", tostring(costs[4]), "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", strsettlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "finance", finance, "tradesettlestatusid", 0) \
     redis.call("sadd", brokerkey .. ":tradeid", "trade:" .. tradeid) \
     redis.call("sadd", brokerkey .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
@@ -1441,7 +1471,8 @@ exports.registerScripts = function () {
     --[[ add to a system wide list of items for sending contract notes ]] \
     redis.call("rpush", "contractnotes", brokerid .. ":" .. tradeid) \
     --[[ add sorted sets for columns that require sorting capability ]] \
-    local fieldscorekeys = {"symbolid", 0, symbolid .. ":" .. tradeid, "timestamp", timestampms, tradeid, "settlcurramt", tostring(settlcurramt), tradeid} \
+    local indexsettlcurramt = tonumber(strsettlcurramt) * 100 \
+    local fieldscorekeys = {"symbolid", 0, symbolid .. ":" .. tradeid, "timestamp", timestampms, tradeid, "settlcurramt", indexsettlcurramt, tradeid} \
     updatefieldindexes(brokerid, "trade", fieldscorekeys) \
     local cost \
     local note \
@@ -2159,9 +2190,46 @@ exports.registerScripts = function () {
   * script to get trades sorted by settlement status
   * params: minimum trade settlement status, maximum trade settlement status
   * returns: list of trades in JSON format
+  * note: this index is system wide - index is <settlestatus>:<brokerid>:<tradeid>
   */
   exports.scriptgettradesbysettlementstatus = gettradesbysettlementstatus + '\
     local trades = gettradesbysettlementstatus(ARGV[1], ARGV[2]) \
+    return cjson.encode(trades) \
+  ';
+
+  /*
+  * scriptgettradesbyconsideration
+  * script to get trades sorted by consideration
+  * params: brokerid, minimum amount, maximum amount
+  * returns: list of trades in JSON format
+  */
+  exports.scriptgettradesbyconsideration = getrecordsbyfieldindex + '\
+    --[[ money, so convert min/max to integer values to match index ]] \
+    local min = tonumber(ARGV[2]) * 100 \
+    local max = tonumber(ARGV[3]) * 100 \
+    local trades = getrecordsbyfieldindex(ARGV[1], "trade", "settlcurramt", min, max) \
+    return cjson.encode(trades) \
+  ';
+
+  /*
+  * scriptgettradesbytimestamp
+  * script to get trades sorted by timestamp
+  * params: brokerid, minimum timestamp, maximum timestamp
+  * returns: list of trades in JSON format
+  */
+  exports.scriptgettradesbytimestamp = getrecordsbyfieldindex + '\
+    local trades = getrecordsbyfieldindex(ARGV[1], "trade", "timestamp", ARGV[2], ARGV[3]) \
+    return cjson.encode(trades) \
+  ';
+
+  /*
+  * scriptgettradesbysymbol
+  * script to get trades sorted by symbolid
+  * params: brokerid, minimum symbolid, maximum symbolid
+  * returns: list of trades in JSON format
+  */
+  exports.scriptgettradesbysymbol = getrecordsbystringfieldindex + '\
+    local trades = getrecordsbystringfieldindex(ARGV[1], "trade", "symbolid", ARGV[2], ARGV[3]) \
     return cjson.encode(trades) \
   ';
 
@@ -2171,8 +2239,33 @@ exports.registerScripts = function () {
   * params: brokerid, minimum transaction type, maximum transaction type
   * returns: list of transactions in JSON format
   */
-  exports.scriptgettransactionsbytransactiontype = gettransactionsbytransactiontype + '\
-    local transactions = gettransactionsbytransactiontype(ARGV[1], ARGV[2], ARGV[3]) \
+  exports.scriptgettransactionsbytransactiontype = getrecordsbystringfieldindex + '\
+    local transactions = getrecordsbystringfieldindex(ARGV[1], "transaction", "transactiontypeid", ARGV[2], ARGV[3]) \
+    return cjson.encode(transactions) \
+  ';
+
+  /*
+  * scriptgettransactionsbyamount
+  * script to get transactions sorted by amount
+  * params: brokerid, minimum amount, maximum amount
+  * returns: list of transactions in JSON format
+  */
+  exports.scriptgettransactionsbyamount = getrecordsbyfieldindex + '\
+    --[[ money, so convert min/max to integer values to match index ]] \
+    local min = tonumber(ARGV[2]) * 100 \
+    local max = tonumber(ARGV[3]) * 100 \
+    local transactions = getrecordsbyfieldindex(ARGV[1], "transaction", "amount", min, max) \
+    return cjson.encode(transactions) \
+  ';
+
+  /*
+  * scriptgettransactionsbytimestamp
+  * script to get transactions sorted by timestamp
+  * params: brokerid, minimum timestamp, maximum timestamp
+  * returns: list of transactions in JSON format
+  */
+  exports.scriptgettransactionsbytimestamp = getrecordsbyfieldindex + '\
+    local transactions = getrecordsbyfieldindex(ARGV[1], "transaction", "timestamp", ARGV[2], ARGV[3]) \
     return cjson.encode(transactions) \
   ';
 }
