@@ -712,18 +712,23 @@ exports.registerScripts = function () {
   * creates a posting record
   * params: accountid, amount, brokerid, localamount, transactionid, timestamp in milliseconds
   */
-  newposting = '\
+  newposting = updatefieldindexes + '\
   local newposting = function(accountid, amount, brokerid, localamount, transactionid, timestampms) \
     local brokerkey = "broker:" .. brokerid \
     local postingid = redis.call("hincrby", brokerkey, "lastpostingid", 1) \
-    redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", tostring(amount), "localamount", tostring(localamount), "postingid", postingid, "transactionid", transactionid) \
+    local stramount = tostring(amount) \
+    redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", stramount, "localamount", tostring(localamount), "postingid", postingid, "transactionid", transactionid) \
     redis.call("sadd", brokerkey .. ":transaction:" .. transactionid .. ":postings", postingid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":postings", postingid) \
     --[[ add a sorted set for time based queries by account ]] \
     redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", timestampms, postingid) \
     redis.call("sadd", brokerkey .. ":postings", postingid) \
     redis.call("sadd", brokerkey .. ":postingid", "posting:" .. postingid) \
-   return postingid \
+    --[[ add sorted sets for columns that require sorting capability ]] \
+    local indexamount = tonumber(stramount) * 100 \
+    local fieldscorekeys = {"amount", indexamount, postingid, "accountid", accountid, postingid} \
+    updatefieldindexes(brokerid, "posting", fieldscorekeys) \
+    return postingid \
   end \
   ';
 
@@ -744,7 +749,7 @@ exports.registerScripts = function () {
     local indexamount = tonumber(stramount) * 100 \
     local fieldscorekeys = {"amount", indexamount, transactionid, "timestamp", timestampms, transactionid, "transactiontypeid", 0, transactiontypeid .. ":" .. transactionid} \
     updatefieldindexes(brokerid, "transaction", fieldscorekeys) \
-   return transactionid \
+    return transactionid \
   end \
   ';
 
@@ -2242,5 +2247,30 @@ exports.registerScripts = function () {
   exports.scriptgettransactionsbytimestamp = getrecordsbyfieldindex + '\
     local transactions = getrecordsbyfieldindex(ARGV[1], "transaction", "timestamp", ARGV[2], ARGV[3]) \
     return cjson.encode(transactions) \
+  ';
+
+  /*
+  * scriptgetpostingsbyaccount
+  * script to get postings sorted by account
+  * params: brokerid, minimum account, maximum account
+  * returns: list of postings in JSON format
+  */
+  exports.scriptgetpostingsbyaccount = getrecordsbyfieldindex + '\
+    local postings = getrecordsbyfieldindex(ARGV[1], "posting", "accountid", ARGV[2], ARGV[3]) \
+    return cjson.encode(postings) \
+  ';
+
+  /*
+  * scriptgetpostingsbyamount
+  * script to get postings sorted by amount
+  * params: brokerid, minimum amount, maximum amount
+  * returns: list of postings in JSON format
+  */
+  exports.scriptgetpostingsbyamount = getrecordsbyfieldindex + '\
+    --[[ money, so convert min/max to integer values to match index ]] \
+    local min = tonumber(ARGV[2]) * 100 \
+    local max = tonumber(ARGV[3]) * 100 \
+    local postings = getrecordsbyfieldindex(ARGV[1], "posting", "amount", min, max) \
+    return cjson.encode(postings) \
   ';
 }
