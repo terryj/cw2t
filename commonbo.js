@@ -912,7 +912,7 @@ exports.registerScripts = function () {
     redis.log(redis.LOG_NOTICE, "newposition") \
     local brokerkey = "broker:" .. brokerid \
     local positionid = redis.call("hincrby", brokerkey, "lastpositionid", 1) \
-    redis.call("hmset", brokerkey .. ":position:" .. positionid, "brokerid", brokerid, "accountid", accountid, "symbolid", symbolid, "quantity", quantity, "cost", cost, "positionid", positionid, "futsettdate", futsettdate) \
+    redis.call("hmset", brokerkey .. ":position:" .. positionid, "brokerid", brokerid, "accountid", accountid, "symbolid", symbolid, "quantity", quantity, "cost", tostring(cost), "positionid", positionid, "futsettdate", futsettdate) \
     setsymbolkey(accountid, brokerid, futsettdate, positionid, symbolid) \
     redis.call("sadd", brokerkey .. ":positions", positionid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":positions", positionid) \
@@ -929,7 +929,7 @@ exports.registerScripts = function () {
   * update an existing position
   * quantity & cost can be +ve/-ve
   */
-  updateposition = setsymbolkey + publishposition + '\
+  updateposition = round + setsymbolkey + publishposition + '\
   local updateposition = function(accountid, brokerid, cost, futsettdate, positionid, quantity, symbolid) \
     redis.log(redis.LOG_NOTICE, "updateposition") \
     local positionkey = "broker:" .. brokerid .. ":position:" .. positionid \
@@ -941,9 +941,9 @@ exports.registerScripts = function () {
     elseif tonumber(quantity) > 0 then \
       newcost = tonumber(position["cost"]) + tonumber(cost) \
     else \
-      newcost = newquantity / tonumber(position["quantity"]) * tonumber(position["cost"]) \
+      newcost = round(newquantity / tonumber(position["quantity"]) * tonumber(position["cost"]), 2) \
     end \
-    redis.call("hmset", positionkey, "accountid", accountid, "symbolid", symbolid, "quantity", newquantity, "cost", newcost, "futsettdate", futsettdate) \
+    redis.call("hmset", positionkey, "accountid", accountid, "symbolid", symbolid, "quantity", newquantity, "cost", tostring(newcost), "futsettdate", futsettdate) \
     if symbolid ~= position["symbolid"] or (futsettdate ~= "" and futsettdate ~= position["futsettdate"]) then \
       setsymbolkey(accountid, brokerid, futsettdate, positionid, symbolid) \
     end \
