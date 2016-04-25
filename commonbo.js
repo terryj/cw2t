@@ -465,12 +465,13 @@ exports.registerScripts = function () {
       --[[ position is long, so we would sell, so use the bid price ]] \
       local bidprice = redis.call("hget", "symbol:" .. symbolid, "bid") \
       if bidprice and tonumber(bidprice) ~= 0 then \
-        ret["price"] = tonumber(bidprice) \
+        ret["symbolcurrencyprice"] = tonumber(bidprice) \
         if ret["symbolcurrencyid"] ~= accountcurrencyid then \
           --[[ get currency rate & adjust price ]] \
           ret["currencyrate"] = getcurrencyrate(ret["symbolcurrencyid"], accountcurrencyid) \
-          ret["symbolcurrencyprice"] = ret["price"] \
-          ret["price"] = ret["price"] * ret["currencyrate"] \
+          ret["price"] = ret["symbolcurrencyprice"] * ret["currencyrate"] \
+        else \
+          ret["price"] = ret["symbolcurrencyprice"] \
         end \
         ret["value"] = qty * ret["price"] \
         ret["unrealisedpandl"] = round(ret["value"] - cost, 2) \
@@ -479,12 +480,13 @@ exports.registerScripts = function () {
       --[[ position is short, so we would buy, so use the ask price ]] \
       local askprice = redis.call("hget", "symbol:" .. symbolid, "ask") \
       if askprice and tonumber(askprice) ~= 0 then \
-        ret["price"] = tonumber(askprice) \
+        ret["symbolcurrencyprice"] = tonumber(askprice) \
         if ret["symbolcurrencyid"] ~= accountcurrencyid then \
           --[[ get currency rate & adjust price ]] \
           ret["currencyrate"] = getcurrencyrate(ret["symbolcurrencyid"], accountcurrencyid) \
-          ret["symbolcurrencyprice"] = ret["price"] \
-          ret["price"] = ret["price"] * ret["currencyrate"] \
+          ret["price"] = ret["symbolcurrencyprice"] * ret["currencyrate"] \
+        else \
+          ret["price"] = ret["symbolcurrencyprice"] \
         end \
         ret["value"] = qty * ret["price"] \
         ret["unrealisedpandl"] = round(ret["value"] + cost, 2) \
