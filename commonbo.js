@@ -1535,6 +1535,31 @@ exports.registerScripts = function () {
   end \
   ';
 
+  /*
+  * transactiondividendreverse()
+  * cash dividend transaction reversal
+  * params: clientaccountid, dividend, brokerid, currencyid, dividendlocal, description, rate, reference, timestamp, timestampms
+  * returns: 0 if ok, else 1 followed by error message
+  */
+  transactiondividendreverse = getbrokeraccountsmapid + newtransaction + newposting + updateaccountbalance + '\
+  local transactiondividendreverse = function(clientaccountid, dividend, brokerid, currencyid, dividendlocal, description, rate, reference, timestamp, timestampms) \
+    --[[ get the relevant broker accounts ]] \
+    local clientfundsaccount = getbrokeraccountsmapid(brokerid, currencyid, "Client funds") \
+    if not clientfundsaccount then \
+      return {1, 1027} \
+    end \
+    --[[ create the transaction ]] \
+    local transactionid = newtransaction(-dividend, brokerid, currencyid, -dividendlocal, description, rate, reference, timestamp, "DVR", timestampms) \
+    --[[ client posting ]] \
+    newposting(clientaccountid, -dividend, brokerid, -dividendlocal, transactionid, timestampms) \
+    updateaccountbalance(clientaccountid, -dividend, brokerid, -dividendlocal) \
+    --[[ broker side of client posting ]] \
+    newposting(clientfundsaccount, dividend, brokerid, dividendlocal, transactionid, timestampms) \
+    updateaccountbalance(clientfundsaccount, dividend, brokerid, dividendlocal) \
+    return {0} \
+  end \
+  ';
+
   /*** Scripts ***/
 
   /*
@@ -1774,6 +1799,7 @@ exports.registerScripts = function () {
     end \
     return cjson.encode(tblresults) \
   ';
+
   /*
   * scriptgethistory
   * prepares a history for an account from beginning to now
@@ -1793,19 +1819,22 @@ exports.registerScripts = function () {
     end \
     return cjson.encode(tblresults) \
   ';
+
   /*
-  * applycacashdividend()
-  * script to apply a cash dividend
-  * params: brokerid, corporateactionid, exdatems, timestamp, timestampms
-  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  * cacashdividend()
+  * script to test/apply/reverse a cash dividend
+  * params: brokerid, corporateactionid, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
+  * returns: 0, total dividend, number of accounts updated if successful, else 1 + an error message if unsuccessful
   */
-  exports.applycacashdividend = getpositionsbysymbolbydate + round + transactiondividend + '\
-    redis.log(redis.LOG_NOTICE, "applycacashdividend") \
+  exports.cacashdividend = getpositionsbysymbolbydate + round + transactiondividend + transactiondividendreverse + '\
+    redis.log(redis.LOG_NOTICE, "cacashdividend") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
     local exdatems = ARGV[3] \
     local timestamp = ARGV[4] \
     local timestampms = ARGV[5] \
+    local mode = tonumber(ARGV[6]) \
+    local totdividend = 0 \
     local numaccountsupdated = 0 \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
@@ -1834,15 +1863,26 @@ exports.registerScripts = function () {
         redis.log(redis.LOG_NOTICE, dividend) \
         local dividendlocal = dividend * rate \
         if dividend ~= 0 then \
-          local retval = transactiondividend(positions[i]["accountid"], dividend, brokerid, symbol["currencyid"], dividendlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
-          if retval[1] == 1 then \
-            return retval \
+          if mode == 2 then \
+            --[[ apply the dividend ]] \
+            local retval = transactiondividend(positions[i]["accountid"], dividend, brokerid, symbol["currencyid"], dividendlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+            if retval[1] == 1 then \
+              return retval \
+            end \
+          elseif mode == 3 then \
+            --[[ reverse the dividend ]] \
+            local retval = transactiondividendreverse(positions[i]["accountid"], dividend, brokerid, symbol["currencyid"], dividendlocal, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+            if retval[1] == 1 then \
+              return retval \
+            end \
           end \
+          totdividend = totdividend + dividend \
           numaccountsupdated = numaccountsupdated + 1 \
         end \
       end \
     end \
-    return {0, numaccountsupdated} \
+    redis.log(redis.LOG_NOTICE, totdividend) \
+    return {0, totdividend, numaccountsupdated} \
   ';
 
   /*
