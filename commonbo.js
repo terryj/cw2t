@@ -1653,14 +1653,22 @@ exports.registerScripts = function () {
   /*
   * transactiondividendreverse()
   * cash dividend transaction reversal
-  * params: clientaccountid, dividend, brokerid, currencyid, dividendlocal, description, rate, reference, timestamp, timestampms
+  * params: clientaccountid, dividend, unsettled dividend, brokerid, currencyid, dividend in local currency, unsettled dividend in local currency, description, rate, reference, timestamp, timestampms
   * returns: 0 if ok, else 1 followed by error message
   */
   transactiondividendreverse = getbrokeraccountsmapid + newtransaction + newposting + updateaccountbalance + '\
-  local transactiondividendreverse = function(clientaccountid, dividend, brokerid, currencyid, dividendlocal, description, rate, reference, timestamp, timestampms) \
+  local transactiondividendreverse = function(clientaccountid, dividend, unsettleddividend, brokerid, currencyid, dividendlocal, unsettleddividendlocal, description, rate, reference, timestamp, timestampms) \
     --[[ get the relevant broker accounts ]] \
     local clientfundsaccount = getbrokeraccountsmapid(brokerid, currencyid, "Client funds") \
     if not clientfundsaccount then \
+      return {1, 1027} \
+    end \
+    local clientsettlementaccount = getbrokeraccountsmapid(brokerid, currencyid, "Client settlement") \
+    if not clientsettlementaccount then \
+      return {1, 1027} \
+    end \
+    local cmaaccount = getbrokeraccountsmapid(brokerid, currencyid, "CMA") \
+    if not cmaaccount then \
       return {1, 1027} \
     end \
     --[[ create the transaction ]] \
@@ -1671,6 +1679,14 @@ exports.registerScripts = function () {
     --[[ broker side of client posting ]] \
     newposting(clientfundsaccount, dividend, brokerid, dividendlocal, transactionid, timestampms) \
     updateaccountbalance(clientfundsaccount, dividend, brokerid, dividendlocal) \
+    if unsettleddividend ~= 0 then \
+      --[[ unsettled transaction ]] \
+      local unsettledtransactionid = newtransaction(-unsettleddividend, brokerid, currencyid, -unsettleddividendlocal, description, rate, reference, timestamp, "DVP", timestampms) \
+      newposting(cmaaccount, -unsettleddividend, brokerid, -unsettleddividendlocal, unsettledtransactionid, timestampms) \
+      updateaccountbalance(cmaaccount, -unsettleddividend, brokerid, -unsettleddividendlocal) \
+      newposting(clientsettlementaccount, unsettleddividend, brokerid, unsettleddividendlocal, unsettledtransactionid, timestampms) \
+      updateaccountbalance(clientsettlementaccount, unsettleddividend, brokerid, unsettleddividendlocal) \
+    end \
     return {0} \
   end \
   ';
@@ -1992,7 +2008,7 @@ exports.registerScripts = function () {
             end \
           elseif mode == 3 then \
             --[[ reverse the dividend ]] \
-            local retval = transactiondividendreverse(positions[i]["accountid"], dividend, brokerid, symbol["currencyid"], dividendlocal, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+            local retval = transactiondividendreverse(positions[i]["accountid"], dividend, unsettleddividend, brokerid, symbol["currencyid"], dividendlocal, unsettleddividendlocal, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
             if retval[1] == 1 then \
               return retval \
             end \
