@@ -1090,13 +1090,14 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * getpositionbydate()
-  * gets a position as at a point in time
+  * getpositionbydatereverseorder()
+  * calculates a position as at a point in time
   * params: brokerid, positionid, datetime in milliseconds
-  * returns: the position
+  * returns: position quantity & cost
+  * note: goes through postings in reverse order - should give the same result as getpositionbydate()
   */
-  getpositionbydate = getposition + getpositionpostingsbydate + '\
-  local getpositionbydate = function(brokerid, positionid, dtmilli) \
+  getpositionbydatereverseorder = getposition + getpositionpostingsbydate + round + '\
+  local getpositionbydatereverseorder = function(brokerid, positionid, dtmilli) \
     --[[ get the position ]] \
     local position = getposition(brokerid, positionid) \
     --[[ get the position postings for this position since the date ]] \
@@ -1110,12 +1111,86 @@ exports.registerScripts = function () {
       elseif positionquantity == 0 then  \
         position["cost"] = tonumber(positionpostings[i]["cost"]) \
       else \
-        position["cost"] = position["quantity"] / positionquantity * tonumber(position["cost"]) \
+        position["cost"] = round(position["quantity"] / positionquantity * tonumber(position["cost"], 2) \
       end \
     end \
     return position \
   end \
  ';
+
+  /*
+  * getpositionbydate()
+  * calculates a position as at a point in time
+  * params: brokerid, positionid, datetime in milliseconds
+  * returns: position quantity & cost
+  * note: goes through postings in normal order, because this direction is required to see what trades made up the position at the time
+  */
+  getpositionbydate = getposition + getpositionpostingsbydate + round + '\
+  local getpositionbydate = function(brokerid, positionid, dtmilli) \
+    --[[ get the position ]] \
+    local position = getposition(brokerid, positionid) \
+    position["quantity"] = 0 \
+    position["cost"] = 0 \
+    --[[ get the position postings for this position since the beginning of time ]] \
+    local positionpostings = getpositionpostingsbydate(brokerid, positionid, "-inf", dtmilli) \
+    --[[ update quantity and cost to reflect these postings ]] \
+    for i = 1, #positionpostings do \
+      local postingquantity = tonumber(positionpostings[i]["quantity"]) \
+      local newquantity = position["quantity"] + postingquantity \
+      if newquantity == 0 then \
+        position["cost"] = 0 \
+      elseif postingquantity > 0 then \
+        position["cost"] = position["cost"] + tonumber(positionpostings[i]["cost"]) \
+      else \
+        position["cost"] = round(newquantity / position["quantity"] * position["cost"], 2) \
+      end \
+      position["quantity"] = newquantity \
+    end \
+    return position \
+  end \
+ ';
+
+  /*
+  * getpositionquantitiesbydate()
+  * calculates the quantity with settled and unsettled portion of a position as at a date
+  * params: brokerid, symbolid, date in milliseconds
+  * returns: quantity, unsettledquantity, settledquantity
+  * note: calculates quantities only
+  */
+  getpositionquantitiesbydate = getposition + getpositionpostingsbydate + gethashvalues + '\
+  local getpositionquantitiesbydate = function(brokerid, positionid, dtmilli) \
+    redis.log(redis.LOG_NOTICE, "getpositionquantitiesbydate") \
+    --[[ get the position ]] \
+    local position = getposition(brokerid, positionid) \
+    position["quantity"] = 0 \
+    position["unsettledquantity"] = 0 \
+    position["settledquantity"] = 0 \
+    --[[ get the position postings for this position up to the date ]] \
+    local positionpostings = getpositionpostingsbydate(brokerid, positionid, "-inf", dtmilli) \
+    for i = 1, #positionpostings do \
+      --[[ adjust the quantity ]] \
+      position["quantity"] = position["quantity"] + tonumber(positionpostings[i]["quantity"]) \
+      if position["quantity"] == 0 then \
+        --[[ no position, so reset settled & unsettled ]] \
+        position["unsettledquantity"] = 0 \
+        position["settledquantity"] = 0 \
+      else \
+        --[[ if posting is a trade, see if it is unsettled, otherwise treat is as settled ]] \
+        if tonumber(positionpostings[i]["positionpostingtypeid"]) == 1 then \
+          local trade = gethashvalues("broker:" .. brokerid .. ":trade:" .. positionpostings[i]["linkid"]) \
+          if trade["tradeid"] and tonumber(trade["tradesettlestatusid"]) < 4 then \
+            position["unsettledquantity"] = position["unsettledquantity"] + tonumber(positionpostings[i]["quantity"]) \
+          else \
+            position["settledquantity"] = position["settledquantity"] + tonumber(positionpostings[i]["quantity"]) \
+          end \
+        else \
+          position["settledquantity"] = position["settledquantity"] + tonumber(positionpostings[i]["quantity"]) \
+        end \
+      end \
+    end \
+    return position \
+  end \
+  ';
 
   /*
   * getpositionsbysymbol()
@@ -1152,7 +1227,31 @@ exports.registerScripts = function () {
     local positionids = redis.call("smembers", "broker:" .. brokerid .. ":symbol:" .. symbolid .. ":positions") \
     for i = 1, #positionids do \
       local position = getpositionbydate(brokerid, positionids[i], milliseconds) \
-      if tonumber(position["quantity"]) > 0 then \
+      --[[ only interested in non-zero positions ]] \
+      if position["quantity"] ~= 0 then \
+        table.insert(tblresults, position) \
+      end \
+    end \
+    return tblresults \
+  end \
+  ';
+
+  /*
+  * getpositionquantitiesbysymbolbydate()
+  * gets all position quantities for a symbol as at a date
+  * params: brokerid, symbolid, date in milliseconds
+  * returns: a table of position quantities
+  */
+  getpositionquantitiesbysymbolbydate = getpositionquantitiesbydate + '\
+  local getpositionquantitiesbysymbolbydate = function(brokerid, symbolid, milliseconds) \
+    redis.log(redis.LOG_NOTICE, "getpositionquantitiesbysymbolbydate") \
+    local tblresults = {} \
+    --[[ get position ids ]] \
+    local positionids = redis.call("smembers", "broker:" .. brokerid .. ":symbol:" .. symbolid .. ":positions") \
+    for i = 1, #positionids do \
+      local position = getpositionquantitiesbydate(brokerid, positionids[i], milliseconds) \
+      --[[ only interested in non-zero positions ]] \
+      if position["quantity"] ~= 0 then \
         table.insert(tblresults, position) \
       end \
     end \
@@ -1513,14 +1612,22 @@ exports.registerScripts = function () {
   /*
   * transactiondividend()
   * cash dividend transaction
-  * params: clientaccountid, dividend, brokerid, currencyid, dividendlocal, description, rate, reference, timestamp, timestampms
+  * params: clientaccountid, dividend, unsettled dividend, brokerid, currencyid, dividend in local currency, unsettled dividend in local currency, description, rate, reference, timestamp, timestampms
   * returns: 0 if ok, else 1 followed by error message
   */
   transactiondividend = getbrokeraccountsmapid + newtransaction + newposting + updateaccountbalance + '\
-  local transactiondividend = function(clientaccountid, dividend, brokerid, currencyid, dividendlocal, description, rate, reference, timestamp, timestampms) \
+  local transactiondividend = function(clientaccountid, dividend, unsettleddividend, brokerid, currencyid, dividendlocal, unsettleddividendlocal, description, rate, reference, timestamp, timestampms) \
     --[[ get the relevant broker accounts ]] \
     local clientfundsaccount = getbrokeraccountsmapid(brokerid, currencyid, "Client funds") \
     if not clientfundsaccount then \
+      return {1, 1027} \
+    end \
+    local clientsettlementaccount = getbrokeraccountsmapid(brokerid, currencyid, "Client settlement") \
+    if not clientsettlementaccount then \
+      return {1, 1027} \
+    end \
+    local cmaaccount = getbrokeraccountsmapid(brokerid, currencyid, "CMA") \
+    if not cmaaccount then \
       return {1, 1027} \
     end \
     --[[ create the transaction ]] \
@@ -1531,6 +1638,14 @@ exports.registerScripts = function () {
     --[[ broker side of client posting ]] \
     newposting(clientfundsaccount, -dividend, brokerid, -dividendlocal, transactionid, timestampms) \
     updateaccountbalance(clientfundsaccount, -dividend, brokerid, -dividendlocal) \
+    if unsettleddividend ~= 0 then \
+      --[[ unsettled transaction ]] \
+      local unsettledtransactionid = newtransaction(unsettleddividend, brokerid, currencyid, unsettleddividendlocal, description, rate, reference, timestamp, "DVP", timestampms) \
+      newposting(cmaaccount, unsettleddividend, brokerid, unsettleddividendlocal, unsettledtransactionid, timestampms) \
+      updateaccountbalance(cmaaccount, unsettleddividend, brokerid, unsettleddividendlocal) \
+      newposting(clientsettlementaccount, -unsettleddividend, brokerid, -unsettleddividendlocal, unsettledtransactionid, timestampms) \
+      updateaccountbalance(clientsettlementaccount, -unsettleddividend, brokerid, -unsettleddividendlocal) \
+    end \
     return {0} \
   end \
   ';
@@ -1725,8 +1840,10 @@ exports.registerScripts = function () {
     --[[ calculate each position as at the passed date ]] \
     for index = 1, #positionids do \
       local position = getpositionbydate(ARGV[2], positionids[index], ARGV[3]) \
-      --[[ todo: need to value as at the date ]] \
-      table.insert(tblvaluation, position) \
+      if position["quantity"] ~= 0 then \
+        --[[ todo: need to value as at the date ]] \
+        table.insert(tblvaluation, position) \
+      end \
     end \
     return cjson.encode(tblvaluation) \
   ';
@@ -1824,9 +1941,9 @@ exports.registerScripts = function () {
   * cacashdividend()
   * script to test/apply/reverse a cash dividend
   * params: brokerid, corporateactionid, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: 0, total dividend, number of accounts updated if successful, else 1 + an error message if unsuccessful
+  * returns: 0, total dividend, total unsettled dividend, number of accounts updated if successful, else 1 + an error message if unsuccessful
   */
-  exports.cacashdividend = getpositionsbysymbolbydate + round + transactiondividend + transactiondividendreverse + '\
+  exports.cacashdividend = getpositionquantitiesbysymbolbydate + round + transactiondividend + transactiondividendreverse + '\
     redis.log(redis.LOG_NOTICE, "cacashdividend") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
@@ -1835,7 +1952,8 @@ exports.registerScripts = function () {
     local timestampms = ARGV[5] \
     local mode = tonumber(ARGV[6]) \
     local totdividend = 0 \
-    local numaccountsupdated = 0 \
+    local totunsettleddividend = 0 \
+    local numaccounts = 0 \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction["corporateactionid"] then \
@@ -1849,23 +1967,26 @@ exports.registerScripts = function () {
     --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
     local rate = 1 \
     --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
-    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
+    local positions = getpositionquantitiesbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
     for i = 1, #positions do \
       redis.log(redis.LOG_NOTICE, "accountid") \
       redis.log(redis.LOG_NOTICE, positions[i]["accountid"]) \
       redis.log(redis.LOG_NOTICE, "quantity") \
       redis.log(redis.LOG_NOTICE, positions[i]["quantity"]) \
-      local posqty = tonumber(positions[i]["quantity"]) \
+      redis.log(redis.LOG_NOTICE, positions[i]["unsettledquantity"]) \
+      redis.log(redis.LOG_NOTICE, positions[i]["settledquantity"]) \
       --[[ may have a position with no quantity ]] \
-      if posqty ~= 0 then \
-        local dividend = round(posqty * tonumber(corporateaction["cashpershare"]), 2) \
+      if positions[i]["quantity"] ~= 0 then \
+        local dividend = round(positions[i]["quantity"] * tonumber(corporateaction["cashpershare"]), 2) \
+        local unsettleddividend = round(positions[i]["unsettledquantity"] * tonumber(corporateaction["cashpershare"]), 2) \
         redis.log(redis.LOG_NOTICE, "dividend") \
         redis.log(redis.LOG_NOTICE, dividend) \
         local dividendlocal = dividend * rate \
+        local unsettleddividendlocal = unsettleddividend * rate \
         if dividend ~= 0 then \
           if mode == 2 then \
             --[[ apply the dividend ]] \
-            local retval = transactiondividend(positions[i]["accountid"], dividend, brokerid, symbol["currencyid"], dividendlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+            local retval = transactiondividend(positions[i]["accountid"], dividend, unsettleddividend, brokerid, symbol["currencyid"], dividendlocal, unsettleddividendlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
             if retval[1] == 1 then \
               return retval \
             end \
@@ -1877,12 +1998,14 @@ exports.registerScripts = function () {
             end \
           end \
           totdividend = totdividend + dividend \
-          numaccountsupdated = numaccountsupdated + 1 \
+          totunsettleddividend = totunsettleddividend + unsettleddividend \
+          numaccounts = numaccounts + 1 \
         end \
       end \
     end \
+    redis.log(redis.LOG_NOTICE, "totdividend") \
     redis.log(redis.LOG_NOTICE, totdividend) \
-    return {0, totdividend, numaccountsupdated} \
+    return {0, tostring(totdividend), tostring(totunsettleddividend), numaccounts} \
   ';
 
   /*

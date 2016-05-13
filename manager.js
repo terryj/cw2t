@@ -218,13 +218,13 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-    //applyCorporateAction(1, 1);
+    applyCorporateAction(1, 1);
     //test();
     //testtrade();
     //testSettle();
     //testSupplierFundsTransfer();
     //testPositionPostings();
-    testStatement();
+    //testStatement();
     //testOrder(1);
     //testValuation();
 
@@ -2201,7 +2201,7 @@ function applyCorporateAction(brokerid, corporateactionid) {
     }
 
     if (corporateactiontypeid == "DVCA") {
-      applyCashDividend(brokerid, corporateactionid);
+      caCashDividend(brokerid, corporateactionid);
     } else if (corporateactiontypeid == "DVSC") {
       applyScripDividend(brokerid, corporateactionid);
     } else if (corporateactiontypeid == "RHTS") {
@@ -2218,23 +2218,25 @@ function applyCorporateAction(brokerid, corporateactionid) {
   });
 }
 
-function applyCashDividend(brokerid, corporateactionid) {
-  console.log("applyCashDividend");
-  var exdatems = new Date("February 25, 2016").getTime();
+function caCashDividend(brokerid, corporateactionid) {
+  console.log("caCashDividend");
+  var exdatems = new Date("April 25, 2016").getTime();
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
+  var mode = 2;
 
   console.log(exdatems);
   console.log(corporateactionid);
   console.log(timestamp);
 
-  db.eval(commonbo.applycacashdividend, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, function(err, ret) {
+  db.eval(commonbo.cacashdividend, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, mode, function(err, ret) {
     if (err) throw err;
     console.log(ret);
     if (ret[0] == 1) {
       console.log("error");
     } else {
-      console.log("Number of accounts updated: " + ret[1]);
+      console.log("Total dividend: " + ret[1]);
+      console.log("Number of accounts: " + ret[2]);
     }
   });
 }
