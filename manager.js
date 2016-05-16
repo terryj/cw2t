@@ -2200,10 +2200,12 @@ function applyCorporateAction(brokerid, corporateactionid) {
       return;
     }
 
+    console.log(corporateactiontypeid);
+
     if (corporateactiontypeid == "DVCA") {
       caCashDividend(brokerid, corporateactionid);
     } else if (corporateactiontypeid == "DVSC") {
-      applyScripDividend(brokerid, corporateactionid);
+      caScripDividend(brokerid, corporateactionid);
     } else if (corporateactiontypeid == "RHTS") {
       if (applyEXdate == 1) {
         applyCARightsExdate(brokerid, corporateactionid);
@@ -2236,22 +2238,24 @@ function caCashDividend(brokerid, corporateactionid) {
       console.log("error");
     } else {
       console.log("Total dividend: " + ret[1]);
-      console.log("Number of accounts: " + ret[2]);
+      console.log("Total unsettled dividend: " + ret[2]);
+      console.log("Number of accounts: " + ret[3]);
     }
   });
 }
 
-function applyScripDividend(brokerid, corporateactionid) {
+function caScripDividend(brokerid, corporateactionid) {
   console.log("applyScripDividend");
-  var exdatems = new Date("February 12, 2016").getTime();
+  var exdatems = new Date("April 25, 2016").getTime();
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
+  var mode = 1;
 
   console.log(exdatems);
   console.log(corporateactionid);
   console.log(timestamp);
 
-  db.eval(commonbo.applycadividendscrip, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, function(err, ret) {
+  db.eval(commonbo.cadividendscrip, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, mode, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });
