@@ -2246,16 +2246,17 @@ function caCashDividend(brokerid, corporateactionid) {
 
 function caScripDividend(brokerid, corporateactionid) {
   console.log("applyScripDividend");
-  var exdatems = new Date("April 25, 2016").getTime();
+  var exdate = new Date("April 25, 2016");
+  var exdatems = exdate.getTime();
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
-  var mode = 1;
+  var mode = 2;
 
   console.log(exdatems);
   console.log(corporateactionid);
   console.log(timestamp);
 
-  db.eval(commonbo.cadividendscrip, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatems, timestamp, timestampms, mode, function(err, ret) {
+  db.eval(commonbo.cadividendscrip, 1, "broker:" + brokerid, brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode, function(err, ret) {
     if (err) throw err;
     console.log(ret);
   });

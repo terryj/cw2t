@@ -1987,20 +1987,21 @@ exports.registerScripts = function () {
   /*
   * cadividendscrip()
   * script to test/apply/reverse a scrip dividend
-  * params: brokerid, corporateactionid, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
+  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.cadividendscrip = getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + getsharesdue + newpositiontransaction + transactiondividend + round + '\
+  exports.cadividendscrip = getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + getsharesdue + newpositiontransaction + transactiondividend + round + geteodprice + '\
     redis.log(redis.LOG_NOTICE, "cadividendscrip") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
-    local exdatems = ARGV[3] \
-    local timestamp = ARGV[4] \
-    local timestampms = ARGV[5] \
-    local mode = tonumber(ARGV[6]) \
+    local exdate = ARGV[3] \
+    local exdatems = ARGV[4] \
+    local timestamp = ARGV[5] \
+    local timestampms = ARGV[6] \
+    local mode = tonumber(ARGV[7]) \
     local totquantity = 0 \
     local totsharesdue = 0 \
-    local totresidue = 0 \
+    local totresiduecash = 0 \
     local totdividendascash = 0 \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
@@ -2030,8 +2031,8 @@ exports.registerScripts = function () {
         if corporateactiondecision == "SCRIP" then \
           local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
           if sharesdue[1] > 0 then \
+            --[[ add any shares to position ]] \
             if mode == 2 then \
-              --[[ add to position ]] \
               newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
             elseif mode == 3 then \
               newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
@@ -2039,20 +2040,26 @@ exports.registerScripts = function () {
             totsharesdue = totsharesdue + sharesdue[1] \
           end \
           if sharesdue[2] > 0 then \
-            --[[ any residue dividend taken as cash ]] \
-            local residuelocal = sharesdue[2] * rate \
+            --[[ any residue shares amount is taken as cash - we need the closing price as at the exdate to value this ]] \
+            local eodprice = geteodprice(exdate, corporateaction["symbolid"]) \
+            if not eodprice["bid"] then \
+              return {1, 1029} \
+            end \
+            --[[ calculate the amount cash as the stub * closing price ]] \
+            local residuecash = round(sharesdue[2] * eodprice["bid"], 2) \
+            local residuecashlocal = residuecash * rate \
             if mode == 2 then \
-              local retval = transactiondividend(positions[i]["accountid"], sharesdue[2], 0, brokerid, symbol["currencyid"], residuelocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "DVP", timestampms) \
+              local retval = transactiondividend(positions[i]["accountid"], residuecash, 0, brokerid, symbol["currencyid"], residuecashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "DVP", timestampms) \
               if retval[1] == 1 then \
                 return retval \
               end \
             elseif mode == 3 then \
-              local retval = transactiondividend(positions[i]["accountid"], -sharesdue[2], 0, brokerid, symbol["currencyid"], -residuelocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "DVR", timestampms) \
+              local retval = transactiondividend(positions[i]["accountid"], -residuecash, 0, brokerid, symbol["currencyid"], -residuecashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "DVR", timestampms) \
               if retval[1] == 1 then \
                 return retval \
               end \
             end \
-            totresidue = totresidue + sharesdue[2] \
+            totresiduecash = totresiduecash + residuecash \
           end \
         else \
           --[[ dividend taken as cash ]] \
@@ -2078,7 +2085,7 @@ exports.registerScripts = function () {
         totquantity = totquantity + positions[i]["quantity"] \
       end \
     end \
-    return {0, tostring(totquantity), tostring(totsharesdue), tostring(totresidue), tostring(totdividendascash)} \
+    return {0, tostring(totquantity), tostring(totsharesdue), tostring(totresiduecash), tostring(totdividendascash)} \
   ';
 
   /*
