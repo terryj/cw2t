@@ -2089,20 +2089,24 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * applycarightsexdate()
+  * carightsexdate()
   * script to apply the first part of a rights issue, as at ex-date
-  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms
+  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
   * note: exdate is actual exdate - 1 & exdatems is millisecond representation of time at the end of exdate - 1
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycarightsexdate = getpositionsbysymbolbydate + getsharesdue + geteodprice + newpositiontransaction + transactiondividend + '\
-    redis.log(redis.LOG_NOTICE, "applycarightsexdate") \
+  exports.carightsexdate = getpositionsbysymbolbydate + getsharesdue + geteodprice + newpositiontransaction + transactiondividend + '\
+    redis.log(redis.LOG_NOTICE, "carightsexdate") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
     local exdate = ARGV[3] \
     local exdatems = ARGV[4] \
     local timestamp = ARGV[5] \
     local timestampms = ARGV[6] \
+    local mode = ARGV[7] \
+    local totquantity = 0 \
+    local totrightsquantity = 0 \
+    local totresidue = 0 \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction["corporateactionid"] then \
@@ -2133,7 +2137,7 @@ exports.registerScripts = function () {
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
     for i = 1, #positions do \
       --[[ only interested in long positions ]] \
-      if tonumber(positions[i]["quantity"]) > 0 then \
+      if positions[i]["quantity"] > 0 then \
         redis.log(redis.LOG_NOTICE, "accountid " .. positions[i]["accountid"]) \
         redis.log(redis.LOG_NOTICE, "quantity " .. positions[i]["quantity"]) \
         --[[ get shares due & any remainder ]] \
@@ -2141,20 +2145,31 @@ exports.registerScripts = function () {
         if sharesdue[1] > 0 then \
           --[[ create a position in the rights ]] \
           newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolidnew"], timestamp, timestampms) \
+          totrightsquantity = totrightsquantity + sharesdue[1] \
         end \
         if sharesdue[2] > 0 then \
           --[[ calculate how much cash is due ]] \
-          local stubcash = round(sharesdue[2] * eodprice["bid"], 2) / 100 \
+          local stubcash = round(sharesdue[2] * eodprice["bid"], 2) \
           local stubcashlocal = stubcash * rate \
-          --[[ todo: this may need a rights issue equivalent function ]] \
-          local retval = transactiondividend(positions[i]["accountid"], stubcash, brokerid, symbol["currencyid"], stubcashlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
-          if retval[1] == 1 then \
-            return retval \
+          if mode == 2 then \
+            --[[ apply the transaction ]] \
+            local retval = transactiondividend(positions[i]["accountid"], stubcash, 0, brokerid, symbol["currencyid"], stubcashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+            if retval[1] == 1 then \
+              return retval \
+            end \
+          elseif mode == 3 then \
+            --[[ reverse the transaction ]] \
+            local retval = transactiondividend(positions[i]["accountid"], -stubcash, 0, brokerid, symbol["currencyid"], -stubcashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+            if retval[1] == 1 then \
+              return retval \
+            end \
           end \
+          totresidue = totresidue + sharesdue[2] \
         end \
+        totquantity = totquantity + positions[i]["quantity"] \
       end \
     end \
-    return {0} \
+    return {0, tostring(totquantity), tostring(totrightsquantity), tostring(totresidue)} \
   ';
 
   /*

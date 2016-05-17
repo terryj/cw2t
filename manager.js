@@ -2192,7 +2192,7 @@ function applyCorporateAction(brokerid, corporateactionid) {
   console.log("applyCorporateAction");
 
   // this variable determines whether the ex-date or pay-date part of the rights issue process is run, based on a user selection
-  var applyEXdate = 0;
+  var applyEXdate = 1;
 
   db.hget("corporateaction:" + corporateactionid, "corporateactiontypeid", function(err, corporateactiontypeid) {
     if (err) {
@@ -2268,6 +2268,7 @@ function applyCARightsExdate(brokerid, corporateactionid) {
 
   // millisecond representation of exdate - don't need to subtract a day as this will give us the 00:00:00 time
   var exdatems = exdate.getTime();
+  var mode = 1;
 
   // we need exdate - 1
   exdate.setDate(exdate.getDate() - 1);
@@ -2281,12 +2282,12 @@ function applyCARightsExdate(brokerid, corporateactionid) {
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
 
-  db.eval(commonbo.applycarightsexdate, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatestr, exdatems, timestamp, timestampms, function(err, ret) {
+  db.eval(commonbo.carightsexdate, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatestr, exdatems, timestamp, timestampms, mode, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
     if (ret[0] == 1) {
-      console.log("Error in applycarightsexdate: " + commonbo.getReasonDesc(ret[1]));
+      console.log("Error in carightsexdate: " + commonbo.getReasonDesc(ret[1]));
       return;      
     }
   });
