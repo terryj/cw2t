@@ -2213,7 +2213,7 @@ function applyCorporateAction(brokerid, corporateactionid) {
         caRightsPayDate(brokerid, corporateactionid);
       }
     } else if (corporateactiontypeid == "SPLF" || corporateactiontypeid == "SPLR") {
-      applyCAStockSplit(corporateactionid);
+      caStockSplit(corporateactionid);
     } else if (corporateactiontypeid == "BONU") {
       caScripIssue(brokerid, corporateactionid);
     }
@@ -2319,7 +2319,7 @@ function caRightsPayDate(brokerid, corporateactionid) {
 
 function caStockSplit(corporateactionid) {
   console.log("caStockSplit");
-  var exdate = new Date("February 16, 2016");
+  var exdate = new Date("April 25, 2016");
   var mode = 1;
 
   // millisecond representation of exdate

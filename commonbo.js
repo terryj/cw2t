@@ -270,6 +270,9 @@ exports.registerScripts = function () {
     case 1035:
       desc = "Please enter a shares per share figure for this corporate action";
       break;
+    case 1036:
+      desc = "Please enter a cash per share figure for this corporate action";
+      break;
     default:
       desc = "Unknown reason";
     }
@@ -2015,6 +2018,10 @@ exports.registerScripts = function () {
     if not corporateaction["sharespershare"] then \
       return {1, 1035} \
     end \
+    --[[ there needs to be a cash per share figure for this ca ]] \
+    if not corporateaction["cashpershare"] then \
+      return {1, 1036} \
+    end \
     --[[ get the symbol ]] \
     local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
     if not symbol["symbolid"] then \
@@ -2256,19 +2263,22 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * applycastocksplit
+  * castocksplit
   * script to apply a stock split
-  * params: corporateactionid, exdate, exdatems, timestamp, timestampms
-  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  * params: corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
+  * returns: 0, total shares due, total residue if ok, else 1 + an error message if unsuccessful
   * note: this corporate action is applied across all brokers
   */
-  exports.applycastocksplit = geteodprice + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + transactiondividend + round + '\
-    redis.log(redis.LOG_NOTICE, "applycastocksplit") \
+  exports.castocksplit = geteodprice + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + transactiondividend + round + '\
+    redis.log(redis.LOG_NOTICE, "castocksplit") \
     local corporateactionid = ARGV[1] \
     local exdate = ARGV[2] \
     local exdatems = ARGV[3] \
     local timestamp = ARGV[4] \
     local timestampms = ARGV[5] \
+    local mode = ARGV[6] \
+    local totsharesdue = 0 \
+    local totresidue = 0 \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction["corporateactionid"] then \
@@ -2297,29 +2307,42 @@ exports.registerScripts = function () {
       local positions = getpositionsbysymbolbydate(brokers[j], corporateaction["symbolid"], exdatems) \
       for i = 1, #positions do \
         --[[ only interested in long positions ]] \
-        if tonumber(positions[i]["quantity"]) > 0 then \
+        if positions[i]["quantity"] > 0 then \
           redis.log(redis.LOG_NOTICE, "accountid " .. positions[i]["accountid"]) \
           redis.log(redis.LOG_NOTICE, "quantity " .. positions[i]["quantity"]) \
           --[[ get shares due & any remainder ]] \
           local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
           if sharesdue[1] > 0 then \
-            --[[ update the position ]] \
-            newpositiontransaction(positions[i]["accountid"], brokers[j], 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
+            if mode == 2 then \
+              --[[ update the position ]] \
+              newpositiontransaction(positions[i]["accountid"], brokers[j], 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
+            elseif mode == 3 then \
+              --[[ reverse the effect on the position ]] \
+              newpositiontransaction(positions[i]["accountid"], brokers[j], 0, "", corporateactionid, 2, -sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
+            end \
+            totsharesdue = totsharesdue + sharesdue[1] \
           end \
           if sharesdue[2] > 0 then \
             --[[ calculate how much cash is due ]] \
-            local stubcash = round(sharesdue[2] * eodprice["bid"], 2) / 100 \
+            local stubcash = round(sharesdue[2] * eodprice["bid"], 2) \
             local stubcashlocal = stubcash * rate \
-            --[[ todo: this may need a rights issue equivalent function ]] \
-            local retval = transactiondividend(positions[i]["accountid"], stubcash, brokers[j], symbol["currencyid"], stubcashlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
-            if retval[1] == 1 then \
-              return retval \
+            if mode == 2 then \
+              local retval = transactiondividend(positions[i]["accountid"], stubcash, brokers[j], symbol["currencyid"], stubcashlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+              if retval[1] == 1 then \
+                return retval \
+              end \
+            elseif mode == 3 then \
+              local retval = transactiondividend(positions[i]["accountid"], -stubcash, brokers[j], symbol["currencyid"], -stubcashlocal, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+              if retval[1] == 1 then \
+                return retval \
+              end \
             end \
-          end \
+            totresidue = totresidue + stubcash \
+         end \
         end \
       end \
     end \
-    return {0} \
+    return {0, tostring(totsharesdue), tostring(totresidue)} \
   ';
 
   /*
