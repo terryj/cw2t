@@ -1605,8 +1605,6 @@ exports.registerScripts = function () {
   getsharesdue = round + '\
   local getsharesdue = function(posqty, sharespershare) \
     redis.log(redis.LOG_NOTICE, "getsharesdue") \
-    redis.log(redis.LOG_NOTICE, posqty) \
-    redis.log(redis.LOG_NOTICE, sharespershare) \
     local sharesdue = round(tonumber(posqty) * tonumber(sharespershare), 2) \
     local sharesdueint = math.floor(sharesdue) \
     local sharesduerem = sharesdue - sharesdueint \
@@ -2372,7 +2370,6 @@ exports.registerScripts = function () {
         redis.log(redis.LOG_NOTICE, "quantity " .. positions[i]["quantity"]) \
         --[[ get shares due & any remainder ]] \
         local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
-        redis.log(redis.LOG_NOTICE, "sharesdue") \
         if sharesdue[1] > 0 then \
           if mode == 2 then \
             --[[ update the position ]] \
@@ -2383,7 +2380,6 @@ exports.registerScripts = function () {
           end \
           totsharesdue = totsharesdue + sharesdue[1] \
         end \
-        redis.log(redis.LOG_NOTICE, "sharesdue") \
         if sharesdue[2] > 0 then \
           --[[ calculate how much cash is due ]] \
           local stubcash = round(sharesdue[2] * eodprice["bid"], 2) \
