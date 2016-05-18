@@ -267,6 +267,9 @@ exports.registerScripts = function () {
     case 1034:
       desc = "Either quantity or cashorderqty must be present";
       break;
+    case 1035:
+      desc = "Please enter a shares per share figure for this corporate action";
+      break;
     default:
       desc = "Unknown reason";
     }
@@ -1602,6 +1605,8 @@ exports.registerScripts = function () {
   getsharesdue = round + '\
   local getsharesdue = function(posqty, sharespershare) \
     redis.log(redis.LOG_NOTICE, "getsharesdue") \
+    redis.log(redis.LOG_NOTICE, posqty) \
+    redis.log(redis.LOG_NOTICE, sharespershare) \
     local sharesdue = round(tonumber(posqty) * tonumber(sharespershare), 2) \
     local sharesdueint = math.floor(sharesdue) \
     local sharesduerem = sharesdue - sharesdueint \
@@ -2008,12 +2013,16 @@ exports.registerScripts = function () {
     if not corporateaction then \
       return {1, 1028} \
     end \
+    --[[ there needs to be a shares per share figure for this ca ]] \
+    if not corporateaction["sharespershare"] then \
+      return {1, 1035} \
+    end \
     --[[ get the symbol ]] \
     local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
     if not symbol["symbolid"] then \
       return {1, 1015} \
     end \
-    --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
+   --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
     local rate = 1 \
     --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
@@ -2112,16 +2121,20 @@ exports.registerScripts = function () {
     if not corporateaction["corporateactionid"] then \
       return {1, 1027} \
     end \
-    --[[ get the symbol ]] \
-    local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
-    if not symbol["symbolid"] then \
-      return {1, 1015} \
+    --[[ there needs to be a shares per share figure for this ca ]] \
+    if not corporateaction["sharespershare"] then \
+      return {1, 1035} \
     end \
     --[[ make sure a symbol for the rights exists ]] \
     if not corporateaction["symbolidnew"] then \
       return {1, 1030} \
     end \
-    --[[ get the symbol for the rights ]] \
+    --[[ get the symbol ]] \
+    local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
+    if not symbol["symbolid"] then \
+      return {1, 1015} \
+    end \
+   --[[ get the symbol for the rights ]] \
     local symbolnew = gethashvalues("symbol:" .. corporateaction["symbolidnew"]) \
     if not symbolnew["symbolid"] then \
       return {1, 1030} \
@@ -2235,7 +2248,7 @@ exports.registerScripts = function () {
           --[[ zero the position in the rights ]] \
           newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -positions[i]["quantity"], corporateaction["symbolidnew"], timestamp, timestampms) \
         elseif mode == 3 then \
-          --[[ recreate the position in the rights ]] \
+          --[[ recreate a position in the rights ]] \
           newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, positions[i]["quantity"], corporateaction["symbolidnew"], timestamp, timestampms) \
         end \
         totquantity = totquantity + positions[i]["quantity"] \
@@ -2262,6 +2275,10 @@ exports.registerScripts = function () {
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction["corporateactionid"] then \
       return {1, 1027} \
+    end \
+    --[[ there needs to be a shares per share figure for this ca ]] \
+    if not corporateaction["sharespershare"] then \
+      return {1, 1035} \
     end \
     --[[ get the symbol ]] \
     local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
@@ -2308,31 +2325,38 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * applycascripissue()
+  * cascripissue()
   * script to apply a scrip issue
-  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms
+  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
   * note: exdate is actually exdate - 1 in "YYYYMMDD" format, exdatems is millisecond representation of time at the end of exdate - 1
-  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  * returns: 0, total sharesdue, total residue if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycascripissue = geteodprice + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + transactiondividend + '\
-    redis.log(redis.LOG_NOTICE, "applycascripissue") \
+  exports.cascripissue = geteodprice + getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + transactiondividend + '\
+    redis.log(redis.LOG_NOTICE, "cascripissue") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
     local exdate = ARGV[3] \
     local exdatems = ARGV[4] \
     local timestamp = ARGV[5] \
     local timestampms = ARGV[6] \
+    local mode = ARGV[7] \
+    local totsharesdue = 0 \
+    local totresidue = 0 \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction["corporateactionid"] then \
       return {1, 1027} \
+    end \
+    --[[ there needs to be a shares per share figure for this ca ]] \
+    if not corporateaction["sharespershare"] then \
+      return {1, 1035} \
     end \
     --[[ get the symbol ]] \
     local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
     if not symbol["symbolid"] then \
       return {1, 1015} \
     end \
-    --[[ get the closing price for the stock as at the exdate ]] \
+   --[[ get the closing price for the stock as at the exdate ]] \
     local eodprice = geteodprice(exdate, corporateaction["symbolid"]) \
     if not eodprice["bid"] then \
       return {1, 1029} \
@@ -2343,28 +2367,43 @@ exports.registerScripts = function () {
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
     for i = 1, #positions do \
       --[[ only interested in long positions ]] \
-      if tonumber(positions[i]["quantity"]) > 0 then \
+      if positions[i]["quantity"] > 0 then \
         redis.log(redis.LOG_NOTICE, "accountid " .. positions[i]["accountid"]) \
         redis.log(redis.LOG_NOTICE, "quantity " .. positions[i]["quantity"]) \
         --[[ get shares due & any remainder ]] \
         local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
+        redis.log(redis.LOG_NOTICE, "sharesdue") \
         if sharesdue[1] > 0 then \
-          --[[ update the position ]] \
-          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
+          if mode == 2 then \
+            --[[ update the position ]] \
+            newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
+          elseif mode == 3 then \
+            --[[ reverse the effect on the position ]] \
+            newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
+          end \
+          totsharesdue = totsharesdue + sharesdue[1] \
         end \
+        redis.log(redis.LOG_NOTICE, "sharesdue") \
         if sharesdue[2] > 0 then \
           --[[ calculate how much cash is due ]] \
-          local stubcash = round(sharesdue[2] * eodprice["bid"], 2) / 100 \
+          local stubcash = round(sharesdue[2] * eodprice["bid"], 2) \
           local stubcashlocal = stubcash * rate \
-          --[[ todo: this may need a rights issue equivalent function ]] \
-          local retval = transactiondividend(positions[i]["accountid"], stubcash, brokerid, symbol["currencyid"], stubcashlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
-          if retval[1] == 1 then \
-            return retval \
+          if mode == 2 then \
+            local retval = transactiondividend(positions[i]["accountid"], stubcash, brokerid, symbol["currencyid"], stubcashlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+            if retval[1] == 1 then \
+              return retval \
+            end \
+          elseif mode == 3 then \
+            local retval = transactiondividend(positions[i]["accountid"], -stubcash, brokerid, symbol["currencyid"], -stubcashlocal, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+            if retval[1] == 1 then \
+              return retval \
+            end \
           end \
+          totresidue = totresidue + stubcash \
         end \
       end \
     end \
-    return {0} \
+    return {0, tostring(totsharesdue), tostring(totresidue)} \
   ';
 
   /*

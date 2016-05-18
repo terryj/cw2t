@@ -2215,7 +2215,7 @@ function applyCorporateAction(brokerid, corporateactionid) {
     } else if (corporateactiontypeid == "SPLF" || corporateactiontypeid == "SPLR") {
       applyCAStockSplit(corporateactionid);
     } else if (corporateactiontypeid == "BONU") {
-      applyCAScripIssue(brokerid, corporateactionid);
+      caScripIssue(brokerid, corporateactionid);
     }
   });
 }
@@ -2297,7 +2297,7 @@ function caRightsPayDate(brokerid, corporateactionid) {
   console.log("caRightsPayDate");
   var operatorid = 1;
   var paydate = new Date("February 16, 2016");
-  var mode = 1;
+  var mode = 2;
 
   // millisecond representation of paydate
   var paydatems = paydate.getTime();
@@ -2317,9 +2317,10 @@ function caRightsPayDate(brokerid, corporateactionid) {
   });
 }
 
-function applyCAStockSplit(corporateactionid) {
-  console.log("applyCAStockSplit");
+function caStockSplit(corporateactionid) {
+  console.log("caStockSplit");
   var exdate = new Date("February 16, 2016");
+  var mode = 1;
 
   // millisecond representation of exdate
   var exdatems = exdate.getTime();
@@ -2332,20 +2333,21 @@ function applyCAStockSplit(corporateactionid) {
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
 
-  db.eval(commonbo.applycastocksplit, 0, corporateactionid, exdatestr, exdatems, timestamp, timestampms, function(err, ret) {
+  db.eval(commonbo.castocksplit, 0, corporateactionid, exdatestr, exdatems, timestamp, timestampms, mode, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
     if (ret[0] == 1) {
-      console.log("Error in applycastocksplit: " + commonbo.getReasonDesc(ret[1]));
+      console.log("Error in castocksplit: " + commonbo.getReasonDesc(ret[1]));
       return;      
     }
   });
 }
 
-function applyCAScripIssue(brokerid, corporateactionid) {
-  console.log("applyCAScripIssue");
-  var exdate = new Date("February 12, 2016");
+function caScripIssue(brokerid, corporateactionid) {
+  console.log("caScripIssue");
+  var exdate = new Date("April 25, 2016");
+  var mode = 3;
 
   // millisecond representation of exdate - don't need to subtract a day as this will give us the 00:00:00 time
   var exdatems = exdate.getTime();
@@ -2353,17 +2355,18 @@ function applyCAScripIssue(brokerid, corporateactionid) {
   // we need exdate - 1 for eod price
   exdate.setDate(exdate.getDate() - 1);
   var exdatestr = commonbo.getUTCDateString(exdate);
+console.log(exdatestr);
 
   // timestamp & millisecond representation
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
 
-  db.eval(commonbo.applycascripissue, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatestr, exdatems, timestamp, timestampms, function(err, ret) {
+  db.eval(commonbo.cascripissue, 1, "broker:" + brokerid, brokerid, corporateactionid, exdatestr, exdatems, timestamp, timestampms, mode, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
     if (ret[0] == 1) {
-      console.log("Error in applycascripissue: " + commonbo.getReasonDesc(ret[1]));
+      console.log("Error in cascripissue: " + commonbo.getReasonDesc(ret[1]));
       return;      
     }
   });
