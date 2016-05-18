@@ -2192,7 +2192,7 @@ function applyCorporateAction(brokerid, corporateactionid) {
   console.log("applyCorporateAction");
 
   // this variable determines whether the ex-date or pay-date part of the rights issue process is run, based on a user selection
-  var applyEXdate = 1;
+  var applyEXdate = 2;
 
   db.hget("corporateaction:" + corporateactionid, "corporateactiontypeid", function(err, corporateactiontypeid) {
     if (err) {
@@ -2208,9 +2208,9 @@ function applyCorporateAction(brokerid, corporateactionid) {
       caScripDividend(brokerid, corporateactionid);
     } else if (corporateactiontypeid == "RHTS") {
       if (applyEXdate == 1) {
-        applyCARightsExdate(brokerid, corporateactionid);
+        caRightsExdate(brokerid, corporateactionid);
       } else {
-        applyCARightsPayDate(brokerid, corporateactionid);
+        caRightsPayDate(brokerid, corporateactionid);
       }
     } else if (corporateactiontypeid == "SPLF" || corporateactiontypeid == "SPLR") {
       applyCAStockSplit(corporateactionid);
@@ -2262,8 +2262,8 @@ function caScripDividend(brokerid, corporateactionid) {
   });
 }
 
-function applyCARightsExdate(brokerid, corporateactionid) {
-  console.log("applyCARightsExdate");
+function caRightsExdate(brokerid, corporateactionid) {
+  console.log("caRightsExdate");
   var exdate = new Date("February 12, 2016");
 
   // millisecond representation of exdate - don't need to subtract a day as this will give us the 00:00:00 time
@@ -2293,10 +2293,11 @@ function applyCARightsExdate(brokerid, corporateactionid) {
   });
 }
 
-function applyCARightsPayDate(brokerid, corporateactionid) {
-  console.log("applyCARightsPayDate");
+function caRightsPayDate(brokerid, corporateactionid) {
+  console.log("caRightsPayDate");
   var operatorid = 1;
   var paydate = new Date("February 16, 2016");
+  var mode = 1;
 
   // millisecond representation of paydate
   var paydatems = paydate.getTime();
@@ -2305,12 +2306,12 @@ function applyCARightsPayDate(brokerid, corporateactionid) {
   var timestamp = new Date();
   var timestampms = timestamp.getTime();
 
-  db.eval(commonbo.applycarightspaydate, 1, "broker:" + brokerid, brokerid, corporateactionid, paydatems, timestamp, timestampms, operatortype, operatorid, function(err, ret) {
+  db.eval(commonbo.carightspaydate, 1, "broker:" + brokerid, brokerid, corporateactionid, paydatems, timestamp, timestampms, operatortype, operatorid, mode, function(err, ret) {
     if (err) throw err;
     console.log(ret);
 
     if (ret[0] == 1) {
-      console.log("Error in applycarightspaydate: " + commonbo.getReasonDesc(ret[1]));
+      console.log("Error in carightspaydate: " + commonbo.getReasonDesc(ret[1]));
       return;      
     }
   });

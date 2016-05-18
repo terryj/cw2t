@@ -1916,7 +1916,7 @@ exports.registerScripts = function () {
   * cacashdividend()
   * script to test/apply/reverse a cash dividend
   * params: brokerid, corporateactionid, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: 0, total dividend, total unsettled dividend, number of accounts updated if successful, else 1 + an error message if unsuccessful
+  * returns: 0, total position quantity, total unsettled quantity, total dividend, total unsettled dividend, number of accounts updated if successful, else 1 + an error message if unsuccessful
   */
   exports.cacashdividend = getpositionquantitiesbysymbolbydate + round + transactiondividend + '\
     redis.log(redis.LOG_NOTICE, "cacashdividend") \
@@ -1988,7 +1988,7 @@ exports.registerScripts = function () {
   * cadividendscrip()
   * script to test/apply/reverse a scrip dividend
   * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  * returns: 0, total position quantity, total shares due, total residue cash, total dividend as cash if ok, else 1 + an error message if unsuccessful
   */
   exports.cadividendscrip = getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + getsharesdue + newpositiontransaction + transactiondividend + round + geteodprice + '\
     redis.log(redis.LOG_NOTICE, "cadividendscrip") \
@@ -2090,10 +2090,10 @@ exports.registerScripts = function () {
 
   /*
   * carightsexdate()
-  * script to apply the first part of a rights issue, as at ex-date
+  * script to apply the first part of a rights issue, as at the ex-date
   * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
   * note: exdate is actual exdate - 1 & exdatems is millisecond representation of time at the end of exdate - 1
-  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  * returns: 0, total position quantity, total rights quantity, total residue if ok, else 1 + an error message if unsuccessful
   */
   exports.carightsexdate = getpositionsbysymbolbydate + getsharesdue + geteodprice + newpositiontransaction + transactiondividend + '\
     redis.log(redis.LOG_NOTICE, "carightsexdate") \
@@ -2173,13 +2173,13 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * applycarightspaydate()
+  * carightspaydate()
   * script to apply the second part of a rights issue, as at pay-date
-  * params: brokerid, corporateactionid, paydatems, timestamp, timestampms, operatortype, operatorid
-  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  * params: brokerid, corporateactionid, paydatems, timestamp, timestampms, operatortype, operatorid, mode (1=test,2=apply,3=reverse) 
+  * returns: 0, total position quantity, total exercised if ok, else 1 + an error message if unsuccessful
   */
-  exports.applycarightspaydate = getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + newtrade + newpositiontransaction + '\
-    redis.log(redis.LOG_NOTICE, "applycarightspaydate") \
+  exports.carightspaydate = getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionsclientdecisionbyclient + newtrade + newpositiontransaction + '\
+    redis.log(redis.LOG_NOTICE, "carightspaydate") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
     local paydatems = ARGV[3] \
@@ -2187,12 +2187,15 @@ exports.registerScripts = function () {
     local timestampms = ARGV[5] \
     local operatortype = ARGV[6] \
     local operatorid = ARGV[7] \
+    local mode = ARGV[8] \
     local currencyratetoorg = 1 \
     local currencyindtoorg = 1 \
     local costs = {0,0,0,0} \
     local settlcurrfxrate = 1 \
     local settlcurrfxratecalc = 1 \
     local side = 1 \
+    local totquantity = 0 \
+    local totexercised = 0 \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction["corporateactionid"] then \
@@ -2203,11 +2206,15 @@ exports.registerScripts = function () {
     if not symbol["symbolid"] then \
       return {1, 1015} \
     end \
+    --[[ make sure a symbol for the rights exists ]] \
+    if not corporateaction["symbolidnew"] then \
+      return {1, 1030} \
+    end \
     --[[ get all positions in the rights symbol as at the pay date ]] \
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolidnew"], paydatems) \
     for i = 1, #positions do \
       --[[ only interested in long positions ]] \
-      if tonumber(positions[i]["quantity"]) > 0 then \
+      if positions[i]["quantity"] > 0 then \
         --[[ get the client decision ]] \
         local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
         if not clientid then \
@@ -2215,14 +2222,26 @@ exports.registerScripts = function () {
         end \
         local corporateactiondecision = getcorporateactionsclientdecisionbyclient(brokerid, clientid, corporateactionid) \
         if corporateactiondecision == "EXERCISE" then \
-          --[[ create a trade in the original symbol at the rights price ]] \
-          newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, positions[i]["quantity"], corporateaction["price"], symbol["currencyid"], currencyratetoorg, currencyindtoorg, costs, "", "", 0, "", "", timestamp, "", "", symbol["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms) \
+          if mode == 2 then \
+            --[[ create a trade in the original symbol at the rights price ]] \
+            newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, positions[i]["quantity"], corporateaction["price"], symbol["currencyid"], currencyratetoorg, currencyindtoorg, costs, "", "", 0, "", "", timestamp, "", "", symbol["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms) \
+          elseif mode == 3 then \
+            --[[ create the reverse trade in the original symbol at the rights price ]] \
+            newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, -positions[i]["quantity"], corporateaction["price"], symbol["currencyid"], currencyratetoorg, currencyindtoorg, costs, "", "", 0, "", "", timestamp, "", "", symbol["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms) \
+          end \
+          totexercised = totexercised + positions[i]["quantity"] \
         end \
-        --[[ zero the position in the rights ]] \
-        newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -tonumber(positions[i]["quantity"]), corporateaction["symbolidnew"], timestamp, timestampms) \
+        if mode == 2 then \
+          --[[ zero the position in the rights ]] \
+          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -positions[i]["quantity"], corporateaction["symbolidnew"], timestamp, timestampms) \
+        elseif mode == 3 then \
+          --[[ recreate the position in the rights ]] \
+          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, positions[i]["quantity"], corporateaction["symbolidnew"], timestamp, timestampms) \
+        end \
+        totquantity = totquantity + positions[i]["quantity"] \
       end \
     end \
-    return {0} \
+    return {0, tostring(totquantity), tostring(totexercised)} \
   ';
 
   /*
