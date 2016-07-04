@@ -2553,7 +2553,7 @@ exports.registerScripts = function () {
   *         timestamp in milliseconds
   *         operatorid
   *         mode - 1=test, 2=apply, 3=reverse
-  * returns: 0, array of scheme trades {fund id, price, quantity, consideration} if ok, else 1, errorcode
+  * returns: 0, total scheme cash, number of clients, array of scheme trades {fund id, price, quantity, consideration} if ok, else 1, errorcode
   */
   exports.newcollectaggregateinvest = split + getclientaccountid + getaccount + newtransaction + newposting + newtrade + '\
     redis.log(redis.LOG_NOTICE, "newcollectaggregateinvest") \
@@ -2575,6 +2575,7 @@ exports.registerScripts = function () {
     local schemeclientid = redis.call("get", "broker:" .. brokerid .. ":account:" .. scheme["accountid"] .. ":client") \
     --[[ keep a table of {clientid, cashamount} pairs ]] \
     local clientcashamounts = {} \
+    --[[ table for return values ]] \
     local ret = {} \
     ret["schemecashamount"] = 0 \
     ret["numclients"] = 0 \
@@ -2596,22 +2597,12 @@ exports.registerScripts = function () {
       else \
         amount = math.floor(tonumber(account["balance"]) * cashamount / 100) \
       end \
-      if amount > 0 and mode == 2 then \
-        --[[ create transaction ]] \
-        local localamount = amount * rate \
-        local note = "Cash deposit to schmeme " .. scheme["name"] \
-        local reference = "scheme:" .. schemeid \
-        local transactionid = newtransaction(amount, brokerid, account["currencyid"], localamount, note, rate, reference, timestamp, "SRC", timestampms) \
-        --[[ deduct cash from client account ]] \
-        newposting(accountid, -amount, brokerid, -localamount, transactionid, timestampms) \
-        updateaccountbalance(accountid, -amount, brokerid, -localamount) \
-        --[[ add cash to scheme account ]] \
-        newposting(scheme["accountid"], amount, brokerid, localamount, transactionid, timestampms) \
-        updateaccountbalance(scheme["accountid"], amount, brokerid, localamount) \
-      end \
       redis.log(redis.LOG_NOTICE, amount) \
-      table.insert(clientcashamounts, schemeclients[i]) \
-      table.insert(clientcashamounts, amount) \
+      --[[ add the client cash to table for later processing ]] \
+      local clientcashamount = {} \
+      clientcashamount["clientid"] = schemeclients[i] \
+      clientcashamount["amount"] = amount \
+      table.insert(clientcashamounts, clientcashamount) \
       ret["schemecashamount"] = ret["schemecashamount"] + amount \
       ret["numclients"] = ret["numclients"] + 1 \
     end \
@@ -2640,11 +2631,11 @@ exports.registerScripts = function () {
       if schemetrade["quantity"] > 0 and mode == 2 then \
         newtrade(scheme["accountid"], brokerid, schemeclientid, "", fundallocations[i], 1, schemetrade["quantity"], schemetrade["price"], schemeaccount["currencyid"], 1, 1, {0,0,0,0}, 0, 3, 0, "", "", timestamp, "", "", schemeaccount["currencyid"], schemetrade["settlcurramt"], 1, 0, 0, 2, operatorid, 0, timestampms) \
         --[[ create pro rata trades for the clients ]] \
-        for i = 1, #clientcashamounts, 2 do \
-          local accountid = getclientaccountid(brokerid, clientcashamounts[i], 1) \
-          local quantity = math.floor(clientcashamounts[i+1] / ret["schemecashamount"] * schemetrade["quantity"]) \
+        for i = 1, #clientcashamounts do \
+          local accountid = getclientaccountid(brokerid, clientcashamounts[i]["clientid"], 1) \
+          local quantity = math.floor(clientcashamounts[i]["amount"] / ret["schemecashamount"] * schemetrade["quantity"]) \
           local settlcurramt = round(schemetrade["price"] * quantity, 2) \
-          newtrade(accountid, brokerid, clientcashamounts[i], "", fundallocations[i], 1, quantity, schemetrade["price"], schemeaccount["currencyid"], 1, 1, {0,0,0,0}, 0, 3, 0, "", "", timestamp, "", "", schemeaccount["currencyid"], settlcurramt, 1, 0, 0, 2, operatorid, 0, timestampms) \
+          newtrade(accountid, brokerid, clientcashamounts[i]["clientid"], "", fundallocations[i], 1, quantity, schemetrade["price"], schemeaccount["currencyid"], 1, 1, {0,0,0,0}, 0, 3, 0, "", "", timestamp, "", "", schemeaccount["currencyid"], settlcurramt, 1, 0, 0, 2, operatorid, 0, timestampms) \
         end \
       end \
       table.insert(ret["schemetrades"], schemetrade) \
