@@ -2553,7 +2553,7 @@ exports.registerScripts = function () {
   *         timestamp in milliseconds
   *         operatorid
   *         mode - 1=test, 2=apply, 3=reverse
-  * returns: else 1, errorcode
+  * returns: 0, array of scheme trades {fund id, price, quantity, consideration} if ok, else 1, errorcode
   */
   exports.newcollectaggregateinvest = split + getclientaccountid + getaccount + newtransaction + newposting + newtrade + '\
     redis.log(redis.LOG_NOTICE, "newcollectaggregateinvest") \
@@ -2633,16 +2633,17 @@ exports.registerScripts = function () {
       end \
       --[[ create a trade for the scheme for this fund ]] \
       local schemetrade = {} \
+      schemetrade["fundid"] = fundallocations[i] \
       schemetrade["price"] = symbol["ask"] \
       schemetrade["quantity"] = math.floor(ret["schemecashamount"] * fundallocations[i+1] / 100 / schemetrade["price"]) \
-      schemetrade["settlcurramt"] = schemetrade["price"] * schemetrade["quantity"] \
+      schemetrade["settlcurramt"] = round(schemetrade["price"] * schemetrade["quantity"], 2) \
       if schemetrade["quantity"] > 0 and mode == 2 then \
         newtrade(scheme["accountid"], brokerid, schemeclientid, "", fundallocations[i], 1, schemetrade["quantity"], schemetrade["price"], schemeaccount["currencyid"], 1, 1, {0,0,0,0}, 0, 3, 0, "", "", timestamp, "", "", schemeaccount["currencyid"], schemetrade["settlcurramt"], 1, 0, 0, 2, operatorid, 0, timestampms) \
         --[[ create pro rata trades for the clients ]] \
         for i = 1, #clientcashamounts, 2 do \
           local accountid = getclientaccountid(brokerid, clientcashamounts[i], 1) \
           local quantity = math.floor(clientcashamounts[i+1] / ret["schemecashamount"] * schemetrade["quantity"]) \
-          local settlcurramt = schemetrade["price"] * quantity \
+          local settlcurramt = round(schemetrade["price"] * quantity, 2) \
           newtrade(accountid, brokerid, clientcashamounts[i], "", fundallocations[i], 1, quantity, schemetrade["price"], schemeaccount["currencyid"], 1, 1, {0,0,0,0}, 0, 3, 0, "", "", timestamp, "", "", schemeaccount["currencyid"], settlcurramt, 1, 0, 0, 2, operatorid, 0, timestampms) \
         end \
       end \
