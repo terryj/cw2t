@@ -218,7 +218,7 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-    applyCorporateAction(1, 1);
+    //applyCorporateAction(1, 1);
     //test();
     //testtrade();
     //testSettle();
@@ -227,6 +227,7 @@ function listen() {
     //testStatement();
     //testOrder(1);
     //testValuation();
+    testcollectagginvest();
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
@@ -2368,6 +2369,31 @@ console.log(exdatestr);
     if (ret[0] == 1) {
       console.log("Error in cascripissue: " + commonbo.getReasonDesc(ret[1]));
       return;      
+    }
+  });
+}
+
+function testcollectagginvest() {
+  var brokerid = 1;
+  var schemeid = 1;
+  var cashamount = 10;
+  var cashisfixed = 0;
+  var fundallocations = "BARC.L,50,AMZN.O,50";
+ 
+  // timestamp & millisecond representation
+  var timestamp = new Date();
+  var timestampms = timestamp.getTime();
+
+  var operatorid = 1; // user id
+  var mode = 2;
+ 
+  db.eval(commonbo.newcollectaggregateinvest, 1, "broker:" + brokerid, brokerid, schemeid, cashamount, cashisfixed, fundallocations, timestamp, timestampms, operatorid, mode, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    if (ret[0] == 1) {
+      console.log("Error in newcollectaggregateinvest: " + commonbo.getReasonDesc(ret[1]));
+      return;
     }
   });
 }
