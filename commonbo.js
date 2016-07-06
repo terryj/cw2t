@@ -2553,7 +2553,7 @@ exports.registerScripts = function () {
   *         timestamp in milliseconds
   *         operatorid
   *         mode - 1=test, 2=apply, 3=reverse
-  * returns: 0, total scheme cash, number of clients, array of scheme trades {fund id, price, quantity, consideration} if ok, else 1, errorcode
+  * returns: 0, scheme cash available, scheme cash invested, number of clients, array of scheme trades {fund id, price, quantity, consideration} if ok, else 1, errorcode
   */
   exports.newcollectaggregateinvest = split + getclientaccountid + getaccount + newtransaction + newposting + newtrade + '\
     redis.log(redis.LOG_NOTICE, "newcollectaggregateinvest") \
@@ -2567,79 +2567,78 @@ exports.registerScripts = function () {
     local timestampms = ARGV[7] \
     local operatorid = ARGV[8] \
     local mode = tonumber(ARGV[9]) \
+    local rate = 1 \
+     --[[ we need a table to return any trades for the scheme ]] \
+    local schemetrades = {} \
+    for i = 1, #fundallocations, 2 do \
+      local schemetrade = {} \
+      schemetrade["symbolid"] = fundallocations[i] \
+      schemetrade["quantity"] = 0 \
+      schemetrade["settlcurramt"] = 0 \
+      table.insert(schemetrades, schemetrade) \
+    end \
+    --[[ table for return values ]] \
+    local ret = {} \
+    ret["schemecashavailable"] = 0 \
+    ret["schemecashinvested"] = 0 \
+    ret["numclients"] = 0 \
+    --[[ get scheme details ]] \
     local scheme = gethashvalues("broker:" .. brokerid .. ":scheme:" .. schemeid) \
     if not scheme["schemeid"] then \
       return {1, 1037} \
     end \
     local schemeaccount = getaccount(scheme["accountid"], brokerid) \
     local schemeclientid = redis.call("get", "broker:" .. brokerid .. ":account:" .. scheme["accountid"] .. ":client") \
-    --[[ keep a table of {clientid, cashamount} pairs ]] \
-    local clientcashamounts = {} \
-    --[[ table for return values ]] \
-    local ret = {} \
-    ret["schemecashamount"] = 0 \
-    ret["numclients"] = 0 \
-    ret.schemetrades = {} \
-    local rate = 1 \
-    --[[ move cash from clients to the scheme ]] \
-    local numclients = 0 \
-    local schemecashamount = 0 \
+    --[[ process clients in the scheme ]] \
     local schemeclients = redis.call("smembers", "broker:" .. brokerid .. ":scheme:" .. schemeid .. ":clients") \
     for i = 1, #schemeclients do \
       redis.log(redis.LOG_NOTICE, "client: " .. schemeclients[i]) \
       --[[ get the default account for this client ]] \
       local accountid = getclientaccountid(brokerid, schemeclients[i], 1) \
       local account = getaccount(accountid, brokerid) \
-      --[[ calculate how much cash to take from the client ]] \
+      --[[ calculate how much cash is available ]] \
       local amount \
       if cashisfixed == 1 then \
         amount = cashamount \
       else \
         amount = math.floor(tonumber(account["balance"]) * cashamount / 100) \
       end \
-      redis.log(redis.LOG_NOTICE, amount) \
-      --[[ add the client cash to table for later processing ]] \
-      local clientcashamount = {} \
-      clientcashamount["clientid"] = schemeclients[i] \
-      clientcashamount["amount"] = amount \
-      table.insert(clientcashamounts, clientcashamount) \
-      ret["schemecashamount"] = ret["schemecashamount"] + amount \
+      redis.log(redis.LOG_NOTICE, "cash available: " .. amount) \
+      --[[ loop through the fundallocations & determine how much to invest in each ]] \
+      local k = 1 \
+      for j = 1, #fundallocations, 2 do \
+        redis.log(redis.LOG_NOTICE, "fund:" .. fundallocations[j]) \
+        redis.log(redis.LOG_NOTICE, "% " .. fundallocations[j+1]) \
+        local symbol = gethashvalues("symbol:" .. fundallocations[j]) \
+        if not symbol["symbolid"] then \
+          redis.log(redis.LOG_NOTICE, "symbol not found:" .. fundallocations[j]) \
+          return {1, 1015} \
+        end \
+        --[[ calculate investment for this client & fund ]] \
+        local quantity = math.floor(amount * fundallocations[j+1] / 100 / symbol["ask"]) \
+        local settlcurramt = round(symbol["ask"] * quantity, 2) \
+        if quantity > 0 then \
+          if mode == 2 then \
+            --[[ create client trades ]] \
+            newtrade(accountid, brokerid, schemeclients[i], "", fundallocations[j], 1, quantity, symbol["ask"], account["currencyid"], 1, 1, {0,0,0,0}, 0, 3, 0, "", "", timestamp, "", "", account["currencyid"], settlcurramt, 1, 0, 0, 2, operatorid, 0, timestampms) \
+          end \
+          schemetrades[k]["quantity"] = schemetrades[k]["quantity"] + quantity \
+          schemetrades[k]["settlcurramt"] = schemetrades[k]["settlcurramt"] + settlcurramt \
+          schemetrades[k]["price"] = symbol["ask"] \
+        end \
+        k = k + 1 \
+      end \
+      ret["schemecashavailable"] = ret["schemecashavailable"] + amount \
       ret["numclients"] = ret["numclients"] + 1 \
     end \
-    --[[ there must be some scheme cash & clients in the scheme ]] \
-    if ret["schemecashamount"] == 0 then \
-      return {1, 1038} \
-    end \
-    if ret["numclients"] == 0 then \
-      return {1, 1039} \
-    end \
-    --[[ loop through the fundallocations in pairs of {fundid, %} ]] \
-    for i = 1, #fundallocations, 2 do \
-      redis.log(redis.LOG_NOTICE, "fund:" .. fundallocations[i]) \
-      redis.log(redis.LOG_NOTICE, "% " .. fundallocations[i+1]) \
-      local symbol = gethashvalues("symbol:" .. fundallocations[i]) \
-      if not symbol["symbolid"] then \
-        redis.log(redis.LOG_NOTICE, "symbol not found:" .. fundallocations[i]) \
-        return {1, 1015} \
+    for i = 1, #schemetrades do \
+      if schemetrades[i]["quantity"] > 0 and mode == 2 then \
+        --[[ create a trade for the scheme for this fund ]] \
+        newtrade(scheme["accountid"], brokerid, schemeclientid, "", schemetrades[i]["symbolid"], 1, schemetrades[i]["quantity"], schemetrades[i]["price"], schemeaccount["currencyid"], 1, 1, {0,0,0,0}, 0, 3, 0, "", "", timestamp, "", "", schemeaccount["currencyid"], schemetrades[i]["settlcurramt"], 1, 0, 0, 2, operatorid, 0, timestampms) \
+        ret["schemecashinvested"] = ret["schemecashinvested"] + schemetrades[i]["settlcurramt"] \
       end \
-      --[[ create a trade for the scheme for this fund ]] \
-      local schemetrade = {} \
-      schemetrade["fundid"] = fundallocations[i] \
-      schemetrade["price"] = symbol["ask"] \
-      schemetrade["quantity"] = math.floor(ret["schemecashamount"] * fundallocations[i+1] / 100 / schemetrade["price"]) \
-      schemetrade["settlcurramt"] = round(schemetrade["price"] * schemetrade["quantity"], 2) \
-      if schemetrade["quantity"] > 0 and mode == 2 then \
-        newtrade(scheme["accountid"], brokerid, schemeclientid, "", fundallocations[i], 1, schemetrade["quantity"], schemetrade["price"], schemeaccount["currencyid"], 1, 1, {0,0,0,0}, 0, 3, 0, "", "", timestamp, "", "", schemeaccount["currencyid"], schemetrade["settlcurramt"], 1, 0, 0, 2, operatorid, 0, timestampms) \
-        --[[ create pro rata trades for the clients ]] \
-        for i = 1, #clientcashamounts do \
-          local accountid = getclientaccountid(brokerid, clientcashamounts[i]["clientid"], 1) \
-          local quantity = math.floor(clientcashamounts[i]["amount"] / ret["schemecashamount"] * schemetrade["quantity"]) \
-          local settlcurramt = round(schemetrade["price"] * quantity, 2) \
-          newtrade(accountid, brokerid, clientcashamounts[i]["clientid"], "", fundallocations[i], 1, quantity, schemetrade["price"], schemeaccount["currencyid"], 1, 1, {0,0,0,0}, 0, 3, 0, "", "", timestamp, "", "", schemeaccount["currencyid"], settlcurramt, 1, 0, 0, 2, operatorid, 0, timestampms) \
-        end \
-      end \
-      table.insert(ret["schemetrades"], schemetrade) \
     end \
+    ret["schemetrades"] = schemetrades \
     return cjson.encode({0, ret}) \
   ';
 }
