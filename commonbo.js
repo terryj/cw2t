@@ -282,6 +282,9 @@ exports.registerScripts = function () {
     case 1039:
       desc = "No clients found in scheme";
       break;
+    case 1040:
+      desc = "Symbol does not have a price";
+      break;
     default:
       desc = "Unknown reason";
     }
@@ -2614,9 +2617,14 @@ exports.registerScripts = function () {
           redis.log(redis.LOG_NOTICE, "symbol not found:" .. fundallocations[j]) \
           return {1, 1015} \
         end \
+        schemetrades[k]["price"] = tonumber(symbol["ask"]) \
+        if schemetrades[k]["price"] == 0 then \
+          redis.log(redis.LOG_NOTICE, "symbol: " .. fundallocations[j] .. " does not have a price") \
+          return {1, 1040} \
+        end \
         --[[ calculate investment for this client & fund ]] \
-        local quantity = math.floor(amount * fundallocations[j+1] / 100 / symbol["ask"]) \
-        local settlcurramt = round(symbol["ask"] * quantity, 2) \
+        local quantity = math.floor(amount * fundallocations[j+1] / 100 / schemetrades[k]["price"]) \
+        local settlcurramt = round(schemetrades[k]["price"] * quantity, 2) \
         if quantity > 0 then \
           if mode == 2 then \
             --[[ create client trades ]] \
@@ -2624,7 +2632,6 @@ exports.registerScripts = function () {
           end \
           schemetrades[k]["quantity"] = schemetrades[k]["quantity"] + quantity \
           schemetrades[k]["settlcurramt"] = schemetrades[k]["settlcurramt"] + settlcurramt \
-          schemetrades[k]["price"] = symbol["ask"] \
         end \
         k = k + 1 \
       end \
