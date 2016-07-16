@@ -364,6 +364,10 @@ function parse(data) {
           instrec.ask = "";
           instrec.midnetchange = "";
           instrec.midpercentchange = "";
+          instrec.currencyid = "";
+          instrec.isin = "";
+          instrec.mnemonic = "";
+          instrec.shortname = "";
         }
 
         // we have finished a message
@@ -518,11 +522,15 @@ function updateDb(functioncode, instrumentcode, instrec) {
 function getDbInstrec(instrumentcode, instrec) {
   var dbinstrec = {};
 
-  // adjust prices to £
+  // may need to adjust prices to £
   if (instrec.currencyid == "GBP") {
     dbinstrec.ask = instrec.ask / 100;
     dbinstrec.bid = instrec.bid / 100;
+  } else {
+    dbinstrec.ask = instrec.ask;
+    dbinstrec.bid = instrec.bid;
   }
+
   dbinstrec.currencyid = instrec.currencyid;
   dbinstrec.isin = instrec.isin;
   dbinstrec.longname = instrec.longname;
