@@ -537,9 +537,15 @@ function getDbInstrec(instrumentcode, instrec) {
   dbinstrec.midnetchange = instrec.midnetchange;
   dbinstrec.midpercentchange = instrec.midpercentchange;
   dbinstrec.mnemonic = instrec.mnemonic;
-  dbinstrec.shortname = instrec.shortname;
   dbinstrec.timestamp = instrec.timestamp;
   dbinstrec.timezoneid = instrec.timezoneid;
+
+  // we need a shortname
+  if (instrec.shortname == "") {
+    dbinstrec.shortname = instrumentcode;
+  } else {
+    dbinstrec.shortname = instrec.shortname;
+  }
 
   // add additional values we need
   dbinstrec.symbolid = instrumentcode;
