@@ -234,6 +234,10 @@ function parse(data) {
   instrec.ask = "";
   instrec.midnetchange = "";
   instrec.midpercentchange = "";
+  instrec.currencyid = "";
+  instrec.isin = "";
+  instrec.mnemonic = "";
+  instrec.shortname = "";
 
   //var datalen = data.length;
   //console.log("data length="+data.length);
@@ -466,8 +470,8 @@ function updateDb(functioncode, instrumentcode, instrec) {
       // we only want to store part of the instrument record
       var dbinstrec = getDbInstrec(instrumentcode, instrec);
 
-      // just equities for now, may need to add other instrument types
-      if (dbinstrec.instrumenttypeid != "DE") {
+      // just equities & fx for now, may need to add other instrument types
+      if (dbinstrec.instrumenttypeid != "DE" && dbinstrec.instrumenttypeid != "FX") {
         return;
       }
 
@@ -593,6 +597,9 @@ function getInstrumentType(nbinsttype) {
       break;
     case 24:
       insttype = "CW";
+      break;
+    case 28:
+      insttype = "FX";
       break;
     default:
       insttype = "77";
