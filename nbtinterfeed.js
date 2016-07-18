@@ -564,8 +564,8 @@ function getDbInstrec(instrumentcode, instrec) {
 function getExchangeId(instrumentcode) {
   var exchange = "";
 
-  if (string.indexOf(',') > -1) {
-    var s = instrumentcode.split(","); 
+  if (instrumentcode.indexOf(',') > -1) {
+    var s = instrumentcode.split(','); 
     exchange = s[1];
   }
 
