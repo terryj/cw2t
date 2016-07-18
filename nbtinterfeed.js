@@ -552,6 +552,8 @@ function getDbInstrec(instrumentcode, instrec) {
   dbinstrec.nbtsymbol = instrumentcode;
   dbinstrec.hedgesymbolid = "";
   dbinstrec.exchangeid = getExchangeId(instrumentcode);
+  dbinstrec.ptmexempt = 0;
+  dbinstrec.stampexempt = 0;
 
   // add our own instrument type, as we use text not numeric
   if ("insttype" in instrec) {
