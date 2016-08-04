@@ -1496,7 +1496,7 @@ exports.registerScripts = function () {
       --[[ commission posting ]] \
       if commission > 0 then \
         newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, timestampms) \
-        updateaccountbalance(commissionaccountid, consideration, brokerid, commissionlocalamount) \
+        updateaccountbalance(commissionaccountid, commission, brokerid, commissionlocalamount) \
       end \
    end \
   end \
