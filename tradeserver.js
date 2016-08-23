@@ -1024,7 +1024,7 @@ function registerScripts() {
   var removefromorderbook;
   var cancelorder;
   var getcosts;
-  var rejectorder;
+  //var rejectorder;
   var adjustmarginreserve;
   //var getinitialmargin;
   //var updatetrademargin;
@@ -1107,21 +1107,6 @@ function registerScripts() {
   end \
   ';
 
-  /*
-  * getinitialmargin()
-  * calcualtes initial margin required for an order, including costs
-  * params: brokerid, symbolid, consid, totalcosts
-  * returns: initialmargin
-  */
-  getinitialmargin = '\
-  local getinitialmargin = function(brokerid, symbolid, consid, totalcost) \
-    local marginpercent = redis.call("hget", "broker:" .. brokerid .. "brokersymbol:" .. symbolid, "marginpercent") \
-    if not marginpercent then marginpercent = 100 end \
-    local initialmargin = tonumber(consid) * tonumber(marginpercent) / 100 \
-    return initialmargin \
-  end \
-  ';
-
   updateordermargin = '\
   local updateordermargin = function(orderid, clientid, ordmargin, currencyid, newordmargin) \
     if newordmargin == ordmargin then return end \
@@ -1187,7 +1172,7 @@ function registerScripts() {
   end \
   ';
 
-  adjustmarginreserve = getinitialmargin + updateordermargin + updatereserve + '\
+  adjustmarginreserve = commonbo.getinitialmargin + updateordermargin + updatereserve + '\
   local adjustmarginreserve = function(orderid, clientid, symbolid, side, price, ordmargin, currencyid, leavesqty, newleavesqty, futsettdate, nosettdays) \
     local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
     leavesqty = tonumber(leavesqty) \
@@ -1208,18 +1193,6 @@ function registerScripts() {
   end \
   ';
 
-  /*
-  * rejectorder()
-  * rejects an order with a reason & any additional text
-  */
-  rejectorder = '\
-  local rejectorder = function(brokerid, orderid, orderrejectreasonid, text) \
-    redis.log(redis.LOG_NOTICE, "rejectorder") \
-    redis.log(redis.LOG_NOTICE, text) \
-    redis.call("hmset", "broker:" .. brokerid .. ":order:" .. orderid, "orderstatusid", "8", "orderrejectreasonid", orderrejectreasonid, "text", text) \
-  end \
-  ';
-
   /*getreserve = '\
   local getreserve = function(clientid, symbolid, currencyid, futsettdate) \
     local reserve = redis.call("hget", clientid .. ":reserve:" .. symbolid .. ":" .. currencyid .. ":" .. futsettdate, "quantity") \
@@ -1228,89 +1201,8 @@ function registerScripts() {
     end \
     return reserve \
   end \
-  ';*/
 
-  /*
-  * creditcheck()
-  * credit checks an order
-  * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, futsettdate, settlcurramt
-  * returns: 0=fail/1=succeed, inialmargin
-  */
-  creditcheck = rejectorder + getinitialmargin + commonbo.getpositionbysymbol + commonbo.getfreemargin + commonbo.getaccount + '\
-  local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, settlcurramt, currencyid, futsettdate, totalcost, instrumenttypeid) \
-    redis.log(redis.LOG_NOTICE, "creditcheck") \
-    side = tonumber(side) \
-    quantity = tonumber(quantity) \
-    --[[ calculate margin required for order ]] \
-    local initialmargin = getinitialmargin(brokerid, symbolid, settlcurramt, totalcost) \
-    --[[ get position, if there is one, as may be a closing buy or sell ]] \
-    local position = getpositionbysymbol(accountid, brokerid, symbolid, futsettdate) \
-    if position then \
-      --[[ we have a position - always allow closing trades ]] \
-      local posqty = tonumber(position["quantity"]) \
-      if (side == 1 and posqty < 0) or (side == 2 and posqty > 0) then \
-        if quantity <= math.abs(posqty) then \
-          --[[ closing trade, so ok ]] \
-          return {1, initialmargin} \
-        end \
-        if side == 2 and (instrumenttypeid == "DE" or instrumenttypeid == "IE") then \
-            --[[ equity, so cannot sell more than we have ]] \
-            rejectorder(brokerid, orderid, 0, "Quantity greater than position quantity") \
-            return {0} \
-        end \
-        --[[ we are trying to close a quantity greater than current position, so need to check we can open a new position ]] \
-        local freemargin = getfreemargin(accountid, brokerid) \
-        --[[ add the margin returned by closing the position ]] \
-        local margin = getmargin(symbolid, math.abs(posqty)) \
-        --[[ get initial margin for remaining quantity after closing position ]] \
-        initialmargin = getinitialmargin(brokerid, symbolid, (quantity - math.abs(posqty)) * price, totalcost) \
-        if initialmargin + totalcost > freemargin + margin then \
-          rejectorder(brokerid, orderid, 0, "Insufficient free margin") \
-          return {0} \
-        end \
-        --[[ closing trade or enough margin to close & open a new position, so ok ]] \
-        return {1, initialmargin} \
-      end \
-    end \
-    if instrumenttypeid == "DE" or instrumenttypeid == "IE" then \
-      if side == 1 then \
-        local account = getaccount(accountid, brokerid) \
-        if tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) + tonumber(account["creditlimit"]) < settlcurramt + totalcost then \
-          rejectorder(brokerid, orderid, 0, "Insufficient funds") \
-          return {0} \
-        end \
-      else \
-        --[[ allow ifa certificated equity sells ]] \
-        if instrumenttypeid == "DE" then \
-          if redis.call("hget", "broker:" .. brokerid .. ":client:" .. clientid, "clienttypeid") == "3" then \
-            return {1, initialmargin} \
-          end \
-        end \
-        --[[ check there is a position ]] \
-        if not position then \
-          rejectorder(brokerid, orderid, 0, "No position held in this instrument") \
-          return {0} \
-        end \
-        --[[ check the position is of sufficient size ]] \
-        local posqty = tonumber(position["quantity"]) \
-        if posqty < 0 or quantity > posqty then \
-          rejectorder(brokerid, orderid, 0, "Insufficient position size in this instrument") \
-          return {0} \
-        end \
-      end \
-    elseif instrumenttypeid == "CFD" or instrumenttypeid == "SPB" or instrumenttypeid == "CCFD" then \
-      --[[ check free margin for all derivative trades ]] \
-      local freemargin = getfreemargin(accountid, brokerid) \
-      if initialmargin + totalcost > freemargin then \
-        rejectorder(brokerid, orderid, 0, "Insufficient free margin") \
-        return {0} \
-      end \
-    end \
-    return {1, initialmargin} \
-  end \
-  ';
-
- cancelorder = adjustmarginreserve + '\
+  cancelorder = adjustmarginreserve + '\
   local cancelorder = function(brokerid, orderid, orderstatusid) \
     local orderkey = "broker:" .. brokerid .. "order:" .. orderid \
     redis.call("hset", orderkey, "orderstatusid", orderstatusid) \
@@ -1428,7 +1320,7 @@ function registerScripts() {
   * returns: 0 if fail, consideration if ok
   * note: order status & reject reason will be updated if there is an error 
   */
-  getsettlcurramt = rejectorder + '\
+  getsettlcurramt = commonbo.rejectorder + '\
   local getsettlcurramt = function(quantity, cashorderqty, price) \
     local settlcurramt \
     if quantity == "" then \
@@ -1457,7 +1349,7 @@ function registerScripts() {
   * returns: 0 if fail, 1 if ok together with symbol details
   * note: order status & reject reason will be updated if there is an error 
   */
-  validorder = rejectorder + gethashvalues + '\
+  validorder = commonbo.rejectorder + gethashvalues + '\
   local validorder = function(brokerid, clientid, orderid, symbolid) \
     --[[ see if symbol exists ]] \
     local symbol = gethashvalues("symbol:" .. symbolid) \
@@ -1479,7 +1371,7 @@ function registerScripts() {
   * store & process order  * params: accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid, cashorderqty, settlmnttypid, timestampms)
   * returns: {fail 0=fail, errorcode, orderid} or {success 1=ok, orderid, isin, mnemonic, exchangeid, instrumenttypeid, hedgesymbolid, hedgeorderid} \
   */
-  newordersingle = neworder + getsettlcurramt + validorder + getcosts + creditcheck + reverseside + commonbo.newtrade + publishorder + '\
+  newordersingle = neworder + getsettlcurramt + validorder + getcosts + commonbo.creditcheck + reverseside + commonbo.newtrade + publishorder + '\
   local newordersingle = function(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid, cashorderqty, settlmnttypid, timestampms) \
     redis.log(redis.LOG_NOTICE, "newordersingle") \
     local orderid = neworder(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforce, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid, cashorderqty, settlmnttypid) \
@@ -1635,7 +1527,7 @@ function registerScripts() {
   * order rejected externally
   * params: brokerid, orderid, orderrejectreasonid, text
   */
-  scriptrejectorder = rejectorder + publishorder + '\
+  scriptrejectorder = commonbo.rejectorder + publishorder + '\
   rejectorder(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
   local operatortype = redis.call("hget", "broker:" .. ARGV[1] .. ":order:" .. ARGV[2], "operatortype") \
   publishorder(ARGV[1], ARGV[2], operatortype) \
@@ -1849,7 +1741,7 @@ function registerScripts() {
   return {errorcode, orderid, operatortype} \
   ';
 
-  scriptorderfillrequest = '\
+  scriptorderfillrequest = commonbo.getinitialmargin + '\
   local errorcode = 0 \
   local orderid = KEYS[2] \
   local fields = {"clientid", "symbolid", "side", "quantity", "price", "margin", "leavesqty", "nosettdays", "operatortype", "hedgeorderid", "futsettdate", "operatorid", "orderstatusid", "externalorderid", "settlcurrencyid", "markettype"} \

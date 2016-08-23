@@ -285,6 +285,9 @@ exports.registerScripts = function () {
     case 1040:
       desc = "Symbol does not have a price";
       break;
+    case 1041:
+      desc = "Insufficient funds";
+      break;
     default:
       desc = "Unknown reason";
     }
@@ -397,6 +400,19 @@ exports.registerScripts = function () {
   ';
 
   exports.getsymbolkey = getsymbolkey;
+
+  /*
+  * rejectorder()
+  * rejects an order with a reason & any additional text
+  */
+  rejectorder = '\
+  local rejectorder = function(brokerid, orderid, orderrejectreasonid, text) \
+    redis.log(redis.LOG_NOTICE, "order rejected: " .. text) \
+    if orderid ~= "" then \
+      redis.call("hmset", "broker:" .. brokerid .. ":order:" .. orderid, "orderstatusid", "8", "orderrejectreasonid", orderrejectreasonid, "text", text) \
+    end \
+  end \
+  ';
 
   /*
   * getmargin()
@@ -546,6 +562,21 @@ exports.registerScripts = function () {
   ';
 
   exports.calcfinance = calcfinance;
+
+  /*
+  * getinitialmargin()
+  * calcualtes initial margin required for an order, including costs
+  * params: brokerid, symbolid, consid, totalcosts
+  * returns: initialmargin
+  */
+  getinitialmargin = '\
+  local getinitialmargin = function(brokerid, symbolid, consid, totalcost) \
+    local marginpercent = redis.call("hget", "broker:" .. brokerid .. "brokersymbol:" .. symbolid, "marginpercent") \
+    if not marginpercent then marginpercent = 100 end \
+    local initialmargin = tonumber(consid) * tonumber(marginpercent) / 100 \
+    return initialmargin \
+  end \
+  ';
 
   /*
   * gethashvalues()
@@ -865,6 +896,86 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":unclearedcashlist", unclearedcashlistid) \
     redis.call("sadd", brokerkey .. ":unclearedcashlistid", "unclearedcashlist:" .. unclearedcashlistid) \
     redis.call("zadd", brokerkey .. ":unclearedcashlist:unclearedcashlistbydate", clearancedate, unclearedcashlistid) \
+  end \
+  ';
+
+  /*
+  * creditcheck()
+  * credit checks an order
+  * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, futsettdate, settlcurramt
+  * returns: 0=fail/1=succeed, inialmargin
+  */
+  creditcheck = rejectorder + getinitialmargin + getpositionbysymbol + getfreemargin + getaccount + '\
+  local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, settlcurramt, currencyid, futsettdate, totalcost, instrumenttypeid) \
+    redis.log(redis.LOG_NOTICE, "creditcheck") \
+    side = tonumber(side) \
+    quantity = tonumber(quantity) \
+    --[[ calculate margin required for order ]] \
+    local initialmargin = getinitialmargin(brokerid, symbolid, settlcurramt, totalcost) \
+    --[[ get position, if there is one, as may be a closing buy or sell ]] \
+    local position = getpositionbysymbol(accountid, brokerid, symbolid, futsettdate) \
+    if position then \
+      --[[ we have a position - always allow closing trades ]] \
+      local posqty = tonumber(position["quantity"]) \
+      if (side == 1 and posqty < 0) or (side == 2 and posqty > 0) then \
+        if quantity <= math.abs(posqty) then \
+          --[[ closing trade, so ok ]] \
+          return {1, initialmargin} \
+        end \
+        if side == 2 and (instrumenttypeid == "DE" or instrumenttypeid == "IE") then \
+            --[[ equity, so cannot sell more than we have ]] \
+            rejectorder(brokerid, orderid, 0, "Quantity greater than position quantity") \
+            return {0, 1019} \
+        end \
+        --[[ we are trying to close a quantity greater than current position, so need to check we can open a new position ]] \
+        local freemargin = getfreemargin(accountid, brokerid) \
+        --[[ add the margin returned by closing the position ]] \
+        local margin = getmargin(symbolid, math.abs(posqty)) \
+        --[[ get initial margin for remaining quantity after closing position ]] \
+        initialmargin = getinitialmargin(brokerid, symbolid, (quantity - math.abs(posqty)) * price, totalcost) \
+        if initialmargin + totalcost > freemargin + margin then \
+          rejectorder(brokerid, orderid, 0, "Insufficient free margin") \
+          return {0, 1020} \
+        end \
+        --[[ closing trade or enough margin to close & open a new position, so ok ]] \
+        return {1, initialmargin} \
+      end \
+    end \
+    if instrumenttypeid == "DE" or instrumenttypeid == "IE" then \
+      if side == 1 then \
+        local account = getaccount(accountid, brokerid) \
+        if tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) + tonumber(account["creditlimit"]) < settlcurramt + totalcost then \
+          rejectorder(brokerid, orderid, 0, "Insufficient funds") \
+          return {0, 1041} \
+        end \
+      else \
+        --[[ allow ifa certificated equity sells ]] \
+        if instrumenttypeid == "DE" then \
+          if redis.call("hget", "broker:" .. brokerid .. ":client:" .. clientid, "clienttypeid") == "3" then \
+            return {1, initialmargin} \
+          end \
+        end \
+        --[[ check there is a position ]] \
+        if not position then \
+          rejectorder(brokerid, orderid, 0, "No position held in this instrument") \
+          return {0, 1003} \
+        end \
+        --[[ check the position is of sufficient size ]] \
+        local posqty = tonumber(position["quantity"]) \
+        if posqty < 0 or quantity > posqty then \
+          rejectorder(brokerid, orderid, 0, "Insufficient position size in this instrument") \
+          return {0, 1004} \
+        end \
+      end \
+    elseif instrumenttypeid == "CFD" or instrumenttypeid == "SPB" or instrumenttypeid == "CCFD" then \
+      --[[ check free margin for all derivative trades ]] \
+      local freemargin = getfreemargin(accountid, brokerid) \
+      if initialmargin + totalcost > freemargin then \
+        rejectorder(brokerid, orderid, 0, "Insufficient free margin") \
+        return {0, 1020} \
+      end \
+    end \
+    return {1, initialmargin} \
   end \
   ';
 
