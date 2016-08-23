@@ -901,9 +901,9 @@ exports.registerScripts = function () {
 
   /*
   * creditcheck()
-  * credit checks an order
-  * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, currencyid, futsettdate, settlcurramt
-  * returns: 0=fail/1=succeed, inialmargin
+  * credit checks an order or trade
+  * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, settlcurramt, currencyid, futsettdate, totalcost, instrumenttypeid 
+  * returns: 0=fail, error code/1=succeed, inialmargin
   */
   creditcheck = rejectorder + getinitialmargin + getpositionbysymbol + getfreemargin + getaccount + '\
   local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, settlcurramt, currencyid, futsettdate, totalcost, instrumenttypeid) \
