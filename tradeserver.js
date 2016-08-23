@@ -1275,7 +1275,7 @@ function registerScripts() {
     if instrumenttypeid == "DE" or instrumenttypeid == "IE" then \
       if side == 1 then \
         local account = getaccount(accountid, brokerid) \
-        if tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) < settlcurramt + totalcost then \
+        if tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) + tonumber(account["creditlimit"]) < settlcurramt + totalcost then \
           rejectorder(brokerid, orderid, 0, "Insufficient funds") \
           return {0} \
         end \
