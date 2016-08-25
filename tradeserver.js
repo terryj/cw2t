@@ -4,6 +4,9 @@
 * Cantwaittotrade Limited
 * Terry Johnston
 * November 2013
+* Modifications
+* 25-Aug-2016 - scriptQuoteRequest - used account currency as quote request currency
+*             - scriptQuoteRequest - changed return code to 0=error, 1=success
 ****************/
 
 // node libraries
@@ -227,7 +230,7 @@ function quoteRequest(quoterequest) {
     if (err) throw err;
 
     // todo:sort out
-    if (ret[0] != 0) {
+    if (ret[0] == 0) {
       // todo: send a quote ack to client
       console.log("Error in scriptQuoteRequest: " + commonbo.getReasonDesc(ret[0]));
       return;
@@ -238,6 +241,10 @@ function quoteRequest(quoterequest) {
     quoterequest.isin = ret[2];
     quoterequest.mnemonic = ret[3];
     quoterequest.exchangeid = ret[4];
+
+    // use the returned account currency for the request currencies
+    quoterequest.currencyid = ret[5];
+    quoterequest.settlcurrencyid = ret[5];
 
     if (testmode == 1) {
       console.log("Test response");
@@ -1810,11 +1817,12 @@ function registerScripts() {
   * scriptQuoteRequest
   * store a quote request
   * params: 1=accountid, 2=brokerid, 3=cashorderqty, 4=clientid, 5=currencyid, 6=futsettdate, 7=operatorid, 8=operatortype, 9=quantity, 10=settlmnttypid, 11=side, 12=symbolid, 13=timestamp, 14=settlcurrencyid
+  * returns: 0, error message if error, else 1, quote request id, isin, symbol mnemonic, exchange id, account currencyid
   */
-  scriptQuoteRequest = commonbo.gethashvalues + commonbo.getclientaccountid + quoteack + '\
+  scriptQuoteRequest = commonbo.gethashvalues + commonbo.getclientaccountid + commonbo.getaccount + quoteack + '\
   redis.log(redis.LOG_NOTICE, "scriptQuoteRequest") \
   local quoterequestid = redis.call("hincrby", KEYS[1], "lastquoterequestid", 1) \
-  if not quoterequestid then return {1005} end \
+  if not quoterequestid then return {0, 1005} end \
   --[[ get trading accountid if not specified ]] \
   local accountid \
   if ARGV[1] == "" then \
@@ -1823,10 +1831,12 @@ function registerScripts() {
     accountid = ARGV[1] \
   end \
   if not accountid then \
-    return {1025} \
+    return {0, 1025} \
   end \
+  --[[ get the account & use the account currency as the request currency ]] \
+  local account = getaccount(accountid, ARGV[2]) \
   --[[ store the quote request ]] \
-  redis.call("hmset", KEYS[1] .. ":quoterequest:" .. quoterequestid, "accountid", accountid, "brokerid", ARGV[2], "cashorderqty", ARGV[3], "clientid", ARGV[4], "currencyid", ARGV[5], "futsettdate", ARGV[6], "operatorid", ARGV[7], "operatortype", ARGV[8], "quantity", ARGV[9], "quoterejectreasonid", "", "quoterequestid", quoterequestid, "quotestatusid", 0, "settlmnttypid", ARGV[10], "side", ARGV[11], "symbolid", ARGV[12], "timestamp", ARGV[13], "text", "", "settlcurrencyid", ARGV[14]) \
+  redis.call("hmset", KEYS[1] .. ":quoterequest:" .. quoterequestid, "accountid", accountid, "brokerid", ARGV[2], "cashorderqty", ARGV[3], "clientid", ARGV[4], "currencyid", account["currencyid"], "futsettdate", ARGV[6], "operatorid", ARGV[7], "operatortype", ARGV[8], "quantity", ARGV[9], "quoterejectreasonid", "", "quoterequestid", quoterequestid, "quotestatusid", 0, "settlmnttypid", ARGV[10], "side", ARGV[11], "symbolid", ARGV[12], "timestamp", ARGV[13], "text", "", "settlcurrencyid", account["currencyid"]) \
   --[[ add to the set of quoterequests ]] \
   redis.call("sadd", KEYS[1] .. ":quoterequests", quoterequestid) \
   redis.call("sadd", KEYS[1] .. ":quoterequestid", "quoterequest:" .. quoterequestid) \
@@ -1835,15 +1845,15 @@ function registerScripts() {
   --[[ check there is some kind of quantity ]] \
   if ARGV[3] == "" and ARGV[9] == "" then \
     quoteack(ARGV[2], quoterequestid, 5, 99, "Either quantity or cashorderqty must be present") \
-    return {1034} \
+    return {0, 1034} \
   end \
   --[[ get required instrument values for external feed ]] \
   local symbol = gethashvalues("symbol:" .. ARGV[12]) \
   if not symbol["symbolid"] then \
     quoteack(ARGV[2], quoterequestid, 5, 99, "Symbol not found") \
-    return {1016} \
+    return {0, 1016} \
   end \
-  return {0, quoterequestid, symbol["isin"], symbol["mnemonic"], symbol["exchangeid"]} \
+  return {1, quoterequestid, symbol["isin"], symbol["mnemonic"], symbol["exchangeid"], account["currencyid"]} \
   ';
 
   scriptQuote = publishquote + getcosts + '\
