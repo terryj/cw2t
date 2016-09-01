@@ -218,7 +218,7 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-    //applyCorporateAction(1, 1);
+    applyCorporateAction(1, 1);
     //test();
     //testtrade();
     //testSettle();
@@ -227,7 +227,7 @@ function listen() {
     //testStatement();
     //testOrder(1);
     //testValuation();
-    testcollectagginvest();
+    //testcollectagginvest();
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
@@ -2238,9 +2238,11 @@ function caCashDividend(brokerid, corporateactionid) {
     if (ret[0] == 1) {
       console.log("error");
     } else {
-      console.log("Total dividend: " + ret[1]);
-      console.log("Total unsettled dividend: " + ret[2]);
-      console.log("Number of accounts: " + ret[3]);
+      console.log("Total quantity: " + ret[1]);
+      console.log("Total unsettled quantity: " + ret[2]);
+      console.log("Total dividend: " + ret[3]);
+      console.log("Total unsettled dividend: " + ret[4]);
+      console.log("Number of accounts: " + ret[5]);
     }
   });
 }

@@ -862,7 +862,7 @@ nbt.on("orderExpired", function(exereport) {
   db.eval(scriptorderexpire, 1, exereport.clordid, function(err, ret) {
     if (err) {
       console.log(err);
-      return
+      return;
     }
 
     if (ret[0] != 0) {
@@ -934,7 +934,7 @@ function processTrade(exereport) {
   db.eval(scriptnewtrade, 1, "broker:" + exereport.brokerid, exereport.accountid, exereport.brokerid, exereport.clientid, exereport.clordid, exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.execbroker, counterpartytype, markettype, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.lastmkt, exereport.orderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, exereport.operatortype, exereport.operatorid, exereport.leavesqty, function(err, ret) {
     if (err) {
       console.log(err);
-      return
+      return;
     }
 
     if (ret[0] != 0) {
@@ -961,7 +961,7 @@ nbt.on("orderCancelReject", function(ordercancelreject) {
   db.eval(scriptordercancelreject, 3, ordercancelreject.clordid, ordercancelreject.cxlrejreason, text, function(err, ret) {
     if (err) {
       console.log(err);
-      return
+      return;
     }
 
     orderCancelReject(ret, ordercancelreject.clordid);
