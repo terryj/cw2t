@@ -14,6 +14,8 @@
 * Real-time partial record i.e. "publish 7 rp:BARC.L"
 * Real-time full record i.e. "publish 7 rf:BARC.L"
 * Snap full record i.e. "publish 7 snap:L.B***"
+* Changes:
+* 3 September 2016 - modified getExchangeId() to split instrument code in a more flexible way to get exchange id
 *****************/
 
 // node libraries
@@ -568,7 +570,7 @@ function getExchangeId(instrumentcode) {
 
   if (instrumentcode.indexOf('.') > -1) {
     var s = instrumentcode.split('.'); 
-    exchange = s[1];
+    exchange = s[s.length-1];
   }
 
   return exchange;

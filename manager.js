@@ -19,6 +19,7 @@ var redis = require('redis');
 var commonfo = require('./commonfo.js');
 var commonbo = require('./commonbo.js');
 var common = require('./common.js');
+var sql = require('./sql.js');
 
 // redis
 var redishost;
@@ -120,6 +121,7 @@ function initialise() {
   commonfo.registerScripts();
   commonbo.registerScripts();
   common.registerScripts();
+  sql.registerScripts();
   registerScripts();
   initDb();
   clearSubscriptions();
@@ -218,7 +220,7 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-    applyCorporateAction(1, 1);
+    //applyCorporateAction(1, 1);
     //test();
     //testtrade();
     //testSettle();
@@ -228,6 +230,7 @@ function listen() {
     //testOrder(1);
     //testValuation();
     //testcollectagginvest();
+    testSql();
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
@@ -2398,6 +2401,21 @@ function testcollectagginvest() {
       return;
     }
   });
+}
+
+function testSql() {
+  var brokerid = 1;
+  var s = "select quantity,price from trades where quantity > 10";
+
+  db.eval(sql.scriptretrievebysql, 1, "broker:" + brokerid, brokerid, s, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    if (ret[0] == 1) {
+      console.log("Error in scriptretrievebysql: " + ret[1]);
+      return;
+    }
+  }); 
 }
 
 function registerScripts() {
