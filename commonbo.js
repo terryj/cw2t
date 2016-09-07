@@ -1596,7 +1596,7 @@ exports.registerScripts = function () {
         updateaccountbalance(sdrtaccountid, stampduty, brokerid, stampdutylocalamount) \
       end \
    else \
-      --[[ we are selling so only commission applies ]] \
+      --[[ we are selling so only commission & PTM apply ]] \
       local totalamount = consideration - commission \
       local localamount = totalamount * rate \
       --[[ the transaction ]] \
@@ -1611,6 +1611,11 @@ exports.registerScripts = function () {
       if commission > 0 then \
         newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, timestampms) \
         updateaccountbalance(commissionaccountid, commission, brokerid, commissionlocalamount) \
+      end \
+       --[[ ptm levy posting ]] \
+      if ptmlevy > 0 then \
+        newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid, timestampms) \
+        updateaccountbalance(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount) \
       end \
    end \
   end \
