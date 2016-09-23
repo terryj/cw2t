@@ -220,7 +220,7 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-    //applyCorporateAction(1, 1);
+    applyCorporateAction(1, 1);
     //test();
     //testtrade();
     //testSettle();
@@ -230,7 +230,7 @@ function listen() {
     //testOrder(1);
     //testValuation();
     //testcollectagginvest();
-    testSql();
+    //testSql();
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
@@ -2220,6 +2220,8 @@ function applyCorporateAction(brokerid, corporateactionid) {
       caStockSplit(corporateactionid);
     } else if (corporateactiontypeid == "BONU") {
       caScripIssue(brokerid, corporateactionid);
+    } else if (corporateactiontypeid == "EXOF") {
+      caTakeover(brokerid, corporateactionid);
     }
   });
 }
@@ -2374,6 +2376,30 @@ console.log(exdatestr);
     if (ret[0] == 1) {
       console.log("Error in cascripissue: " + commonbo.getReasonDesc(ret[1]));
       return;      
+    }
+  });
+}
+
+function caTakeover(brokerid, corporateactionid) {
+  console.log("caTakeover");
+  var exdate = new Date("April 25, 2016");
+  var operatorid = 1;
+  var mode = 2;
+
+  // millisecond representation of exdate - don't need to subtract a day as this will give us the 00:00:00 time
+  var exdatems = exdate.getTime();
+
+  // timestamp & millisecond representation
+  var timestamp = new Date();
+  var timestampms = timestamp.getTime();
+
+  db.eval(commonbo.catakeover, 1, "broker:" + brokerid, brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, operatortype, operatorid, mode, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+
+    if (ret[0] == 1) {
+      console.log("Error in catakeover: " + commonbo.getReasonDesc(ret[1]));
+      return;  
     }
   });
 }

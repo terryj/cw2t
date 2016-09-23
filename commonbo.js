@@ -2611,6 +2611,65 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * catakeover()
+  * script to test/apply/reverse a cash takeover
+  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, operatortype, operatorid, mode (1=test,2=apply,3=reverse)
+  * returns: 0, total position quantity, total shares due, total residue cash, total cash, number of accounts updated if successful, else 1 + an error message if unsuccessful
+  */
+  exports.catakeover = getpositionquantitiesbysymbolbydate + getaccount + getclientfromaccount + dividendasshares + dividendascash + '\
+    redis.log(redis.LOG_NOTICE, "catakeover") \
+    local brokerid = ARGV[1] \
+    local corporateactionid = ARGV[2] \
+    local exdate = ARGV[3] \
+    local exdatems = ARGV[4] \
+    local timestamp = ARGV[5] \
+    local timestampms = ARGV[6] \
+    local operatortype = ARGV[7] \
+    local operatorid = ARGV[8] \
+    local mode = tonumber(ARGV[9]) \
+    local totquantity = 0 \
+    local numaccounts = 0 \
+    local totsharesdue = 0 \
+    local totresiduecash = 0 \
+    local totcash = 0 \
+    --[[ get the corporate action ]] \
+    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
+    if not corporateaction["corporateactionid"] then \
+      return {1, 1027} \
+    end \
+    --[[ we are assuming GBP - todo: get fx rate if necessary ]] \
+    local rate = 1 \
+    --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
+    local positions = getpositionquantitiesbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
+    for i = 1, #positions do \
+      redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"]) \
+      --[[ may have a position with no quantity ]] \
+      if positions[i]["quantity"] ~= 0 then \
+        local account = getaccount(positions[i]["accountid"], brokerid) \
+        local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
+        if mode == 2 then \
+          --[[ flatten the position in the stock being taken over ]] \
+          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -positions[i]["quantity"], corporateaction["symbolid"], timestamp, timestampms) \
+        end \
+        --[[ share element ]] \
+        if tonumber(corporateaction["sharespershare"]) > 0 then \
+          local shares = dividendasshares(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
+          totsharesdue = totsharesdue + shares[1] \
+          totresiduecash = totresiduecash + shares[2] \
+        end \
+        --[[ cash element ]] \
+        if tonumber(corporateaction["cashpershare"]) > 0 then \
+          local cash = dividendascash(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
+          totcash = totcash + cash \
+        end \
+        totquantity = totquantity + positions[i]["quantity"] \
+        numaccounts = numaccounts + 1 \
+      end \
+    end \
+    return {0, tostring(totquantity), tostring(totsharesdue), tostring(totresiduecash), tostring(totcash), numaccounts} \
+  ';
+
+  /*
   * scriptgettradesbysettlementstatus
   * script to get trades sorted by settlement status
   * params: minimum trade settlement status, maximum trade settlement status
