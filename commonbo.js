@@ -1945,6 +1945,17 @@ exports.registerScripts = function () {
     return dividend \
   end \
   ';
+
+  /*
+  * settradestatus()
+  * function to update trade status
+  * params: brokerid, tradeid, status
+  */
+  settradestatus = '\
+  local settradestatus = function(brokerid, tradeid, status) \
+  redis.call("hset", "broker:" .. brokerid .. ":tradeid:" .. tradeid, "status", status) \
+  end \
+  ';
  
   /*** Scripts ***/
 
@@ -2963,13 +2974,16 @@ exports.registerScripts = function () {
   * params: brokerid, tradeid, timestamp, timestamp in milliseconds
   * returns: 0 if successful
   */
-  scriptdeletetrade = gethashvalues + deletetradetransaction + newpositiontransaction + '\
+  scriptdeletetrade = gethashvalues + deletetradetransaction + newpositiontransaction + settradestatus + '\
   redis.log(redis.LOG_NOTICE, "scriptdeletetrade") \
   local brokerid = ARGV[1] \
   local tradeid = ARGV[2] \
   local timestamp = ARGV[3] \
   local timestampms = ARGV[4] \
   local trade = gethashvalues("broker:" .. brokerid .. ":trade:" .. tradeid) \
+  if tonumber(trade["status"]) == 3 then \
+    return {1, "Invalid trade"} \
+  end \
   local rate = 1 \
   local quantity \
   local cost \
@@ -2982,6 +2996,7 @@ exports.registerScripts = function () {
   end \
   deletetradetransaction(trade["settlcurramt"], trade["commission"], trade["ptmlevy"], trade["stampduty"], brokerid, trade["accountid"], trade["currencyid"], rate, timestamp, tradeid, trade["side"], timestampms) \
   newpositiontransaction(trade["accountid"], brokerid, -cost, trade["futsettdate"], tradeid, 5, -quantity, trade["symbolid"], timestamp, timestampms) \
+  settradestatus(brokerid, tradeid, status)
   return {0} \
   ';
 }
