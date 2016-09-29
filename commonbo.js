@@ -1552,8 +1552,8 @@ exports.registerScripts = function () {
   * newtradetransaction()
   * cash side of a client trade
   */
-  newtradetransaction = getbrokeraccountsmapid + newtransaction + newposting + getaccountbalance + updateaccountbalanceuncleared + updateaccountbalance + '\
-  local newtradetransaction = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, note, rate, timestamp, tradeid, side, timestampms, futsettdate) \
+  newtradetransaction = getbrokeraccountsmapid + newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + '\
+  local newtradetransaction = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, rate, timestamp, tradeid, side, timestampms) \
     redis.log(redis.LOG_NOTICE, "newtradetransaction") \
     --[[ get broker accounts ]] \
     local considerationaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Stock B/S") \
@@ -1597,10 +1597,88 @@ exports.registerScripts = function () {
       end \
    else \
       --[[ we are selling so only commission & PTM apply ]] \
-      local totalamount = consideration - commission \
+      local totalamount = consideration - commission - ptmlevy \
       local localamount = totalamount * rate \
       --[[ the transaction ]] \
       transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade payment", rate, "trade:" .. tradeid, timestamp, "TPC", timestampms) \
+      --[[ client account posting - note: update uncleared balance ]] \
+      newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, timestampms) \
+      updateaccountbalanceuncleared(clientaccountid, totalamount, brokerid, localamount) \
+      --[[ consideration posting ]] \
+      newposting(considerationaccountid, -consideration, brokerid, -considerationlocalamount, transactionid, timestampms) \
+      updateaccountbalance(considerationaccountid, -consideration, brokerid, -considerationlocalamount) \
+      --[[ commission posting ]] \
+      if commission > 0 then \
+        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, timestampms) \
+        updateaccountbalance(commissionaccountid, commission, brokerid, commissionlocalamount) \
+      end \
+       --[[ ptm levy posting ]] \
+      if ptmlevy > 0 then \
+        newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid, timestampms) \
+        updateaccountbalance(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount) \
+      end \
+   end \
+  end \
+  ';
+
+  /*
+  * deletetradetransaction()
+  * cash side of deleting a client trade
+  */
+  deletetradetransaction = getbrokeraccountsmapid + newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + '\
+  local deletetradetransaction = function(consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, rate, timestamp, tradeid, side, timestampms) \
+    redis.log(redis.LOG_NOTICE, "deletetradetransaction") \
+    --[[ get broker accounts ]] \
+    local considerationaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Stock B/S") \
+    local commissionaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Commission") \
+    local ptmaccountid = getbrokeraccountsmapid(brokerid, currencyid, "PTM levy") \
+    local sdrtaccountid = getbrokeraccountsmapid(brokerid, currencyid, "SDRT") \
+    --[[ get reverse amounts because we are deleting ]] \
+    consideration = -tonumber(consideration) \
+    commission = -tonumber(commission) \
+    stampduty = -tonumber(stampduty) \
+    ptmlevy = -tonumber(ptmlevy) \
+    --[[ calculate amounts in broker currency ]] \
+    rate = tonumber(rate) \
+    local considerationlocalamount = consideration * rate \
+    local commissionlocalamount = commission * rate \
+    local transactionid \
+    if tonumber(side) == 1 then \
+      --[[ buy includes all costs ]] \
+      local totalamount = consideration + commission + stampduty + ptmlevy \
+      --[[ calculate amounts in local currency ]] \
+      local localamount = totalamount * rate \
+      local ptmlevylocalamount = ptmlevy * rate \
+      local stampdutylocalamount = stampduty * rate \
+      --[[ the transaction ]] \
+      transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt reversal", rate, "trade:" .. tradeid, timestamp, "TPC", timestampms) \
+      --[[ client account posting - note: update cleared balance ]] \
+      newposting(clientaccountid, -totalamount, brokerid, -localamount, transactionid, timestampms) \
+      updateaccountbalance(clientaccountid, -totalamount, brokerid, -localamount) \
+      --[[ consideration posting ]] \
+      newposting(considerationaccountid, consideration, brokerid, considerationlocalamount, transactionid, timestampms) \
+      updateaccountbalance(considerationaccountid, consideration, brokerid, considerationlocalamount) \
+      --[[ commission posting ]] \
+      if commission > 0 then \
+        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, timestampms) \
+        updateaccountbalance(commissionaccountid, commission, brokerid, commissionlocalamount) \
+      end \
+      --[[ ptm levy posting ]] \
+      if ptmlevy > 0 then \
+        newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid, timestampms) \
+        updateaccountbalance(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount) \
+      end \
+      --[[ sdrt posting ]] \
+      if stampduty > 0 then \
+        newposting(sdrtaccountid, stampduty, brokerid, stampdutylocalamount, transactionid, timestampms) \
+        updateaccountbalance(sdrtaccountid, stampduty, brokerid, stampdutylocalamount) \
+      end \
+   else \
+      --[[ we are selling so only commission & PTM apply ]] \
+      local totalamount = consideration - commission - ptmlevy \
+      local localamount = totalamount * rate \
+      --[[ the transaction ]] \
+      transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade payment reversal", rate, "trade:" .. tradeid, timestamp, "TRC", timestampms) \
       --[[ client account posting - note: update uncleared balance ]] \
       newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, timestampms) \
       updateaccountbalanceuncleared(clientaccountid, totalamount, brokerid, localamount) \
@@ -1691,16 +1769,13 @@ exports.registerScripts = function () {
     local fieldscorekeys = {"symbolid", 0, symbolid .. ":" .. tradeid, "timestamp", timestampms, tradeid, "settlcurramt", indexsettlcurramt, tradeid} \
     updatefieldindexes(brokerid, "trade", fieldscorekeys) \
     local cost \
-    local note \
     if tonumber(side) == 1 then \
       cost = settlcurramt \
-      note = "Bought " .. quantity .. " " .. symbolid .. " @ " .. price \
     else \
       quantity = -tonumber(quantity) \
       cost = -tonumber(settlcurramt) \
-      note = "Sold " .. quantity .. " " .. symbolid .. " @ " .. price \
     end \
-    local retval = newtradetransaction(settlcurramt, costs[1], costs[2], costs[3], costs[4], brokerid, accountid, settlcurrencyid, note, 1, timestamp, tradeid, side, timestampms, futsettdate) \
+    local retval = newtradetransaction(settlcurramt, costs[1], costs[2], costs[3], costs[4], brokerid, accountid, settlcurrencyid, 1, timestamp, tradeid, side, timestampms) \
     newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, timestampms) \
     publishtrade(brokerid, tradeid, 6) \
     return tradeid \
@@ -2844,8 +2919,7 @@ exports.registerScripts = function () {
       --[[ loop through the fundallocations & determine how much to invest in each ]] \
       local k = 1 \
       for j = 1, #fundallocations, 2 do \
-        redis.log(redis.LOG_NOTICE, "fund:" .. fundallocations[j]) \
-        redis.log(redis.LOG_NOTICE, "% " .. fundallocations[j+1]) \
+        redis.log(redis.LOG_NOTICE, "fund:" .. fundallocations[j] .. " % " .. fundallocations[j+1]) \
         local symbol = gethashvalues("symbol:" .. fundallocations[j]) \
         if not symbol["symbolid"] then \
           redis.log(redis.LOG_NOTICE, "symbol not found:" .. fundallocations[j]) \
@@ -2881,5 +2955,33 @@ exports.registerScripts = function () {
     end \
     ret["schemetrades"] = schemetrades \
     return cjson.encode({0, ret}) \
+  ';
+
+  /*
+  * scriptdeletetrade()
+  * processing to delete a trade
+  * params: brokerid, tradeid, timestamp, timestamp in milliseconds
+  * returns: 0 if successful
+  */
+  scriptdeletetrade = gethashvalues + deletetradetransaction + newpositiontransaction + '\
+  redis.log(redis.LOG_NOTICE, "scriptdeletetrade") \
+  local brokerid = ARGV[1] \
+  local tradeid = ARGV[2] \
+  local timestamp = ARGV[3] \
+  local timestampms = ARGV[4] \
+  local trade = gethashvalues("broker:" .. brokerid .. ":trade:" .. tradeid) \
+  local rate = 1 \
+  local quantity \
+  local cost \
+  if tonumber(trade["side"]) == 1 then \
+    quantity = trade["quantity"]) \
+    cost = trade["settlcurramt"] \
+  else \
+    quantity = -tonumber(trade["quantity"]) \
+    cost = -tonumber(trade["settlcurramt"]) \
+  end \
+  deletetradetransaction(trade["settlcurramt"], trade["commission"], trade["ptmlevy"], trade["stampduty"], brokerid, trade["accountid"], trade["currencyid"], rate, timestamp, tradeid, trade["side"], timestampms) \
+  newpositiontransaction(trade["accountid"], brokerid, -cost, trade["futsettdate"], tradeid, 5, -quantity, trade["symbolid"], timestamp, timestampms) \
+  return {0} \
   ';
 }
