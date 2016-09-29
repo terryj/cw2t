@@ -1953,7 +1953,7 @@ exports.registerScripts = function () {
   */
   settradestatus = '\
   local settradestatus = function(brokerid, tradeid, status) \
-  redis.call("hset", "broker:" .. brokerid .. ":tradeid:" .. tradeid, "status", status) \
+    redis.call("hset", "broker:" .. brokerid .. ":trade:" .. tradeid, "status", status) \
   end \
   ';
  
@@ -2996,7 +2996,7 @@ exports.registerScripts = function () {
   end \
   deletetradetransaction(trade["settlcurramt"], trade["commission"], trade["ptmlevy"], trade["stampduty"], brokerid, trade["accountid"], trade["currencyid"], rate, timestamp, tradeid, trade["side"], timestampms) \
   newpositiontransaction(trade["accountid"], brokerid, -cost, trade["futsettdate"], tradeid, 5, -quantity, trade["symbolid"], timestamp, timestampms) \
-  settradestatus(brokerid, tradeid, status)
+  settradestatus(brokerid, tradeid, status) \
   return {0} \
   ';
 }
