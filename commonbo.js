@@ -3018,7 +3018,7 @@ exports.registerScripts = function () {
   * scriptdeletetrade()
   * processing to delete a trade
   * params: brokerid, tradeid, timestamp, timestamp in milliseconds
-  * returns: 0 if successful else 1, error message 
+  * returns: 0, CREST message type to send or empty string if successful else 1, error message 
   */
   scriptdeletetrade = deletetrade + '\
   redis.log(redis.LOG_NOTICE, "scriptdeletetrade") \
@@ -3046,7 +3046,7 @@ exports.registerScripts = function () {
   * scriptedittrade()
   * processing to edit a trade
   * params: 1=accountid, 2=brokerid, 3=clientid, 4=orderid, 5=symbolid, 6=side, 7=quantity, 8=price, 9=currencyid, 10=currencyratetoorg, 11=currencyindtoorg, 12=commission, 13=ptmlevy, 14=stampduty, 15=contractcharge, 16=counterpartyid, 17=counterpartytype, 18=markettype, 19=externaltradeid, 20=futsettdate, 21=timestamp, 22=lastmkt, 23=externalorderid, 24=settlcurrencyid, 25=settlcurramt, 26=settlcurrfxrate, 27=settlcurrfxratecalc, 28=margin, 29=operatortype, 30=operatorid, 31=finance, 32=timestampms, 33=tradeid)
-  * returns: 0, CREST message type to send if successful, else 1, error message
+  * returns: 0, CREST message type to send or empty string if successful, else 1, error message
   */
   scriptedittrade = deletetrade + newtrade + updatetrade + '\
   redis.log(redis.LOG_NOTICE, "scriptedittrade") \
