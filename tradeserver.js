@@ -1425,10 +1425,9 @@ function registerScripts() {
         local principleclientid = redis.call("get", brokerkey .. ":account:" .. principleaccountid .. ":client") \
         local rside = reverseside(side) \
         local finance = 0 \
-        local principlecosts = {0,0,0,0} \
         local counterpartytype = 2 \
-        local tradeid = newtrade(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs, principleaccountid, counterpartytype, markettype, "", futsettdate, timestamp, "", "", settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, cc[2], operatortype, operatorid, finance, timestampms) \
-        local principletradeid = newtrade(principleaccountid, brokerid, principleclientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, principlecosts, accountid, counterpartytype, markettype, "", futsettdate, timestamp, "", "", settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, cc[2], operatortype, operatorid, finance, timestampms) \
+        local tradeid = newtrade(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs[1], costs[2], costs[3], costs[4], principleaccountid, counterpartytype, markettype, "", futsettdate, timestamp, "", "", settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, cc[2], operatortype, operatorid, finance, timestampms) \
+        local principletradeid = newtrade(principleaccountid, brokerid, principleclientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, accountid, counterpartytype, markettype, "", futsettdate, timestamp, "", "", settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, cc[2], operatortype, operatorid, finance, timestampms) \
         --[[ adjust order as filled ]] \
         redis.call("hmset", brokerkey .. ":order:" .. orderid, "leavesqty", 0, "orderstatusid", 2) \
         --[[ todo: may need to adjust margin here ]] \
@@ -1607,8 +1606,8 @@ function registerScripts() {
       local margin = consid \
       local operatortype = 1 \
       local operatorid = 1 \
-      local tradeid = newtrade(clientid, KEYS[1], vals[2], vals[3], tradequantity, tradeprice, vals[6], 1, 1, costs, matchclientid, "1", "", vals[9], vals[10], "", "", vals[6], consid, "", "", vals[11], margin, operatortype, operatorid, finance) \
-      local matchtradeid = newtrade(matchclientid, matchorders[i], matchvals[2], matchside, tradequantity, tradeprice, matchvals[6], 1, 1, matchcosts, clientid, "1", "", matchvals[9], vals[10], "", "", vals[6], consid, "", "", matchvals[11], margin, operatortype, operatorid, finance) \
+      local tradeid = newtrade(clientid, KEYS[1], vals[2], vals[3], tradequantity, tradeprice, vals[6], 1, 1, costs[1], costs[2], costs[3], costs[4], matchclientid, "1", "", vals[9], vals[10], "", "", vals[6], consid, "", "", vals[11], margin, operatortype, operatorid, finance) \
+      local matchtradeid = newtrade(matchclientid, matchorders[i], matchvals[2], matchside, tradequantity, tradeprice, matchvals[6], 1, 1, matchcosts[1], matchcosts[2], matchcosts[3], matchcosts[4], clientid, "1", "", matchvals[9], vals[10], "", "", vals[6], consid, "", "", matchvals[11], margin, operatortype, operatorid, finance) \
       --[[ update return values ]] \
       mo[j] = matchorders[i] \
       t[j] = tradeid \
@@ -1676,7 +1675,7 @@ function registerScripts() {
   local finance = 0 \
   local margin = 0 \
   --[[ create trade ]] \
-  local tradeid = newtrade(accountid, ARGV[2], clientid, orderid, symbolid, ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], costs, ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, ARGV[24]) \
+  local tradeid = newtrade(accountid, ARGV[2], clientid, orderid, symbolid, ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], costs[1], costs[2], costs[3], costs[4], ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, ARGV[24]) \
   --[[ adjust order remaining quantity & status ]] \
   if orderid ~= "" then \
     local orderstatusid \
@@ -1794,7 +1793,7 @@ function registerScripts() {
     local finance = calcfinance(instrumenttypeid, consid, settlcurrencyid, side, vals[8]) \
     local hedgebookid = redis.call("get", "hedgebook:" .. instrumenttypeid .. ":" .. settlcurrencyid) \
     if not hedgebookid then hedgebookid = 999999 end \
-    tradeid = newtrade(vals[1], orderid, symbolid, side, quantity, price, settlcurrencyid, 1, 1, costs, hedgebookid, vals[16], "", KEYS[7], KEYS[3], "", "", settlcurrencyid, consid, 1, 1, vals[8], initialmargin, vals[9], vals[12], finance) \
+    tradeid = newtrade(vals[1], orderid, symbolid, side, quantity, price, settlcurrencyid, 1, 1, costs[1], costs[2], costs[3], costs[4], hedgebookid, vals[16], "", KEYS[7], KEYS[3], "", "", settlcurrencyid, consid, 1, 1, vals[8], initialmargin, vals[9], vals[12], finance) \
   end \
   return {errorcode, tradeid} \
   ';
