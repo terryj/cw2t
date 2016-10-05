@@ -3037,17 +3037,11 @@ exports.registerScripts = function () {
     deletetrade(trade, timestamp, timestampms) \
     return {0, "AXTD"} \
   elseif tonumber(trade.tradesettlestatusid) == 4 then \
-    return {1, "Unable to delete. Trade already settled"} \
+    return {1, "Trade already settled. Unable to delete."} \
   end \
   return {0, ""} \
   ';
 
-  /*
-  * scriptedittrade()
-  * processing to edit a trade
-  * params: 1=accountid, 2=brokerid, 3=clientid, 4=orderid, 5=symbolid, 6=side, 7=quantity, 8=price, 9=currencyid, 10=currencyratetoorg, 11=currencyindtoorg, 12=commission, 13=ptmlevy, 14=stampduty, 15=contractcharge, 16=counterpartyid, 17=counterpartytype, 18=markettype, 19=externaltradeid, 20=futsettdate, 21=timestamp, 22=lastmkt, 23=externalorderid, 24=settlcurrencyid, 25=settlcurramt, 26=settlcurrfxrate, 27=settlcurrfxratecalc, 28=margin, 29=operatortype, 30=operatorid, 31=finance, 32=timestampms, 33=tradeid)
-  * returns: 0, CREST message type to send or empty string if successful, else 1, error message
-  */
   scriptedittrade = deletetrade + newtrade + updatetrade + '\
   redis.log(redis.LOG_NOTICE, "scriptedittrade") \
   --[[ these are the updated values ]] \
@@ -3089,33 +3083,34 @@ exports.registerScripts = function () {
   if trade.status == 3 then \
     return {1, "Cannot edit a deleted trade"} \
   end \
-  --[[ what we do depends on CREST status ]] \
-  if tonumber(trade.tradesettlestatusid) == 0 then \
-    if tonumber(accountid) ~= tonumber(trade.accountid) or tonumber(clientid) ~= tonumber(trade.clientid) or tonumber(commission) ~= tonumber(trade.commission) or currencyid ~= trade.currencyid or tonumber(quantity) ~= tonumber(trade.quantity) or tonumber(price) ~= tonumber(trade.price) or tonumber(ptmlevy) ~= tonumber(trade.ptmlevy) or tonumber(currencyratetoorg) ~= tonumber(trade.currencyratetoorg) or tonumber(currencyindtoorg) ~= tonumber(trade.currencyindtoorg) or tonumber(settlcurramt) ~= tonumber(trade.settlcurramt) or settlcurrencyid ~= trade.settlcurrencyid or tonumber(settlcurrfxrate) ~= tonumber(trade.settlcurrfxrate) or tonumber(side) ~= tonumber(trade.side) or tonumber(stampduty) ~= tonumber(trade.stampduty) then \
-      --[[ we need to reverse the postings of the original trade, so delete & enter a new one ]] \
+  --[[ see if one or more of the values relevant to CREST have changed ]] \
+  if tonumber(accountid) ~= tonumber(trade.accountid) or tonumber(clientid) ~= tonumber(trade.clientid) or tonumber(commission) ~= tonumber(trade.commission) or currencyid ~= trade.currencyid or tonumber(quantity) ~= tonumber(trade.quantity) or tonumber(price) ~= tonumber(trade.price) or tonumber(ptmlevy) ~= tonumber(trade.ptmlevy) or tonumber(currencyratetoorg) ~= tonumber(trade.currencyratetoorg) or tonumber(currencyindtoorg) ~= tonumber(trade.currencyindtoorg) or tonumber(settlcurramt) ~= tonumber(trade.settlcurramt) or settlcurrencyid ~= trade.settlcurrencyid or tonumber(settlcurrfxrate) ~= tonumber(trade.settlcurrfxrate) or tonumber(side) ~= tonumber(trade.side) or tonumber(stampduty) ~= tonumber(trade.stampduty) then \
+    --[[ they have, so what we do depends on CREST status ]] \
+    if tonumber(trade.tradesettlestatusid) == 0 then \
+      --[[ we can edit but need to reverse the postings of the original trade, so delete & enter a new one ]] \
       deletetrade(trade, timestamp, timestampms) \
       --[[ create a new trade with a combination of the existing & updated values ]] \
       newtrade(accountid, brokerid, clientid, trade.orderid, trade.symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, 0, trade.counterpartyid, trade.counterpartytype, trade.markettype, trade.externaltradeid, trade.futsettdate, timestamp, trade.lastmkt, trade.externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, trade.margin, operatortype, operatorid, trade.finance, timestampms) \
-    else \
-      --[[ just update existing trade values ]] \
-      updatetrade(trade.accountid, trade.brokerid, trade.clientid, orderid, symbolid, trade.side, trade.quantity, trade.price, trade.currencyid, trade.currencyratetoorg, trade.currencyindtoorg, trade.commission, trade.ptmlevy, trade.stampduty, contractcharge, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, trade.settlcurrencyid, trade.settlcurramt, trade.settlcurrfxrate, trade.settlcurrfxratecalc, margin, trade.operatortype, trade.operatorid, finance, timestampms, trade.tradeid, trade.tradesettlestatusid) \
+    elseif tonumber(trade.tradesettlestatusid) == 1 then \
+      --[[ we can only edit if only stamp duty related values have changed ]] \
+      if tonumber(accountid) == tonumber(trade.accountid) and tonumber(clientid) == tonumber(trade.clientid) and tonumber(commission) == tonumber(trade.commission) and currencyid == trade.currencyid and tonumber(quantity) == tonumber(trade.quantity) and tonumber(price) == tonumber(trade.price) and tonumber(ptmlevy) == tonumber(trade.ptmlevy) and tonumber(currencyratetoorg) == tonumber(trade.currencyratetoorg) and tonumber(currencyindtoorg) == tonumber(trade.currencyindtoorg) and tonumber(settlcurrfxrate) == tonumber(trade.settlcurrfxrate) and tonumber(side) == tonumber(trade.side) then \
+        --[[ remove the original trade ]] \
+        deletetrade(trade, timestamp, timestampms) \
+        --[[ create a new trade with a combination of the existing & updated values ]] \
+        newtrade(accountid, brokerid, clientid, trade.orderid, trade.symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, 0, trade.counterpartyid, trade.counterpartytype, trade.markettype, trade.externaltradeid, trade.futsettdate, timestamp, trade.lastmkt, trade.externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, trade.margin, operatortype, operatorid, trade.finance, timestampms) \
+        --[[ need to send a message to CREST ]] \
+        return {0, "ATXA"} \
+      else \
+        return {1, "Changes other than Stamp Duty related cannot be accepted. Delete this trade and enter a new one."} \
+      end \
+    elseif tonumber(trade.tradesettlestatusid) == 2 or tonumber(trade.tradesettlestatusid) == 3 then \
+      return {1, "Matching has already taken place. Changes cannot now be accepted."} \
+    elseif tonumber(trade.tradesettlestatusid) == 4 then \
+      return {1, "Settlement has already taken place. Changes cannot now be accepted."} \
     end \
-  elseif tonumber(trade.tradesettlestatusid) == 1 then \
-    --[[ can only update if only stamp duty related have changed ]] \
-    if tonumber(accountid) == tonumber(trade.accountid) and tonumber(clientid) == tonumber(trade.clientid) and tonumber(commission) == tonumber(trade.commission) and currencyid == trade.currencyid and tonumber(quantity) == tonumber(trade.quantity) and tonumber(price) == tonumber(trade.price) and tonumber(ptmlevy) == tonumber(trade.ptmlevy) and tonumber(currencyratetoorg) == tonumber(trade.currencyratetoorg) and tonumber(currencyindtoorg) == tonumber(trade.currencyindtoorg) and tonumber(settlcurramt) == tonumber(trade.settlcurramt) and settlcurrencyid == trade.settlcurrencyid and tonumber(settlcurrfxrate) == tonumber(trade.settlcurrfxrate) and tonumber(side) == tonumber(trade.side) and tonumber(stampduty) == tonumber(trade.stampduty) then \
-      --[[ remove the original trade ]] \
-      deletetrade(trade, timestamp, timestampms) \
-      --[[ create a new trade with a combination of the existing & updated values ]] \
-      newtrade(accountid, brokerid, clientid, trade.orderid, trade.symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, 0, trade.counterpartyid, trade.counterpartytype, trade.markettype, trade.externaltradeid, trade.futsettdate, timestamp, trade.lastmkt, trade.externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, trade.margin, operatortype, operatorid, trade.finance, timestampms) \
-      --[[ need to send a message to CREST ]] \
-      return {0, "ATXA"} \
-    else \
-      return {1, "Changes other than Stamp Duty related cannot be accepted. Delete this trade and enter a new one."} \
-    end \
-  elseif tonumber(trade.tradesettlestatusid) == 2 or tonumber(trade.tradesettlestatusid) == 3 then \
-    return {1, "Matching has already taken place. Changes cannot now be accepted."} \
-  elseif tonumber(trade.tradesettlestatusid) == 4 then \
-    return {1, "Settlement has already taken place. Changes cannot now be accepted."} \
+  else \
+    --[[ only minor changes, so can just update existing trade values ]] \
+    updatetrade(trade.accountid, trade.brokerid, trade.clientid, orderid, symbolid, trade.side, trade.quantity, trade.price, trade.currencyid, trade.currencyratetoorg, trade.currencyindtoorg, trade.commission, trade.ptmlevy, trade.stampduty, contractcharge, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, trade.settlcurrencyid, trade.settlcurramt, trade.settlcurrfxrate, trade.settlcurrfxratecalc, margin, trade.operatortype, trade.operatorid, finance, timestampms, trade.tradeid, trade.tradesettlestatusid) \
   end \
   return {0, ""} \
   ';
