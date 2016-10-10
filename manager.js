@@ -220,7 +220,7 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-    applyCorporateAction(1, 1);
+    //applyCorporateAction(1, 1);
     //test();
     //testtrade();
     //testSettle();
@@ -228,7 +228,7 @@ function listen() {
     //testPositionPostings();
     //testStatement();
     //testOrder(1);
-    //testValuation();
+    testValuation();
     //testcollectagginvest();
     //testSql();
 
@@ -2181,10 +2181,10 @@ function testValuation() {
   var brokerid = 1;
   var accountid = 1;
 
-  var dtmilli = new Date("February 24, 2016 00:00:00").getTime();
-  console.log(dtmilli);
+  var dtmilli = new Date("September 24, 2016 00:00:00").getTime();
+  var valuedate = "20160924";
 
-  db.eval(commonbo.scriptvaluation, 1, "broker:" + brokerid, accountid, brokerid, dtmilli, function(err, ret) {
+  db.eval(commonbo.scriptvaluation, 1, "broker:" + brokerid, accountid, brokerid, valuedate, dtmilli, 1, function(err, ret) {
     if (err) throw err;
 
     var obj = JSON.parse(ret);

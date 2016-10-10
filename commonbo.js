@@ -301,6 +301,23 @@ exports.registerScripts = function () {
   exports.getReasonDesc = getReasonDesc;
 
   /*
+  * gethashvalues()
+  * function to read all field values from a table for a given key
+  */
+  gethashvalues = '\
+  local gethashvalues = function(key) \
+    local vals = {} \
+    local rawvals = redis.call("hgetall", key) \
+    for index = 1, #rawvals, 2 do \
+      vals[rawvals[index]] = rawvals[index + 1] \
+    end \
+    return vals \
+  end \
+  ';
+
+  exports.gethashvalues = gethashvalues;
+
+  /*
   * isHoliday()
   * checks whether a date is a holiday
   * params: date object, set of holidays
@@ -418,6 +435,19 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * geteodprice()
+  * get end of day prices for a symbol as a date 
+  * params: eoddate, symbolid
+  * returns: all fields in eodprices hash 
+  */
+  geteodprice = gethashvalues + '\
+  local geteodprice = function(eoddate, symbolid) \
+    local eodprice = gethashvalues("symbol:" .. symbolid .. ":eoddate:" .. eoddate) \
+    return eodprice \
+  end \
+  ';
+
+  /*
   * getmargin()
   * calculates margin for a position
   * params: symbol, quantity
@@ -476,7 +506,7 @@ exports.registerScripts = function () {
   /*
   * getunrealisedpandl()
   * calculate the unrealised profit/loss for a position
-  * params: symbolid, position quantity, cost of position, account currency
+  * params: position
   * returns: table as follows:
   * price = price of stock in account currency
   * value = value of positon in account currency
@@ -486,19 +516,20 @@ exports.registerScripts = function () {
   * currencyrate - currency rate used to convert price 
   */
   getunrealisedpandl = getcurrencyrate + round + '\
-  local getunrealisedpandl = function(symbolid, quantity, cost, accountcurrencyid) \
+  local getunrealisedpandl = function(position) \
     local ret = {} \
     ret["price"] = 0 \
     ret["value"] = 0 \
     ret["unrealisedpandl"] = 0 \
-    --[[ get the symbol currency as may be different from account currency ]] \
-    ret["symbolcurrencyid"] = redis.call("hget", "symbol:" .. symbolid, "currencyid") \
+    --[[ get the account currency & symbol currency as the symbol may be priced in a different currency ]] \
+    local accountcurrencyid = redis.call("hget", "broker:" .. position.brokerid .. ":account:" .. position["accountid"], "currencyid") \
+    ret["symbolcurrencyid"] = redis.call("hget", "symbol:" .. position.symbolid, "currencyid") \
     ret["symbolcurrencyprice"] = 0 \
     ret["currencyrate"] = 1 \
-    local qty = tonumber(quantity) \
+    local qty = tonumber(position.quantity) \
     if qty > 0 then \
       --[[ position is long, so we would sell, so use the bid price ]] \
-      local bidprice = redis.call("hget", "symbol:" .. symbolid, "bid") \
+      local bidprice = redis.call("hget", "symbol:" .. position.symbolid, "bid") \
       if bidprice and tonumber(bidprice) ~= 0 then \
         ret["symbolcurrencyprice"] = tonumber(bidprice) \
         if ret["symbolcurrencyid"] ~= accountcurrencyid then \
@@ -509,11 +540,11 @@ exports.registerScripts = function () {
           ret["price"] = ret["symbolcurrencyprice"] \
         end \
         ret["value"] = qty * ret["price"] \
-        ret["unrealisedpandl"] = round(ret["value"] - cost, 2) \
+        ret["unrealisedpandl"] = round(ret["value"] - position.cost, 2) \
       end \
     elseif qty < 0 then \
       --[[ position is short, so we would buy, so use the ask price ]] \
-      local askprice = redis.call("hget", "symbol:" .. symbolid, "ask") \
+      local askprice = redis.call("hget", "symbol:" .. position.symbolid, "ask") \
       if askprice and tonumber(askprice) ~= 0 then \
         ret["symbolcurrencyprice"] = tonumber(askprice) \
         if ret["symbolcurrencyid"] ~= accountcurrencyid then \
@@ -524,7 +555,7 @@ exports.registerScripts = function () {
           ret["price"] = ret["symbolcurrencyprice"] \
         end \
         ret["value"] = qty * ret["price"] \
-        ret["unrealisedpandl"] = round(ret["value"] + cost, 2) \
+        ret["unrealisedpandl"] = round(ret["value"] + position.cost, 2) \
       end \
     end \
     return ret \
@@ -532,6 +563,66 @@ exports.registerScripts = function () {
   ';
 
   exports.getunrealisedpandl = getunrealisedpandl;
+
+  /*
+  * getunrealisedpandlvaluedate()
+  * calculate the unrealised profit/loss for a position as at a date
+  * params: position, value date
+  * returns: table as follows:
+  * price = end of day price of stock in account currency as at value date
+  * value = value of positon in account currency as at value date
+  * unrealisedpandl = unrealised p&l in account currency as at value date
+  * symbolcurrencyid = currency of symbol  
+  * symbolcurrencyprice = price in currency of symbol at end of value date
+  * currencyrate - currency rate at end of value date used to convert price 
+  */
+  getunrealisedpandlvaluedate = getcurrencyrate + geteodprice + round + '\
+  local getunrealisedpandlvaluedate = function(position, valuedate) \
+    redis.log(redis.LOG_NOTICE, "getunrealisedpandlvaluedate") \
+    local ret = {} \
+    ret.price = 0 \
+    ret.value = 0 \
+    ret.unrealisedpandl = 0 \
+    --[[ get the account currency & symbol currency as may be different ]] \
+    local accountcurrencyid = redis.call("hget", "broker:" .. position.brokerid .. ":account:" .. position.accountid, "currencyid") \
+    ret.symbolcurrencyid = redis.call("hget", "symbol:" .. position.symbolid, "currencyid") \
+    ret.symbolcurrencyprice = 0 \
+    ret.currencyrate = 1 \
+    --[[ get the end of day price for the valuedate ]] \
+    local eodprice = geteodprice(valuedate, position.symbolid) \
+    local qty = tonumber(position.quantity) \
+    if qty > 0 then \
+      --[[ position is long, so we would sell, so use the bid price ]] \
+      if eodprice.bid and tonumber(eodprice.bid) ~= 0 then \
+        ret.symbolcurrencyprice = tonumber(eodprice.bid) \
+        if ret.symbolcurrencyid ~= accountcurrencyid then \
+          --[[ get currency rate & adjust price ]] \
+          ret.currencyrate = getcurrencyrate(ret.symbolcurrencyid, accountcurrencyid) \
+          ret.price = ret.symbolcurrencyprice * ret.currencyrate \
+        else \
+          ret.price = ret.symbolcurrencyprice \
+        end \
+        ret.value = qty * ret.price \
+        ret.unrealisedpandl = round(ret.value - position.cost, 2) \
+      end \
+    elseif qty < 0 then \
+      --[[ position is short, so we would buy, so use the ask price ]] \
+      if eodprice.ask and tonumber(eodprice.ask) ~= 0 then \
+        ret.symbolcurrencyprice = tonumber(eodprice.ask) \
+        if ret.symbolcurrencyid ~= accountcurrencyid then \
+          --[[ get currency rate & adjust price ]] \
+          ret.currencyrate = getcurrencyrate(ret.symbolcurrencyid, accountcurrencyid) \
+          ret.price = ret.symbolcurrencyprice * ret.currencyrate \
+        else \
+          ret.price = ret.symbolcurrencyprice \
+        end \
+        ret.value = qty * ret.price \
+        ret.unrealisedpandl = round(ret.value + position.cost, 2) \
+      end \
+    end \
+    return ret \
+  end \
+  ';
 
   /*
   * calcfinance()
@@ -580,23 +671,6 @@ exports.registerScripts = function () {
     return initialmargin \
   end \
   ';
-
-  /*
-  * gethashvalues()
-  * function to read all field values from a table for a given key
-  */
-  gethashvalues = '\
-  local gethashvalues = function(key) \
-    local vals = {} \
-    local rawvals = redis.call("hgetall", key) \
-    for index = 1, #rawvals, 2 do \
-      vals[rawvals[index]] = rawvals[index + 1] \
-    end \
-    return vals \
-  end \
-  ';
-
-  exports.gethashvalues = gethashvalues;
 
   /*
   * getaccountbalance()
@@ -1095,10 +1169,8 @@ exports.registerScripts = function () {
   local getpositionvalue = function(brokerid, positionid) \
     local position = getposition(brokerid, positionid) \
     if position["positionid"] then \
-      --[[ get the account currency id as symbol may be priced in a different currency ]] \
-      local accountcurrencyid = redis.call("hget", "broker:" .. brokerid .. ":account:" .. position["accountid"], "currencyid") \
       local margin = getmargin(position["symbolid"], position["quantity"]) \
-      local upandl = getunrealisedpandl(position["symbolid"], position["quantity"], position["cost"], accountcurrencyid) \
+      local upandl = getunrealisedpandl(position) \
       position["margin"] = margin \
       position["price"] = upandl["price"] \
       position["value"] = upandl["value"] \
@@ -1206,6 +1278,31 @@ exports.registerScripts = function () {
         position["cost"] = round(newquantity / position["quantity"] * position["cost"], 2) \
       end \
       position["quantity"] = newquantity \
+    end \
+    return position \
+  end \
+ ';
+
+  /*
+  * getpositionvaluebydate()
+  * calculates & values a position at a value date
+  * params: brokerid, positionid, valuedate, valuedate in milliseconds
+  * returns: position quantity, cost & value
+  */
+  getpositionvaluebydate = getpositionbydate + getunrealisedpandlvaluedate + '\
+  local getpositionvaluebydate = function(brokerid, positionid, valuedate, valuedatems) \
+    redis.log(redis.LOG_NOTICE, "getpositionvaluebydate") \
+    --[[ get the position at the value date]] \
+    local position = getpositionbydate(brokerid, positionid, valuedatems) \
+    if tonumber(position["quantity"]) > 0 then \
+      --[[ value the position ]] \
+      local upandl = getunrealisedpandlvaluedate(position, valuedate) \
+      position["price"] = upandl["price"] \
+      position["value"] = upandl["value"] \
+      position["unrealisedpandl"] = upandl["unrealisedpandl"] \
+      position["symbolcurrencyid"] = upandl["symbolcurrencyid"] \
+      position["symbolcurrencyprice"] = upandl["symbolcurrencyprice"] \
+      position["currencyrate"] = upandl["currencyrate"] \
     end \
     return position \
   end \
@@ -1767,19 +1864,6 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * geteodprice()
-  * get end of day prices for a symbol as a date
-  * params: eoddate, symbolid
-  * returns: all fields in eodprices hash
-  */
-  geteodprice = gethashvalues + '\
-  local geteodprice = function(eoddate, symbolid) \
-    local eodprice = gethashvalues("symbol:" .. symbolid .. ":eoddate:" .. eoddate) \
-    return eodprice \
-  end \
-  ';
-
-  /*
   * publishtrade()
   * publish a trade
   */
@@ -2158,19 +2242,28 @@ exports.registerScripts = function () {
  /*
   * scriptvaluation
   * value a portfolio as at a date
-  * params: accountid, brokerid, end of valuation date in milliseconds
+  * params: accountid, brokerid, value date, end of value date in milliseconds, 1=current or 2=historic
   * returns: array of positions with their associated values in JSON
   */
-  exports.scriptvaluation = getpositionbydate + '\
+  exports.scriptvaluation = getpositionvalue + getpositionvaluebydate + '\
     redis.log(redis.LOG_NOTICE, "scriptvaluation") \
+    local accountid = ARGV[1] \
+    local brokerid = ARGV[2] \
+    local valuedate = ARGV[3] \
+    local valuedatems = ARGV[4] \
+    local valuetype = ARGV[5] \
     local tblvaluation = {} \
     --[[ get the ids for the positions held by this account ]] \
-    local positionids = redis.call("smembers", "broker:" .. ARGV[2] .. ":account:" .. ARGV[1] .. ":positions") \
-    --[[ calculate each position as at the passed date ]] \
+    local positionids = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. ":positions") \
+    --[[ calculate each position together with value as at the value date ]] \
     for index = 1, #positionids do \
-      local position = getpositionbydate(ARGV[2], positionids[index], ARGV[3]) \
+      local position \
+      if tonumber(valuetype) == 1 then \
+        position = getpositionvalue(brokerid, positionids[index]) \
+      else \
+        position = getpositionvaluebydate(brokerid, positionids[index], valuedate, valuedatems) \
+      end \
       if position["quantity"] ~= 0 then \
-        --[[ todo: need to value as at the date ]] \
         table.insert(tblvaluation, position) \
       end \
     end \
