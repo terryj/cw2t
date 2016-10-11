@@ -2181,10 +2181,10 @@ function testValuation() {
   var brokerid = 1;
   var accountid = 1;
 
-  var dtmilli = new Date("September 24, 2016 00:00:00").getTime();
   var valuedate = "20160924";
+  var dtmilli = new Date("September 24, 2016 23:59:59").getTime();
 
-  db.eval(commonbo.scriptvaluation, 1, "broker:" + brokerid, accountid, brokerid, valuedate, dtmilli, 1, function(err, ret) {
+  db.eval(commonbo.scriptvaluation, 1, "broker:" + brokerid, accountid, brokerid, valuedate, dtmilli, function(err, ret) {
     if (err) throw err;
 
     var obj = JSON.parse(ret);

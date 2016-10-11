@@ -1289,7 +1289,7 @@ exports.registerScripts = function () {
   * params: brokerid, positionid, valuedate, valuedate in milliseconds
   * returns: position quantity, cost & value
   */
-  getpositionvaluebydate = getpositionbydate + getunrealisedpandlvaluedate + '\
+  getpositionvaluebydate = getpositionbydate + getunrealisedpandlvaluedate + gethashvalues + '\
   local getpositionvaluebydate = function(brokerid, positionid, valuedate, valuedatems) \
     redis.log(redis.LOG_NOTICE, "getpositionvaluebydate") \
     --[[ get the position at the value date]] \
@@ -1297,12 +1297,16 @@ exports.registerScripts = function () {
     if tonumber(position["quantity"]) > 0 then \
       --[[ value the position ]] \
       local upandl = getunrealisedpandlvaluedate(position, valuedate) \
-      position["price"] = upandl["price"] \
-      position["value"] = upandl["value"] \
-      position["unrealisedpandl"] = upandl["unrealisedpandl"] \
-      position["symbolcurrencyid"] = upandl["symbolcurrencyid"] \
-      position["symbolcurrencyprice"] = upandl["symbolcurrencyprice"] \
-      position["currencyrate"] = upandl["currencyrate"] \
+      position.price = upandl.price \
+      position.value = upandl.value \
+      position.unrealisedpandl = upandl.unrealisedpandl \
+      position.symbolcurrencyid = upandl.symbolcurrencyid \
+      position.symbolcurrencyprice = upandl.symbolcurrencyprice \
+      position.currencyrate = upandl.currencyrate \
+      local symbol = gethashvalues("symbol:" .. position.symbolid) \
+      position.isin = symbol.isin \
+      position.symbollongname = symbol.longname \
+      position.symbolcountrycodeid = symbol.countrycodeid \
     end \
     return position \
   end \
@@ -2242,27 +2246,21 @@ exports.registerScripts = function () {
  /*
   * scriptvaluation
   * value a portfolio as at a date
-  * params: accountid, brokerid, value date, end of value date in milliseconds, 1=current or 2=historic
+  * params: accountid, brokerid, value date, end of value date in milliseconds
   * returns: array of positions with their associated values in JSON
   */
-  exports.scriptvaluation = getpositionvalue + getpositionvaluebydate + '\
+  exports.scriptvaluation = getpositionvaluebydate + '\
     redis.log(redis.LOG_NOTICE, "scriptvaluation") \
     local accountid = ARGV[1] \
     local brokerid = ARGV[2] \
     local valuedate = ARGV[3] \
     local valuedatems = ARGV[4] \
-    local valuetype = ARGV[5] \
     local tblvaluation = {} \
     --[[ get the ids for the positions held by this account ]] \
     local positionids = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. ":positions") \
     --[[ calculate each position together with value as at the value date ]] \
     for index = 1, #positionids do \
-      local position \
-      if tonumber(valuetype) == 1 then \
-        position = getpositionvalue(brokerid, positionids[index]) \
-      else \
-        position = getpositionvaluebydate(brokerid, positionids[index], valuedate, valuedatems) \
-      end \
+      local position = getpositionvaluebydate(brokerid, positionids[index], valuedate, valuedatems) \
       if position["quantity"] ~= 0 then \
         table.insert(tblvaluation, position) \
       end \
