@@ -2290,7 +2290,7 @@ exports.registerScripts = function () {
         addunclearedcashlistitem(ARGV[3], ARGV[13], ARGV[4],  transactionid) \
       else \
       end \
-    elseif paymenttypeid == "BAC" then \
+    elseif paymenttypeid == "BAC" or paymenttypeid == "FPS" or paymenttypeid == "CHP" then \
       if action == 1 then \
         local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CAR", ARGV[12]) \
         newposting(ARGV[4], ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
