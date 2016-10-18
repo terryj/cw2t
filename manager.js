@@ -227,8 +227,8 @@ function listen() {
     //testSupplierFundsTransfer();
     //testPositionPostings();
     //testStatement();
-    //testOrder(1);
-    testValuation();
+    testOrder(1);
+    //testValuation();
     //testcollectagginvest();
     //testSql();
 
@@ -2123,12 +2123,12 @@ function testOrder(userid) {
   order.accountid = 1;
   order.clientid = 1;
   order.side = 1;
-  order.symbolid = 'BARC.L.CFD';
+  order.symbolid = 'BARC.L';
   order.quantity = 100;
   order.price = '1.25';
-  order.cashorderqty = '';//500;
+  order.cashorderqty = '';
   order.currencyid = 'GBP';
-  order.ordertype = 1;
+  order.ordertype = 2;
   order.settlcurrencyid = 'GBP';
   order.futsettdate = "";
   order.timeinforce = "4";
@@ -2148,14 +2148,7 @@ function orderReceived(order, userid) {
   order.operatortype = operatortype;
   order.operatorid = userid;
 
-  var testorder = {};
-  testorder.quoteid = order.quoteid;
-  testorder.brokerid = brokerid;
-  testorder.operatortype = operatortype;
-  testorder.operatorid = userid;
-  testorder.ordertype = 'D';
-
-  db.publish(commonbo.tradeserverchannel, "{\"order\":" + JSON.stringify(testorder) + "}");
+  db.publish(commonbo.tradeserverchannel, "{\"order\":" + JSON.stringify(order) + "}");
 }
 
 function testStatement() {

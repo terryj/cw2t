@@ -434,6 +434,8 @@ exports.registerScripts = function () {
   end \
   ';
 
+  exports.rejectorder = rejectorder;
+
   /*
   * geteodprice()
   * get end of day prices for a symbol as a date 
@@ -1659,6 +1661,8 @@ exports.registerScripts = function () {
     return {1, initialmargin} \
   end \
   ';
+
+  exports.creditcheck = creditcheck;
 
   /*
   * settradestatus()
