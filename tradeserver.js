@@ -650,12 +650,12 @@ function orderFillRequest(ofr) {
   });
 }
 
-function displayOrderBook(symbolid, lowerbound, upperbound) {
-  db.zrangebyscore("orderbook:" + symbolid, lowerbound, upperbound, function(err, matchorders) {
+function displayOrderBook(brokerid, symbolid, lowerbound, upperbound) {
+  db.zrangebyscore("broker:" + brokerid + ":orderbook:" + symbolid, lowerbound, upperbound, function(err, matchorders) {
     console.log("order book for instrument " + symbolid + " has " + matchorders.length + " order(s)");
 
     matchorders.forEach(function (matchorderid, i) {
-      db.hgetall("order:" + matchorderid, function(err, matchorder) {
+      db.hgetall("broker:" + brokerid + ":order:" + matchorderid, function(err, matchorder) {
         console.log("orderid="+matchorder.orderid+", clientid="+matchorder.clientid+", price="+matchorder.price+", side="+matchorder.side+", leavesqty="+matchorder.leavesqty);
       });
     });
@@ -1227,31 +1227,32 @@ function registerScripts() {
 
   /*
   * adds an order to the orderbook
+  * params: order
   */
   addtoorderbook = '\
   local addtoorderbook = function(order) \
     local price \
     --[[ buy orders need a negative price ]] \
     if tonumber(order.side) == 1 then \
-      price = -tonumber(order.price) \
+      price = "-" .. order.price \
     else \
       price = order.price \
     end \
     --[[ add order to order book ]] \
-    redis.call("zadd", "orderbook:" .. order.symbolid, price, order.orderid) \
-    redis.call("sadd", "orderbooks", order.symbolid) \
+    redis.call("zadd", "broker:" .. order.brokerid .. ":orderbook:" .. order.symbolid, price, order.orderid) \
+    redis.call("sadd", "broker:" .. order.brokerid .. ":orderbooks", order.symbolid) \
   end \
   ';
 
   /*
   * remove an order from the orderbook
+  * params: order
   */
   removefromorderbook = '\
   local removefromorderbook = function(order) \
-    redis.call("zrem", "orderbook:" .. order.symbolid, order.orderid) \
+    redis.call("zrem", "broker:" .. order.brokerid .. ":orderbook:" .. order.symbolid, order.orderid) \
     if (redis.call("zcount", order.symbolid, "-inf", "+inf") == 0) then \
-      --[[ todo: dont think so ]] \
-      redis.call("srem", "orderbooks", order.symbolid) \
+      redis.call("srem", "broker:" .. order.brokerid .. ":orderbooks", order.symbolid) \
     end \
   end \
   ';
@@ -1400,15 +1401,15 @@ function registerScripts() {
     local matchside \
     if tonumber(order.side) == 1 then \
       lowerbound = 0 \
-      upperbound = tonumber(order.price) \
+      upperbound = order.price \
       matchside = 2 \
     else \
       lowerbound = "-inf" \
-      upperbound = -tonumber(order.price) \
+      upperbound = "-" .. order.price \
       matchside = 1 \
     end \
     --[[ get the matchable orders ]] \
-    local matchorders = redis.call("zrangebyscore", "orderbook:" .. order.symbolid, lowerbound, upperbound) \
+    local matchorders = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. order.symbolid, lowerbound, upperbound) \
     for i = 1, #matchorders do \
       local matchorder = gethashvalues("broker:" .. brokerid .. ":order:" .. matchorders[i]) \
       if tonumber(matchorder.leavesqty) > 0 and matchorder.clientid ~= order.clientid then \
@@ -1432,8 +1433,6 @@ function registerScripts() {
         else \
           matchorderstatusid = 1 \
         end \
-        --[[ update passive order ]] \
-        redis.call("hmset", "broker:" .. brokerid .. ":order:" .. matchorder.orderid, "leavesqty", matchleavesqty, "orderstatusid", matchorderstatusid) \
         --[[ trade gets done at passive order price ]] \
         local consid = tonumber(tradequantity) * tonumber(matchorder.price) \
         local costs = {0,0,0,0} \
@@ -1451,6 +1450,10 @@ function registerScripts() {
         local tradeid = newtrade(order.accountid, order.brokerid, order.clientid, order.orderid, order.symbolid, order.side, tradequantity, matchorder.price, order.currencyid, currencyratetoorg, currencyindtoorg, costs[1], costs[2], costs[3], costs[4], matchorder.clientid, counterpartytype, markettype, "", order.futsettdate, order.timestamp, lastmkt, "", order.settlcurrencyid, consid, settlcurrfxrate, settlcurrfxratecalc, margin, order.operatortype, order.operatorid, finance, timestampms) \
         --[[ passive order trade ]] \
         local matchtradeid = newtrade(matchorder.accountid, matchorder.brokerid, matchorder.clientid, matchorder.orderid, matchorder.symbolid, matchorder.side, tradequantity, matchorder.price, matchorder.currencyid, currencyratetoorg, currencyindtoorg, costs[1], costs[2], costs[3], costs[4], order.clientid, counterpartytype, markettype, "", order.futsettdate, order.timestamp, lastmkt, "", matchorder.settlcurrencyid, consid, settlcurrfxrate, settlcurrfxratecalc, margin, order.operatortype, order.operatorid, finance, timestampms) \
+        --[[ update passive order ]] \
+        redis.call("hmset", "broker:" .. brokerid .. ":order:" .. matchorder.orderid, "leavesqty", matchleavesqty, "orderstatusid", matchorderstatusid) \
+        --[[ update active order remaining qty ]] \
+        redis.call("hmset", "broker:" .. brokerid .. ":order:" .. order.orderid, "leavesqty", order.leavesqty) \
       end \
     end \
     local orderstatusid \
@@ -1469,8 +1472,8 @@ function registerScripts() {
       orderstatusid = 2 \
       desc = "Order filled" \
     end \
-    --[[ update active order ]] \
-    redis.call("hmset", "broker:" .. brokerid .. "order:" .. order.orderid, "leavesqty", order.leavesqty, "orderstatusid", orderstatusid) \
+    --[[ update active order status ]] \
+    redis.call("hmset", "broker:" .. brokerid .. ":order:" .. order.orderid, "orderstatusid", orderstatusid) \
     return {1, desc} \
   end \
   ';
@@ -1546,7 +1549,7 @@ function registerScripts() {
     elseif symbol["instrumenttypeid"] == "DE" or symbol["instrumenttypeid"] == "IE" then \
       --[[ consider equity limit orders ]] \
       if tonumber(ordertype) == 2 then \
-        --[[ order match the order with the orderbook ]] \
+        --[[ match the order with the orderbook ]] \
         local match = matchorder(brokerid, orderid, timestampms) \
         return match \
       end \
@@ -1728,7 +1731,7 @@ function registerScripts() {
     if errorcode ~= 0 then \
       redis.call("hset", "ordercancelrequest:" .. ordercancelreqid, "orderrejectreasonid", errorcode) \
     else \
-      removefromorderbook(order["symbolid"], orderid) \
+      removefromorderbook(order) \
       cancelorder(orderid, "4") \
     end \
   else \

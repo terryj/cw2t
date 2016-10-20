@@ -227,7 +227,8 @@ function listen() {
     //testSupplierFundsTransfer();
     //testPositionPostings();
     //testStatement();
-    testOrder(1);
+    //testOrder(1);
+    getOrderbookBestAll();
     //testValuation();
     //testcollectagginvest();
     //testSql();
@@ -2120,12 +2121,12 @@ function quoteRequestReceived(quoterequest, userid) {
 function testOrder(userid) {
   var order = {};
 
-  order.accountid = 1;
-  order.clientid = 1;
+  order.accountid = 2;
+  order.clientid = 2;
   order.side = 1;
   order.symbolid = 'BARC.L';
   order.quantity = 100;
-  order.price = '1.25';
+  order.price = '1.26';
   order.cashorderqty = '';
   order.currencyid = 'GBP';
   order.ordertype = 2;
@@ -2435,6 +2436,24 @@ function testSql() {
       return;
     }
   }); 
+}
+
+function getOrderBook() {
+  var brokerid = 1;
+
+  db.eval(commonbo.scriptgetorderbook, 1, "broker:" + brokerid, brokerid, "BARC.L", "-inf", "inf", function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+  });
+}
+
+function getOrderbookBestAll() {
+  var brokerid = 1;
+
+  db.eval(commonbo.scriptgetorderbookbestall, 1, "broker:" + brokerid, brokerid,  function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+ });
 }
 
 function registerScripts() {

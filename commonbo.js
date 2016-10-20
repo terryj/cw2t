@@ -1583,6 +1583,70 @@ exports.registerScripts = function () {
   exports.getclientaccountid = getclientaccountid; 
 
   /*
+  * getorderbook()
+  * get the orderbook for a symbol
+  * params: brokerid, symbol, lower price, upper price
+  * returns: all orders in the orderbook for this symbol
+  */
+  getorderbook = gethashvalues + '\
+  local getorderbook = function(brokerid, symbolid) \
+    local orders = {} \
+    local matchorders = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. symbolid, lowerbound, upperbound) \
+    for i = 1, #matchorders do \
+      local matchorder = gethashvalues("broker:" .. brokerid .. ":order:" .. matchorders[i]) \
+      table.insert(orders, matchorder) \
+    end \
+    return orders \
+  end \
+  ';
+
+  /*
+  * getorderbookbest()
+  * get the best buy & sell order on the orderbook for a symbol
+  * params: brokerid, symbol
+  * returns: highest price sell & lowest price buy orders
+  */
+  getorderbookbest = gethashvalues + '\
+  local getorderbookbest = function(brokerid, symbolid) \
+    local orders = {} \
+    --[[ buy orders are stored in the orderbook with a -ve price, so run from -inf to 0 ]] \
+    local bestbuyorderids = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. symbolid, "-inf", 0, "limit", 0, 1) \
+    for i = 1, #bestbuyorderids do \
+      local buyorder = gethashvalues("broker:" .. brokerid .. ":order:" .. bestbuyorderids[i]) \
+      table.insert(orders, buyorder) \
+    end \
+    --[[ sell orders have a +ve price, so run from 0 to inf ]] \
+    local bestsellorderids = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. symbolid, 0, "inf", "limit", 0, 1) \
+    for i = 1, #bestsellorderids do \
+      local sellorder = gethashvalues("broker:" .. brokerid .. ":order:" .. bestsellorderids[i]) \
+      table.insert(orders, sellorder) \
+    end \
+    return orders \
+  end \
+  ';
+
+  /*
+  * getorderbookbestall()
+  * get the best buy & sell orders on the orderbook for all symbols
+  * params: brokerid
+  * returns: list of orders
+  */
+  getorderbookbestall = getorderbookbest + '\
+  local getorderbookbestall = function(brokerid) \
+    local bestorders = {} \
+    --[[ get the symbols that have orderbooks ]] \
+    local orderbooks = redis.call("smembers", "broker:" .. brokerid .. ":orderbooks") \
+    for i = 1, #orderbooks do \
+      local orders = getorderbookbest(brokerid, orderbooks[i]) \
+      for j = 1, #orders do \
+        table.insert(bestorders, orders[j]) \
+      end \
+    end \
+    return bestorders \
+  end \
+  ';
+
+  /*
   * creditcheck()
   * credit checks an order or trade
   * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, settlcurramt, currencyid, futsettdate, totalcost, instrumenttypeid 
@@ -2170,6 +2234,26 @@ exports.registerScripts = function () {
     table.insert(tblresults, trade) \
   end \
   return cjson.encode(tblresults) \
+  ';
+
+  /*
+  * get an orderbook for a symbol
+  * params: brokerid, symbolid, lowerbound, upperbound
+  * returns: array of orders as JSON
+  */
+  exports.scriptgetorderbook = getorderbook + '\
+  local orders = getorderbook(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
+  return cjson.encode(orders) \
+  ';
+
+  /*
+  * get the best buy & sell orders on the orderbook for all symbols
+  * params: brokerid
+  * returns: array of orders as JSON
+  */
+  exports.scriptgetorderbookbestall = getorderbookbestall + '\
+  local orders = getorderbookbestall(ARGV[1]) \
+  return cjson.encode(orders) \
   ';
 
   /*
