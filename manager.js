@@ -228,7 +228,7 @@ function listen() {
     //testPositionPostings();
     //testStatement();
     //testOrder(1);
-    getOrderbookBestAll();
+    getOrderbookTopAll();
     //testValuation();
     //testcollectagginvest();
     //testSql();
@@ -2447,10 +2447,10 @@ function getOrderBook() {
   });
 }
 
-function getOrderbookBestAll() {
+function getOrderbookTopAll() {
   var brokerid = 1;
 
-  db.eval(commonbo.scriptgetorderbookbestall, 1, "broker:" + brokerid, brokerid,  function(err, ret) {
+  db.eval(commonbo.scriptgetorderbooktopall, 1, "broker:" + brokerid, brokerid,  function(err, ret) {
     if (err) throw err;
     console.log(ret);
  });

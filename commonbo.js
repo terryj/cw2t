@@ -5,8 +5,11 @@
 * Terry Johnston
 * June 2015
 * Changes:
-* 1 September 2016 - modified corporate action functions to take account of default client decisions - added dividendasshares(), dividendascash()
-* 1 September 2016 - modified corporate action functions to use account rather than symbol for currency of transactions
+*  1 Sep 2016 - modified corporate action functions to take account of default client decisions - added dividendasshares(), dividendascash()
+*  1 Sep 2016 - modified corporate action functions to use account rather than symbol for currency of transactions
+* 21 Oct 2016 - added getorderbook(), getorderbooktop(), getorderbooktopall()
+*             - added scriptgetorderbook(), scriptgetorderbooktop(), scriptgetorderbooktopall()
+* 23 Oct 2016 - added orderbookchannel
 ****************/
 
 exports.registerScripts = function () {
@@ -22,6 +25,7 @@ exports.registerScripts = function () {
   exports.pricechannel = 9;
   exports.positionchannel = 10;
   exports.quoterequestchannel = 11;
+  exports.orderbookchannel = 12;
 
   /*** Functions ***/
 
@@ -1584,41 +1588,57 @@ exports.registerScripts = function () {
 
   /*
   * getorderbook()
-  * get the orderbook for a symbol
-  * params: brokerid, symbol, lower price, upper price
-  * returns: all orders in the orderbook for this symbol
+  * get the orderbook buy or sell orders for a symbol
+  * params: brokerid, symbol, side
+  * returns: all orders in the orderbook for this symbol & side
   */
   getorderbook = gethashvalues + '\
-  local getorderbook = function(brokerid, symbolid) \
+  local getorderbook = function(brokerid, symbolid, side) \
     local orders = {} \
-    local matchorders = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. symbolid, lowerbound, upperbound) \
-    for i = 1, #matchorders do \
-      local matchorder = gethashvalues("broker:" .. brokerid .. ":order:" .. matchorders[i]) \
-      table.insert(orders, matchorder) \
+    local lowerbound \
+    local upperbound \
+    --[[ buy orders are -ve ]] \
+    if tonumber(side) == 1 then \
+      lowerbound = "-inf" \
+      upperbound = 0 \
+    else \
+      lowerbound = 0 \
+      upperbound = "inf" \
+    end \
+    --[[ get the orders ]] \
+    local orders = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. symbolid, lowerbound, upperbound) \
+    for i = 1, #orders do \
+      local order = gethashvalues("broker:" .. brokerid .. ":order:" .. orders[i]) \
+      table.insert(orders, order) \
     end \
     return orders \
   end \
   ';
 
   /*
-  * getorderbookbest()
-  * get the best buy & sell order on the orderbook for a symbol
+  * getorderbooktop()
+  * get the lowest buy & highest sell price and quantity on the orderbook for a symbol
   * params: brokerid, symbol
   * returns: highest price sell & lowest price buy orders
   */
-  getorderbookbest = gethashvalues + '\
-  local getorderbookbest = function(brokerid, symbolid) \
+  getorderbooktop = gethashvalues + '\
+  local getorderbooktop = function(brokerid, symbolid) \
     local orders = {} \
+    local bestbuyprice \
     --[[ buy orders are stored in the orderbook with a -ve price, so run from -inf to 0 ]] \
-    local bestbuyorderids = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. symbolid, "-inf", 0, "limit", 0, 1) \
-    for i = 1, #bestbuyorderids do \
-      local buyorder = gethashvalues("broker:" .. brokerid .. ":order:" .. bestbuyorderids[i]) \
+    local topbuyorderids = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. symbolid, "-inf", 0) \
+    for i = 1, #buyorderids do \
+      local buyorder = gethashvalues("broker:" .. brokerid .. ":order:" .. buyorderids[i]) \
+      if i == 1 then \
+        bestbuyprice = buyorder.price \
+      else \
+      end \
       table.insert(orders, buyorder) \
     end \
     --[[ sell orders have a +ve price, so run from 0 to inf ]] \
-    local bestsellorderids = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. symbolid, 0, "inf", "limit", 0, 1) \
-    for i = 1, #bestsellorderids do \
-      local sellorder = gethashvalues("broker:" .. brokerid .. ":order:" .. bestsellorderids[i]) \
+    local topsellorderids = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. symbolid, 0, "inf") \
+    for i = 1, #topsellorderids do \
+      local sellorder = gethashvalues("broker:" .. brokerid .. ":order:" .. topsellorderids[i]) \
       table.insert(orders, sellorder) \
     end \
     return orders \
@@ -1626,23 +1646,23 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * getorderbookbestall()
-  * get the best buy & sell orders on the orderbook for all symbols
+  * getorderbooktopall()
+  * get the lowest buy & highest sell orders on the orderbook for all symbols
   * params: brokerid
   * returns: list of orders
   */
-  getorderbookbestall = getorderbookbest + '\
-  local getorderbookbestall = function(brokerid) \
-    local bestorders = {} \
+  getorderbooktopall = getorderbooktop + '\
+  local getorderbooktopall = function(brokerid) \
+    local toporders = {} \
     --[[ get the symbols that have orderbooks ]] \
     local orderbooks = redis.call("smembers", "broker:" .. brokerid .. ":orderbooks") \
     for i = 1, #orderbooks do \
-      local orders = getorderbookbest(brokerid, orderbooks[i]) \
+      local orders = getorderbooktop(brokerid, orderbooks[i]) \
       for j = 1, #orders do \
-        table.insert(bestorders, orders[j]) \
+        table.insert(toporders, orders[j]) \
       end \
     end \
-    return bestorders \
+    return toporders \
   end \
   ';
 
@@ -2237,22 +2257,32 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * get an orderbook for a symbol
-  * params: brokerid, symbolid, lowerbound, upperbound
+  * get an orderbook for a symbol & side
+  * params: brokerid, symbolid, side
   * returns: array of orders as JSON
   */
   exports.scriptgetorderbook = getorderbook + '\
-  local orders = getorderbook(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
+  local orders = getorderbook(ARGV[1], ARGV[2], ARGV[3]) \
   return cjson.encode(orders) \
   ';
 
   /*
-  * get the best buy & sell orders on the orderbook for all symbols
+  * get the lowest buy & highest sell orders on an orderbook for a symbol
+  * params: brokerid, symbolid
+  * returns: array of orders as JSON
+  */
+  exports.scriptgetorderbooktop = getorderbooktop + '\
+  local orders = getorderbooktop(ARGV[1], ARGV[2]) \
+  return cjson.encode(orders) \
+  ';
+
+  /*
+  * get the lowest buy & highest sell orders on the orderbook for all symbols
   * params: brokerid
   * returns: array of orders as JSON
   */
-  exports.scriptgetorderbookbestall = getorderbookbestall + '\
-  local orders = getorderbookbestall(ARGV[1]) \
+  exports.scriptgetorderbooktopall = getorderbooktopall + '\
+  local orders = getorderbooktopall(ARGV[1]) \
   return cjson.encode(orders) \
   ';
 
