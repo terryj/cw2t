@@ -490,7 +490,7 @@ function newOrderSingle(order) {
 
   db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforceid, order.expiredate, order.expiretime, order.settlcurrencyid, order.settlcurrfxrate, order.settlcurrfxratecalc, order.operatortype, order.operatorid, order.cashorderqty, order.settlmnttypid, order.timestampms, function(err, ret) {
     if (err) throw err;
-console.log(ret);
+
     // error check
     if (ret[0] == 0) {
       console.log("Error in scriptneworder, order #" + ret[2] + " - " + commonbo.getReasonDesc(ret[1]));
@@ -502,7 +502,6 @@ console.log(ret);
       console.log(ret[1]);
       return;
     }
-console.log("out");
 
     // update order details with required values for trade feed
     order.orderid = ret[1];
