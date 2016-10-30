@@ -227,8 +227,8 @@ function listen() {
     //testSupplierFundsTransfer();
     //testPositionPostings();
     //testStatement();
-    //testOrder(1);
-    getOrderbookTopAll();
+    testOrder(1);
+    //getOrderbookTopAll();
     //testValuation();
     //testcollectagginvest();
     //testSql();
@@ -2126,7 +2126,7 @@ function testOrder(userid) {
   order.side = 1;
   order.symbolid = 'BARC.L';
   order.quantity = 100;
-  order.price = '1.26';
+  //order.price = '1.26';
   order.cashorderqty = '';
   order.currencyid = 'GBP';
   order.ordertype = 2;
@@ -2137,6 +2137,7 @@ function testOrder(userid) {
   order.expiretime = "";
   order.settlmnttypid = 0;
   order.quoteid = "";
+  order.ordertype = 1;
 
   orderReceived(order, userid);
 }

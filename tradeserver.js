@@ -10,6 +10,9 @@
 * 21 Oct 2016 - added limit orders to newordersingle() & call to matchordersingle()
 *             - updated matchorder(), addtoorderbook() & removefromorderbook()
 * 23 Oct 2016 - added matchordersingle() & publishorderbook()
+* 27 Oct 2016 - added ordertype validation to validorder()
+* 30 Oct 2016 - added brokerid, orderid & ordertype to getsettlcurramt()
+*             - updated newordersingle() & testTradeResponse()
 ****************/
 
 // node libraries
@@ -32,7 +35,7 @@ var redispassword;
 var redislocal = true; // local or external server
 
 // globals
-var testmode = 1; // 0 = off, 1 = on
+var testmode; // comes from database, 0 = off, 1 = on
 var quoteinterval = null;
 //var markettype; // comes from database, 0=normal market, 1=out of hours
 var holidays = {};
@@ -487,7 +490,7 @@ function newOrderSingle(order) {
 
   db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforceid, order.expiredate, order.expiretime, order.settlcurrencyid, order.settlcurrfxrate, order.settlcurrfxratecalc, order.operatortype, order.operatorid, order.cashorderqty, order.settlmnttypid, order.timestampms, function(err, ret) {
     if (err) throw err;
-
+console.log(ret);
     // error check
     if (ret[0] == 0) {
       console.log("Error in scriptneworder, order #" + ret[2] + " - " + commonbo.getReasonDesc(ret[1]));
@@ -499,6 +502,7 @@ function newOrderSingle(order) {
       console.log(ret[1]);
       return;
     }
+console.log("out");
 
     // update order details with required values for trade feed
     order.orderid = ret[1];
@@ -517,7 +521,7 @@ function newOrderSingle(order) {
 * Either forward an order to the market or generate a test response, depending on the type of instrument & market
 */
 function processOrder(order) {
-  console.log("process order");
+  console.log("processOrder");
   console.log(order);
 
   // equity orders
@@ -567,7 +571,6 @@ function testTradeResponse(order) {
   exereport.symbolid = order.symbolid;
   exereport.side = order.side;
   exereport.lastshares = order.quantity;
-  exereport.lastpx = order.price;
   exereport.currencyid = "GBP";
   exereport.execbroker = order.quoterid;
   exereport.execid = 1;
@@ -577,7 +580,15 @@ function testTradeResponse(order) {
   exereport.lastmkt = "";
   exereport.orderid = "";
   exereport.settlcurrencyid = "GBP";
-  exereport.settlcurramt = parseFloat(order.price) * parseInt(order.quantity);
+
+  // may not be a price i.e. market order
+  if (order.price == "") {
+    exereport.lastpx = 1.23;
+  } else {
+    exereport.lastpx = order.price;
+  }
+
+  exereport.settlcurramt = parseFloat(exereport.lastpx) * parseInt(order.quantity);
   exereport.settlcurrfxrate = order.settlcurrfxrate;
   exereport.settlcurrfxratecalc = order.settlcurrfxratecalc;
 
@@ -1373,50 +1384,65 @@ function registerScripts() {
   /*
   * getsettlcurramt()
   * calculate order consideration
-  * params: quantity, cashorderqty, price
-  * returns: 0 if fail, consideration if ok
+  * params: quantity, cashorderqty, price, ordertype
+  * returns: 0 if fail, 1, consideration if ok
   * note: order status & reject reason will be updated if there is an error 
   */
   getsettlcurramt = commonbo.rejectorder + '\
-  local getsettlcurramt = function(quantity, cashorderqty, price) \
+  local getsettlcurramt = function(brokerid, orderid, quantity, cashorderqty, price, ordertype) \
     local settlcurramt \
     if quantity == "" then \
       if cashorderqty == "" then \
         rejectorder(brokerid, orderid, 0, "Either quantity or cashorderqty must be specified") \
-        return 0 \
+        return {0} \
       else \
-        settlcurramt = cashorderqty \
+        settlcurramt = tonumber(cashorderqty) \
       end \
     else \
       if price == "" then \
-        rejectorder(brokerid, orderid, 0, "Price must be specified with quantity") \
-        return 0 \
+        if tonumber(ordertype) == 1 then \
+          --[[ no price is correct for a market order ]] \
+          settlcurramt = "" \
+        else \
+          rejectorder(brokerid, orderid, 0, "Price must be specified with quantity") \
+          return {0} \
+        end \
       else \
-        settlcurramt = tonumber(quantity) * tonumber(price) \
+        if tonumber(ordertype) == 1 then \
+          rejectorder(brokerid, orderid, 0, "Price should not be specified in a market order") \
+          return {0} \
+        else \
+          settlcurramt = round(tonumber(quantity) * tonumber(price), 2) \
+        end \
       end \
     end \
-    return settlcurramt \
+    return {1, settlcurramt} \
   end \
   ';
 
   /*
   * validorder()
   * validate an order
-  * params: brokerid, clientid, orderid, symbolid
+  * params: brokerid, clientid, orderid, symbolid, ordertype
   * returns: 0 if fail, 1 if ok together with symbol details
   * note: order status & reject reason will be updated if there is an error 
   */
   validorder = commonbo.rejectorder + gethashvalues + '\
-  local validorder = function(brokerid, clientid, orderid, symbolid) \
+  local validorder = function(brokerid, clientid, orderid, symbolid, ordertype) \
     --[[ see if symbol exists ]] \
     local symbol = gethashvalues("symbol:" .. symbolid) \
     if not symbol["symbolid"] then \
       rejectorder(brokerid, orderid, 0, "Symbol not found") \
       return {0} \
     end \
-   --[[ see if client is allowed to trade this type of product ]] \
+    --[[ see if client is allowed to trade this type of product ]] \
     if redis.call("sismember", "broker:" .. brokerid .. ":client:" .. clientid .. ":instrumenttypes", symbol["instrumenttypeid"]) == 0 then \
       rejectorder(brokerid, orderid, 0, "Client not authorised to trade this type of product") \
+      return {0} \
+    end \
+    --[[ see if valid order type ]] \
+    if ordertype ~= "D" and tonumber(ordertype) ~= 1 then \
+      rejectorder(brokerid, orderid, 0, "Order type not supported") \
       return {0} \
     end \
     return {1, symbol} \
@@ -1593,33 +1619,38 @@ function registerScripts() {
     redis.log(redis.LOG_NOTICE, "newordersingle") \
     local orderid = neworder(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertype, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforceid, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid, cashorderqty, settlmnttypid) \
     local brokerkey = "broker:" .. brokerid \
+    side = tonumber(side) \
+    local hedgeorderid = "" \
     --[[ validate the order ]] \
-    local vo = validorder(brokerid, clientid, orderid, symbolid) \
+    local vo = validorder(brokerid, clientid, orderid, symbolid, ordertype) \
     if vo[1] == 0 then \
       --[[ publish the order back to the operatortype - the order contains the error ]] \
       publishorder(brokerid, orderid, operatortype) \
       return {0, 1018, orderid} \
     end \
     local symbol = vo[2] \
-    local brokerkey = "broker:" .. brokerid \
-    side = tonumber(side) \
-    local hedgeorderid = "" \
     --[[ calculate the consideration ]] \
-    local settlcurramt = round(tonumber(getsettlcurramt(quantity, cashorderqty, price)), 2) \
-    if settlcurramt == 0 then \
+    local sc = getsettlcurramt(brokerid, orderid, quantity, cashorderqty, price, ordertype) \
+    if sc[1] == 0 then \
       --[[ publish the order back to the operatortype - the order contains the error ]] \
       publishorder(brokerid, orderid, operatortype) \
-      return {0, 1033, orderid} \
+      return {0, 1006, orderid} \
     end \
+    local settlcurramt = sc[2] \
     --[[ calculate costs ]] \
-    local costs =  getcosts(brokerid, clientid, symbolid, side, settlcurramt, currencyid) \
-    local totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
-    --[[ credit check the order ]] \
-    local cc = creditcheck(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, settlcurramt, settlcurrencyid, futsettdate, totalcost, symbol["instrumenttypeid"]) \
-    if cc[1] == 0 then \
-      --[[ publish the order back to the operatortype - the order contains the error ]] \
-      publishorder(brokerid, orderid, operatortype) \
-      return {0, 1026, orderid} \
+    local costs = {0, 0, 0, 0} \
+    local totalcost = 0 \
+    --[[ a market order does not have a price or consideration, so we are assuming it has already been credit checked ]] \
+    if settlcurramt ~= "" then \
+      costs =  getcosts(brokerid, clientid, symbolid, side, settlcurramt, currencyid) \
+      totalcost = costs[1] + costs[2] + costs[3] + costs[4] \
+      --[[ credit check the order ]] \
+      local cc = creditcheck(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, settlcurramt, settlcurrencyid, futsettdate, totalcost, symbol["instrumenttypeid"]) \
+      if cc[1] == 0 then \
+        --[[ publish the order back to the operatortype - the order contains the error ]] \
+        publishorder(brokerid, orderid, operatortype) \
+        return {0, 1026, orderid} \
+      end \
     end \
     if symbol["instrumenttypeid"] == "CFD" or symbol["instrumenttypeid"] == "SPB" or symbol["instrumenttypeid"] == "CCFD" then \
       --[[ ignore limit orders for derivatives as they will be handled manually, at least for the time being ]] \
