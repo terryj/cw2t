@@ -13,6 +13,7 @@
 * 27 Oct 2016 - added ordertype validation to validorder()
 * 30 Oct 2016 - added brokerid, orderid & ordertype to getsettlcurramt()
 *             - updated newordersingle() & testTradeResponse()
+*             - updated error handling of scriptneworder() in newOrderSingle()
 ****************/
 
 // node libraries
@@ -489,7 +490,10 @@ function newOrderSingle(order) {
   }
 
   db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforceid, order.expiredate, order.expiretime, order.settlcurrencyid, order.settlcurrfxrate, order.settlcurrfxratecalc, order.operatortype, order.operatorid, order.cashorderqty, order.settlmnttypid, order.timestampms, function(err, ret) {
-    if (err) throw err;
+    if (err) {
+      console.log(err);
+      return;
+    }
 
     // error check
     if (ret[0] == 0) {
