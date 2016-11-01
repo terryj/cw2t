@@ -1518,6 +1518,7 @@ exports.registerScripts = function () {
       accountsummary["equity"] = equity \
       accountsummary["margin"] = totalpositionvalue["margin"] \
       accountsummary["freemargin"] = freemargin \
+      accountsummary["availablefortrading"] = account["availablefortrading"] \
     end \
     return accountsummary \
   end \
