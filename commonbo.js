@@ -10,6 +10,7 @@
 * 21 Oct 2016 - added getorderbook(), getorderbooktop(), getorderbooktopall()
 *             - added scriptgetorderbook(), scriptgetorderbooktop(), scriptgetorderbooktopall()
 * 23 Oct 2016 - added orderbookchannel
+* 07 Nov 2016 - modified getpostingsbydate() to use posting note rather than transaction note
 ****************/
 
 exports.registerScripts = function () {
@@ -948,13 +949,6 @@ exports.registerScripts = function () {
       local posting = gethashvalues(brokerkey .. ":posting:" .. postings[i]) \
       --[[ get additional details from the transaction ]] \
       local transaction = gettransaction(brokerid, posting["transactionid"]) \
-      local note \
-      if transaction["transactiontypeid"] == "TPC" or transaction["transactiontypeid"] == "TRC" then \
-        note = gettradedescription(brokerkey .. ":" .. transaction["reference"]) \
-      else \
-        note = transaction["note"] \
-      end \
-      posting["note"] = note \
       posting["reference"] = transaction["reference"] \
       posting["timestamp"] = transaction["timestamp"] \
       posting["transactiontypeid"] = transaction["transactiontypeid"] \
