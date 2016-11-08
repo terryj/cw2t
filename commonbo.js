@@ -1512,7 +1512,6 @@ exports.registerScripts = function () {
       accountsummary["equity"] = equity \
       accountsummary["margin"] = totalpositionvalue["margin"] \
       accountsummary["freemargin"] = freemargin \
-      accountsummary["availablefortrading"] = account["availablefortrading"] \
     end \
     return accountsummary \
   end \
@@ -2118,7 +2117,7 @@ exports.registerScripts = function () {
       if not eodprice["bid"] then \
         return {1, 1029} \
       end \
-      --[[ calculate the amount cash as the stub * closing price ]] \
+      --[[ calculate the amount of cash as the stub * closing price ]] \
       residuecash = round(sharesdue[2] * eodprice["bid"], 2) \
       if residuecash > 0 then \
         local residuecashlocal = residuecash * rate \
@@ -2567,7 +2566,7 @@ exports.registerScripts = function () {
     if not corporateaction["cashpershare"] then \
       return {1, 1036} \
     end \
-   --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
+    --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
     for i = 1, #positions do \
       redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"]) \
