@@ -14,8 +14,10 @@
 * Real-time partial record i.e. "publish 7 rp:BARC.L"
 * Real-time full record i.e. "publish 7 rf:BARC.L"
 * Snap full record i.e. "publish 7 snap:L.B***"
+*
 * Changes:
 * 3 September 2016 - modified getExchangeId() to split instrument code in a more flexible way to get exchange id
+* 6 November 2016 - added default mnemonic in case of no value returned
 *****************/
 
 // node libraries
@@ -538,9 +540,16 @@ function getDbInstrec(instrumentcode, instrec) {
   dbinstrec.longname = instrec.longname;
   dbinstrec.midnetchange = instrec.midnetchange;
   dbinstrec.midpercentchange = instrec.midpercentchange;
-  dbinstrec.mnemonic = instrec.mnemonic;
+  //dbinstrec.mnemonic = instrec.mnemonic;
   dbinstrec.timestamp = instrec.timestamp;
   dbinstrec.timezoneid = instrec.timezoneid;
+
+  // we need a mnemonic as this is used in the trade feed
+  if (instrec.mnemonic == "") {
+    dbinstrec.mnemonic = instrumentcode.split(".")[0];
+  } else {
+    dbinstrec.mnemonic = instrec.mnemonic;
+  }
 
   // we need a shortname
   if (instrec.shortname == "") {
