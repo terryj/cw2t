@@ -227,7 +227,8 @@ function listen() {
     //testSupplierFundsTransfer();
     //testPositionPostings();
     //testStatement();
-    testOrder(1);
+    testOrders();
+    //testOrder(1);
     //getOrderbookTopAll();
     //testValuation();
     //testcollectagginvest();
@@ -2151,6 +2152,12 @@ function orderReceived(order, userid) {
   order.operatorid = userid;
 
   db.publish(commonbo.tradeserverchannel, "{\"order\":" + JSON.stringify(order) + "}");
+}
+
+function testOrders() {
+  for (var i = 0; i < 100; i++) {
+    testOrder(1);
+  }
 }
 
 function testStatement() {
