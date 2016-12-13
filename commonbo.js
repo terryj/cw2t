@@ -11,6 +11,7 @@
 *             - added scriptgetorderbook(), scriptgetorderbooktop(), scriptgetorderbooktopall()
 * 23 Oct 2016 - added orderbookchannel
 * 07 Nov 2016 - modified getpostingsbydate() to use posting note rather than transaction note
+* 10 Dec 2016 - added fixseqnum to newtrade()
 ****************/
 
 exports.registerScripts = function () {
@@ -1966,13 +1967,13 @@ exports.registerScripts = function () {
   * stores a trade & updates cash & position
   */
   newtrade = newtradetransaction + newpositiontransaction + updatetradesettlestatusindex + updatefieldindexes + publishtrade + '\
-  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms) \
+  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms, fixseqnum) \
     redis.log(redis.LOG_NOTICE, "newtrade") \
     local brokerkey = "broker:" .. brokerid \
     local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
     if not tradeid then return 0 end \
     local strsettlcurramt = tostring(settlcurramt) \
-    redis.call("hmset", brokerkey .. ":trade:" .. tradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", tostring(commission), "ptmlevy", tostring(ptmlevy), "stampduty", tostring(stampduty), "contractcharge", tostring(contractcharge), "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", strsettlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "finance", finance, "tradesettlestatusid", 0) \
+    redis.call("hmset", brokerkey .. ":trade:" .. tradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", tostring(commission), "ptmlevy", tostring(ptmlevy), "stampduty", tostring(stampduty), "contractcharge", tostring(contractcharge), "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", strsettlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "finance", finance, "tradesettlestatusid", 0, fixseqnum) \
     redis.call("sadd", brokerkey .. ":tradeid", "trade:" .. tradeid) \
     redis.call("sadd", brokerkey .. ":trades", tradeid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
@@ -2746,20 +2747,20 @@ exports.registerScripts = function () {
           if corporateaction["decisiondefault"] == "EXERCISE" then \
             if mode == 2 then \
               --[[ create a trade in the original symbol at the rights price ]] \
-              newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, positions[i]["quantity"], corporateaction["price"], account["currencyid"], currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, "", "", 0, "", "", timestamp, "", "", account["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms) \
+              newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, positions[i]["quantity"], corporateaction["price"], account["currencyid"], currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, "", "", 0, "", "", timestamp, "", "", account["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms, "") \
             elseif mode == 3 then \
               --[[ create the reverse trade in the original symbol at the rights price ]] \
-              newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, -positions[i]["quantity"], corporateaction["price"], account["currencyid"], currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, "", "", 0, "", "", timestamp, "", "", account["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms) \
+              newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, -positions[i]["quantity"], corporateaction["price"], account["currencyid"], currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, "", "", 0, "", "", timestamp, "", "", account["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms, "") \
             end \
             totexercised = totexercised + positions[i]["quantity"] \
           end \
         elseif corporateactiondecision == "EXERCISE" then \
           if mode == 2 then \
             --[[ create a trade in the original symbol at the rights price ]] \
-            newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, positions[i]["quantity"], corporateaction["price"], account["currencyid"], currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, "", "", 0, "", "", timestamp, "", "", account["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms) \
+            newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, positions[i]["quantity"], corporateaction["price"], account["currencyid"], currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, "", "", 0, "", "", timestamp, "", "", account["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms, "") \
           elseif mode == 3 then \
             --[[ create the reverse trade in the original symbol at the rights price ]] \
-            newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, -positions[i]["quantity"], corporateaction["price"], account["currencyid"], currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, "", "", 0, "", "", timestamp, "", "", account["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms) \
+            newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, -positions[i]["quantity"], corporateaction["price"], account["currencyid"], currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, "", "", 0, "", "", timestamp, "", "", account["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms, "") \
           end \
           totexercised = totexercised + positions[i]["quantity"] \
         end \
@@ -3196,7 +3197,7 @@ exports.registerScripts = function () {
         if quantity > 0 then \
           if mode == 2 then \
             --[[ create client trades ]] \
-            newtrade(accountid, brokerid, schemeclients[i], "", fundallocations[j], 1, quantity, symbol["ask"], account["currencyid"], 1, 1, 0, 0, 0, 0, 0, 3, 0, "", "", timestamp, "", "", account["currencyid"], settlcurramt, 1, 0, 0, 2, operatorid, 0, timestampms) \
+            newtrade(accountid, brokerid, schemeclients[i], "", fundallocations[j], 1, quantity, symbol["ask"], account["currencyid"], 1, 1, 0, 0, 0, 0, 0, 3, 0, "", "", timestamp, "", "", account["currencyid"], settlcurramt, 1, 0, 0, 2, operatorid, 0, timestampms, "") \
           end \
           schemetrades[k]["quantity"] = schemetrades[k]["quantity"] + quantity \
           schemetrades[k]["settlcurramt"] = schemetrades[k]["settlcurramt"] + settlcurramt \
@@ -3209,7 +3210,7 @@ exports.registerScripts = function () {
     for i = 1, #schemetrades do \
       if schemetrades[i]["quantity"] > 0 and mode == 2 then \
         --[[ create a trade for the scheme for this fund ]] \
-        newtrade(scheme["accountid"], brokerid, schemeclientid, "", schemetrades[i]["symbolid"], 1, schemetrades[i]["quantity"], schemetrades[i]["price"], schemeaccount["currencyid"], 1, 1, 0, 0, 0, 0, 0, 3, 0, "", "", timestamp, "", "", schemeaccount["currencyid"], schemetrades[i]["settlcurramt"], 1, 0, 0, 2, operatorid, 0, timestampms) \
+        newtrade(scheme["accountid"], brokerid, schemeclientid, "", schemetrades[i]["symbolid"], 1, schemetrades[i]["quantity"], schemetrades[i]["price"], schemeaccount["currencyid"], 1, 1, 0, 0, 0, 0, 0, 3, 0, "", "", timestamp, "", "", schemeaccount["currencyid"], schemetrades[i]["settlcurramt"], 1, 0, 0, 2, operatorid, 0, timestampms, "") \
         ret["schemecashinvested"] = ret["schemecashinvested"] + schemetrades[i]["settlcurramt"] \
       end \
     end \
@@ -3293,14 +3294,14 @@ exports.registerScripts = function () {
       --[[ we can edit but need to reverse the postings of the original trade, so delete & enter a new one ]] \
       deletetrade(trade, timestamp, timestampms) \
       --[[ create a new trade with a combination of the existing & updated values ]] \
-      newtrade(accountid, brokerid, clientid, trade.orderid, trade.symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, 0, trade.counterpartyid, trade.counterpartytype, trade.markettype, trade.externaltradeid, trade.futsettdate, timestamp, trade.lastmkt, trade.externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, trade.margin, operatortype, operatorid, trade.finance, timestampms) \
+      newtrade(accountid, brokerid, clientid, trade.orderid, trade.symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, 0, trade.counterpartyid, trade.counterpartytype, trade.markettype, trade.externaltradeid, trade.futsettdate, timestamp, trade.lastmkt, trade.externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, trade.margin, operatortype, operatorid, trade.finance, timestampms, "") \
     elseif tonumber(trade.tradesettlestatusid) == 1 then \
       --[[ we can only edit if only stamp duty related values have changed ]] \
       if tonumber(accountid) == tonumber(trade.accountid) and tonumber(clientid) == tonumber(trade.clientid) and tonumber(commission) == tonumber(trade.commission) and currencyid == trade.currencyid and tonumber(quantity) == tonumber(trade.quantity) and tonumber(price) == tonumber(trade.price) and tonumber(ptmlevy) == tonumber(trade.ptmlevy) and tonumber(currencyratetoorg) == tonumber(trade.currencyratetoorg) and tonumber(currencyindtoorg) == tonumber(trade.currencyindtoorg) and tonumber(settlcurrfxrate) == tonumber(trade.settlcurrfxrate) and tonumber(side) == tonumber(trade.side) and timestamp == trade.timestamp and symbolid == trade.symbolid then \
         --[[ remove the original trade ]] \
         deletetrade(trade, timestamp, timestampms) \
         --[[ create a new trade with a combination of the existing & updated values ]] \
-        newtrade(accountid, brokerid, clientid, trade.orderid, trade.symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, 0, trade.counterpartyid, trade.counterpartytype, trade.markettype, trade.externaltradeid, trade.futsettdate, timestamp, trade.lastmkt, trade.externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, trade.margin, operatortype, operatorid, trade.finance, timestampms) \
+        newtrade(accountid, brokerid, clientid, trade.orderid, trade.symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, 0, trade.counterpartyid, trade.counterpartytype, trade.markettype, trade.externaltradeid, trade.futsettdate, timestamp, trade.lastmkt, trade.externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, trade.margin, operatortype, operatorid, trade.finance, timestampms, "") \
         --[[ need to send a message to CREST ]] \
         return {0, "ATXA"} \
       else \

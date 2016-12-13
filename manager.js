@@ -227,12 +227,14 @@ function listen() {
     //testSupplierFundsTransfer();
     //testPositionPostings();
     //testStatement();
-    testOrders();
+    //testOrders();
     //testOrder(1);
     //getOrderbookTopAll();
     //testValuation();
     //testcollectagginvest();
     //testSql();
+    testQuoteRequest();
+    //testQuoteRequests();
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
@@ -2157,6 +2159,37 @@ function orderReceived(order, userid) {
 function testOrders() {
   for (var i = 0; i < 100; i++) {
     testOrder(1);
+  }
+}
+
+function testQuoteRequest() {
+  var quoterequest = {};
+
+  quoterequest.brokerid = 1;
+  quoterequest.operatortype = operatortype;
+  quoterequest.operatorid = 1;
+  quoterequest.accountid = 2;
+  quoterequest.clientid = 2;
+  quoterequest.side = 1;
+  quoterequest.symbolid = 'BARC.L';
+  quoterequest.quantity = 99;
+  quoterequest.cashorderqty = '';
+  quoterequest.currencyid = 'GBP';
+  quoterequest.settlcurrencyid = 'GBP';
+  quoterequest.futsettdate = "";
+  quoterequest.timeinforce = "4";
+  quoterequest.expiredate = "";
+  quoterequest.expiretime = "";
+  quoterequest.settlmnttypid = 0;
+  quoterequest.quoteid = "";
+  quoterequest.ordertype = 1;
+
+  db.publish(commonbo.tradeserverchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
+}
+
+function testQuoteRequests() {
+  for (var i = 0; i < 100; i++) {
+    testQuoteRequest(1);
   }
 }
 

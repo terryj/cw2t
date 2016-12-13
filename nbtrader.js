@@ -10,8 +10,8 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 var util = require('util');
-//var net = require('net');
-var tls = require('tls');
+var net = require('net');
+//var tls = require('tls');
 var events = require('events');
 var fs = require("fs");
 
@@ -80,7 +80,8 @@ function tryToConnect(self) {
 
   restarttimer = null;
 
-  nbconn = tls.connect(nbport, nbhost, options, function() {
+  nbconn = net.connect(nbport, nbhost, function() {
+  //nbconn = tls.connect(nbport, nbhost, options, function() {
     // connected
     self.emit("connected");
 
@@ -583,21 +584,28 @@ function completeMessage(tagvalarr, self) {
   var header = getHeader(tagvalarr);
   var body = getBody(header.msgtype, tagvalarr);
 
+  // our timestamp
+  var timestamp = commonbo.getUTCTimeStamp(new Date());
+
   // store the message & get the expected incoming sequence number
-  db.eval(scriptfixmessagein, 0, header.msgseqnum, header.msgtype, body, function(err, ret) {
+  db.eval(scriptfixmessagein, 0, header.msgtype, sendercompid, targetcompid, header.msgseqnum, header.sendingtime, header.possdupflag, header.possresend, header.onbehalfofcompid, header.origsendingtime, header.delivertocompid, body, timestamp, function(err, ret) {
     if (err) {
       console.log(err);
       return;
     }
 
-    var fixseqnumin = ret;
+    var fixseqnumin = ret[0];
+    var fixseqnumid = ret[1];
 
+    // id created may be used to link to a record
+    body.fixseqnumid = fixseqnumid;
+ 
     if (header.possdupflag == 'Y') {
       if (messagerecoveryinrequested) {
         // this is the start of the recovery process
         // set the stored value to the first value requested & set started flag
         console.log('message recovery started');
-        db.set("fixseqnumin", nextseqnumin - 1);
+        db.set("lastfixseqnumin", nextseqnumin - 1);
         messagerecoveryinrequested = false;
         messagerecoveryinstarted = true;
       }
@@ -637,7 +645,7 @@ function completeMessage(tagvalarr, self) {
 	  } else {
 	    // normal logon reply & we haven't missed anything, so just set the stored sequence number to that received
 	    console.log("Resetting incoming sequence number to: " + header.msgseqnum);
-	    db.set("fixseqnumin", header.msgseqnum);
+	    db.set("lastfixseqnumin", header.msgseqnum);
 	  }
         } else if (header.msgtype == '5') {
           if ('text' in body) {
@@ -693,7 +701,7 @@ function completeMessage(tagvalarr, self) {
         } else if (header.msgtype == 'A') {
           // normal logon reply & we haven't missed anything, so just set the stored sequence number to that received
           console.log("Resetting incoming sequence number to: " + header.msgseqnum);
-          db.set("fixseqnumin", header.msgseqnum);
+          db.set("lastfixseqnumin", header.msgseqnum);
         } else {
           // request resend of messages from this point, but wait to adjust the stored value
           // until we know the recovery process has started, as in the first possible duplicate received
@@ -704,52 +712,55 @@ function completeMessage(tagvalarr, self) {
 	  return;
         }
       }
-    }
-	
-    // message numbers match, so do the processing on our data object
-    switch (header.msgtype) {
-    case 'S':
-      body.fixseqnumin = fixseqnumin;
-      quoteReceived(body, header, self);
-      break;
-    case '8':
-      body.fixseqnumin = fixseqnumin;
-      executionReport(body, self);
-      break;
-    case '9':
-      orderCancelReject(body, self);
-      break;
-    case 'A':
-      logonReplyReceived(body, self);
-      break;
-    case '0':
-      heartbeatReceived(body, self);
-      break;
-    case '1':
-      testRequestReceived(body, self);
-      break;
-    case '2':
-      resendRequestReceived(body, self);
-      break;
-    case '4':
-      sequenceGapReceived(body);
-      break;
-    case '5':
-      logoutReceived(body, self);
-      break;
-    case 'b':
-      quoteAckReceived(body, self);
-      break;
-    case '3':
-      rejectReceived(body, self);
-      break;
-    case 'j':
-      businessRejectReceived(body, self);
-      break;
-    default:
-      console.log("unknown message type");
+    } else {
+      // sequence numbers match, so process message
+      processMessage(body, header, self);
     }
   });
+}
+
+function processMessage(body, header, self) {
+  // message numbers match, so do the processing on our data object
+  switch (header.msgtype) {
+  case 'S':
+    quoteReceived(body, header, self);
+    break;
+  case '8':
+    executionReport(body, self);
+    break;
+  case '9':
+    orderCancelReject(body, self);
+    break;
+  case 'A':
+    logonReplyReceived(body, self);
+    break;
+  case '0':
+    heartbeatReceived(body, self);
+    break;
+  case '1':
+    testRequestReceived(body, self);
+    break;
+  case '2':
+    resendRequestReceived(body, self);
+    break;
+  case '4':
+    sequenceGapReceived(body);
+    break;
+  case '5':
+    logoutReceived(body, self);
+    break;
+  case 'b':
+    quoteAckReceived(body, self);
+    break;
+  case '3':
+    rejectReceived(body, self);
+    break;
+  case 'j':
+    businessRejectReceived(body, self);
+    break;
+  default:
+    console.log("unknown message type");
+  }
 }
 
 function getHeader(tagvalarr) {
@@ -1265,7 +1276,7 @@ function sequenceReset(body, nextnumin, self) {
   }
 
   // reset the incoming sequence number
-  db.set("fixseqnumin", body.newseqno - 1);
+  db.set("lastfixseqnumin", body.newseqno - 1);
 }
 
 function resendRequest(beginseqno) {
@@ -1285,7 +1296,7 @@ function sequenceGapReceived(seqgap) {
       console.log('resetting incoming sequence number');
 
       // reset the expected incoming sequence number
-      db.set("fixseqnumin", seqgap.newseqno - 1);
+      db.set("lastfixseqnumin", seqgap.newseqno - 1);
     }
   }
 }
@@ -1423,7 +1434,7 @@ function resendMessage(msgno, endseqno, self) {
 		// check for infinity
 		if (endseqno == 0) {
 			// get the last outgoing message sequence number
-			db.get("fixseqnumout", function(err, msgseqnumout) {
+			db.get("lastfixseqnumout", function(err, msgseqnumout) {
 				if (err) {
 					console.log(err);
 					disconnect(self);
@@ -1451,7 +1462,7 @@ function resendMessage(msgno, endseqno, self) {
 				// send any sequence gap message
 				if (sequencegapnum != 0) {
 					// get the last outgoing message sequence number, so we can tell the other side what to expect next
-					db.get("fixseqnumout", function(err, msgseqnumout) {
+					db.get("lastfixseqnumout", function(err, msgseqnumout) {
 						if (err) {
 							console.log(err);
 							disconnect(self);
@@ -1754,13 +1765,14 @@ function registerScripts() {
   * params: msgtype, body, timestamp, brokerid, id - may be used to link to a record id
   */
   scriptfixmessageout = '\
-  local fixseqnumout = redis.call("incr", "fixseqnumout") \
-  redis.call("hmset", "fixseqnumout:" .. fixseqnumout, "msgtype", ARGV[1], "body", ARGV[2], "timestamp", ARGV[3], "broker", ARGV[4], "id", ARGV[5]) \
+  local fixseqnumid = redis.call("incr", "lastfixseqnumid") \
+  local fixseqnumout = redis.call("incr", "lastfixseqnumout") \
+  redis.call("hmset", "fixseqnum:" .. fixseqnumid, "fixseqnumout", fixseqnumout, "msgtype", ARGV[1], "body", ARGV[2], "timestamp", ARGV[3], "broker", ARGV[4], "id", ARGV[5], "fixseqnumid", fixseqnumid) \
   --[[ where possible, link the fix message back to the originating message ]] \
   if ARGV[1] == "R" then \
-    redis.call("hset", "broker:" .. ARGV[4] .. ":quoterequest:" ..  ARGV[5], "fixseqnumout", fixseqnumout) \
+    redis.call("hset", "broker:" .. ARGV[4] .. ":quoterequest:" ..  ARGV[5], "fixseqnumid", fixseqnumid) \
   elseif ARGV[1] == "D" or tonumber(ARGV[1]) == 1 then \
-    redis.call("hset", "broker:" .. ARGV[4] .. ":order:" ..  ARGV[5], "fixseqnumout", fixseqnumout) \
+    redis.call("hset", "broker:" .. ARGV[4] .. ":order:" ..  ARGV[5], "fixseqnumid", fixseqnumid) \
   end \
   return fixseqnumout \
   ';
@@ -1769,11 +1781,13 @@ function registerScripts() {
   * scriptfixmessagein
   * store the incoming message & get the next incoming sequence number
   * params: sequence number, msgtype, body, timestamp
+  * returns: fixseqnumin - used for fix sequence processing, fixseqnumid - may be used to link to record id yet to be created
   */
   scriptfixmessagein = '\
-  redis.call("hmset", "fixseqnumin:" .. ARGV[1], "msgtype", ARGV[2], "body", ARGV[3], "timestamp", ARGV[4]) \
-  local fixseqnumin = redis.call("incr", fixseqnumin") \
-  return fixseqnumin \
+  local fixseqnumid = redis.call("incr", "lastfixseqnumid") \
+  local fixseqnumin = redis.call("incr", "lastfixseqnumin") \
+  redis.call("hmset", "fixseqnum:" .. fixseqnumid, "fixseqnumin", fixseqnumin, "msgtype", ARGV[1], "sendercompid", ARGV[2], "targetcompid", ARGV[3], "msgseqnum", ARGV[4], "sendingtime", ARGV[5], "possdupflag", ARGV[6], "possresend", ARGV[7], "onbehalfofcompid", ARGV[8], "origsendingtime", ARGV[9], "delivertocompid", ARGV[10], "body", ARGV[11], "timestamp", ARGV[12], "fixseqnumid", fixseqnumid) \
+  return {fixseqnumin, fixseqnumid} \
   ';
 
   /*
@@ -1782,8 +1796,8 @@ function registerScripts() {
   * params: none
   */
   scriptresetsequencenumbers = '\
-  redis.call("set", "fixseqnumin" 0) \
-  redis.call("set", "fixseqnumout" 0) \
+  redis.call("set", "lastfixseqnumin" 0) \
+  redis.call("set", "lastfixseqnumout" 0) \
   ';
 }
 

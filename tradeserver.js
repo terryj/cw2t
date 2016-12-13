@@ -14,7 +14,8 @@
 * 30 Oct 2016 - added brokerid, orderid & ordertype to getsettlcurramt()
 *             - updated newordersingle() & testTradeResponse()
 *             - updated error handling of scriptneworder() in newOrderSingle()
-* 10 Dec 2016 - added fixseqnumout & fixseqnumin to quote requests & orders
+* 10 Dec 2016 - added fixseqnum storage to quote request process
+* 12 Dec 2016 - added separate quoteacks
 ****************/
 
 // node libraries
@@ -178,7 +179,10 @@ function stopQuoteInterval() {
 
 function quoteInterval() {
   db.eval(scriptquotemonitor, 0, function(err, ret) {
-    if (err) throw err;
+    if (err) {
+      console.log(err);
+      return;
+    }
 
     if (ret == 0 && quoteinterval != null) {
       stopQuoteInterval();
@@ -234,7 +238,10 @@ function quoteRequest(quoterequest) {
 
   // store the quote request & get an id
   db.eval(scriptQuoteRequest, 1, "broker:" + quoterequest.brokerid, quoterequest.accountid, quoterequest.brokerid, quoterequest.cashorderqty, quoterequest.clientid, quoterequest.currencyid, quoterequest.futsettdate, quoterequest.operatorid, quoterequest.operatortype, quoterequest.quantity, quoterequest.settlmnttypid, quoterequest.side, quoterequest.symbolid, quoterequest.timestamp, quoterequest.settlcurrencyid, function(err, ret) {
-    if (err) throw err;
+    if (err) {
+      console.log(err);
+      return;
+    }
 
     // todo:sort out
     if (ret[0] == 0) {
@@ -359,7 +366,7 @@ function testQuote(quoterequest, side) {
     quote.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, quote.settledays, holidays));
   }
 
-  quote.fixseqnumin = "";
+  quote.fixseqnumid = "";
 
   newQuote(quote);
 }
@@ -396,7 +403,10 @@ function newOrder(order) {
 */
 function dealAtQuote(order) {
   db.eval(scriptdealatquote, 1, "broker:" + order.brokerid, order.brokerid, order.ordertype, order.markettype, order.quoteid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforceid, order.operatortype, order.operatorid, order.timestampms, function(err, ret) {
-    if (err) throw err;
+    if (err) {
+      console.log(err);
+      return;
+    }
 
     // error check
     if (ret[0] == 0) {
@@ -595,7 +605,7 @@ function testTradeResponse(order) {
   exereport.settlcurramt = parseFloat(exereport.lastpx) * parseInt(order.quantity);
   exereport.settlcurrfxrate = order.settlcurrfxrate;
   exereport.settlcurrfxratecalc = order.settlcurrfxratecalc;
-  exereport.fixseqnumin = "";
+  exereport.fixseqnum = "";
 
   processTrade(exereport);
 }
@@ -606,7 +616,10 @@ function orderCancelRequest(ocr) {
   ocr.timestamp = commonbo.getUTCTimeStamp(new Date());
 
   db.eval(scriptordercancelrequest, 5, ocr.clientid, ocr.orderid, ocr.timestamp, ocr.operatortype, ocr.operatorid, function(err, ret) {
-    if (err) throw err;
+    if (err) {
+      console.log(err);
+      return;
+    }
 
     // error, so send an ordercancelreject message
     if (ret[0] != 0) {
@@ -653,7 +666,10 @@ function orderFillRequest(ofr) {
   ofr.futsettdate = commonbo.getUTCDateString(commonbo.getSettDate(today, ofr.nosettdays, holidays));
 
   db.eval(scriptorderfillrequest, 7, ofr.clientid, ofr.orderid, ofr.timestamp, ofr.operatortype, ofr.operatorid, ofr.price, ofr.futsettdate, function(err, ret) {
-    if (err) throw err;
+    if (err) {
+      console.log(err);
+      return;
+    }
 
     // error, so send an orderfillreject message
     if (ret[0] != 0) {
@@ -691,7 +707,10 @@ function initDb() {
 function loadHolidays() {
   // we are assuming "L"=London
   db.eval(commonbo.scriptgetholidays, 0, "L", function(err, ret) {
-    if (err) throw err;
+    if (err) {
+      console.log(err);
+      return;
+    }
 
     for (var i = 0; i < ret.length; ++i) {
       holidays[ret[i]] = ret[i];
@@ -777,7 +796,7 @@ function newQuote(quote) {
   }
 
   // quote script
-  db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, quote.bidspotrate, quote.offerspotrate, quote.fixseqnumin, function(err, ret) {
+  db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, quote.bidspotrate, quote.offerspotrate, quote.fixseqnumid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -845,7 +864,7 @@ nbt.on("orderAck", function(exereport) {
     text = exereport.text;
   }
 
-  db.eval(scriptorderack, 1, "broker:" + exereport.brokerid, exereport.brokerid, exereport.clordid, exereport.orderid, exereport.ordstatus, exereport.execid, text, exereport.fixseqnumin, function(err, ret) {
+  db.eval(scriptorderack, 1, "broker:" + exereport.brokerid, exereport.brokerid, exereport.clordid, exereport.orderid, exereport.ordstatus, exereport.execid, text, exereport.fixseqnum, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -862,7 +881,10 @@ nbt.on("orderCancel", function(exereport) {
   console.log("Order cancelled externally, ordercancelrequest id: " + exereport.clordid);
 
   db.eval(scriptordercancel, 1, exereport.clordid, function(err, ret) {
-    if (err) throw err;
+    if (err) {
+      console.log(err);
+      return;
+    }
 
     if (ret[0] != 0) {
       // todo: send to client & sort out error
@@ -954,7 +976,7 @@ function processTrade(exereport) {
   // milliseconds since epoch, used for scoring datetime indexes
   var milliseconds = new Date().getTime();
 
-  db.eval(scriptnewtrade, 1, "broker:" + exereport.brokerid, exereport.accountid, exereport.brokerid, exereport.clientid, exereport.clordid, exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.execbroker, counterpartytype, markettype, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.lastmkt, exereport.orderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, exereport.operatortype, exereport.operatorid, exereport.leavesqty, exereport.fixseqnumin, function(err, ret) {
+  db.eval(scriptnewtrade, 1, "broker:" + exereport.brokerid, exereport.accountid, exereport.brokerid, exereport.clientid, exereport.clordid, exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.execbroker, counterpartytype, markettype, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.lastmkt, exereport.orderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, exereport.operatortype, exereport.operatorid, exereport.leavesqty, exereport.fixseqnum, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -1074,15 +1096,18 @@ function registerScripts() {
   /*
   * publishquoteack()
   * publish a quote acknowledgement
-  * params: brokerid, quoterequestid
+  * params: brokerid, quoteackid
   */ 
   publishquoteack = commonbo.gethashvalues + '\
-  local publishquoteack = function(brokerid, quoterequestid) \
+  local publishquoteack = function(brokerid, quoteackid) \
     redis.log(redis.LOG_NOTICE, "publishquoteack") \
-    local quoterequest = gethashvalues("broker:" .. brokerid .. ":quoterequest:" .. quoterequestid) \
-    local quoteack = {brokerid=brokerid, quoterequestid=quoterequestid, accountid=quoterequest["accountid"], clientid=quoterequest["clientid"], symbolid=quoterequest["symbolid"], quotestatusid=quoterequest["quotestatusid"], quoterejectreasonid=quoterequest["quoterejectreasonid"], text=quoterequest["text"], operatorid=quoterequest["operatorid"]} \
+    local quoteack = gethashvalues("broker:" .. brokerid .. ":quoteack:" .. quoteackid) \
+    local quoterequest = gethashvalues("broker:" .. brokerid .. ":quoterequest:" .. quoteack.quoterequestid) \
+    quoteack.clientid = quoterequest.clientid \
+    quoteack.symbolid = quoterequest.symbolid \
+    quoteack.accountid = quoterequest.accountid \
     redis.call("publish", quoterequest["operatortype"], "{" .. cjson.encode("quoteack") .. ":" .. cjson.encode(quoteack) .. "}") \
-    end \
+  end \
   ';
 
   /*
@@ -1352,10 +1377,16 @@ function registerScripts() {
   */
   quoteack = publishquoteack + '\
   local quoteack = function(brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text) \
+    --[[ create a quote ack ]] \
+    redis.log(redis.LOG_NOTICE, "1") \
+    local quoteackid = redis.call("hincrby", "broker:" .. brokerid, "lastquoteackid", 1) \
+    redis.log(redis.LOG_NOTICE, "2") \
+    redis.call("hmset", "broker:" .. brokerid .. ":quoteack:" .. quoteackid, "broker", brokerid, "quoterequestid", quoterequestid, "quotestatusid", quotestatusid, "quoterejectreasonid", quoterejectreasonid, "text", text, "quoteackid", quoteackid) \
     --[[ update quote request ]] \
-    redis.call("hmset", "broker:" .. brokerid .. ":quoterequest:" .. quoterequestid, "quotestatusid", quotestatusid, "quoterejectreasonid", quoterejectreasonid, "text", text) \
+    redis.call("hmset", "broker:" .. brokerid .. ":quoterequest:" .. quoterequestid, "quotestatusid", quotestatusid, "quoteackid", quoteackid) \
     --[[ publish to operator type ]] \
-    publishquoteack(brokerid, quoterequestid) \
+    redis.log(redis.LOG_NOTICE, "3") \
+    publishquoteack(brokerid, quoteackid) \
   end \
   ';
 
@@ -1509,9 +1540,9 @@ function registerScripts() {
         local settlcurrfxratecalc = 0 \
         local lastmkt = "XLON" \
         --[[ active order trade ]] \
-        local tradeid = newtrade(order.accountid, order.brokerid, order.clientid, order.orderid, order.symbolid, order.side, order.quantity, order.price, order.currencyid, currencyratetoorg, currencyindtoorg, costs[1], costs[2], costs[3], costs[4], matchorder.clientid, counterpartytype, markettype, "", order.futsettdate, order.timestamp, lastmkt, "", order.settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, order.operatortype, order.operatorid, finance, timestampms) \
+        local tradeid = newtrade(order.accountid, order.brokerid, order.clientid, order.orderid, order.symbolid, order.side, order.quantity, order.price, order.currencyid, currencyratetoorg, currencyindtoorg, costs[1], costs[2], costs[3], costs[4], matchorder.clientid, counterpartytype, markettype, "", order.futsettdate, order.timestamp, lastmkt, "", order.settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, order.operatortype, order.operatorid, finance, timestampms, "") \
         --[[ passive order trade ]] \
-        local matchtradeid = newtrade(matchorder.accountid, matchorder.brokerid, matchorder.clientid, matchorder.orderid, matchorder.symbolid, matchorder.side, matchorder.quantity, matchorder.price, matchorder.currencyid, currencyratetoorg, currencyindtoorg, matchcosts[1], matchcosts[2], matchcosts[3], matchcosts[4], order.clientid, counterpartytype, markettype, "", order.futsettdate, order.timestamp, lastmkt, "", matchorder.settlcurrencyid, consid, settlcurrfxrate, settlcurrfxratecalc, margin, order.operatortype, order.operatorid, finance, timestampms) \
+        local matchtradeid = newtrade(matchorder.accountid, matchorder.brokerid, matchorder.clientid, matchorder.orderid, matchorder.symbolid, matchorder.side, matchorder.quantity, matchorder.price, matchorder.currencyid, currencyratetoorg, currencyindtoorg, matchcosts[1], matchcosts[2], matchcosts[3], matchcosts[4], order.clientid, counterpartytype, markettype, "", order.futsettdate, order.timestamp, lastmkt, "", matchorder.settlcurrencyid, consid, settlcurrfxrate, settlcurrfxratecalc, margin, order.operatortype, order.operatorid, finance, timestampms, "") \
         --[[ update passive order ]] \
         redis.call("hmset", "broker:" .. brokerid .. ":order:" .. matchorder.orderid, "leavesqty", 0, "orderstatusid", 2) \
         removefromorderbook(matchorder) \
@@ -1595,9 +1626,9 @@ function registerScripts() {
         local settlcurrfxratecalc = 0 \
         local lastmkt = "XLON" \
         --[[ active order trade ]] \
-        local tradeid = newtrade(order.accountid, order.brokerid, order.clientid, order.orderid, order.symbolid, order.side, tradequantity, matchorder.price, order.currencyid, currencyratetoorg, currencyindtoorg, costs[1], costs[2], costs[3], costs[4], matchorder.clientid, counterpartytype, markettype, "", order.futsettdate, order.timestamp, lastmkt, "", order.settlcurrencyid, consid, settlcurrfxrate, settlcurrfxratecalc, margin, order.operatortype, order.operatorid, finance, timestampms) \
+        local tradeid = newtrade(order.accountid, order.brokerid, order.clientid, order.orderid, order.symbolid, order.side, tradequantity, matchorder.price, order.currencyid, currencyratetoorg, currencyindtoorg, costs[1], costs[2], costs[3], costs[4], matchorder.clientid, counterpartytype, markettype, "", order.futsettdate, order.timestamp, lastmkt, "", order.settlcurrencyid, consid, settlcurrfxrate, settlcurrfxratecalc, margin, order.operatortype, order.operatorid, finance, timestampms, "") \
         --[[ passive order trade ]] \
-        local matchtradeid = newtrade(matchorder.accountid, matchorder.brokerid, matchorder.clientid, matchorder.orderid, matchorder.symbolid, matchorder.side, tradequantity, matchorder.price, matchorder.currencyid, currencyratetoorg, currencyindtoorg, matchcosts[1], matchcosts[2], matchcosts[3], matchcosts[4], order.clientid, counterpartytype, markettype, "", order.futsettdate, order.timestamp, lastmkt, "", matchorder.settlcurrencyid, consid, settlcurrfxrate, settlcurrfxratecalc, margin, order.operatortype, order.operatorid, finance, timestampms) \
+        local matchtradeid = newtrade(matchorder.accountid, matchorder.brokerid, matchorder.clientid, matchorder.orderid, matchorder.symbolid, matchorder.side, tradequantity, matchorder.price, matchorder.currencyid, currencyratetoorg, currencyindtoorg, matchcosts[1], matchcosts[2], matchcosts[3], matchcosts[4], order.clientid, counterpartytype, markettype, "", order.futsettdate, order.timestamp, lastmkt, "", matchorder.settlcurrencyid, consid, settlcurrfxrate, settlcurrfxratecalc, margin, order.operatortype, order.operatorid, finance, timestampms, "") \
         --[[ update passive order ]] \
         redis.call("hmset", "broker:" .. brokerid .. ":order:" .. matchorder.orderid, "leavesqty", matchleavesqty, "orderstatusid", matchorderstatusid) \
         --[[ update active order remaining qty ]] \
@@ -1685,8 +1716,8 @@ function registerScripts() {
         local rside = reverseside(side) \
         local finance = 0 \
         local counterpartytype = 2 \
-        local tradeid = newtrade(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs[1], costs[2], costs[3], costs[4], principleaccountid, counterpartytype, markettype, "", futsettdate, timestamp, "", "", settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, cc[2], operatortype, operatorid, finance, timestampms) \
-        local principletradeid = newtrade(principleaccountid, brokerid, principleclientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, accountid, counterpartytype, markettype, "", futsettdate, timestamp, "", "", settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, cc[2], operatortype, operatorid, finance, timestampms) \
+        local tradeid = newtrade(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, costs[1], costs[2], costs[3], costs[4], principleaccountid, counterpartytype, markettype, "", futsettdate, timestamp, "", "", settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, cc[2], operatortype, operatorid, finance, timestampms, "") \
+        local principletradeid = newtrade(principleaccountid, brokerid, principleclientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, accountid, counterpartytype, markettype, "", futsettdate, timestamp, "", "", settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, cc[2], operatortype, operatorid, finance, timestampms, "") \
         --[[ adjust order as filled ]] \
         redis.call("hmset", brokerkey .. ":order:" .. orderid, "leavesqty", 0, "orderstatusid", 2) \
         --[[ todo: may need to adjust margin here ]] \
@@ -1805,7 +1836,7 @@ function registerScripts() {
   /*
   * scriptnewtrade()
   * process a fill from the market
-  * params: 1=accountid, 2=brokerid, 3=clientid, 4=clordid, 5=symbolid, 6=side, 7=lastshares, 8=lastpx, 9=currencyid, 10=currencyratetoorg, 11=currencyindtoorg, 12=execbroker, 13=counterpartytype, 14=markettype, 15=execid, 16=futsettdate, 17=transacttime, 18=lastmkt, 19=orderid, 20=settlcurrencyid, 21=settlcurramt, 22=settlcurrfxrate, 23=settlcurrfxratecalc, 24=milliseconds, 25=operatortype, 26=operatorid, 27=leavesqty, 28=fixseqnumin
+  * params: 1=accountid, 2=brokerid, 3=clientid, 4=clordid, 5=symbolid, 6=side, 7=lastshares, 8=lastpx, 9=currencyid, 10=currencyratetoorg, 11=currencyindtoorg, 12=execbroker, 13=counterpartytype, 14=markettype, 15=execid, 16=futsettdate, 17=transacttime, 18=lastmkt, 19=orderid, 20=settlcurrencyid, 21=settlcurramt, 22=settlcurrfxrate, 23=settlcurrfxratecalc, 24=milliseconds, 25=operatortype, 26=operatorid, 27=leavesqty, 28=fixseqnum
   */
   scriptnewtrade = getcosts + commonbo.newtrade + '\
   redis.log(redis.LOG_NOTICE, "scriptnewtrade") \
@@ -1818,7 +1849,7 @@ function registerScripts() {
   local operatortype = ARGV[25] \
   local operatorid = ARGV[26] \
   local leavesqty = ARGV[27] \
-  local fixseqnumin = ARGV[28] \
+  local fixseqnum = ARGV[28] \
   local settlcurramt = round(tonumber(ARGV[21]), 2) \
   local order \
   --[[ if there is an orderid, get the order & update unknown values for the fill ]] \
@@ -1843,7 +1874,7 @@ function registerScripts() {
   local finance = 0 \
   local margin = 0 \
   --[[ create trade ]] \
-  local tradeid = newtrade(accountid, ARGV[2], clientid, orderid, symbolid, ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], costs[1], costs[2], costs[3], costs[4], ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, ARGV[24]) \
+  local tradeid = newtrade(accountid, ARGV[2], clientid, orderid, symbolid, ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], costs[1], costs[2], costs[3], costs[4], ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, ARGV[24], fixseqnum) \
   --[[ adjust order remaining quantity & status ]] \
   if orderid ~= "" then \
     local orderstatusid \
@@ -1852,7 +1883,7 @@ function registerScripts() {
     else \
       orderstatusid = 2 \
     end \
-    redis.call("hmset", KEYS[1] .. ":order:" .. orderid, "leavesqty", leavesqty, "orderstatusid", orderstatusid, "fixseqnumin", fixseqnumin) \
+    redis.call("hmset", KEYS[1] .. ":order:" .. orderid, "leavesqty", leavesqty, "orderstatusid", orderstatusid) \
   end \
   return {0, tradeid} \
   ';
@@ -1915,6 +1946,7 @@ function registerScripts() {
   return {errorcode, orderid, operatortype} \
   ';
 
+  // todo: add timems, fixseqnum to newtrade()
   scriptorderfillrequest = commonbo.getinitialmargin + '\
   local errorcode = 0 \
   local orderid = KEYS[2] \
@@ -1961,14 +1993,14 @@ function registerScripts() {
     local finance = calcfinance(instrumenttypeid, consid, settlcurrencyid, side, vals[8]) \
     local hedgebookid = redis.call("get", "hedgebook:" .. instrumenttypeid .. ":" .. settlcurrencyid) \
     if not hedgebookid then hedgebookid = 999999 end \
-    tradeid = newtrade(vals[1], orderid, symbolid, side, quantity, price, settlcurrencyid, 1, 1, costs[1], costs[2], costs[3], costs[4], hedgebookid, vals[16], "", KEYS[7], KEYS[3], "", "", settlcurrencyid, consid, 1, 1, vals[8], initialmargin, vals[9], vals[12], finance) \
+    tradeid = newtrade(vals[1], orderid, symbolid, side, quantity, price, settlcurrencyid, 1, 1, costs[1], costs[2], costs[3], costs[4], hedgebookid, vals[16], "", KEYS[7], KEYS[3], "", "", settlcurrencyid, consid, 1, 1, vals[8], initialmargin, vals[9], vals[12], finance, "", "") \
   end \
   return {errorcode, tradeid} \
   ';
 
   scriptorderack = publishorder + '\
   --[[ update external limit reference ]] \
-  redis.call("hmset", "broker:" .. ARGV[1] .. ":order:" .. ARGV[2], "externalorderid", ARGV[3], "orderstatusid", ARGV[4], "execid", ARGV[5], "text", ARGV[6], "fixseqnumin", fixseqnumin) \
+  redis.call("hmset", "broker:" .. ARGV[1] .. ":order:" .. ARGV[2], "externalorderid", ARGV[3], "orderstatusid", ARGV[4], "execid", ARGV[5], "text", ARGV[6], "fixseqnum", fixseqnum) \
   publishorder(ARGV[1], ARGV[2]) \
   return \
   ';
@@ -2083,7 +2115,7 @@ function registerScripts() {
   --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
   local quoteid = redis.call("hincrby", brokerkey, "lastquoteid", 1) \
   --[[ store the quote ]] \
-  redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", brokerid, "accountid", quoterequest["accountid"], "clientid", quoterequest["clientid"], "quoteid", quoteid, "symbolid", quoterequest["symbolid"], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", tostring(cashorderqty), "settledays", ARGV[18], "noseconds", ARGV[19], "settlmnttypid", ARGV[21], "commission", tostring(costs[1]), "ptmlevy", tostring(costs[2]), "stampduty", tostring(costs[3]), "contractcharge", tostring(costs[4]), "bidspotrate", ARGV[22], "offerspotrate", ARGV[23]) \
+  redis.call("hmset", brokerkey .. ":quote:" .. quoteid, "quoterequestid", ARGV[1], "brokerid", brokerid, "accountid", quoterequest["accountid"], "clientid", quoterequest["clientid"], "quoteid", quoteid, "symbolid", quoterequest["symbolid"], "bestbid", bestbid, "bestoffer", bestoffer, "bidpx", ARGV[3], "offerpx", ARGV[4], "bidquantity", bidquantity, "offerquantity", offerquantity, "bidsize", ARGV[5], "offersize", ARGV[6], "validuntiltime", ARGV[7], "transacttime", ARGV[8], "currencyid", ARGV[9], "settlcurrencyid", ARGV[10], "quoterid", ARGV[11], "quotertype", ARGV[12], "futsettdate", ARGV[13], "bidfinance", bidfinance, "offerfinance", offerfinance, "orderid", "", "bidquotedepth", ARGV[14], "offerquotedepth", ARGV[15], "externalquoteid", ARGV[16], "cashorderqty", tostring(cashorderqty), "settledays", ARGV[18], "noseconds", ARGV[19], "settlmnttypid", ARGV[21], "commission", tostring(costs[1]), "ptmlevy", tostring(costs[2]), "stampduty", tostring(costs[3]), "contractcharge", tostring(costs[4]), "bidspotrate", ARGV[22], "offerspotrate", ARGV[23], "fixseqnumid", ARGV[24]) \
   --[[ add to sets of quotes & quotes for this account ]] \
   redis.call("sadd", brokerkey .. ":quotes", quoteid) \
   redis.call("sadd", brokerkey .. ":account:" .. quoterequest["accountid"] .. ":quotes", quoteid) \
@@ -2098,7 +2130,7 @@ function registerScripts() {
     quotestatusid = "0" \
   end \
   --[[ update status to stored quoterequest ]] \
-  redis.call("hmset", brokerkey .. ":quoterequest:" .. ARGV[1], "quotestatusid", quotestatusid, "fixseqnumin", ARGV[28]) \
+  redis.call("hmset", brokerkey .. ":quoterequest:" .. ARGV[1], "quotestatusid", quotestatusid) \
   --[[ publish quote to operator type, with operator id, so can be forwarded as appropriate ]] \
   publishquote(brokerid, quoteid, quoterequest["operatortype"], quoterequest["operatorid"]) \
   return errorcode \
@@ -2174,7 +2206,8 @@ function registerScripts() {
   local msgtype = ARGV[2] \
   local text = ARGV[3] \
   --[[ get the fix message ]] \
-  local fixmessage = gethashvalues("fixseqnumout:" .. ARGV[1]) \
+  local fixseqnum = redis.call("hget", "fixseqnumout:" .. ARGV[1] .. ":fixseqnum") \
+  local fixmessage = gethashvalues("fixseqnum:" .. fixseqnum) \
   if msgtype == "R" then \
     redis.call("hmset", "broker:" .. fixmessage.brokerid .. ":quoterequest:" .. fixmessage.id, "quotestatusid", 5, "text", text) \
     publishquoteack(fixmessage.brokerid, fixmessage.id) \
