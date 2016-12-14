@@ -1378,14 +1378,11 @@ function registerScripts() {
   quoteack = publishquoteack + '\
   local quoteack = function(brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text) \
     --[[ create a quote ack ]] \
-    redis.log(redis.LOG_NOTICE, "1") \
     local quoteackid = redis.call("hincrby", "broker:" .. brokerid, "lastquoteackid", 1) \
-    redis.log(redis.LOG_NOTICE, "2") \
     redis.call("hmset", "broker:" .. brokerid .. ":quoteack:" .. quoteackid, "broker", brokerid, "quoterequestid", quoterequestid, "quotestatusid", quotestatusid, "quoterejectreasonid", quoterejectreasonid, "text", text, "quoteackid", quoteackid) \
     --[[ update quote request ]] \
     redis.call("hmset", "broker:" .. brokerid .. ":quoterequest:" .. quoterequestid, "quotestatusid", quotestatusid, "quoteackid", quoteackid) \
     --[[ publish to operator type ]] \
-    redis.log(redis.LOG_NOTICE, "3") \
     publishquoteack(brokerid, quoteackid) \
   end \
   ';
@@ -2199,18 +2196,18 @@ function registerScripts() {
   /*
   * scriptreject
   * script to handle fix message errors
-  * params: refseqnum, msgtype, reason description
+  * params: outgoing refseqnum, msgtype, reason description
   * returns: 0 if ok else 1 + error message 
   */
-  scriptreject = commonbo.gethashvalues + publishquoteack + commonbo.rejectorder + publishorder + '\
+  scriptreject = commonbo.gethashvalues + quoteack + commonbo.rejectorder + publishorder + '\
   local msgtype = ARGV[2] \
   local text = ARGV[3] \
-  --[[ get the fix message ]] \
-  local fixseqnum = redis.call("hget", "fixseqnumout:" .. ARGV[1] .. ":fixseqnum") \
-  local fixmessage = gethashvalues("fixseqnum:" .. fixseqnum) \
+  --[[ get the outgoing fix message ]] \
+  local fixseqnumid = redis.call("get", "fixseqnumout:" .. refseqnum .. ":fixseqnumid") \
+  local fixmessage = gethashvalues("fixseqnum:" .. fixseqnumid) \
+  --[[ try to find associated record ]] \
   if msgtype == "R" then \
-    redis.call("hmset", "broker:" .. fixmessage.brokerid .. ":quoterequest:" .. fixmessage.id, "quotestatusid", 5, "text", text) \
-    publishquoteack(fixmessage.brokerid, fixmessage.id) \
+    quoteack(fixmessage.brokerid, fixmessage.id, 5, quoterejectreasonid, text) \
   elseif msgtype == "D" or tonumber(msgtype) == 1 then \
     rejectorder(fixmessage.brokerid, fixmessage.id, "", text) \
     publishorder(fixmessage.brokerid, fixmessage.id) \

@@ -18,6 +18,7 @@
 * Changes:
 * 3 September 2016 - modified getExchangeId() to split instrument code in a more flexible way to get exchange id
 * 6 November 2016 - added default mnemonic in case of no value returned
+* 14 December 2016 - added midprice to default symbol record
 *****************/
 
 // node libraries
@@ -236,6 +237,7 @@ function parse(data) {
   // need something in these fields for script 
   instrec.bid = "";
   instrec.ask = "";
+  instrec.midprice = "";
   instrec.midnetchange = "";
   instrec.midpercentchange = "";
   instrec.currencyid = "";
@@ -366,6 +368,7 @@ function parse(data) {
           // re-initialise prices as may be more than one message
           instrec.bid = "";
           instrec.ask = "";
+          instrec.midprice = "";
           instrec.midnetchange = "";
           instrec.midpercentchange = "";
           instrec.currencyid = "";
@@ -518,7 +521,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
   }
 
   // update price
-  db.eval(commonfo.scriptpriceupdate, 0, instrumentcode, instrec.timestamp, instrec.bid, instrec.ask, instrec.midnetchange, instrec.midpercentchange, function(err, ret) {
+  db.eval(commonfo.scriptpriceupdate, 0, instrumentcode, instrec.timestamp, instrec.bid, instrec.ask, instrec.midprice, instrec.midnetchange, instrec.midpercentchange, function(err, ret) {
     if (err) throw err;
   });
 }
@@ -530,9 +533,11 @@ function getDbInstrec(instrumentcode, instrec) {
   if (instrec.currencyid == "GBP") {
     dbinstrec.ask = instrec.ask / 100;
     dbinstrec.bid = instrec.bid / 100;
+    dbinstrec.midprice = instrec.midprice / 100;
   } else {
     dbinstrec.ask = instrec.ask;
     dbinstrec.bid = instrec.bid;
+    dbinstrec.midprice = instrec.midprice;
   }
 
   dbinstrec.currencyid = instrec.currencyid;
@@ -1353,5 +1358,6 @@ function getError(errorcode) {
   }
 
   return desc;
+  instrec.midprice = "";
 }
 
