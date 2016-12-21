@@ -12,6 +12,8 @@
 * 23 Oct 2016 - added orderbookchannel
 * 07 Nov 2016 - modified getpostingsbydate() to use posting note rather than transaction note
 * 10 Dec 2016 - added fixseqnum to newtrade()
+* 20 Dec 2016 - added scriptErrorLog(), errorlog() & publisherror()
+* 21 Dec 2016 - updated publishposition() & publishtrade() to use a specific channel
 ****************/
 
 exports.registerScripts = function () {
@@ -28,6 +30,7 @@ exports.registerScripts = function () {
   exports.positionchannel = 10;
   exports.quoterequestchannel = 11;
   exports.orderbookchannel = 12;
+  exports.errorchannel = 13;
 
   /*** Functions ***/
 
@@ -1028,12 +1031,12 @@ exports.registerScripts = function () {
   /*
   * publishposition()
   * publish a position
-  * params: brokerid, positionid, channel
+  * params: brokerid, positionid
   */
   publishposition = getposition + '\
-  local publishposition = function(brokerid, positionid, channel) \
+  local publishposition = function(brokerid, positionid) \
     local position = getposition(brokerid, positionid) \
-    redis.call("publish", channel, "{" .. cjson.encode("position") .. ":" .. cjson.encode(position) .. "}") \
+    redis.call("publish", 10, "{" .. cjson.encode("position") .. ":" .. cjson.encode(position) .. "}") \
   end \
   ';
 
@@ -1053,7 +1056,7 @@ exports.registerScripts = function () {
     redis.call("sadd", brokerkey .. ":positions", positionid) \
     redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":positions", positionid) \
     redis.call("sadd", brokerkey .. ":positionid", "position:" .. positionid) \
-    publishposition(brokerid, positionid, 10) \
+    publishposition(brokerid, positionid) \
     return positionid \
   end \
   ';
@@ -1083,7 +1086,7 @@ exports.registerScripts = function () {
     if symbolid ~= position["symbolid"] or (futsettdate ~= "" and futsettdate ~= position["futsettdate"]) then \
       setsymbolkey(accountid, brokerid, futsettdate, positionid, symbolid) \
     end \
-    publishposition(brokerid, positionid, 10) \
+    publishposition(brokerid, positionid) \
   end \
   ';
 
@@ -1952,13 +1955,13 @@ exports.registerScripts = function () {
 
   /*
   * publishtrade()
-  * publish a trade
+  * publish a trade to the trade channel
+  * params: brokerid, tradeid
   */
   publishtrade = gethashvalues + '\
-  local publishtrade = function(brokerid, tradeid, channel) \
-    redis.log(redis.LOG_NOTICE, "publishtrade") \
+  local publishtrade = function(brokerid, tradeid) \
     local trade = gethashvalues("broker:" .. brokerid .. ":trade:" .. tradeid) \
-    redis.call("publish", channel, "{" .. cjson.encode("trade") .. ":" .. cjson.encode(trade) .. "}") \
+    redis.call("publish", 6, "{" .. cjson.encode("trade") .. ":" .. cjson.encode(trade) .. "}") \
   end \
   ';
 
@@ -1995,7 +1998,7 @@ exports.registerScripts = function () {
     end \
     local retval = newtradetransaction(settlcurramt, commission, ptmlevy, stampduty, contractcharge, brokerid, accountid, settlcurrencyid, 1, timestamp, tradeid, side, timestampms) \
     newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, timestampms) \
-    publishtrade(brokerid, tradeid, 6) \
+    publishtrade(brokerid, tradeid) \
     return tradeid \
   end \
   ';
@@ -2175,7 +2178,46 @@ exports.registerScripts = function () {
   end \
   ';
 
+  /*
+  * publisherror()
+  * publish an error
+  * params: errorlogid
+  */
+  publisherror = gethashvalues + '\
+  local publisherror = function(errorlogid) \
+    local errorlog = gethashvalues("errorlog:" .. errorlogid) \
+    redis.call("publish", 13, "{" .. cjson.encode("errorlog") .. ":" .. cjson.encode(errorlog) .. "}") \
+  end \
+  ';
+
+  /*
+  * errorlog()
+  * store details of errors
+  * params: brokerid, businessobjectid, businessobjecttypeid, errortypeid, messageid, messagetypeid, module, rejectreasonid, text, timestamp
+  * returns:
+  */
+  errorlog = publisherror + '\
+  local errorlog = function(brokerid, businessobjectid, businessobjecttypeid, errortypeid, messageid, messagetypeid, module, rejectreasonid, text, timestamp) \
+    redis.log(redis.LOG_NOTICE, "errorlog") \
+    local errorlogid = redis.call("hincrby", "config", "lasterrorlogid", 1) \
+    redis.call("hmset", "errorlog:" .. errorlogid, "brokerid", brokerid, "businessobjectid", businessobjectid, "businessobjecttypeid", businessobjecttypeid, "errorlogid", errorlogid, "errortypeid", errortypeid, "messageid", messageid, "messagetypeid", messagetypeid, "module", module, "rejectreasonid", rejectreasonid, "text", text, "timestamp", timestamp) \
+    publisherror(errorlogid) \
+  end \
+  ';
+
+  exports.errorlog = errorlog;
+
   /*** Scripts ***/
+
+  /*
+  * scripterrorlog
+  * store errors
+  * params: brokerid, businessobjectid, businessobjecttypeid, errortypeid, messageid, messagetypeid, module, rejectreasonid, text, timestamp
+  * returns:
+  */
+  exports.scripterrorlog = errorlog + '\
+    errorlog(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10]) \
+ ';
 
   /*
   * scriptgetholidays

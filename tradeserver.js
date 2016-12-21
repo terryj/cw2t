@@ -15,7 +15,8 @@
 *             - updated newordersingle() & testTradeResponse()
 *             - updated error handling of scriptneworder() in newOrderSingle()
 * 10 Dec 2016 - added fixseqnum storage to quote request process
-* 12 Dec 2016 - added separate quoteacks
+* 12 Dec 2016 - added separate quoteacks - quoteack(), publishquoteack()
+* 20 Dec 2016 - modified scriptQuoteRequest(), scriptQuote(), scriptQuoteAck(), scriptreject()
 ****************/
 
 // node libraries
@@ -93,6 +94,19 @@ db.on("error", function(err) {
   console.log(err);
 });
 
+// log errors
+function errorLog(brokerid, businessobjectid, businessobjecttypeid, errortypeid, messageid, messagetypeid, module, rejectreasonid, text) {
+  var timestamp = commonbo.getUTCTimeStamp(new Date());
+
+  db.eval(commonbo.scripterrorlog, 0, brokerid, businessobjectid, businessobjecttypeid, errortypeid, messageid, messagetypeid, module, rejectreasonid, text, timestamp, function(err, ret) {
+    if (err) {
+      // do not call error log here
+      console.log(err);
+      return;
+    }
+  });
+}
+
 function initialise() {
   initDb();
   pubsub();
@@ -137,18 +151,6 @@ function pubsub() {
   // listen for trade related messages
   dbsub.subscribe(commonbo.tradeserverchannel);
 }
-
-// connection to Winner
-/*var winner = new winnclient.Winner();
-winner.on("connected", function() {
-  console.log("Connected to Winner");
-});
-winner.on("loggedon", function() {
-  console.log("Logged on to Winner");
-});
-winner.on('finished', function(message) {
-    console.log(message);
-});*/
 
 // connection to NBTrader
 var nbt = new nbtrader.Nbt();
@@ -240,13 +242,13 @@ function quoteRequest(quoterequest) {
   db.eval(scriptQuoteRequest, 1, "broker:" + quoterequest.brokerid, quoterequest.accountid, quoterequest.brokerid, quoterequest.cashorderqty, quoterequest.clientid, quoterequest.currencyid, quoterequest.futsettdate, quoterequest.operatorid, quoterequest.operatortype, quoterequest.quantity, quoterequest.settlmnttypid, quoterequest.side, quoterequest.symbolid, quoterequest.timestamp, quoterequest.settlcurrencyid, function(err, ret) {
     if (err) {
       console.log(err);
+      errorLog(quoterequest.brokerid, "", 5, 4, "", "", "tradeserver.scriptQuoteRequest", "", err);
       return;
     }
 
-    // todo:sort out
     if (ret[0] == 0) {
-      // todo: send a quote ack to client
-      console.log("Error in scriptQuoteRequest: " + commonbo.getReasonDesc(ret[0]));
+      console.log("Error in scriptQuoteRequest: " + commonbo.getReasonDesc(ret[1]));
+      errorLog(quoterequest.brokerid, "", 5, 4, "", "", "tradeserver.scriptQuoteRequest", "", commonbo.getReasonDesc(ret[1]));
       return;
     }
 
@@ -304,9 +306,10 @@ function testQuoteAck(quoterequest) {
   quoteack.quoterejectreasonid = "";
   quoteack.text = "test rejection message";
 
-  db.eval(scriptQuoteAck, 1, "broker:" + quoterequest.brokerid, quoterequest.brokerid, quoteack.quoterequestid, quoteack.quotestatusid, quoteack.quoterejectreasonid, quoteack.text, function(err, ret) {
+  db.eval(scriptQuoteAck, 1, "broker:" + quoterequest.brokerid, quoterequest.brokerid, quoteack.quoterequestid, quoteack.quotestatusid, quoteack.quoterejectreasonid, quoteack.text, "", function(err, ret) {
     if (err) {
       console.log(err);
+      errorLog(quoterequest.brokerid, "", 7, 4, "", "", "tradeserver.testQuoteAck", "", err);
       return;
     }
   });
@@ -405,6 +408,7 @@ function dealAtQuote(order) {
   db.eval(scriptdealatquote, 1, "broker:" + order.brokerid, order.brokerid, order.ordertype, order.markettype, order.quoteid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforceid, order.operatortype, order.operatorid, order.timestampms, function(err, ret) {
     if (err) {
       console.log(err);
+      errorLog(order.brokerid, "", 2, 4, "", "", "tradeserver.scriptdealatquote", "", err);
       return;
     }
 
@@ -412,11 +416,10 @@ function dealAtQuote(order) {
     if (ret[0] == 0) {
       console.log("Error in scriptdealatquote, order #" + ret[2] + " - " + commonbo.getReasonDesc(ret[1]));
 
-      // if the orderid=0, no order was created & a message needs to be sent back to the user - todo
-      if (ret[2] == 0) {
-      }
+      // record the error
+      errorLog(order.brokerid, ret[2], 2, 4, "", "", "tradeserver.scriptdealatquote", "", commonbo.getReasonDesc(ret[1]));
 
-      // otherwise, script will publish the order back to the operator type
+      // script will publish the order back to the operator type
 
       return;
     }
@@ -503,6 +506,7 @@ function newOrderSingle(order) {
   db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertype, order.markettype, order.futsettdate, order.quoteid, order.currencyid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforceid, order.expiredate, order.expiretime, order.settlcurrencyid, order.settlcurrfxrate, order.settlcurrfxratecalc, order.operatortype, order.operatorid, order.cashorderqty, order.settlmnttypid, order.timestampms, function(err, ret) {
     if (err) {
       console.log(err);
+      errorLog(order.brokerid, "", 2, 4, "", "", "tradeserver.scriptneworder", "", err);
       return;
     }
 
@@ -510,11 +514,15 @@ function newOrderSingle(order) {
     if (ret[0] == 0) {
       console.log("Error in scriptneworder, order #" + ret[2] + " - " + commonbo.getReasonDesc(ret[1]));
 
+      // record the error
+      errorLog(order.brokerid, ret[2], 2, 4, "", "", "tradeserver.scriptneworder", "", commonbo.getReasonDesc(ret[1]));
+
       // script will publish the order back to the operator type if an order was created
       return;
-    } else if (order.ordertype == 2) {
-      // handle limit orders internally
-      console.log(ret[1]);
+    }
+
+    // handle limit orders internally
+    if (order.ordertype == 2) {
       return;
     }
 
@@ -799,6 +807,7 @@ function newQuote(quote) {
   db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, quote.bidspotrate, quote.offerspotrate, quote.fixseqnumid, function(err, ret) {
     if (err) {
       console.log(err);
+      errorLog(quote.brokerid, "", 3, 4, quote.fixseqnumid, "S", "tradeserver.newQuote", "", err);
       return;
     }
 
@@ -807,11 +816,6 @@ function newQuote(quote) {
       console.log("Error in scriptquote: " + commonbo.getReasonDesc(ret));
       return;
     }
-
-    // start the quote monitor if necessary
-    /*if (quoteinterval == null) {
-      startQuoteInterval();
-    }*/
 
     // script publishes quote to the operator type that made the request
   });
@@ -867,10 +871,11 @@ nbt.on("orderAck", function(exereport) {
   db.eval(scriptorderack, 1, "broker:" + exereport.brokerid, exereport.brokerid, exereport.clordid, exereport.orderid, exereport.ordstatus, exereport.execid, text, exereport.fixseqnum, function(err, ret) {
     if (err) {
       console.log(err);
+      errorLog(exereport.brokerid, "", 8, 4, exereport.fixseqnumid, "b", "tradeserver.scriptorderack", "", err);
       return;
     }
 
-    // script publishes orderack to operator type
+    // script publishes order to operator type
   });
 });
 
@@ -1043,43 +1048,75 @@ nbt.on("quoteack", function(quoteack) {
   console.log("Quote ack received, request id: " + quoteack.quoterequestid);
   console.log(quoteack);
 
-  db.eval(scriptQuoteAck, 1, "broker:" + quoteack.brokerid, quoteack.brokerid, quoteack.quoterequestid, quoteack.quoteackstatus, quoteack.quoterejectreasonid, quoteack.text, function(err, ret) {
+  db.eval(scriptQuoteAck, 1, "broker:" + quoteack.brokerid, quoteack.brokerid, quoteack.quoterequestid, quoteack.quoteackstatus, quoteack.quoterejectreasonid, quoteack.text, quoteack.fixseqnumid, function(err, ret) {
     if (err) {
       console.log(err);
+      errorLog(quoteack.brokerid, "", 7, 4, quoteack.fixseqnumid, "b", "tradeserver.scriptQuoteAck", "", err);
       return;
     }
   });
 });
 
 //
-// message error
-// todo: get fix message & inform client
+// session error
 //
 nbt.on("reject", function(reject) {
-  console.log("Message reject received");
+  console.log("Session reject received");
   console.log(reject);
 
   var reasondesc = "";
 
   if ('sessionrejectreason' in reject) {
     reasondesc = nbt.getSessionRejectReason(reject.sessionrejectreason);
-    console.log("Reason: " + reasondesc);
+  }
+
+  if ('text' in reject) {
+    reasondesc = reasondesc + ": " + reject.text;
   }
 
   if ('refseqnum' in reject && 'refmsgtype' in reject) {
     db.eval(scriptreject, 0, reject.refseqnum, reject.refmsgtype, reasondesc, function(err, ret) {
       if (err) {
         console.log(err);
+        errorLog("", "", "", 4, "", "3", "reject", "", err);
         return;
       }
+      
+      // report the error
+      errorLog("", "", "", 4, ret, "3", "reject", "", reasondesc);
     });
   }
 });
 
+//
+// business error
+//
 nbt.on("businessReject", function(businessreject) {
-  console.log("business reject message received");
+  console.log("Business reject received");
   console.log(businessreject);
-  // todo: lookup fix msg to get details of what it relates to
+
+  var reasondesc = "";
+
+  if ('businessrejectreason' in businessreject) {
+    reasondesc = nbt.getBusinessRejectReason(businessreject.businessrejectreason);
+  }
+
+  if ('text' in businessreject) {
+    reasondesc = reasondesc + ": " + businessreject.text;
+  }
+
+  if ('refseqnum' in businessreject && 'refmsgtype' in businessreject) {
+    db.eval(scriptbusinessreject, 0, businessreject.refseqnum, businessreject.refmsgtype, reasondesc, function(err, ret) {
+      if (err) {
+        console.log(err);
+        errorLog("", "", "", 4, "", "j", "businessreject", "", err);
+        return;
+      }
+
+      // report the error
+      errorLog("", "", "", 4, ret, "j", "businessreject", "", reasondesc);
+    });
+  }
 });
 
 function registerScripts() {
@@ -1373,15 +1410,17 @@ function registerScripts() {
   /*
   * quoteack()
   * process a quote acknowledgement
-  * params: brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text
+  * params: brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text, fixseqnumid
   */
   quoteack = publishquoteack + '\
-  local quoteack = function(brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text) \
+  local quoteack = function(brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text, fixseqnumid) \
     --[[ create a quote ack ]] \
     local quoteackid = redis.call("hincrby", "broker:" .. brokerid, "lastquoteackid", 1) \
-    redis.call("hmset", "broker:" .. brokerid .. ":quoteack:" .. quoteackid, "broker", brokerid, "quoterequestid", quoterequestid, "quotestatusid", quotestatusid, "quoterejectreasonid", quoterejectreasonid, "text", text, "quoteackid", quoteackid) \
+    redis.call("hmset", "broker:" .. brokerid .. ":quoteack:" .. quoteackid, "broker", brokerid, "quoterequestid", quoterequestid, "quotestatusid", quotestatusid, "quoterejectreasonid", quoterejectreasonid, "text", text, "quoteackid", quoteackid, "fixseqnumid", fixseqnumid) \
     --[[ update quote request ]] \
     redis.call("hmset", "broker:" .. brokerid .. ":quoterequest:" .. quoterequestid, "quotestatusid", quotestatusid, "quoteackid", quoteackid) \
+    --[[ update fix message ]] \
+    redis.call("hmset", "fixmessage:" .. fixseqnumid, "brokerid", brokerid, "businessobjectid", quoteackid, "businessobjecttypeid", 7) \
     --[[ publish to operator type ]] \
     publishquoteack(brokerid, quoteackid) \
   end \
@@ -1434,7 +1473,7 @@ function registerScripts() {
   * returns: 0 if fail, 1, consideration if ok
   * note: order status & reject reason will be updated if there is an error 
   */
-  getsettlcurramt = commonbo.rejectorder + '\
+  getsettlcurramt = commonbo.rejectorder + commonbo.round + '\
   local getsettlcurramt = function(brokerid, orderid, quantity, cashorderqty, price, ordertype) \
     local settlcurramt \
     if quantity == "" then \
@@ -1997,7 +2036,7 @@ function registerScripts() {
 
   scriptorderack = publishorder + '\
   --[[ update external limit reference ]] \
-  redis.call("hmset", "broker:" .. ARGV[1] .. ":order:" .. ARGV[2], "externalorderid", ARGV[3], "orderstatusid", ARGV[4], "execid", ARGV[5], "text", ARGV[6], "fixseqnum", fixseqnum) \
+  redis.call("hmset", "broker:" .. ARGV[1] .. ":order:" .. ARGV[2], "externalorderid", ARGV[3], "orderstatusid", ARGV[4], "execid", ARGV[5], "text", ARGV[6], "fixseqnum", ARGV[7]) \
   publishorder(ARGV[1], ARGV[2]) \
   return \
   ';
@@ -2017,8 +2056,6 @@ function registerScripts() {
   */
   scriptQuoteRequest = commonbo.gethashvalues + commonbo.getclientaccountid + commonbo.getaccount + quoteack + '\
   redis.log(redis.LOG_NOTICE, "scriptQuoteRequest") \
-  local quoterequestid = redis.call("hincrby", KEYS[1], "lastquoterequestid", 1) \
-  if not quoterequestid then return {0, 1005} end \
   --[[ get trading accountid if not specified ]] \
   local accountid \
   if ARGV[1] == "" then \
@@ -2031,8 +2068,10 @@ function registerScripts() {
   end \
   --[[ get the account & use the account currency as the request currency ]] \
   local account = getaccount(accountid, ARGV[2]) \
+  local quoterequestid = redis.call("hincrby", KEYS[1], "lastquoterequestid", 1) \
+  if not quoterequestid then return {0, 1005} end \
   --[[ store the quote request ]] \
-  redis.call("hmset", KEYS[1] .. ":quoterequest:" .. quoterequestid, "accountid", accountid, "brokerid", ARGV[2], "cashorderqty", ARGV[3], "clientid", ARGV[4], "currencyid", account["currencyid"], "futsettdate", ARGV[6], "operatorid", ARGV[7], "operatortype", ARGV[8], "quantity", ARGV[9], "quoterejectreasonid", "", "quoterequestid", quoterequestid, "quotestatusid", 0, "settlmnttypid", ARGV[10], "side", ARGV[11], "symbolid", ARGV[12], "timestamp", ARGV[13], "text", "", "settlcurrencyid", account["currencyid"]) \
+  redis.call("hmset", KEYS[1] .. ":quoterequest:" .. quoterequestid, "accountid", accountid, "brokerid", ARGV[2], "cashorderqty", ARGV[3], "clientid", ARGV[4], "currencyid", account["currencyid"], "futsettdate", ARGV[6], "operatorid", ARGV[7], "operatortype", ARGV[8], "quantity", ARGV[9], "quoterequestid", quoterequestid, "quotestatusid", 0, "settlmnttypid", ARGV[10], "side", ARGV[11], "symbolid", ARGV[12], "timestamp", ARGV[13], "settlcurrencyid", account["currencyid"], "quoteackid", "", "fixseqnumid", "") \
   --[[ add to the set of quoterequests ]] \
   redis.call("sadd", KEYS[1] .. ":quoterequests", quoterequestid) \
   redis.call("sadd", KEYS[1] .. ":quoterequestid", "quoterequest:" .. quoterequestid) \
@@ -2040,13 +2079,13 @@ function registerScripts() {
   redis.call("sadd", KEYS[1] .. ":account:" .. accountid .. ":quoterequests", quoterequestid) \
   --[[ check there is some kind of quantity ]] \
   if ARGV[3] == "" and ARGV[9] == "" then \
-    quoteack(ARGV[2], quoterequestid, 5, 99, "Either quantity or cashorderqty must be present") \
+    quoteack(ARGV[2], quoterequestid, 5, 99, "Either quantity or cashorderqty must be present", "") \
     return {0, 1034} \
   end \
   --[[ get required instrument values for external feed ]] \
   local symbol = gethashvalues("symbol:" .. ARGV[12]) \
   if not symbol["symbolid"] then \
-    quoteack(ARGV[2], quoterequestid, 5, 99, "Symbol not found") \
+    quoteack(ARGV[2], quoterequestid, 5, 99, "Symbol not found", "") \
     return {0, 1016} \
   end \
   return {1, quoterequestid, symbol["isin"], symbol["mnemonic"], symbol["exchangeid"], account["currencyid"]} \
@@ -2106,7 +2145,6 @@ function registerScripts() {
     cashorderqty = round(bidquantity * bidprice, 2) \
     side = 2 \
   end \
-  redis.log(redis.LOG_NOTICE, cashorderqty) \
   --[[ get the costs ]] \
   costs = getcosts(brokerid, clientid, quoterequest["symbolid"], side, cashorderqty, ARGV[10]) \
   --[[ create a quote id as different from external quote ids (one for bid, one for offer)]] \
@@ -2126,6 +2164,8 @@ function registerScripts() {
   else \
     quotestatusid = "0" \
   end \
+  --[[ update fix message ]] \
+  redis.call("hmset", "fixmessage:" .. ARGV[24], "brokerid", brokerid, "businessobjectid", quoteid, "businessobjecttypeid", 3) \
   --[[ update status to stored quoterequest ]] \
   redis.call("hmset", brokerkey .. ":quoterequest:" .. ARGV[1], "quotestatusid", quotestatusid) \
   --[[ publish quote to operator type, with operator id, so can be forwarded as appropriate ]] \
@@ -2136,10 +2176,10 @@ function registerScripts() {
   /*
   * scriptQuoteAck
   * script to handle a quote acknowledgement
-  * params: brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text
+  * params: brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text, fixseqnumid
   */
   scriptQuoteAck = quoteack + '\
-  quoteack(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5]) \
+  quoteack(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6]) \
   return \
   ';
 
@@ -2195,23 +2235,51 @@ function registerScripts() {
 
   /*
   * scriptreject
-  * script to handle fix message errors
+  * script to handle fix message session errors
   * params: outgoing refseqnum, msgtype, reason description
   * returns: 0 if ok else 1 + error message 
   */
   scriptreject = commonbo.gethashvalues + quoteack + commonbo.rejectorder + publishorder + '\
+  local refseqnum = ARGV[1] \
   local msgtype = ARGV[2] \
   local text = ARGV[3] \
   --[[ get the outgoing fix message ]] \
   local fixseqnumid = redis.call("get", "fixseqnumout:" .. refseqnum .. ":fixseqnumid") \
-  local fixmessage = gethashvalues("fixseqnum:" .. fixseqnumid) \
-  --[[ try to find associated record ]] \
-  if msgtype == "R" then \
-    quoteack(fixmessage.brokerid, fixmessage.id, 5, quoterejectreasonid, text) \
-  elseif msgtype == "D" or tonumber(msgtype) == 1 then \
-    rejectorder(fixmessage.brokerid, fixmessage.id, "", text) \
-    publishorder(fixmessage.brokerid, fixmessage.id) \
+  local fixmessage = gethashvalues("fixmessage:" .. fixseqnumid) \
+  --[[ try to find associated record to inform the client/user ]] \
+  if fixmessage.brokerid and fixmessage.businessobjectid then \
+    if msgtype == "R" then \
+      quoteack(fixmessage.brokerid, fixmessage.businessobjectid, 5, 99, text, fixseqnumid) \
+    elseif msgtype == "D" or tonumber(msgtype) == 1 then \
+      rejectorder(fixmessage.brokerid, fixmessage.businessobjectid, "", text) \
+      publishorder(fixmessage.brokerid, fixmessage.businessobjectid) \
+    end \
   end \
-  return 0 \
+  return fixseqnumid \
+  ';
+
+  /*
+  * scriptbusinessreject
+  * script to handle fix message business errors
+  * params: outgoing refseqnum, msgtype, reason description
+  * returns: 0 if ok else 1 + error message
+  */
+  scriptbusinessreject = commonbo.gethashvalues + quoteack + commonbo.rejectorder + publishorder + '\
+  local refseqnum = ARGV[1] \
+  local msgtype = ARGV[2] \
+  local text = ARGV[3] \
+  --[[ get the outgoing fix message ]] \
+  local fixseqnumid = redis.call("get", "fixseqnumout:" .. refseqnum .. ":fixseqnumid") \
+  local fixmessage = gethashvalues("fixmessage:" .. fixseqnumid) \
+  --[[ try to find associated record to inform the client/user ]] \
+  if fixmessage.brokerid and fixmessage.businessobjectid then \
+    if msgtype == "R" then \
+      quoteack(fixmessage.brokerid, fixmessage.businessobjectid, 5, 99, text, fixseqnumid) \
+    elseif msgtype == "D" or tonumber(msgtype) == 1 then \
+      rejectorder(fixmessage.brokerid, fixmessage.businessobjectid, "", text) \
+      publishorder(fixmessage.brokerid, fixmessage.businessobjectid) \
+    end \
+  end \
+  return fixseqnumid \
   ';
 }

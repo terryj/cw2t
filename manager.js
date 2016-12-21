@@ -152,6 +152,7 @@ function pubsub() {
 
         if ("quote" in obj) {
           forwardQuote(obj.quote, message);
+          placeOrder(obj.quote);
         } else if ("order" in obj) {
           forwardOrder(obj.order, message);
         } else if ("trade" in obj) {
@@ -1714,6 +1715,23 @@ function forwardQuote(quote, msg) {
   }
 }
 
+function placeOrder(quote) {
+  console.log("placeOrder");
+
+  var order = {};
+
+  order.brokerid = 1;
+  order.operatortype = operatortype;
+  order.operatorid = 1;
+  order.accountid = 2;
+  order.clientid = 2;
+  order.quoteid = quote.quoteid;
+  order.ordertype = 1;
+  order.symbolid = 'BARC.L';
+
+  db.publish(commonbo.tradeserverchannel, "{\"order\":" + JSON.stringify(order) + "}");
+}
+
 function sendConnections(connectionreq, conn) {
   db.eval(scriptgetconnections, 0, function(err, ret) {
     if (err) throw err;
@@ -2172,7 +2190,7 @@ function testQuoteRequest() {
   quoterequest.clientid = 2;
   quoterequest.side = 1;
   quoterequest.symbolid = 'BARC.L';
-  quoterequest.quantity = 99;
+  quoterequest.quantity = 100;
   quoterequest.cashorderqty = '';
   quoterequest.currencyid = 'GBP';
   quoterequest.settlcurrencyid = 'GBP';

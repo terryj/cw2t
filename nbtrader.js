@@ -248,7 +248,7 @@ function logon(reset) {
     msg += '141=' + 'Y' + SOH;
   }
 
-  sendMessage('A', "", "", msg, false, null, null, 0, 0);
+  sendMessage('A', "", "", msg, false, null, null, "", "", "");
 }
 
 function sendLogout(text) {
@@ -258,11 +258,11 @@ function sendLogout(text) {
     msg = '58=' + text + SOH;
   }
 
-  sendMessage('5', "", "", msg, false, null, null, 0, 0);
+  sendMessage('5', "", "", msg, false, null, null, "", "", "");
 }
 
 function sendHeartbeat() {
-  sendMessage('0', "", "", "", false, null, null, 0, 0);
+  sendMessage('0', "", "", "", false, null, null, "", "", "");
 }
 
 function sendTestRequest(self) {
@@ -286,7 +286,7 @@ function sendTestRequest(self) {
   msg = '112=' + matchtestreqid + SOH;
 
   // send a test request after agreed quiet time period
-  sendMessage('1', "", "", msg, false, null, null, 0, 0);
+  sendMessage('1', "", "", msg, false, null, null, "", "", "");
 
   // need to receive a signed heartbeat within agreed time period, otherwise we are history
   startTestRequestTimer(self);
@@ -362,7 +362,7 @@ Nbt.prototype.quoteRequest = function(quoterequest) {
     msg += '6158=' + quoterequest.quoterid + SOH;
   }
 
-  sendMessage('R', onbehalfofcompid, "", msg, false, null, null, quoterequest.brokerid, quoterequest.quoterequestid);
+  sendMessage('R', onbehalfofcompid, "", msg, false, null, null, quoterequest.brokerid, quoterequest.quoterequestid, 5);
 }
 
 Nbt.prototype.newOrder = function(order) {
@@ -416,12 +416,12 @@ Nbt.prototype.newOrder = function(order) {
       msg += '64=' + order.futsettdate + SOH;
     }
 
-    sendMessage('D', onbehalfofcompid, delivertocompid, msg, false, null, null, order.brokerid, order.orderid);
+    sendMessage('D', onbehalfofcompid, delivertocompid, msg, false, null, null, order.brokerid, order.orderid, 2);
 }
 
 Nbt.prototype.orderCancelRequest = function(ocr) {
   var msg = '11=' + ocr.ordercancelreqid + SOH
-    + '41=' + ocr.orderid + SOH
+    + '41=' + ocr.brokerid + ":" + ocr.orderid + SOH
     + '55=' + ocr.mnemonic + SOH
     + '48=' + ocr.isin + SOH
     + '22=' + idsource + SOH
@@ -429,14 +429,14 @@ Nbt.prototype.orderCancelRequest = function(ocr) {
     + '38=' + ocr.quantity + SOH
     + '60=' + ocr.timestamp + SOH;
 
-    sendMessage('F', onbehalfofcompid, "", msg, false, null, null, 0, 0);
+    sendMessage('F', onbehalfofcompid, "", msg, false, null, null, ocr.brokerid, ocr.orderid, 6);
 }
 
 //
 // resend=false, msgseqnum=null, origtimestamp=null for a new message
 // resend=true, msgseqnum=original message number, origtimestamp=original timespamp if a message is being resent
 // 
-function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, origtimestamp, brokerid, id) {
+function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, origtimestamp, brokerid, businessobjectid, businessobjecttypeid) {
   // we need our own timestamp
   var timestamp = commonbo.getUTCTimeStamp(new Date());
 
@@ -447,7 +447,7 @@ function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, m
     sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, timestamp, origtimestamp);
   } else {
     // store the message in case it needs to be resent later
-    db.eval(scriptfixmessageout, 0, msgtype, body, timestamp, brokerid, id, function(err, ret) {
+    db.eval(scriptfixmessageout, 0, msgtype, onbehalfofcompid, delivertocompid, body, timestamp, brokerid, businessobjectid, businessobjecttypeid, function(err, ret) {
       if (err) {
         console.log(err);
         return;
@@ -588,7 +588,7 @@ function completeMessage(tagvalarr, self) {
   var timestamp = commonbo.getUTCTimeStamp(new Date());
 
   // store the message & get the expected incoming sequence number
-  db.eval(scriptfixmessagein, 0, header.msgtype, sendercompid, targetcompid, header.msgseqnum, header.sendingtime, header.possdupflag, header.possresend, header.onbehalfofcompid, header.origsendingtime, header.delivertocompid, body, timestamp, function(err, ret) {
+  db.eval(scriptfixmessagein, 0, header.msgtype, header.onbehalfofcompid, header.delivertocompid, body, timestamp, "", "", "", header.msgseqnum, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -597,6 +597,9 @@ function completeMessage(tagvalarr, self) {
     var fixseqnumin = ret[0];
     var fixseqnumid = ret[1];
 
+////////////todo: remove
+    fixseqnumin = header.msgseqnum;
+//////////////
     // id created may be used to link to a record
     body.fixseqnumid = fixseqnumid;
  
@@ -1287,7 +1290,7 @@ function resendRequest(beginseqno) {
   msg = '7=' + beginseqno + SOH
     + '16=' + '0' + SOH;
 
-  sendMessage('2', "", "", msg, false, null, null, 0, 0);
+  sendMessage('2', "", "", msg, false, null, null, "", "", "");
 }
 
 function sequenceGapReceived(seqgap) {
@@ -1376,7 +1379,7 @@ function testRequestReceived(testrequest, self) {
 function testRequestReply(reqid) {	
   var msg = '112=' + reqid + SOH;
 
-  sendMessage('0', "", "", msg, false, null, null, 0, 0);
+  sendMessage('0', "", "", msg, false, null, null, "", "", "");
 }
 
 function resendRequestReceived(resendrequest, self) {
@@ -1428,7 +1431,7 @@ function resendMessage(msgno, endseqno, self) {
 				sequenceGap(sequencegapnum, msgno, sequencegaptimestamp);
 			}
 
-			sendMessage(msg.msgtype, "", "", msg.body, true, msgno, msg.timestamp, 0, 0);
+			sendMessage(msg.msgtype, "", "", msg.body, true, msgno, msg.timestamp, "", "", "");
 		}
 
 		// check for infinity
@@ -1513,7 +1516,7 @@ function sequenceGap(beginnum, endnum, timestamp) {
 	msg = '123=' + 'Y' + SOH
 		+ '36=' + endnum + SOH;
 
-	sendMessage('4', "", "", msg, true, beginnum, timestamp, 0, 0);
+	sendMessage('4', "", "", msg, true, beginnum, timestamp, "", "", "");
 
 	sequencegapnum = 0;
 }
@@ -1762,17 +1765,19 @@ function registerScripts() {
   /*
   * scriptfixmessageout
   * increment the outgoing sequence number & store the message
-  * params: msgtype, body, timestamp, brokerid, id - may be used to link to a record id
+  * params: msgtype, onbehalfofcompid, delivertocompid, body, timestamp, brokerid, businessobjectid, businessobjecttypeid
   */
   scriptfixmessageout = '\
-  local fixseqnumid = redis.call("incr", "lastfixseqnumid") \
-  local fixseqnumout = redis.call("incr", "lastfixseqnumout") \
-  redis.call("hmset", "fixseqnum:" .. fixseqnumid, "fixseqnumout", fixseqnumout, "msgtype", ARGV[1], "body", ARGV[2], "timestamp", ARGV[3], "broker", ARGV[4], "id", ARGV[5], "fixseqnumid", fixseqnumid) \
+  local fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
+  local fixseqnumout = redis.call("hincrby", "config", "lastfixseqnumout", 1) \
+  redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "body", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumout", fixseqnumout, "fixseqnumid", fixseqnumid) \
+  --[[ set a key so we can get to the stored message from the outgoing fix sequence number ]] \
+  redis.call("set", "fixseqnumout:" .. fixseqnumout .. ":fixseqnumid", fixseqnumid) \
   --[[ where possible, link the fix message back to the originating message ]] \
   if ARGV[1] == "R" then \
-    redis.call("hset", "broker:" .. ARGV[4] .. ":quoterequest:" ..  ARGV[5], "fixseqnumid", fixseqnumid) \
+    redis.call("hset", "broker:" .. ARGV[6] .. ":quoterequest:" ..  ARGV[7], "fixseqnumid", fixseqnumid) \
   elseif ARGV[1] == "D" or tonumber(ARGV[1]) == 1 then \
-    redis.call("hset", "broker:" .. ARGV[4] .. ":order:" ..  ARGV[5], "fixseqnumid", fixseqnumid) \
+    redis.call("hset", "broker:" .. ARGV[6] .. ":order:" ..  ARGV[7], "fixseqnumid", fixseqnumid) \
   end \
   return fixseqnumout \
   ';
@@ -1784,9 +1789,9 @@ function registerScripts() {
   * returns: fixseqnumin - used for fix sequence processing, fixseqnumid - may be used to link to record id yet to be created
   */
   scriptfixmessagein = '\
-  local fixseqnumid = redis.call("incr", "lastfixseqnumid") \
-  local fixseqnumin = redis.call("incr", "lastfixseqnumin") \
-  redis.call("hmset", "fixseqnum:" .. fixseqnumid, "fixseqnumin", fixseqnumin, "msgtype", ARGV[1], "sendercompid", ARGV[2], "targetcompid", ARGV[3], "msgseqnum", ARGV[4], "sendingtime", ARGV[5], "possdupflag", ARGV[6], "possresend", ARGV[7], "onbehalfofcompid", ARGV[8], "origsendingtime", ARGV[9], "delivertocompid", ARGV[10], "body", ARGV[11], "timestamp", ARGV[12], "fixseqnumid", fixseqnumid) \
+  local fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
+  local fixseqnumin = redis.call("hincrby", "config", "lastfixseqnumin", 1) \
+  redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "body", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumid", fixseqnumid, "fixseqnumin", fixseqnumin, "externalfixseqnumin", ARGV[9]) \
   return {fixseqnumin, fixseqnumid} \
   ';
 
