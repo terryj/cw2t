@@ -378,7 +378,6 @@ Nbt.prototype.newOrder = function(order) {
     + '54=' + order.side + SOH
     + '60=' + order.timestamp + SOH
     + '63=' + order.settlmnttypid + SOH
-    //+ '64=' + order.futsettdate + SOH
     + '59=' + order.timeinforce + SOH
     + '120=' + order.settlcurrencyid + SOH
     + '15=' + order.currencyid + SOH

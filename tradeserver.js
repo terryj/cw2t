@@ -626,12 +626,15 @@ function orderCancelRequest(ocr) {
   db.eval(scriptordercancelrequest, 5, ocr.clientid, ocr.orderid, ocr.timestamp, ocr.operatortype, ocr.operatorid, function(err, ret) {
     if (err) {
       console.log(err);
+      errorLog(ocr.brokerid, "", 6, 4, "", "", "tradeserver.scriptordercancelrequest", "", err);
       return;
     }
 
     // error, so send an ordercancelreject message
     if (ret[0] != 0) {
+      // todo: publish an order from the script
       orderCancelReject(ocr.operatortype, ret[2]);
+      errorLog(ocr.brokerid, "", 6, 4, "", "", "tradeserver.scriptordercancelrequest", "", commonbo.getReasonDesc(ret[0]));
       return;
     }
 
@@ -717,6 +720,7 @@ function loadHolidays() {
   db.eval(commonbo.scriptgetholidays, 0, "L", function(err, ret) {
     if (err) {
       console.log(err);
+      errorLog("", "", "", 4, "", "", "tradeserver.loadHolidays", "", err);
       return;
     }
 
@@ -835,6 +839,7 @@ nbt.on("orderReject", function(exereport) {
   if ('ordrejreason' in exereport) {
     orderrejectreasonid = exereport.ordrejreason;
   }
+
   if ('text' in exereport) {
     text = exereport.text;
   }
@@ -842,15 +847,12 @@ nbt.on("orderReject", function(exereport) {
   db.eval(scriptrejectorder, 1, "broker:" + exereport.brokerid, exereport.brokerid, exereport.clordid, orderrejectreasonid, text, function(err, ret) {
     if (err) {
       console.log(err);
+      errorLog(exereport.brokerid, exereport.clordid, 2, 4, exereport.fixseqnumid, "8", "tradeserver.orderReject", "", err);
       return;
     }
 
-    //todo:sortout
-    if (ret != 0) {
-      // todo: message to operator
-      console.log("Error in scriptrejectorder, reason:" + commonbo.getReasonDesc(ret));
-      return;
-    }
+    // raise an error
+    errorLog(exereport.brokerid, exereport.clordid, 2, 4, exereport.fixseqnumid, "8", "tradeserver.orderReject", orderrejectreasonid, text);
 
     // order published to operator by script
   });
@@ -888,16 +890,18 @@ nbt.on("orderCancel", function(exereport) {
   db.eval(scriptordercancel, 1, exereport.clordid, function(err, ret) {
     if (err) {
       console.log(err);
+      errorLog(exereport.brokerid, "", 9, 4, exereport.fixseqnumid, "9", "tradeserver.orderCancel", "", err);
       return;
     }
 
     if (ret[0] != 0) {
       // todo: send to client & sort out error
       console.log("Error in scriptordercancel, reason: " + commonbo.getReasonDesc(ret[0]));
+      errorLog(exereport.brokerid, "", 9, 4, exereport.fixseqnumid, "9", "tradeserver.orderCancel", "", commonbo.getReasonDesc(ret[0]));
       return;
     }
 
-    // send confirmation to operator type
+    // send confirmation to operator type - todo: publish from script
     db.publish(ret[2], "order:" + ret[1]);
   });
 });
@@ -984,13 +988,17 @@ function processTrade(exereport) {
   db.eval(scriptnewtrade, 1, "broker:" + exereport.brokerid, exereport.accountid, exereport.brokerid, exereport.clientid, exereport.clordid, exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.execbroker, counterpartytype, markettype, exereport.execid, exereport.futsettdate, exereport.transacttime, exereport.lastmkt, exereport.orderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, exereport.operatortype, exereport.operatorid, exereport.leavesqty, exereport.fixseqnum, function(err, ret) {
     if (err) {
       console.log(err);
+      errorLog(exereport.brokerid, "", 4, 4, exereport.fixseqnumid, "8", "tradeserver.scriptnewtrade", "", err);
       return;
     }
 
     if (ret[0] != 0) {
       console.log("Error in scriptnewtrade: " + commonbo.getReasonDesc(ret[0]));
+      errorLog(exereport.brokerid, "", 4, 4, exereport.fixseqnumid, "8", "tradeserver.scriptnewtrade", "", commonbo.getReasonDesc(ret[0]));
       return;
     }
+
+    // item published as part of script
   });
 }
 
@@ -2250,7 +2258,7 @@ function registerScripts() {
   if fixmessage.brokerid and fixmessage.businessobjectid then \
     if msgtype == "R" then \
       quoteack(fixmessage.brokerid, fixmessage.businessobjectid, 5, 99, text, fixseqnumid) \
-    elseif msgtype == "D" or tonumber(msgtype) == 1 then \
+    elseif msgtype == "D" then \
       rejectorder(fixmessage.brokerid, fixmessage.businessobjectid, "", text) \
       publishorder(fixmessage.brokerid, fixmessage.businessobjectid) \
     end \
@@ -2275,7 +2283,7 @@ function registerScripts() {
   if fixmessage.brokerid and fixmessage.businessobjectid then \
     if msgtype == "R" then \
       quoteack(fixmessage.brokerid, fixmessage.businessobjectid, 5, 99, text, fixseqnumid) \
-    elseif msgtype == "D" or tonumber(msgtype) == 1 then \
+    elseif msgtype == "D" then \
       rejectorder(fixmessage.brokerid, fixmessage.businessobjectid, "", text) \
       publishorder(fixmessage.brokerid, fixmessage.businessobjectid) \
     end \

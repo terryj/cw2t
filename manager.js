@@ -2200,7 +2200,7 @@ function testQuoteRequest() {
   quoterequest.expiretime = "";
   quoterequest.settlmnttypid = 0;
   quoterequest.quoteid = "";
-  quoterequest.ordertype = 1;
+  quoterequest.ordertype = 'D';
 
   db.publish(commonbo.tradeserverchannel, "{\"quoterequest\":" + JSON.stringify(quoterequest) + "}");
 }
