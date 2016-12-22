@@ -158,7 +158,7 @@ function init(self) {
   // publish status every time period
   connectstatusinterval = setInterval(publishStatus, connectstatusint * 1000);
 
-  db.get("trading:ipaddress", function(err, ipaddr) {
+  db.hget("config", "tradingipaddress", function(err, ipaddr) {
     if (err) {
       console.log(err);
       return;
@@ -172,7 +172,7 @@ function init(self) {
     nbhost = ipaddr;
   });
 
-  db.get("trading:port", function(err, port) {
+  db.hget("config", "tradingport", function(err, port) {
     if (err) {
       console.log(err);
       return;
@@ -186,7 +186,7 @@ function init(self) {
     nbport = port;
   });
 
-  db.get("sendercompid", function(err, senderid) {
+  db.hget("config", "sendercompid", function(err, senderid) {
     if (err) {
       console.log(err);
       return;
@@ -200,7 +200,7 @@ function init(self) {
     sendercompid = senderid;
   });
 
-  db.get("targetcompid", function(err, targetid) {
+  db.hget("config", "targetcompid", function(err, targetid) {
     if (err) {
       console.log(err);
       return;
@@ -214,7 +214,7 @@ function init(self) {
     targetcompid = targetid;
   });
 
-  db.get("onbehalfofcompid", function(err, onbehalfofid) {
+  db.hget("config", "onbehalfofcompid", function(err, onbehalfofid) {
     if (err) {
       console.log(err);
       return;
@@ -604,7 +604,7 @@ function completeMessage(tagvalarr, self) {
         // this is the start of the recovery process
         // set the stored value to the first value requested & set started flag
         console.log('message recovery started');
-        db.set("lastfixseqnumin", nextseqnumin - 1);
+        db.hset("config", "lastfixseqnumin", nextseqnumin - 1);
         messagerecoveryinrequested = false;
         messagerecoveryinstarted = true;
       }
@@ -644,7 +644,7 @@ function completeMessage(tagvalarr, self) {
 	  } else {
 	    // normal logon reply & we haven't missed anything, so just set the stored sequence number to that received
 	    console.log("Resetting incoming sequence number to: " + header.msgseqnum);
-	    db.set("lastfixseqnumin", header.msgseqnum);
+	    db.hset("config", "lastfixseqnumin", header.msgseqnum);
 	  }
         } else if (header.msgtype == '5') {
           if ('text' in body) {
@@ -1275,7 +1275,7 @@ function sequenceReset(body, nextnumin, self) {
   }
 
   // reset the incoming sequence number
-  db.set("lastfixseqnumin", body.newseqno - 1);
+  db.hset("config", "lastfixseqnumin", body.newseqno - 1);
 }
 
 function resendRequest(beginseqno) {
@@ -1295,7 +1295,7 @@ function sequenceGapReceived(seqgap) {
       console.log('resetting incoming sequence number');
 
       // reset the expected incoming sequence number
-      db.set("lastfixseqnumin", seqgap.newseqno - 1);
+      db.hset("lastfixseqnumin", seqgap.newseqno - 1);
     }
   }
 }
@@ -1402,7 +1402,10 @@ function businessRejectReceived(businessreject, self) {
 
 function resendMessage(msgno, endseqno, self) {
 	// get requested message
-	db.hgetall("fixmessageout:" + msgno, function(err, msg) {
+	//db.hgetall("fixmessageout:" + msgno, function(err, msg) {
+        db.eval(scriptgetfixmessage, 0, msgno, function(err, ret) {
+                console.log(ret);
+
 		if (err) {
 			console.log(err);
 			disconnect(self);
@@ -1433,7 +1436,7 @@ function resendMessage(msgno, endseqno, self) {
 		// check for infinity
 		if (endseqno == 0) {
 			// get the last outgoing message sequence number
-			db.get("lastfixseqnumout", function(err, msgseqnumout) {
+			db.hget("config", "lastfixseqnumout", function(err, msgseqnumout) {
 				if (err) {
 					console.log(err);
 					disconnect(self);
@@ -1461,7 +1464,7 @@ function resendMessage(msgno, endseqno, self) {
 				// send any sequence gap message
 				if (sequencegapnum != 0) {
 					// get the last outgoing message sequence number, so we can tell the other side what to expect next
-					db.get("lastfixseqnumout", function(err, msgseqnumout) {
+					db.hget("config", "lastfixseqnumout", function(err, msgseqnumout) {
 						if (err) {
 							console.log(err);
 							disconnect(self);
@@ -1653,5 +1656,14 @@ function registerScripts() {
   redis.call("hset", "config", "lastfixseqnumin" 0) \
   redis.call("hset", "config", "lastfixseqnumout" 0) \
   ';
-}
 
+  /*
+  * scriptgetfixmessage
+  * params: fixseqnumout
+  */
+  scriptgetfixmessage = commonbo.gethashvalues + '\
+  local fixseqnumid = redis.call("get", "fixseqnumout:" .. ARGV[1] .. ":fixseqnumid") \
+  local fixmessage = gethashvalues("fixmessage:" .. fixseqnumid) \
+  return fixmessage \
+  ';
+}
