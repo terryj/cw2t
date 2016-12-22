@@ -436,7 +436,6 @@ exports.registerScripts = function () {
   */
   rejectorder = '\
   local rejectorder = function(brokerid, orderid, orderrejectreasonid, text) \
-    redis.log(redis.LOG_NOTICE, "order rejected: " .. text) \
     if orderid ~= "" then \
       redis.call("hmset", "broker:" .. brokerid .. ":order:" .. orderid, "orderstatusid", "8", "orderrejectreasonid", orderrejectreasonid, "text", text) \
     end \
