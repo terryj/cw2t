@@ -700,7 +700,7 @@ function completeMessage(tagvalarr, self) {
         } else if (header.msgtype == 'A') {
           // normal logon reply & we haven't missed anything, so just set the stored sequence number to that received
           console.log("Resetting incoming sequence number to: " + header.msgseqnum);
-          db.set("lastfixseqnumin", header.msgseqnum);
+          db.hset("config", "lastfixseqnumin", header.msgseqnum);
         } else {
           // request resend of messages from this point, but wait to adjust the stored value
           // until we know the recovery process has started, as in the first possible duplicate received
