@@ -10,8 +10,8 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 var util = require('util');
-var net = require('net');
-//var tls = require('tls');
+//var net = require('net');
+var tls = require('tls');
 var events = require('events');
 var fs = require("fs");
 
@@ -52,8 +52,8 @@ var connectstatusinterval = 30;
 var datareceivedsinceheartbeat = false; // indicates whether data has been received since the last heartbeat
 
 var options = {
-  key: fs.readFileSync('key.pem'),
-  cert: fs.readFileSync('cert.pem'),
+  key: fs.readFileSync('scripts/key.pem'),
+  cert: fs.readFileSync('scripts/cert.pem'),
 };
 
 function Nbt() {
@@ -80,8 +80,8 @@ function tryToConnect(self) {
 
   restarttimer = null;
 
-  nbconn = net.connect(nbport, nbhost, function() {
-  //nbconn = tls.connect(nbport, nbhost, options, function() {
+  //nbconn = net.connect(nbport, nbhost, function() {
+  nbconn = tls.connect(nbport, nbhost, options, function() {
     // connected
     self.emit("connected");
 
@@ -1650,8 +1650,8 @@ function registerScripts() {
   * params: none
   */
   scriptresetsequencenumbers = '\
-  redis.call("set", "lastfixseqnumin" 0) \
-  redis.call("set", "lastfixseqnumout" 0) \
+  redis.call("hset", "config", "lastfixseqnumin" 0) \
+  redis.call("hset", "config", "lastfixseqnumout" 0) \
   ';
 }
 
