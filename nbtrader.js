@@ -542,10 +542,11 @@ function parseData(self) {
     case 1:
       // end of message
       if (tagvalpair.tag == '10' && tagvalpair.value.length == 3) {
-        completeMessage(tagvalarr, self);
+        endtag = datainbuf.indexOf("10=");
+        completeMessage(tagvalarr, self, endtag);
 
         // remove processed message from buffer
-        endtag = datainbuf.indexOf("10=");
+        //endtag = datainbuf.indexOf("10=");
         datainbuf = datainbuf.slice(endtag + 7);
 
         // clear array
@@ -578,7 +579,7 @@ function stopHeartBeatTimer() {
   }
 }
 
-function completeMessage(tagvalarr, self) {
+function completeMessage(tagvalarr, self, endtag) {
   // build the header & body
   var header = getHeader(tagvalarr);
   var body = getBody(header.msgtype, tagvalarr);
@@ -586,8 +587,11 @@ function completeMessage(tagvalarr, self) {
   // our timestamp
   var timestamp = commonbo.getUTCTimeStamp(new Date());
 
+  // get message to store
+  var msg = datainbuf.substring(0, endtag);
+
   // store the message & get the expected incoming sequence number
-  db.eval(scriptfixmessagein, 0, header.msgtype, header.onbehalfofcompid, header.delivertocompid, body, timestamp, "", "", "", header.msgseqnum, function(err, ret) {
+  db.eval(scriptfixmessagein, 0, header.msgtype, header.onbehalfofcompid, header.delivertocompid, msg, timestamp, "", "", "", header.msgseqnum, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -711,10 +715,10 @@ function completeMessage(tagvalarr, self) {
 	  return;
         }
       }
-    } else {
-      // sequence numbers match, so process message
-      processMessage(body, header, self);
     }
+
+    // sequence numbers match, so process message
+    processMessage(body, header, self);
   });
 }
 
@@ -1617,12 +1621,12 @@ function registerScripts() {
   /*
   * scriptfixmessageout
   * increment the outgoing sequence number & store the message
-  * params: msgtype, onbehalfofcompid, delivertocompid, body, timestamp, brokerid, businessobjectid, businessobjecttypeid
+  * params: msgtype, onbehalfofcompid, delivertocompid, message, timestamp, brokerid, businessobjectid, businessobjecttypeid
   */
   scriptfixmessageout = '\
   local fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
   local fixseqnumout = redis.call("hincrby", "config", "lastfixseqnumout", 1) \
-  redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "body", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumout", fixseqnumout, "fixseqnumid", fixseqnumid) \
+  redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumout", fixseqnumout, "fixseqnumid", fixseqnumid) \
   --[[ set a key so we can get to the stored message from the outgoing fix sequence number ]] \
   redis.call("set", "fixseqnumout:" .. fixseqnumout .. ":fixseqnumid", fixseqnumid) \
   --[[ where possible, link the fix message back to the originating message ]] \
@@ -1637,13 +1641,13 @@ function registerScripts() {
   /*
   * scriptfixmessagein
   * store the incoming message & get the next incoming sequence number
-  * params: sequence number, msgtype, body, timestamp
+  * params: msgtype, onbehalfofcompid, delivertocompid, message, timestamp, brokerid, businessobjectid, businessobjecttypeid
   * returns: fixseqnumin - used for fix sequence processing, fixseqnumid - may be used to link to record id yet to be created
   */
   scriptfixmessagein = '\
   local fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
   local fixseqnumin = redis.call("hincrby", "config", "lastfixseqnumin", 1) \
-  redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "body", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumid", fixseqnumid, "fixseqnumin", fixseqnumin, "externalfixseqnumin", ARGV[9]) \
+  redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumid", fixseqnumid, "fixseqnumin", fixseqnumin, "externalfixseqnumin", ARGV[9]) \
   return {fixseqnumin, fixseqnumid} \
   ';
 
