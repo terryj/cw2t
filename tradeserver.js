@@ -811,13 +811,14 @@ function newQuote(quote) {
   db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.transacttime, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, quote.bidspotrate, quote.offerspotrate, quote.fixseqnumid, function(err, ret) {
     if (err) {
       console.log(err);
-      errorLog(quote.brokerid, "", 3, 4, quote.fixseqnumid, "S", "tradeserver.newQuote", "", err);
+      errorLog(quote.brokerid, "", 3, 4, quote.fixseqnumid, "S", "tradeserver.scriptQuote", "", err);
       return;
     }
 
     if (ret != 0) {
       // can't find quote request, so don't know which client to inform
       console.log("Error in scriptquote: " + commonbo.getReasonDesc(ret));
+      errorLog(quote.brokerid, "", 3, 4, quote.fixseqnumid, "S", "tradeserver.scriptQuote", "", commonbo.getReasonDesc(ret));
       return;
     }
 
@@ -847,12 +848,12 @@ nbt.on("orderReject", function(exereport) {
   db.eval(scriptrejectorder, 1, "broker:" + exereport.brokerid, exereport.brokerid, exereport.clordid, orderrejectreasonid, text, function(err, ret) {
     if (err) {
       console.log(err);
-      errorLog(exereport.brokerid, exereport.clordid, 2, 4, exereport.fixseqnumid, "8", "tradeserver.orderReject", "", err);
+      errorLog(exereport.brokerid, exereport.clordid, 2, 4, exereport.fixseqnumid, "8", "tradeserver.scriptrejectorder", "", err);
       return;
     }
 
     // raise an error
-    errorLog(exereport.brokerid, exereport.clordid, 2, 4, exereport.fixseqnumid, "8", "tradeserver.orderReject", orderrejectreasonid, text);
+    errorLog(exereport.brokerid, exereport.clordid, 2, 4, exereport.fixseqnumid, "8", "tradeserver.scriptrejectorder", orderrejectreasonid, text);
 
     // order published to operator by script
   });
