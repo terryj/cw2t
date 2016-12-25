@@ -16,7 +16,8 @@
 *             - updated error handling of scriptneworder() in newOrderSingle()
 * 10 Dec 2016 - added fixseqnum storage to quote request process
 * 12 Dec 2016 - added separate quoteacks - quoteack(), publishquoteack()
-* 20 Dec 2016 - modified scriptQuoteRequest(), scriptQuote(), scriptQuoteAck(), scriptreject()
+* 20 Dec 2016 - modified scriptQuoteRequest(), scriptQuote(), scriptQuoteAck()
+* 21 Dec 2016 - modified scriptreject(), added scriptbusinessreject()
 ****************/
 
 // node libraries
@@ -305,8 +306,9 @@ function testQuoteAck(quoterequest) {
   quoteack.quotestatusid = 5;
   quoteack.quoterejectreasonid = "";
   quoteack.text = "test rejection message";
+  quoteack.timestamp = commonbo.getUTCTimeStamp(new Date());
 
-  db.eval(scriptQuoteAck, 1, "broker:" + quoterequest.brokerid, quoterequest.brokerid, quoteack.quoterequestid, quoteack.quotestatusid, quoteack.quoterejectreasonid, quoteack.text, "", function(err, ret) {
+  db.eval(scriptQuoteAck, 1, "broker:" + quoterequest.brokerid, quoterequest.brokerid, quoteack.quoterequestid, quoteack.quotestatusid, quoteack.quoterejectreasonid, quoteack.text, "", quoteack.timestamp, function(err, ret) {
     if (err) {
       console.log(err);
       errorLog(quoterequest.brokerid, "", 7, 4, "", "", "tradeserver.testQuoteAck", "", err);
@@ -1057,7 +1059,9 @@ nbt.on("quoteack", function(quoteack) {
   console.log("Quote ack received, request id: " + quoteack.quoterequestid);
   console.log(quoteack);
 
-  db.eval(scriptQuoteAck, 1, "broker:" + quoteack.brokerid, quoteack.brokerid, quoteack.quoterequestid, quoteack.quoteackstatus, quoteack.quoterejectreasonid, quoteack.text, quoteack.fixseqnumid, function(err, ret) {
+  var timestamp = commonbo.getUTCTimeStamp(new Date());
+
+  db.eval(scriptQuoteAck, 1, "broker:" + quoteack.brokerid, quoteack.brokerid, quoteack.quoterequestid, quoteack.quoteackstatus, quoteack.quoterejectreasonid, quoteack.text, quoteack.fixseqnumid, timestamp, function(err, ret) {
     if (err) {
       console.log(err);
       errorLog(quoteack.brokerid, "", 7, 4, quoteack.fixseqnumid, "b", "tradeserver.scriptQuoteAck", "", err);
@@ -1083,8 +1087,10 @@ nbt.on("reject", function(reject) {
     reasondesc = reasondesc + ": " + reject.text;
   }
 
+  var timestamp = commonbo.getUTCTimeStamp(new Date());
+
   if ('refseqnum' in reject && 'refmsgtype' in reject) {
-    db.eval(scriptreject, 0, reject.refseqnum, reject.refmsgtype, reasondesc, function(err, ret) {
+    db.eval(scriptreject, 0, reject.refseqnum, reject.refmsgtype, reasondesc, timestamp, function(err, ret) {
       if (err) {
         console.log(err);
         errorLog("", "", "", 4, "", "3", "reject", "", err);
@@ -1114,8 +1120,10 @@ nbt.on("businessReject", function(businessreject) {
     reasondesc = reasondesc + ": " + businessreject.text;
   }
 
+  var timestamp = commonbo.getUTCTimeStamp(new Date());
+
   if ('refseqnum' in businessreject && 'refmsgtype' in businessreject) {
-    db.eval(scriptbusinessreject, 0, businessreject.refseqnum, businessreject.refmsgtype, reasondesc, function(err, ret) {
+    db.eval(scriptbusinessreject, 0, businessreject.refseqnum, businessreject.refmsgtype, reasondesc, timestamp, function(err, ret) {
       if (err) {
         console.log(err);
         errorLog("", "", "", 4, "", "j", "businessreject", "", err);
@@ -1419,13 +1427,13 @@ function registerScripts() {
   /*
   * quoteack()
   * process a quote acknowledgement
-  * params: brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text, fixseqnumid
+  * params: brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text, fixseqnumid, timestamp
   */
   quoteack = publishquoteack + '\
-  local quoteack = function(brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text, fixseqnumid) \
+  local quoteack = function(brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text, fixseqnumid, timestamp) \
     --[[ create a quote ack ]] \
     local quoteackid = redis.call("hincrby", "broker:" .. brokerid, "lastquoteackid", 1) \
-    redis.call("hmset", "broker:" .. brokerid .. ":quoteack:" .. quoteackid, "broker", brokerid, "quoterequestid", quoterequestid, "quotestatusid", quotestatusid, "quoterejectreasonid", quoterejectreasonid, "text", text, "quoteackid", quoteackid, "fixseqnumid", fixseqnumid) \
+    redis.call("hmset", "broker:" .. brokerid .. ":quoteack:" .. quoteackid, "broker", brokerid, "quoterequestid", quoterequestid, "quotestatusid", quotestatusid, "quoterejectreasonid", quoterejectreasonid, "text", text, "quoteackid", quoteackid, "fixseqnumid", fixseqnumid, "timestamp", timestamp) \
     --[[ update quote request ]] \
     redis.call("hmset", "broker:" .. brokerid .. ":quoterequest:" .. quoterequestid, "quotestatusid", quotestatusid, "quoteackid", quoteackid) \
     --[[ update fix message ]] \
@@ -2088,13 +2096,13 @@ function registerScripts() {
   redis.call("sadd", KEYS[1] .. ":account:" .. accountid .. ":quoterequests", quoterequestid) \
   --[[ check there is some kind of quantity ]] \
   if ARGV[3] == "" and ARGV[9] == "" then \
-    quoteack(ARGV[2], quoterequestid, 5, 99, "Either quantity or cashorderqty must be present", "") \
+    quoteack(ARGV[2], quoterequestid, 5, 99, "Either quantity or cashorderqty must be present", "", ARGV[13]) \
     return {0, 1034} \
   end \
   --[[ get required instrument values for external feed ]] \
   local symbol = gethashvalues("symbol:" .. ARGV[12]) \
   if not symbol["symbolid"] then \
-    quoteack(ARGV[2], quoterequestid, 5, 99, "Symbol not found", "") \
+    quoteack(ARGV[2], quoterequestid, 5, 99, "Symbol not found", "", ARGV[13]) \
     return {0, 1016} \
   end \
   return {1, quoterequestid, symbol["isin"], symbol["mnemonic"], symbol["exchangeid"], account["currencyid"]} \
@@ -2185,10 +2193,10 @@ function registerScripts() {
   /*
   * scriptQuoteAck
   * script to handle a quote acknowledgement
-  * params: brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text, fixseqnumid
+  * params: brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text, fixseqnumid, timestamp
   */
   scriptQuoteAck = quoteack + '\
-  quoteack(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6]) \
+  quoteack(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7]) \
   return \
   ';
 
@@ -2245,20 +2253,21 @@ function registerScripts() {
   /*
   * scriptreject
   * script to handle fix message session errors
-  * params: outgoing refseqnum, msgtype, reason description
+  * params: outgoing refseqnum, msgtype, reason description, timestamp
   * returns: 0 if ok else 1 + error message 
   */
   scriptreject = commonbo.gethashvalues + quoteack + commonbo.rejectorder + publishorder + '\
   local refseqnum = ARGV[1] \
   local msgtype = ARGV[2] \
   local text = ARGV[3] \
+  local timestamp = ARGV[4] \
   --[[ get the outgoing fix message ]] \
   local fixseqnumid = redis.call("get", "fixseqnumout:" .. refseqnum .. ":fixseqnumid") \
   local fixmessage = gethashvalues("fixmessage:" .. fixseqnumid) \
   --[[ try to find associated record to inform the client/user ]] \
   if fixmessage.brokerid and fixmessage.businessobjectid then \
     if msgtype == "R" then \
-      quoteack(fixmessage.brokerid, fixmessage.businessobjectid, 5, 99, text, fixseqnumid) \
+      quoteack(fixmessage.brokerid, fixmessage.businessobjectid, 5, 99, text, fixseqnumid, timestamp) \
     elseif msgtype == "D" then \
       rejectorder(fixmessage.brokerid, fixmessage.businessobjectid, "", text) \
       publishorder(fixmessage.brokerid, fixmessage.businessobjectid) \
@@ -2270,20 +2279,21 @@ function registerScripts() {
   /*
   * scriptbusinessreject
   * script to handle fix message business errors
-  * params: outgoing refseqnum, msgtype, reason description
+  * params: outgoing refseqnum, msgtype, reason description, timestamp
   * returns: 0 if ok else 1 + error message
   */
   scriptbusinessreject = commonbo.gethashvalues + quoteack + commonbo.rejectorder + publishorder + '\
   local refseqnum = ARGV[1] \
   local msgtype = ARGV[2] \
   local text = ARGV[3] \
+  local timestamp = ARGV[4] \
   --[[ get the outgoing fix message ]] \
   local fixseqnumid = redis.call("get", "fixseqnumout:" .. refseqnum .. ":fixseqnumid") \
   local fixmessage = gethashvalues("fixmessage:" .. fixseqnumid) \
   --[[ try to find associated record to inform the client/user ]] \
   if fixmessage.brokerid and fixmessage.businessobjectid then \
     if msgtype == "R" then \
-      quoteack(fixmessage.brokerid, fixmessage.businessobjectid, 5, 99, text, fixseqnumid) \
+      quoteack(fixmessage.brokerid, fixmessage.businessobjectid, 5, 99, text, fixseqnumid, timestamp) \
     elseif msgtype == "D" then \
       rejectorder(fixmessage.brokerid, fixmessage.businessobjectid, "", text) \
       publishorder(fixmessage.brokerid, fixmessage.businessobjectid) \

@@ -10,8 +10,8 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 var util = require('util');
-//var net = require('net');
-var tls = require('tls');
+var net = require('net');
+//var tls = require('tls');
 var events = require('events');
 var fs = require("fs");
 
@@ -80,8 +80,8 @@ function tryToConnect(self) {
 
   restarttimer = null;
 
-  //nbconn = net.connect(nbport, nbhost, function() {
-  nbconn = tls.connect(nbport, nbhost, options, function() {
+  nbconn = net.connect(nbport, nbhost, function() {
+  //nbconn = tls.connect(nbport, nbhost, options, function() {
     // connected
     self.emit("connected");
 

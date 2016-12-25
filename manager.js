@@ -2190,7 +2190,7 @@ function testQuoteRequest() {
   quoterequest.clientid = 2;
   quoterequest.side = 1;
   quoterequest.symbolid = 'BARC.L';
-  quoterequest.quantity = 100;
+  quoterequest.quantity = 98;
   quoterequest.cashorderqty = '';
   quoterequest.currencyid = 'GBP';
   quoterequest.settlcurrencyid = 'GBP';
