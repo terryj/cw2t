@@ -2714,13 +2714,13 @@ exports.registerScripts = function () {
             local stubcashlocal = stubcash * rate \
             if mode == 2 then \
               --[[ apply the transaction ]] \
-              local retval = transactiondividend(positions[i]["accountid"], stubcash, 0, brokerid, account["currencyid"], stubcashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+              local retval = transactiondividend(positions[i]["accountid"], stubcash, 0, brokerid, account["currencyid"], stubcashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "DVP", timestampms) \
               if retval[1] == 1 then \
                 return retval \
               end \
             elseif mode == 3 then \
               --[[ reverse the transaction ]] \
-              local retval = transactiondividend(positions[i]["accountid"], -stubcash, 0, brokerid, account["currencyid"], -stubcashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+              local retval = transactiondividend(positions[i]["accountid"], -stubcash, 0, brokerid, account["currencyid"], -stubcashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "DVR", timestampms) \
               if retval[1] == 1 then \
                 return retval \
               end \
@@ -2885,12 +2885,12 @@ exports.registerScripts = function () {
             if stubcash > 0 then \
               local stubcashlocal = stubcash * rate \
               if mode == 2 then \
-                local retval = transactiondividend(positions[i]["accountid"], stubcash, brokers[j], account["currencyid"], stubcashlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+                local retval = transactiondividend(positions[i]["accountid"], stubcash, 0, brokers[j], account["currencyid"], stubcashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "DVP", timestampms) \
                 if retval[1] == 1 then \
                   return retval \
                 end \
               elseif mode == 3 then \
-                local retval = transactiondividend(positions[i]["accountid"], -stubcash, brokers[j], account["currencyid"], -stubcashlocal, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+                local retval = transactiondividend(positions[i]["accountid"], -stubcash, 0, brokers[j], account["currencyid"], -stubcashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "DVR", timestampms) \
                 if retval[1] == 1 then \
                   return retval \
                 end \
@@ -2969,12 +2969,12 @@ exports.registerScripts = function () {
           if stubcash > 0 then \
             local stubcashlocal = stubcash * rate \
             if mode == 2 then \
-              local retval = transactiondividend(positions[i]["accountid"], stubcash, brokerid, account["currencyid"], stubcashlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+              local retval = transactiondividend(positions[i]["accountid"], stubcash, 0, brokerid, account["currencyid"], stubcashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "DVP", timestampms) \
               if retval[1] == 1 then \
                 return retval \
               end \
             elseif mode == 3 then \
-              local retval = transactiondividend(positions[i]["accountid"], -stubcash, brokerid, account["currencyid"], -stubcashlocal, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, timestampms) \
+              local retval = transactiondividend(positions[i]["accountid"], -stubcash, 0, brokerid, account["currencyid"], -stubcashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "DVR", timestampms) \
               if retval[1] == 1 then \
                 return retval \
               end \
