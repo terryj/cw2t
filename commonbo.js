@@ -14,6 +14,7 @@
 * 10 Dec 2016 - added fixseqnum to newtrade()
 * 20 Dec 2016 - added scriptErrorLog(), errorlog() & publisherror()
 * 21 Dec 2016 - updated publishposition() & publishtrade() to use a specific channel
+* 31 Dec 2016 - added caconversion()
 ****************/
 
 exports.registerScripts = function () {
@@ -2178,6 +2179,57 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * convertsharesasshares()
+  * processing for converting position from one share to another
+  * params: brokerid, position, corporateaction, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
+  * returns: whole number of shares due, remainder of shares expressed as cash based on end of exdate price
+  */
+  convertsharesasshares = getsharesdue + newpositiontransaction + getaccount + geteodprice + transactiondividend + '\
+  local convertsharesasshares = function(brokerid, position, corporateaction, timestamp, timestampms, mode) \
+    redis.log(redis.LOG_NOTICE, "convertsharesasshares") \
+    local sharesdue = getsharesdue(position["quantity"], corporateaction["sharespershare"]) \
+    local residuecash = 0 \
+    if sharesdue[1] > 0 then \
+      if mode == 2 then \
+        --[[ flatten the position in the stock being converted ]] \
+        newpositiontransaction(position["accountid"], brokerid, 0, "", corporateaction["corporateactionid"], 2, -position["quantity"], corporateaction["symbolid"], timestamp, timestampms) \
+        --[[ create a position in the new symbol ]] \
+        newpositiontransaction(position["accountid"], brokerid, position["cost"], "", corporateaction["corporateactionid"], 2, sharesdue[1], corporateaction["symbolidnew"], timestamp, timestampms) \
+      end \
+    end \
+    if sharesdue[2] > 0 then \
+      --[[ get the account for the currency ]] \
+      local account = getaccount(position["accountid"], brokerid) \
+      --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
+      local rate = 1 \
+      --[[ any residue shares amount is taken as cash - we need the closing price as at the exdate to value this ]] \
+      local eodprice = geteodprice(corporateaction["exdate"], corporateaction["symbolid"]) \
+      if not eodprice["bid"] then \
+        return {1, 1029} \
+      end \
+      --[[ calculate the amount of cash as the stub * closing price ]] \
+      residuecash = round(sharesdue[2] * eodprice["bid"], 2) \
+      if residuecash > 0 then \
+        local residuecashlocal = residuecash * rate \
+        if mode == 2 then \
+          local retval = transactiondividend(position["accountid"], residuecash, 0, brokerid, account["currencyid"], residuecashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateaction["corporateactionid"], timestamp, "DVP", timestampms) \
+          if retval[1] == 1 then \
+            return retval \
+          end \
+        elseif mode == 3 then \
+          local retval = transactiondividend(position["accountid"], -residuecash, 0, brokerid, account["currencyid"], -residuecashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateaction["corporateactionid"], timestamp, "DVR", timestampms) \
+          if retval[1] == 1 then \
+            return retval \
+          end \
+        end \
+      end \
+    end \
+    redis.log(redis.LOG_NOTICE, "sharesdue: " .. sharesdue[1] .. ", residuecash: " .. residuecash) \
+    return {sharesdue[1], residuecash} \
+  end \
+  ';
+
+  /*
   * publisherror()
   * publish an error
   * params: errorlogid
@@ -2989,7 +3041,7 @@ exports.registerScripts = function () {
 
   /*
   * catakeover()
-  * script to test/apply/reverse a cash takeover
+  * script to test/apply/reverse a takeover
   * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, operatortype, operatorid, mode (1=test,2=apply,3=reverse)
   * returns: 0, total position quantity, total shares due, total residue cash, total cash, number of accounts updated if successful, else 1 + an error message if unsuccessful
   */
@@ -3045,6 +3097,62 @@ exports.registerScripts = function () {
     end \
     return {0, tostring(totquantity), tostring(totsharesdue), tostring(totresiduecash), tostring(totcash), numaccounts} \
   ';
+
+  /*
+  * caconversion()
+  * script to apply a conversion of one share to another
+  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
+  * returns: 0, total position quantity, total shares due, total residue cash, total cash, number of accounts updated if successful, else 1 + an error message if unsuccessful
+  */
+  exports.caconversion = getpositionquantitiesbysymbolbydate + convertsharesasshares + '\
+    redis.log(redis.LOG_NOTICE, "caconversion") \
+    local brokerid = ARGV[1] \
+    local corporateactionid = ARGV[2] \
+    local exdate = ARGV[3] \
+    local exdatems = ARGV[4] \
+    local timestamp = ARGV[5] \
+    local timestampms = ARGV[6] \
+    local mode = tonumber(ARGV[7]) \
+    local totquantity = 0 \
+    local numaccounts = 0 \
+    local totsharesdue = 0 \
+    local totresiduecash = 0 \
+    local totcash = 0 \
+    --[[ get the corporate action ]] \
+    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
+    if not corporateaction["corporateactionid"] then \
+      return {1, 1027} \
+    end \
+    --[[ we need a symbol for the new stock ]] \
+    if not corporateaction["symbolidnew"] then \
+      return {1, 1030} \
+    end \
+    --[[ there needs to be a cash per share figure for this ca ]] \
+    if not corporateaction["cashpershare"] then \
+      return {1, 1036} \
+    end \
+    --[[ there needs to be a shares per share figure for this ca ]] \
+    if not corporateaction["sharespershare"] then \
+      return {1, 1035} \
+    end \
+    --[[ we are assuming GBP - todo: get fx rate if necessary ]] \
+    local rate = 1 \
+    --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
+    local positions = getpositionquantitiesbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
+    for i = 1, #positions do \
+      redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"]) \
+      --[[ may have a position with no quantity ]] \
+      if positions[i]["quantity"] ~= 0 then \
+        local shares = convertsharesasshares(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
+        totsharesdue = totsharesdue + shares[1] \
+        totresiduecash = totresiduecash + shares[2] \
+        totquantity = totquantity + positions[i]["quantity"] \
+        numaccounts = numaccounts + 1 \
+      end \
+    end \
+    return {0, tostring(totquantity), tostring(totsharesdue), tostring(totresiduecash), numaccounts} \
+  ';
+
 
   /*
   * scriptgettradesbysettlementstatus
