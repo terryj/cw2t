@@ -118,13 +118,15 @@ db.on("error", function(err) {
 });
 
 function initialise() {
+  console.log("initialise");
+
   commonfo.registerScripts();
   commonbo.registerScripts();
   common.registerScripts();
   sql.registerScripts();
   registerScripts();
   initDb();
-  clearSubscriptions();
+  //clearSubscriptions();
   pubsub();
   listen();
 }
@@ -221,7 +223,7 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-    applyCorporateAction(1, 1);
+    //applyCorporateAction(1, 1);
     //test();
     //testtrade();
     //testSettle();
@@ -236,6 +238,10 @@ function listen() {
     //testSql();
     //testQuoteRequest();
     //testQuoteRequests();
+    testWatchlist();
+    //testSubscribeSymbol();
+    //testUnsubscribeSymbol();
+    //testUnwatchlist();
 
   sockjs_svr.on('connection', function(conn) {
     // this will be overwritten if & when a user logs on
@@ -2520,6 +2526,48 @@ function testSql() {
       return;
     }
   }); 
+}
+
+function testWatchlist() {
+  var brokerid = 1;
+  var clientid = 1;
+
+  db.eval(commonfo.scriptgetwatchlist, 0, brokerid, clientid, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+  });
+}
+
+function testUnwatchlist() {
+  var brokerid = 1;
+  var clientid = 1;
+
+  db.eval(commonfo.scriptunwatchlist, 0, brokerid, clientid, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+  });
+}
+
+function testSubscribeSymbol() {
+  var brokerid = 1;
+  var clientid = 1;
+  var symbolid = "BARC.L";
+
+  db.eval(commonfo.scriptsubscribesymbol, 0, brokerid, clientid, symbolid, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+  });
+}
+
+function testUnsubscribeSymbol() {
+  var brokerid = 1;
+  var clientid = 1;
+  var symbolid = "BARC.L";
+
+  db.eval(commonfo.scriptunsubscribesymbol, 0, brokerid, clientid, symbolid, function(err, ret) {
+    if (err) throw err;
+    console.log(ret);
+  });
 }
 
 function getOrderBook() {

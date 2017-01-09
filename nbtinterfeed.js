@@ -744,7 +744,7 @@ function requestData(msg) {
 
     conn.write(buf);
   } else if (msg.substr(0, 4) == "halt") {
-    // remove instrument from watchlist i.e. "<FS>348<US>mtag<GS>BARC.L<FS>"
+    // remove instrument from watchlist i.e. "halt:BARC.L"
 
     var instcode = msg.substr(5);
     var instcodelen = instcode.length;

@@ -2037,8 +2037,8 @@ exports.registerScripts = function () {
 
   /*
   * getsharesdue()
-  * get the number of shares due & any remainder for a scrip issue
-  * params: position quantity, sharespershare ratio
+  * get the whole number of shares due & any remainder for a quantity & ratio
+  * params: position quantity, shares per share ratio
   * returns: whole number of shares due, remainder
   */
   getsharesdue = round + '\
@@ -2093,12 +2093,51 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * convertsharesascash()
+  * processing for converting remainder shares to cash
+  * params: accountid, brokerid, corporateaction, exdate, quantity, timestamp, timestampms, mode
+  * returns: 0, amount of cash if ok, else 1, error message
+  */
+  convertsharesascash = getaccount + geteodprice + transactiondividend + '\
+  local convertsharesascash = function(accountid, brokerid, corporateaction, quantity, timestamp, timestampms, mode) \
+    redis.log(redis.LOG_NOTICE, "convertsharesascash") \
+    --[[ get the account for the currency ]] \
+    local account = getaccount(accountid, brokerid) \
+    --[[ get the closing price at the ex-date ]] \
+    local eodprice = geteodprice(corporateaction["exdate"], corporateaction["symbolid"]) \
+    if not eodprice["bid"] then \
+      return {1, 1029} \
+    end \
+    --[[ calculate how much cash is due ]] \
+    local stubcash = round(quantity * eodprice["bid"], 2) \
+    if stubcash > 0 then \
+      --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
+      local rate = 1 \
+      local stubcashlocal = stubcash * rate \
+      if mode == 2 then \
+        local retval = transactiondividend(accountid, stubcash, 0, brokerid, account["currencyid"], stubcashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "DVP", timestampms) \
+        if retval[1] == 1 then \
+          return retval \
+        end \
+      elseif mode == 3 then \
+        local retval = transactiondividend(accountid, -stubcash, 0, brokerid, account["currencyid"], -stubcashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "DVR", timestampms) \
+        if retval[1] == 1 then \
+          return retval \
+        end \
+      end \
+    end \
+    return {0, stubcash} \
+  end \
+  ';
+
+
+  /*
   * dividendasshares()
   * processing for dividend taken as shares
   * params: brokerid, position, corporateaction, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: whole number of shares due, remainder of shares expressed as cash based on end of exdate price
+  * returns: 0, whole number of shares due, remainder of shares expressed as cash based on end of exdate price if ok, else 1, error message
   */
-  dividendasshares = getsharesdue + newpositiontransaction + getaccount + geteodprice + transactiondividend + '\
+  dividendasshares = getsharesdue + newpositiontransaction + convertsharesascash + '\
   local dividendasshares = function(brokerid, position, corporateaction, timestamp, timestampms, mode) \
     redis.log(redis.LOG_NOTICE, "dividendasshares") \
     local sharesdue = getsharesdue(position["quantity"], corporateaction["sharespershare"]) \
@@ -2112,34 +2151,14 @@ exports.registerScripts = function () {
       end \
     end \
     if sharesdue[2] > 0 then \
-      --[[ get the account for the currency ]] \
-      local account = getaccount(position["accountid"], brokerid) \
-      --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
-      local rate = 1 \
-      --[[ any residue shares amount is taken as cash - we need the closing price as at the exdate to value this ]] \
-      local eodprice = geteodprice(corporateaction["exdate"], corporateaction["symbolid"]) \
-      if not eodprice["bid"] then \
-        return {1, 1029} \
+      local ret = convertsharesascash(position["accountid"], brokerid, corporateaction, sharesdue[2], timestamp, timestampms, mode) \
+      if ret[1] == 1 then \
+        return ret \
       end \
-      --[[ calculate the amount of cash as the stub * closing price ]] \
-      residuecash = round(sharesdue[2] * eodprice["bid"], 2) \
-      if residuecash > 0 then \
-        local residuecashlocal = residuecash * rate \
-        if mode == 2 then \
-          local retval = transactiondividend(position["accountid"], residuecash, 0, brokerid, account["currencyid"], residuecashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateaction["corporateactionid"], timestamp, "DVP", timestampms) \
-          if retval[1] == 1 then \
-            return retval \
-          end \
-        elseif mode == 3 then \
-          local retval = transactiondividend(position["accountid"], -residuecash, 0, brokerid, account["currencyid"], -residuecashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateaction["corporateactionid"], timestamp, "DVR", timestampms) \
-          if retval[1] == 1 then \
-            return retval \
-          end \
-        end \
-      end \
+      residuecash = residuecash + ret[2] \
     end \
     redis.log(redis.LOG_NOTICE, "sharesdue: " .. sharesdue[1] .. ", residuecash: " .. residuecash) \
-    return {sharesdue[1], residuecash} \
+    return {0, sharesdue[1], residuecash} \
   end \
   ';
 
@@ -2147,7 +2166,7 @@ exports.registerScripts = function () {
   * dividendascash()
   * processing for dividend taken as cash
   * params: brokerid, position, corporateaction, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: dividend amount
+  * returns: 0, dividend amount if ok, else 1, error message
   */
   dividendascash = getaccount + transactiondividend + '\
   local dividendascash = function(brokerid, position, corporateaction, timestamp, timestampms, mode) \
@@ -2174,17 +2193,17 @@ exports.registerScripts = function () {
       end \
     end \
     redis.log(redis.LOG_NOTICE, "dividend: " .. dividend) \
-    return dividend \
+    return {0, dividend} \
   end \
   ';
 
   /*
   * convertsharesasshares()
-  * processing for converting position from one share to another
+  * processing for converting position in one share to another, based on a share per share ratio
   * params: brokerid, position, corporateaction, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: whole number of shares due, remainder of shares expressed as cash based on end of exdate price
+  * returns: 0, whole number of shares due, remainder of shares, else 1, error message
   */
-  convertsharesasshares = getsharesdue + newpositiontransaction + getaccount + geteodprice + transactiondividend + '\
+  convertsharesasshares = getsharesdue + newpositiontransaction + convertsharesascash + '\
   local convertsharesasshares = function(brokerid, position, corporateaction, timestamp, timestampms, mode) \
     redis.log(redis.LOG_NOTICE, "convertsharesasshares") \
     local sharesdue = getsharesdue(position["quantity"], corporateaction["sharespershare"]) \
@@ -2198,34 +2217,14 @@ exports.registerScripts = function () {
       end \
     end \
     if sharesdue[2] > 0 then \
-      --[[ get the account for the currency ]] \
-      local account = getaccount(position["accountid"], brokerid) \
-      --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
-      local rate = 1 \
-      --[[ any residue shares amount is taken as cash - we need the closing price as at the exdate to value this ]] \
-      local eodprice = geteodprice(corporateaction["exdate"], corporateaction["symbolid"]) \
-      if not eodprice["bid"] then \
-        return {1, 1029} \
+      local ret = convertsharesascash(position["accountid"], brokerid, corporateaction, sharesdue[2], timestamp, timestampms, mode) \
+      if ret[1] == 1 then \
+        return ret \
       end \
-      --[[ calculate the amount of cash as the stub * closing price ]] \
-      residuecash = round(sharesdue[2] * eodprice["bid"], 2) \
-      if residuecash > 0 then \
-        local residuecashlocal = residuecash * rate \
-        if mode == 2 then \
-          local retval = transactiondividend(position["accountid"], residuecash, 0, brokerid, account["currencyid"], residuecashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateaction["corporateactionid"], timestamp, "DVP", timestampms) \
-          if retval[1] == 1 then \
-            return retval \
-          end \
-        elseif mode == 3 then \
-          local retval = transactiondividend(position["accountid"], -residuecash, 0, brokerid, account["currencyid"], -residuecashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateaction["corporateactionid"], timestamp, "DVR", timestampms) \
-          if retval[1] == 1 then \
-            return retval \
-          end \
-        end \
-      end \
+      residuecash = residuecash + ret[2] \
     end \
     redis.log(redis.LOG_NOTICE, "sharesdue: " .. sharesdue[1] .. ", residuecash: " .. residuecash) \
-    return {sharesdue[1], residuecash} \
+    return {0, sharesdue[1], residuecash} \
   end \
   ';
 
@@ -2587,7 +2586,7 @@ exports.registerScripts = function () {
     if not corporateaction["corporateactionid"] then \
       return {1, 1027} \
     end \
-   --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
+    --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
     local rate = 1 \
     --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
     local positions = getpositionquantitiesbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
@@ -2628,7 +2627,76 @@ exports.registerScripts = function () {
     return {0, tostring(totquantity), tostring(totunsettledquantity), tostring(totdividend), tostring(totunsettleddividend), numaccounts} \
   ';
 
-  /*
+   /*
+  * cacapitalrepayment()
+  * script to apply a capital repayment
+  * params: brokerid, corporateactionid, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
+  * returns: 0, total position quantity, total unsettled quantity, total dividend, total unsettled dividend, number of accounts updated if successful, else 1 + an error message if unsuccessful
+  */
+  exports.cacapitalrepayment = getpositionquantitiesbysymbolbydate + getaccount + round + transactiondividend + '\
+    redis.log(redis.LOG_NOTICE, "cacapitalrepayment") \
+    local brokerid = ARGV[1] \
+    local corporateactionid = ARGV[2] \
+    local exdatems = ARGV[3] \
+    local timestamp = ARGV[4] \
+    local timestampms = ARGV[5] \
+    local mode = tonumber(ARGV[6]) \
+    local totquantity = 0 \
+    local totunsettledquantity = 0 \
+    local totdividend = 0 \
+    local totunsettleddividend = 0 \
+    local numaccounts = 0 \
+    --[[ get the corporate action ]] \
+    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
+    if not corporateaction["corporateactionid"] then \
+      return {1, 1027} \
+    end \
+    --[[ there needs to be a cash per share figure for this ca ]] \
+    if not corporateaction["cashpershare"] then \
+      return {1, 1036} \
+    end \
+   --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
+    local rate = 1 \
+    --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
+    local positions = getpositionquantitiesbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
+    for i = 1, #positions do \
+      redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"] .. ", unsettledquantity: " .. positions[i]["unsettledquantity"] .. ", settledquantity: " .. positions[i]["settledquantity"]) \
+      --[[ may have a position with no quantity ]] \
+      if positions[i]["quantity"] ~= 0 then \
+        --[[ get the account for the currency - may change - todo: consider ]] \
+        local account = getaccount(positions[i]["accountid"], brokerid) \
+        local dividend = round(positions[i]["quantity"] * tonumber(corporateaction["cashpershare"]), 2) \
+        local unsettleddividend = round(positions[i]["unsettledquantity"] * tonumber(corporateaction["cashpershare"]), 2) \
+        redis.log(redis.LOG_NOTICE, "dividend: " .. dividend) \
+        local dividendlocal = dividend * rate \
+        local unsettleddividendlocal = unsettleddividend * rate \
+        if dividend ~= 0 then \
+          if mode == 2 then \
+            --[[ apply the dividend ]] \
+            local retval = transactiondividend(positions[i]["accountid"], dividend, unsettleddividend, brokerid, account["currencyid"], dividendlocal, unsettleddividendlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "CAP", timestampms) \
+            if retval[1] == 1 then \
+              return retval \
+            end \
+          elseif mode == 3 then \
+            --[[ reverse the dividend ]] \
+            local retval = transactiondividend(positions[i]["accountid"], -dividend, -unsettleddividend, brokerid, account["currencyid"], -dividendlocal, -unsettleddividendlocal, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "CAR", timestampms) \
+            if retval[1] == 1 then \
+              return retval \
+            end \
+          end \
+          totquantity = totquantity + positions[i]["quantity"] \
+          totunsettledquantity = totunsettledquantity + positions[i]["unsettledquantity"] \
+          totdividend = totdividend + dividend \
+          totunsettleddividend = totunsettleddividend + unsettleddividend \
+          numaccounts = numaccounts + 1 \
+        end \
+      end \
+    end \
+    redis.log(redis.LOG_NOTICE, "totquantity: " .. totquantity .. ", totdividend: " .. totdividend) \
+    return {0, tostring(totquantity), tostring(totunsettledquantity), tostring(totdividend), tostring(totunsettleddividend), numaccounts} \
+  ';
+
+ /*
   * cadividendscrip()
   * script to test/apply/reverse a scrip dividend
   * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
@@ -2675,19 +2743,31 @@ exports.registerScripts = function () {
         if not corporateactiondecision then \
           if corporateaction["decisiondefault"] == "SCRIP" then \
             local retdivscrip = dividendasshares(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-            totsharesdue = totsharesdue + retdivscrip[1] \
-            totresiduecash = totresiduecash + retdivscrip[2] \
+            if retdivscrip[1] == 1 then \
+              return retdivscrip \
+            end \
+            totsharesdue = totsharesdue + retdivscrip[2] \
+            totresiduecash = totresiduecash + retdivscrip[3] \
           else \
             local dividend = dividendascash(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-            totdividendascash = totdividendascash + dividend \
+            if dividend[1] == 1 then \
+              return dividend \
+            end \
+            totdividendascash = totdividendascash + dividend[2] \
           end \
         elseif corporateactiondecision == "SCRIP" then \
           local retdivscrip = dividendasshares(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-          totsharesdue = totsharesdue + retdivscrip[1] \
-          totresiduecash = totresiduecash + retdivscrip[2] \
+          if retdivscrip[1] == 1 then \
+            return retdivscrip \
+          end \
+          totsharesdue = totsharesdue + retdivscrip[2] \
+          totresiduecash = totresiduecash + retdivscrip[3] \
         else \
           local dividend = dividendascash(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-          totdividendascash = totdividendascash + dividend \
+          if dividend[1] == 1 then \
+            return dividend \
+          end \
+          totdividendascash = totdividendascash + dividend[2] \
         end \
         totquantity = totquantity + positions[i]["quantity"] \
       end \
@@ -2877,7 +2957,7 @@ exports.registerScripts = function () {
   * returns: 0, total shares due, total residue if ok, else 1 + an error message if unsuccessful
   * note: this corporate action is applied across all brokers
   */
-  exports.castocksplit = geteodprice + getpositionsbysymbolbydate + getsharesdue + getaccount + newpositiontransaction + transactiondividend + round + '\
+  exports.castocksplit = getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + convertsharesascash + '\
     redis.log(redis.LOG_NOTICE, "castocksplit") \
     local corporateactionid = ARGV[1] \
     local exdate = ARGV[2] \
@@ -2900,11 +2980,6 @@ exports.registerScripts = function () {
     local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
     if not symbol["symbolid"] then \
       return {1, 1015} \
-    end \
-    --[[ get the closing price for the stock as at the exdate ]] \
-    local eodprice = geteodprice(exdate, corporateaction["symbolid"]) \
-    if not eodprice["bid"] then \
-      return {1, 1029} \
     end \
     --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
     local rate = 1 \
@@ -2930,24 +3005,11 @@ exports.registerScripts = function () {
             totsharesdue = totsharesdue + sharesdue[1] \
           end \
           if sharesdue[2] > 0 then \
-            --[[ get the account for the currency ]] \
-            local account = getaccount(positions[i]["accountid"], brokerid) \
-            --[[ calculate how much cash is due ]] \
-            local stubcash = round(sharesdue[2] * eodprice["bid"], 2) \
-            if stubcash > 0 then \
-              local stubcashlocal = stubcash * rate \
-              if mode == 2 then \
-                local retval = transactiondividend(positions[i]["accountid"], stubcash, 0, brokers[j], account["currencyid"], stubcashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "DVP", timestampms) \
-                if retval[1] == 1 then \
-                  return retval \
-                end \
-              elseif mode == 3 then \
-                local retval = transactiondividend(positions[i]["accountid"], -stubcash, 0, brokers[j], account["currencyid"], -stubcashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "DVR", timestampms) \
-                if retval[1] == 1 then \
-                  return retval \
-                end \
-              end \
-              totresidue = totresidue + stubcash \
+            local ret = convertsharesascash(positions[i]["accountid"], brokerid, corporateaction, sharesdue[2], timestamp, timestampms, mode) \
+            if ret[1] == 1 then \
+              return ret \
+            end \
+            totresidue = totresidue + ret[2] \
            end \
          end \
         end \
@@ -2963,7 +3025,7 @@ exports.registerScripts = function () {
   * note: exdate is actually exdate - 1 in "YYYYMMDD" format, exdatems is millisecond representation of time at the end of exdate - 1
   * returns: 0, total sharesdue, total residue if ok, else 1 + an error message if unsuccessful
   */
-  exports.cascripissue = geteodprice + getpositionsbysymbolbydate + getsharesdue + getaccount + newpositiontransaction + transactiondividend + '\
+  exports.cascripissue = getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + convertsharesascash + '\
     redis.log(redis.LOG_NOTICE, "cascripissue") \
     local brokerid = ARGV[1] \
     local corporateactionid = ARGV[2] \
@@ -2988,13 +3050,6 @@ exports.registerScripts = function () {
     if not symbol["symbolid"] then \
       return {1, 1015} \
     end \
-   --[[ get the closing price for the stock as at the exdate ]] \
-    local eodprice = geteodprice(exdate, corporateaction["symbolid"]) \
-    if not eodprice["bid"] then \
-      return {1, 1029} \
-    end \
-   --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
-    local rate = 1 \
     --[[ get all positions in the stock of the corporate action as at the ex date ]] \
     local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
     for i = 1, #positions do \
@@ -3014,24 +3069,17 @@ exports.registerScripts = function () {
           totsharesdue = totsharesdue + sharesdue[1] \
         end \
         if sharesdue[2] > 0 then \
-          --[[ get the account for the currency ]] \
-          local account = getaccount(positions[i]["accountid"], brokerid) \
-          --[[ calculate how much cash is due ]] \
-          local stubcash = round(sharesdue[2] * eodprice["bid"], 2) \
-          if stubcash > 0 then \
-            local stubcashlocal = stubcash * rate \
-            if mode == 2 then \
-              local retval = transactiondividend(positions[i]["accountid"], stubcash, 0, brokerid, account["currencyid"], stubcashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "DVP", timestampms) \
-              if retval[1] == 1 then \
-                return retval \
-              end \
-            elseif mode == 3 then \
-              local retval = transactiondividend(positions[i]["accountid"], -stubcash, 0, brokerid, account["currencyid"], -stubcashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "DVR", timestampms) \
-              if retval[1] == 1 then \
-                return retval \
-              end \
+          local fractiontype = redis.call("get", "fractiontype:" .. corporateaction["fractiontypeid"]) \
+          if not fractiontype then \
+          elseif fractiontype == "AMALGAMATE" then \
+            --[[ update position for broker own client account ]] \
+            newpositiontransaction(0, brokerid, 0, "", corporateactionid, 2, sharesdue[2], corporateaction["symbolid"], timestamp, timestampms) \
+          elseif fractiontype == "CASH" then \
+            stubcash = convertsharesascash(positions[i]["accountid"], brokerid, corporateaction, positions[i]["quantity"], timestamp, timestampms, mode) \
+            if stubcash[1] == 1 then \
+              return stubcash \
             end \
-            totresidue = totresidue + stubcash \
+            totresidue = totresidue + stubcash[2] \
           end \
         end \
       end \
@@ -3083,13 +3131,19 @@ exports.registerScripts = function () {
         --[[ share element ]] \
         if tonumber(corporateaction["sharespershare"]) > 0 then \
           local shares = dividendasshares(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-          totsharesdue = totsharesdue + shares[1] \
-          totresiduecash = totresiduecash + shares[2] \
+          if shares[1] == 1 then \
+            return shares \
+          end \
+          totsharesdue = totsharesdue + shares[2] \
+          totresiduecash = totresiduecash + shares[3] \
         end \
         --[[ cash element ]] \
         if tonumber(corporateaction["cashpershare"]) > 0 then \
           local cash = dividendascash(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-          totcash = totcash + cash \
+          if cash[1] == 1 then \
+            return cash \
+          end \
+          totcash = totcash + cash[2] \
         end \
         totquantity = totquantity + positions[i]["quantity"] \
         numaccounts = numaccounts + 1 \
@@ -3117,7 +3171,6 @@ exports.registerScripts = function () {
     local numaccounts = 0 \
     local totsharesdue = 0 \
     local totresiduecash = 0 \
-    local totcash = 0 \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction["corporateactionid"] then \
@@ -3144,15 +3197,16 @@ exports.registerScripts = function () {
       --[[ may have a position with no quantity ]] \
       if positions[i]["quantity"] ~= 0 then \
         local shares = convertsharesasshares(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-        totsharesdue = totsharesdue + shares[1] \
-        totresiduecash = totresiduecash + shares[2] \
-        totquantity = totquantity + positions[i]["quantity"] \
+        if shares[1] == 1 then \
+          return shares \
+        end \
+        totsharesdue = totsharesdue + shares[2] \
+        totresiduecash = totresiduecash + shares[3] \
         numaccounts = numaccounts + 1 \
       end \
     end \
     return {0, tostring(totquantity), tostring(totsharesdue), tostring(totresiduecash), numaccounts} \
   ';
-
 
   /*
   * scriptgettradesbysettlementstatus

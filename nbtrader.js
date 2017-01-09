@@ -39,7 +39,6 @@ var messagerecoveryinstarted = false;	// flag to show we are in the process of r
 var nextseqnumin; // store the next sequence number in when resetting stored value for resend request
 var messagerecoveryout = false; // flag to indicate we are in a resend process for outgoing messages
 var sequencegapnum = 0; // sequence gap starting message number
-var sequencegaptimestamp; // timestamp of first message in a sequence gap
 var resendrequestrequired = false; // indicates we need to do our own resend once we have serviced a resend request
 //var settlmnttyp = '6'; // indicates a settlement date is being used, rather than a number of days
 var norelatedsym = '1'; // number of related symbols in a request, always 1
@@ -606,9 +605,7 @@ function completeMessage(tagvalarr, self, endtag) {
     if (header.possdupflag == 'Y') {
       if (messagerecoveryinrequested) {
         // this is the start of the recovery process
-        // set the stored value to the first value requested & set started flag
         console.log('message recovery started');
-        db.hset("config", "lastfixseqnumin", nextseqnumin - 1);
         messagerecoveryinrequested = false;
         messagerecoveryinstarted = true;
       }
@@ -684,6 +681,9 @@ function completeMessage(tagvalarr, self, endtag) {
         return;
       }
 
+      // reset incoming sequence number as we incremented & did not get what we expected 
+      db.hset("config", "lastfixseqnumin", fixseqnumin - 1);
+
       if (messagerecoveryinrequested) {
         // already requested a resend, so this should just be a message sent before the resend request
         // so, just ignore, it should be handled as part of the resend
@@ -692,19 +692,13 @@ function completeMessage(tagvalarr, self, endtag) {
         // store the next sequence number in, as it is used to update the stored value later
         nextseqnumin = fixseqnumin;
 
-        // check the message type before issuing a resend request
-        if (header.msgtype == '2') {
-          // record that we need to do our own resend request after servicing the requested resend
-          resendrequestrequired = true;
-       } else {
-          // request resend of messages from this point, but wait to adjust the stored value
-          // until we know the recovery process has started, as in the first possible duplicate received
-          resendRequest(fixseqnumin);
+        // request resend of messages from this point, but wait to adjust the stored value
+        // until we know the recovery process has started, as in the first possible duplicate received
+        resendRequest(fixseqnumin);
 
-          // we may need to act on this message, once the resend process has finished
-          messagerecoveryinrequested = true;
-	  return;
-        }
+        // we may need to act on this message, once the resend process has finished
+        messagerecoveryinrequested = true;
+	return;
       }
     }
 
@@ -1400,6 +1394,8 @@ function businessRejectReceived(businessreject, self) {
 function resendMessage(msgno, endseqno, self) {
   console.log("resendMessage:" + msgno);
 
+  var sequencegaptimestamp;
+
   // get requested message
   db.eval(scriptgetfixmessage, 0, msgno, function(err, ret) {
     if (err) {
@@ -1411,9 +1407,14 @@ function resendMessage(msgno, endseqno, self) {
     var fixmessage = "";
 
     // in case we are not able to find the message
-    if (ret[0] != 1) {
-      fixmessage = JSON.parse(ret[1]);
+    if (ret[0] == 1) {
+      console.log("unable to find message:" + msgno);
+      sequencegaptimestamp = commonbo.getUTCTimeStamp(new Date());
+      sequenceGap(sequencegapnum, msgno, sequencegaptimestamp);
+      return;
     }
+
+    fixmessage = JSON.parse(ret[1]);
 
     // resend the message
     if (fixmessage == "" || fixmessage.msgtype == '0' || fixmessage.msgtype == '1' || fixmessage.msgtype == '2' || fixmessage.msgtype == '4' || fixmessage.msgtype == '5' || fixmessage.msgtype == 'A' || oldMessage(fixmessage)) {

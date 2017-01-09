@@ -6,720 +6,7 @@
 * December 2013
 ****************/
 
-function broadcastLevelOne(symbolid, connections) {
-  var bestbid = 0.00;
-  var bestoffer = 0.00;
-  var count;
-
-  db.zrange(symbolid, 0, -1, "WITHSCORES", function(err, orders) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = orders.length;
-    if (count == 0) {
-      sendLevelOne(symbolid, bestbid, bestoffer, connections);
-      return;
-    }
-
-    orders.forEach(function (reply, i) {
-      if (i % 2 != 0) {
-        if (i == 1) { // first score
-          if (reply < 0) {
-            bestbid = -parseFloat(reply);
-          } else if (reply > 0) {
-            bestoffer = parseFloat(reply);
-          }
-        } else if (bestoffer == 0.00) {
-          if (reply > 0) {
-            bestoffer = parseFloat(reply);
-          }
-        }
-      }
-
-      count--;
-      if (count <= 0) {
-        sendLevelOne(symbolid, bestbid, bestoffer, connections);
-      }
-    });
-  });
-}
-
-exports.broadcastLevelOne = broadcastLevelOne;
-
-/*function broadcastLevelTwo(symbolid, connections) {
-  var orderbook = {prices : []};
-  var lastprice = 0;
-  var lastside = 0;
-  var firstbid = true;
-  var firstoffer = true;
-  var bidlevel = 0;
-  var offerlevel = 0;
-  var count;
-
-  console.log("broadcastLevelTwo:"+symbolid);
-
-  orderbook.symbolid = symbolid;
-
-  db.zrange(symbolid, 0, -1, "WITHSCORES", function(err, orders) {
-    if (err) {
-      console.log("zrange error:" + err + ", symbol:" + symbolid);
-      return;
-    }
-
-    count = orders.length;
-    if (count == 0) {
-      // build & send a message showing no orders in the order book
-      var levelbid = {};
-      levelbid.bid = 0;
-      levelbid.bidsize = 0;
-      orderbook.prices[0] = levelbid;
-      var leveloffer = {};
-      leveloffer.offer = 0;
-      leveloffer.offersize = 0;
-      orderbook.prices[1] = leveloffer;
-
-      if (conn != null) {
-        conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-      } else {
-        publishMessage("{\"orderbook\":" + JSON.stringify(orderbook) + "}", connections);
-      }
-      return;
-    }
-
-    orders.forEach(function (reply, i) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      console.log(reply);
-
-      if (i % 2 != 0) {
-        // get order hash
-        db.hgetall("order:" + orderid, function(err, order) {
-          if (err) {
-            console.log(err);
-            return;
-          }
-
-          var level = {};
-
-          if (order.price != lastprice || order.side != lastside) {
-            if (parseInt(order.side) == 1) {
-              level.bid = order.price;
-              level.bidsize = parseInt(order.leavesqty);
-              orderbook.prices[bidlevel] = level;
-              bidlevel++;
-          } else {
-            if (!firstoffer) {
-              offerlevel++;
-            } else {
-              firstoffer = false;
-            }
-
-            if (offerlevel <= bidlevel && !firstbid) {
-              orderbook.prices[offerlevel].offer = order.price;
-              orderbook.prices[offerlevel].offersize = parseInt(order.leavesqty);
-            } else {
-              level.offer = order.price;
-              level.offersize = parseInt(order.leavesqty);
-              orderbook.prices[offerlevel] = level;
-            }
-          }
-
-          lastprice = order.price;
-          lastside = order.side;
-        } else {
-          if (parseInt(order.side) == 1) {
-            orderbook.prices[bidlevel].bidsize += parseInt(order.leavesqty);
-          } else {
-            orderbook.prices[offerlevel].offersize += parseInt(order.leavesqty);
-          }
-        }
-
-        count--;
-        if (count <= 0) {
-          if (conn != null) {
-            conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-          } else {
-            // broadcast to all interested parties
-            publishMessage("{\"orderbook\":" + JSON.stringify(orderbook) + "}", connections);
-          }
-        }
-      });
-    });
-  });
-}
-
-exports.broadcastLevelTwo = broadcastLevelTwo;*/
-
-function sendCurrentOrderbook(symbolid, topic, conn, feedtype) {
-  if (feedtype == "proquote") {
-    sendCurrentOrderbookPQ(symbolid, topic, conn);
-  } else if (feedtype == "digitallook") {
-    sendCurrentOrderbookDL(symbolid, topic, conn);
-  } else if (feedtype == "nbtrader") {
-    sendCurrentOrderbookNBT(symbolid, topic, conn);
-  }
-}
-
-exports.sendCurrentOrderbook = sendCurrentOrderbook;
-
-function sendCurrentOrderbookPQ(symbolid, topic, conn) {
-  var orderbook = {prices : []};
-  var level1 = {};
-  var level2 = {};
-  var level3 = {};
-  var level4 = {};
-  var level5 = {};
-  var level6 = {};
-
-  db.hgetall("topic:" + topic, function(err, topicrec) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (!topicrec) {
-      console.log("topic:" + topic + " not found");
-
-      // send zeros
-      topicrec = {};
-      topicrec.bid1 = 0;
-      topicrec.offer1 = 0;
-      topicrec.bid2 = 0;
-      topicrec.offer2 = 0;
-      topicrec.bid3 = 0;
-      topicrec.offer3 = 0;
-    }
-
-    // 3 levels
-    level1.bid = topicrec.bid1;
-    level1.level = 1;
-    orderbook.prices.push(level1);
-    level2.offer = topicrec.offer1;
-    level2.level = 1;
-    orderbook.prices.push(level2);
-    level3.bid = topicrec.bid2;
-    level3.level = 2;
-    orderbook.prices.push(level3);
-    level4.offer = topicrec.offer2;
-    level4.level = 2;
-    orderbook.prices.push(level4);
-    level5.bid = topicrec.bid3;
-    level5.level = 3;
-    orderbook.prices.push(level5);
-    level6.offer = topicrec.offer3;
-    level6.level = 3;
-    orderbook.prices.push(level6);
-
-    orderbook.symbolid = symbolid;
-
-    if (conn != null) {
-      conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-    }
-  });
-}
-
-function sendCurrentOrderbookDL(symbolid, topic, conn) {
-  var orderbook = {prices : []};
-  var level1 = {};
-  var level2 = {};
-  var level3 = {};
-  var level4 = {};
-  var level5 = {};
-  var level6 = {};
-
-  db.hgetall("ticker:" + topic, function(err, topicrec) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (!topicrec) {
-      console.log("ticker:" + topic + " not found");
-
-      // send zeros
-      topicrec = {};
-      topicrec.bid = 0;
-      topicrec.offer = 0;
-    }
-
-    // 3 levels
-    level1.bid = topicrec.bid;
-    level1.level = 1;
-    orderbook.prices.push(level1);
-    level2.offer = topicrec.offer;
-    level2.level = 1;
-    orderbook.prices.push(level2);
-    level3.bid = 0;
-    level3.level = 2;
-    orderbook.prices.push(level3);
-    level4.offer = 0;
-    level4.level = 2;
-    orderbook.prices.push(level4);
-    level5.bid = 0;
-    level5.level = 3;
-    orderbook.prices.push(level5);
-    level6.offer = 0;
-    level6.level = 3;
-    orderbook.prices.push(level6);
-
-    orderbook.symbolid = symbolid;
-
-    if (conn != null) {
-      conn.write("{\"orderbook\":" + JSON.stringify(orderbook) + "}");
-    }
-  });
-}
-
-function sendCurrentOrderbookNBT(symbolid, topic, conn) {
-  // prices are stored against 'topic', as in the symbol used by the feed, so this is used to look up a price
-  db.hgetall("price:" + topic, function(err, price) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    var msg;
-
-    if (!price) {
-      var today = new Date();
-      var timestamp = getUTCTimeStamp(today);
-
-      msg = "{\"prices\":[{\"symbol\":\"" + symbolid + "\",\"bid\":" + "0.00" + "\",\"ask\":" + "0.00" + ",\"level\":" + "1" + ",\"timestamp\":" + timestamp + "}]}";
-    } else {
-      msg = "{\"prices\":[{\"symbol\":\"" + symbolid + "\",\"bid\":" + price.bid + "\",\"ask\":" + price.ask + ",\"level\":" + "1" + ",\"timestamp\":" + price.timestamp + "}]}";
-    }
-
-    if (conn != null) {
-      conn.write(msg);
-    }
-  });
-}
-
-function sendErrorMsg(error, conn) {
-  conn.write("{\"errormsg\":" + JSON.stringify(getReasonDesc(error)) + "}");
-}
-
-exports.sendErrorMsg = sendErrorMsg;
-
-function newPrice(feedsymbol, serverid, msg, connections, feedtype) {
-  if (feedtype == "proquote") {
-    // which symbols are subscribed to for this topic (may be more than 1 as covers derivatives)
-    db.smembers("topic:" + feedsymbol + ":" + serverid + ":symbols", function(err, symbols) {
-      if (err) throw err;
-
-      symbols.forEach(function(symbol, i) {
-        // build the message according to the symbol
-        var jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
-
-        // get the users watching this symbol
-        db.smembers("topic:" + feedsymbol + ":symbol:" + symbol + ":" + serverid, function(err, ids) {
-          if (err) throw err;
-
-          // send the message to each user
-          ids.forEach(function(id, j) {
-            if (id in connections) {
-              connections[id].write(jsonmsg);
-            }
-          });
-        });
-      });
-    });
-  } else if (feedtype == "digitallook") {
-    // which symbols are subscribed to for this topic (may be more than 1 as covers derivatives)
-    db.smembers(feedsymbol + ":" + serverid + ":symbols", function(err, symbols) {
-      if (err) throw err;
-
-      symbols.forEach(function(symbol, i) {
-        // build the message according to the symbol
-        var jsonmsg = "{\"orderbook\":{\"symbol\":\"" + symbol + "\"," + msg + "}}";
-
-        // get the users watching this symbol
-        db.smembers(feedsymbol + ":symbol:" + symbol + ":" + serverid, function(err, ids) {
-          if (err) throw err;
-
-          // send the message to each user
-          ids.forEach(function(id, j) {
-            if (id in connections) {
-              connections[id].write(jsonmsg);
-            }
-          });
-        });
-      });
-    });
-  } else if (feedtype == "nbtrader") {
-    // get the users watching this symbol on this server
-    db.smembers("symbol:" + feedsymbol + ":server:" + serverid + ":ids", function(err, ids) {
-      if (err) throw err;
-
-      // send the message to each user
-      ids.forEach(function(id, j) {
-        if (id in connections) {
-          connections[id].write(msg);
-        }
-      });
-    });
-  }
-}
-
-exports.newPrice = newPrice;
-
-function sendIndex(index, conn) {
-  var i = {symbols: []};
-  var count;
-
-  // todo: remove this stuff?
-  i.name = index;
-
-  db.smembers("index:" + index, function(err, replies) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    count = replies.length;
-    if (count == 0) {
-      console.log("Index:" + index + " not found");
-      return;
-    }
-
-    replies.forEach(function(symbolid, j) {
-      db.hgetall("symbol:" + symbolid, function(err, inst) {
-        var instrument = {};
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        if (inst == null) {
-          console.log("Symbol:" + symbolid + " not found");
-          count--;
-          return;
-        }
-
-        instrument.symbolid = symbolid;
-        instrument.shortname = inst.shortname;
-
-        // add the order to the array
-        i.symbols.push(instrument);
-
-        // send array if we have added the last item
-        count--;
-        if (count <= 0) {
-          conn.write("{\"index\":" + JSON.stringify(i) + "}");
-        }
-      });
-    });
-  });
-}
-
-exports.sendIndex = sendIndex;
-
-//
-// send level one to everyone
-//
-function sendLevelOne(symbolid, bestbid, bestoffer, connections) {
-  var msg = "{\"orderbook\":{\"symbol\":\"" + symbolid + "\",\"prices\":[";
-  msg += "{\"level\":1,\"bid\":" + bestbid + "}";
-  msg += ",{\"level\":1,\"offer\":" + bestoffer + "}";
-  msg += "]}}";
-  publishMessage(msg, connections);
-}
-
-function publishMessage(message, connections) {
-  // todo: alter to just cater for interested parties
-  for (var c in connections) {
-    if (connections.hasOwnProperty(c)) {
-      connections[c].write(message);
-    }
-  }
-}
-
-exports.publishMessage = publishMessage;
-
-//
-// returns valid trading day as date object, taking into account weekends and holidays
-// from passed date, number of settlement days (i.e. T+n) and list of holidays
-//
-/*function getSettDate(dt, nosettdays, holidays) {
-  var days = 0;
-
-  if (nosettdays > 0) {
-    while (true) {
-      // add a day
-      dt.setDate(dt.getDate() + 1);
-
-      // ignore weekends & holidays
-      if (dt.getDay() == 6 || dt.getDay() == 0) {
-      } else if (isHoliday(dt, holidays)) {
-      } else {
-        // add to days & check to see if we are there
-        days++;
-
-        if (days >= nosettdays) {
-          break;
-        }
-      }
-    }
-  }
-
-  return dt;
-}
-
-exports.getSettDate = getSettDate;*/
-
-function isHoliday(datetocheck, holidays) {
-  var found = false;
-
-  var datetocheckstr = getUTCDateString(datetocheck);
-
-  if (datetocheckstr in holidays) {
-    found = true;
-  }
-
-  return found;
-}
-
-//
-// returns a UTC datetime string from a passed date object
-//
-/*function getUTCTimeStamp(timestamp) {
-    var year = timestamp.getUTCFullYear();
-    var month = timestamp.getUTCMonth() + 1; // flip 0-11 -> 1-12
-    var day = timestamp.getUTCDate();
-    var hours = timestamp.getUTCHours();
-    var minutes = timestamp.getUTCMinutes();
-    var seconds = timestamp.getUTCSeconds();
-    //var millis = timestamp.getUTCMilliseconds();
-
-    if (month < 10) {month = '0' + month;}
-
-    if (day < 10) {day = '0' + day;}
-
-    if (hours < 10) {hours = '0' + hours;}
-
-    if (minutes < 10) {minutes = '0' + minutes;}
-
-    if (seconds < 10) {seconds = '0' + seconds;}
-
-    if (millis < 10) {
-        millis = '00' + millis;
-    } else if (millis < 100) {
-        millis = '0' + millis;
-    }
-
-    //var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds, '.', millis].join('');
-    var ts = [year, month, day, '-', hours, ':', minutes, ':', seconds].join('');
-
-    return ts;
-}
-
-exports.getUTCTimeStamp = getUTCTimeStamp;*/
-
-//
-// get a UTC date string from a passed date object
-//
-/*function getUTCDateString(date) {
-    var year = date.getUTCFullYear();
-    var month = date.getUTCMonth() + 1; // flip 0-11 -> 1-12
-    var day = date.getUTCDate();
-
-    if (month < 10) {month = '0' + month;}
-
-    if (day < 10) {day = '0' + day;}
-
-    var utcdate = "" + year + month + day;
-
-    return utcdate;
-}
-
-exports.getUTCDateString = getUTCDateString;*/
-
-/*function getReasonDesc(reason) {
-  var desc;
-
-  switch (parseInt(reason)) {
-  case 1001:
-    desc = "No currency held for this instrument";
-    break;
-  case 1002:
-    desc = "Insufficient cash in settlement currency";
-    break;
-  case 1003:
-    desc = "No position held in this instrument";
-    break;
-  case 1004:
-    desc = "Insufficient position size in this instrument";
-    break;
-  case 1005:
-    desc = "System error";
-    break;
-  case 1006:
-    desc = "Invalid order";
-    break;
-  case 1007:
-    desc = "Invalid instrument";
-    break;
-  case 1008:
-    desc = "Order already cancelled";
-    break;
-  case 1009:
-    desc = "Order not found";
-    break;
-  case 1010:
-    desc = "Order already filled";
-    break;
-  case 1011:
-    desc = "Order currency does not match symbol currency";
-    break;
-  case 1012:
-    desc = "Order already rejected";
-    break;
-  case 1013:
-    desc = "Ordercancelrequest not found";
-    break;
-  case 1014:
-    desc = "Quoterequest not found";
-    break;
-  case 1015:
-    desc = "Symbol not found";
-    break;
-  case 1016:
-    desc = "Proquote symbol not found";
-    break;
-  case 1017:
-    desc = "Client not found";
-    break;
-  case 1018:
-    desc = "Client not authorised to trade this type of product";
-    break;
-  case 1019:
-    desc = "Quantity greater than position quantity";
-    break;
-  case 1020:
-    desc = "Insufficient free margin";
-    break;
-  case 1021:
-    desc = "Order held externally";
-    break;
-  case 1022:
-    desc = "Order already expired";
-    break;
-  case 1023:
-    desc = "Email already exists";
-    break;
-  default:
-    desc = "Unknown reason";
-  }
-
-  return desc;
-}
-
-exports.getReasonDesc = getReasonDesc;*/
-
-//
-// Get the nuber of seconds between two UTC datetimes
-//
-/*function getSeconds(startutctime, finishutctime) {
-  var startdt = new Date(getDateString(startutctime));
-  var finishdt = new Date(getDateString(finishutctime));
-  return ((finishdt - startdt) / 1000);
-}
-
-exports.getSeconds = getSeconds;*/
-
-//
-// Convert a UTC datetime to a valid string for creating a date object
-//
-/*function getDateString(utcdatetime) {
-    return (utcdatetime.substr(0,4) + "/" + utcdatetime.substr(4,2) + "/" + utcdatetime.substr(6,2) + " " + utcdatetime.substr(9,8));
-}
-
-exports.getDateString = getDateString;
-
-//
-// Convert a "yyyymmdd" date string to a date object
-//
-function dateFromUTCString(utcdatestring) {
-  var dt = new Date(utcdatestring.substr(0,4), utcdatestring.substr(4,2) - 1, utcdatestring.substr(6,2));
-  return dt;
-}
-
-exports.dateFromUTCString = dateFromUTCString;*/
-
-function getPTPQuoteRejectReason(reason) {
-  var desc;
-
-  switch (parseInt(reason)) {
-  case 1:
-    desc = "Unknown symbol";
-    break;
-  case 2:
-    desc = "Exchange closed";
-    break;
-  case 3:
-    desc = "Quote Request exceeds limit";
-    break;
-  case 4:
-    desc = "Too late to enter";
-    break;
-  case 5:
-    desc = "Unknown Quote";
-    break;
-  case 6:
-    desc = "Duplicate Quote";
-    break;
-  case 7:
-    desc = "Invalid bid/ask spread";
-    break;
-  case 8:
-    desc = "Invalid price";
-    break;
-  case 9:
-    desc = "Not authorized to quote security";
-    break;
-  default:
-    desc = "Unknown reason";
-  }
-
-  return desc;
-}
-
-exports.getPTPQuoteRejectReason = getPTPQuoteRejectReason;
-
-function getPTPOrderCancelRejectReason(reason) {
-  var desc;
-
-  switch (parseInt(reason)) {
-  case 0:
-    desc = "Too late to cancel";
-    break;
-  case 1:
-    desc = "Unknown order";
-    break;
-  case 2:
-    desc = "Broker Option";
-    break;
-  case 3:
-    desc = "Order already in Pending Cancel or Pending Replace status";
-    break;
-  }
-
-  return desc;
-}
-
-exports.getPTPOrderCancelRejectReason = getPTPOrderCancelRejectReason;
-
-
 exports.registerScripts = function () {
-  //var updatecash;
-  var getmargin;
-  var getunrealisedpandl;
-  var calcfinance;
   var round;
 
   round = '\
@@ -729,324 +16,165 @@ exports.registerScripts = function () {
   end \
   ';
 
-  subscribesymbolpq = '\
-  local subscribesymbolpq = function(symbolid, id, servertype) \
-    local topic = redis.call("hget", "symbol:" .. symbolid, "topic") \
-    if not topic then \
-      return {0, ""} \
-    end \
-    local marketext = redis.call("hget", servertype .. ":" .. id, "marketext") \
-    if not marketext then \
-      topic = topic .. "D" \
-    elseif marketext ~= nil then \
-      topic = topic .. marketext \
-    end \
-    redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbolid) \
-    redis.call("sadd", "topic:" .. topic .. ":symbol:" .. symbolid .. ":" .. servertype, id) \
-    redis.call("sadd", "topic:" .. topic .. ":" .. servertype .. ":symbols", symbolid) \
-    local needtosubscribe = 0 \
-    if redis.call("scard", "topic:" .. topic .. ":" .. servertype) == 0 then \
-      redis.call("sadd", "topic:" .. topic .. ":" .. servertype, id) \
-      needtosubscribe = 1 \
-      if redis.call("scard", "topic:" .. topic .. ":servers") == 0 then \
-        redis.call("publish", "proquote", "subscribe:" .. topic) \
-      end \
-      redis.call("sadd", "topic:" .. topic .. ":servers", servertype) \
-    end \
-    redis.call("sadd", "topics", topic) \
-    redis.call("sadd", "server:" .. servertype .. ":topics", topic) \
-    redis.call("sadd", servertype .. ":" .. id .. ":topics", topic) \
-    return {needtosubscribe, topic} \
+  //
+  // watchlistnew()
+  // create a new watchlist
+  // params: symbolid, watchlistid
+  // returns: watchlistid
+  //
+  watchlistnew = round + '\
+  local watchlistnew = function(brokerid, clientid) \
+    local watchlistid = redis.call("hincrby", "config", "lastwatchlistid", 1) \
+    redis.call("hset", "broker:" .. brokerid .. ":client:" .. clientid, "watchlistid", watchlistid) \
+    redis.call("set", "watchlist:" .. watchlistid .. ":client", brokerid .. ":" .. clientid) \
+    return watchlistid \
   end \
   ';
 
-  exports.subscribesymbolpq = subscribesymbolpq;
-
   //
-  // subscribe to an instrument with nbtrader
-  // any number of symbols can subscribe to a nbtsymbol to support derivatives
+  // subscribe a symbol to a watchlist
+  // params: symbolid, watchlistid
   //
-  // keys:
-  // "symbol:"" .. symbolid
-  // "symbol:" .. symbolid .. ":server:" .. serverid .. ":ids"
-  // "symbol:" .. symbolid .. ":servers"
-  // "nbtsymbol:" .. nbtsymbol .. ":symbols"
-  // "nbtsymbols"
-  // "server:" .. serverid .. ":id:" .. id .. ":symbols"
-  // "server:" .. serverid .. ":ids"
-  //
-  subscribesymbolnbt = '\
-  local subscribesymbolnbt = function(symbolid, id, serverid) \
-    --[[ get nbtsymbol & latest price ]] \
-    local fields = {"bid", "ask", "timestamp", "midnetchg", "midpctchg", "nbtsymbol"} \
-    local vals = redis.call("hmget", "symbol:" .. symbolid, unpack(fields)) \
-    if not vals[6] then \
-      return {0, ""} \
-    end \
-    local nbtsymbol = vals[6] \
-    local subscribe = 0 \
-    redis.call("sadd", "symbol:" .. symbolid .. ":server:" .. serverid .. ":ids", id) \
-    if redis.call("sismember", "symbol:" .. symbolid .. ":servers", serverid) == 0 then \
-      redis.call("sadd", "symbol:" .. symbolid .. ":servers", serverid) \
-      --[[ this server needs to subscribe to this symbol - subscribing will be done on a separate connection ]] \
-      subscribe = 1 \
-    end \
-    redis.call("sadd", "nbtsymbol:" .. nbtsymbol .. ":symbols", symbolid) \
-    if redis.call("sismember", "nbtsymbols", nbtsymbol) == 0 then \
-      redis.call("sadd", "nbtsymbols", nbtsymbol) \
-      --[[ tell the price server to subscribe ]] \
-       redis.call("publish", 7, "rp:" .. nbtsymbol) \
-    end \
-    if redis.call("sismember", "server:" .. serverid .. ":id:" .. id .. ":symbols", symbolid) == 0 then \
-      redis.call("sadd", "server:" .. serverid .. ":id:" .. id .. ":symbols", symbolid) \
-      redis.call("sadd", "server:" .. serverid .. ":ids", id) \
-    end \
-    return {subscribe, vals[1], vals[2], vals[3], vals[4], vals[5]} \
-  end \
-  ';
-
-  exports.subscribesymbolnbt = subscribesymbolnbt;
-
-  //
-  // unsubscribe an instrument from the nbtrader feed
-  //
-  // keys
-  // "symbol:" .. symbolid
-  // "symbol:" .. symbolid .. ":server:" .. serverid .. ":ids"
-  // "symbol:" .. symbolid .. ":servers"
-  // "nbtsymbol:" .. nbtsymbol .. ":symbols"
-  // "nbtsymbols"
-  // "server:" .. serverid .. ":id:" .. id .. ":symbols"
-  // "server:" .. serverid .. ":ids"
-  //
-  unsubscribesymbolnbt = '\
-  local unsubscribesymbolnbt = function(symbolid, id, serverid) \
+  subscribesymbol = '\
+  local subscribesymbol = function(symbolid, watchlistid) \
     local nbtsymbol = redis.call("hget", "symbol:" .. symbolid, "nbtsymbol") \
-    if not nbtsymbol then \
-      return {0, ""} \
+    local exchangeid = redis.call("hget", "symbol:" .. symbolid, "exchangeid") \
+    --[[ subscribe to this symbol, either UK or international price feed ]] \
+    if exchangeid == "L" then \
+      redis.call("publish", 7, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. nbtsymbol) .. "}") \
+    else \
+      redis.call("publish", 13, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. nbtsymbol) .. "}") \
     end \
-    --[[ deal with unsubscribing symbol ]] \
-    local unsubscribe = 0 \
-    redis.call("srem", "symbol:" .. symbolid .. ":server:" .. serverid .. ":ids", id) \
-    if redis.call("scard", "symbol:" .. symbolid .. ":server:" .. serverid .. ":ids") == 0 then \
-      redis.call("srem", "symbol:" .. symbolid .. ":servers", serverid) \
-      if redis.call("scard", "symbol:" .. symbolid .. ":servers") == 0 then \
-        redis.call("srem", "nbtsymbol:" .. nbtsymbol .. ":symbols", symbolid) \
-        if redis.call("scard", "nbtsymbol:" .. nbtsymbol .. ":symbols") == 0 then \
-          redis.call("srem", "nbtsymbols", nbtsymbol) \
-          --[[ tell the price server to unsubscribe ]] \
-          redis.call("publish", 7, "halt:" .. nbtsymbol) \
-        end \
-      end \
-      --[[ unsubscribing from db will be done on separate connection ]] \
-      unsubscribe = 1 \
-    end \
-    --[[ deal with symbols/ids required by servers ]] \
-    redis.call("srem", "server:" .. serverid .. ":id:" .. id .. ":symbols", symbolid) \
-    if redis.call("scard", "server:" .. serverid .. ":id:" .. id .. ":symbols") == 0 then \
-      redis.call("srem", "server:" .. serverid .. ":ids", id) \
-    end \
-    return {unsubscribe, nbtsymbol} \
+    --[[ add the symbol to the watchlist ]] \
+    redis.call("sadd", "watchlist:" .. watchlistid, symbolid) \
+    --[[ add this watchlist to the set watching this symbol ]] \
+    redis.call("sadd", "symbol:" .. symbolid .. ":watchlists", watchlistid) \
   end \
   ';
 
-  exports.unsubscribesymbolnbt = unsubscribesymbolnbt;
-
   //
-  // subscribe to an instrument with digitallook
+  // unsubscribe a symbol from a watchlist
+  // params: symbolid, watchlistid
   //
-  subscribesymboldl = '\
-  local subscribesymboldl = function(symbolid, id, servertype) \
-    local ticker = redis.call("hget", "symbol:" .. symbolid, "ticker") \
-    if not ticker then \
-      return {0, "", 0, ""} \
-    end \
-    redis.call("sadd", "ticker:" .. ticker .. ":" .. servertype .. ":" .. id .. ":symbols", symbolid) \
-    redis.call("sadd", "ticker:" .. ticker .. ":symbol:" .. symbolid .. ":" .. servertype, id) \
-    redis.call("sadd", "ticker:" .. ticker .. ":" .. servertype .. ":symbols", symbolid) \
-    local needtosubscribe = 0 \
-    local needtopublish = 0 \
-    local tickers = {} \
-    if redis.call("scard", "ticker:" .. ticker .. ":" .. servertype) == 0 then \
-      redis.call("sadd", "ticker:" .. ticker .. ":" .. servertype, id) \
-      needtosubscribe = 1 \
-      if redis.call("scard", "ticker:" .. ticker .. ":servers") == 0 then \
-        redis.call("sadd", "tickers", ticker) \
-        tickers = redis.call("smembers", "tickers") \
-        needtopublish = 1 \
-      end \
-      redis.call("sadd", "ticker:" .. ticker .. ":servers", servertype) \
-    end \
-    redis.call("sadd", "server:" .. servertype .. ":tickers", ticker) \
-    redis.call("sadd", servertype .. ":" .. id .. ":tickers", ticker) \
-    return {needtosubscribe, ticker, needtopublish, tickers} \
-  end \
-  ';
-
-  exports.subscribesymboldl = subscribesymboldl;
-
-  unsubscribesymbolpq = '\
-  local unsubscribesymbolpq = function(symbolid, id, servertype) \
-    local topic = redis.call("hget", "symbol:" .. symbolid, "topic") \
-    if not topic then \
-      return {0, ""} \
-    end \
-    local marketext = redis.call("hget", servertype .. ":" .. id, "marketext") \
-    if not marketext then \
-      topic = topic .. "D" \
-    elseif marketext ~= nil then \
-      topic = topic .. marketext \
-    end \
-    redis.call("srem", "topic:" .. topic .. ":symbol:" .. symbolid .. ":" .. servertype, id) \
-    redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols", symbolid) \
-    if redis.call("scard", "topic:" .. topic .. ":symbol:" .. symbolid .. ":" .. servertype) == 0 then \
-    	redis.call("srem", "topic:" .. topic .. ":" .. servertype .. ":symbols", symbolid) \
-    end \
-    local needtounsubscribe = 0 \
-   	if redis.call("scard", "topic:" .. topic .. ":" .. servertype .. ":" .. id .. ":symbols") == 0 then \
-      redis.call("srem", servertype .. ":" .. id .. ":topics", topic) \
-      redis.call("srem", "topic:" .. topic .. ":" .. servertype, id) \
-      if redis.call("scard", "topic:" .. topic .. ":" .. servertype) == 0 then \
-        needtounsubscribe = 1 \
-        redis.call("srem", "topic:" .. topic .. ":servers", servertype) \
-      	redis.call("srem", "server:" .. servertype .. ":topics", topic) \
-      	if redis.call("scard", "topic:" .. topic .. ":servers") == 0 then \
-          redis.call("publish", "proquote", "unsubscribe:" .. topic) \
-      		redis.call("srem", "topics", topic) \
-        end \
+  unsubscribesymbol = '\
+  local unsubscribesymbol = function(symbolid, watchlistid) \
+    --[[ remove symbol from watchlist ]] \
+    redis.call("srem", "watchlist:" .. watchlistid, symbolid) \
+    --[[ remove this watchlist from the set watching this symbol ]] \
+    redis.call("srem", "symbol:" .. symbolid .. ":watchlists", watchlistid) \
+    --[[ if there are no watchlists subscribed to this symbol, unsubscribe from this symbol ]] \
+    if redis.call("scard", "symbol:" .. symbolid .. ":watchlists") == 0 then \
+      local nbtsymbol = redis.call("hget", "symbol:" .. symbolid, "nbtsymbol") \
+      local exchangeid = redis.call("hget", "symbol:" .. symbolid, "exchangeid") \
+      --[[ unsubscribe this symbol from either the UK or international price feed ]] \
+      if exchangeid == "L" then \
+        redis.call("publish", 7, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. nbtsymbol) .. "}") \
+      else \
+        redis.call("publish", 13, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. nbtsymbol) .. "}") \
       end \
     end \
-    return {needtounsubscribe, topic} \
   end \
   ';
 
   //
-  // unsubscribe an instrument from the digitallook feed
+  // script to subscribe a client to a symbol
+  // params: brokerid, clientid, symbolid
   //
-  unsubscribesymboldl = '\
-  local unsubscribesymboldl = function(symbolid, id, servertype) \
-    local ticker = redis.call("hget", "symbol:" .. symbolid, "ticker") \
-    if not ticker then \
-      return {0, "", 0, ""} \
-    end \
-    redis.call("srem", "ticker:" .. ticker .. ":symbol:" .. symbolid .. ":" .. servertype, id) \
-    redis.call("srem", "ticker:" .. ticker .. ":" .. servertype .. ":" .. id .. ":symbols", symbolid) \
-    if redis.call("scard", "ticker:" .. ticker .. ":symbol:" .. symbolid .. ":" .. servertype) == 0 then \
-      redis.call("srem", "ticker:" .. ticker .. ":" .. servertype .. ":symbols", symbolid) \
-    end \
-    local needtounsubscribe = 0 \
-    local needtopublish = 0 \
-    local tickers = {} \
-    if redis.call("scard", "ticker:" .. ticker .. ":" .. servertype .. ":" .. id .. ":symbols") == 0 then \
-      redis.call("srem", servertype .. ":" .. id .. ":tickers", ticker) \
-      redis.call("srem", "ticker:" .. ticker .. ":" .. servertype, id) \
-      if redis.call("scard", "ticker:" .. ticker .. ":" .. servertype) == 0 then \
-        needtounsubscribe = 1 \
-        redis.call("srem", "ticker:" .. ticker .. ":servers", servertype) \
-        redis.call("srem", "server:" .. servertype .. ":tickers", ticker) \
-        if redis.call("scard", "ticker:" .. ticker .. ":servers") == 0 then \
-          redis.call("srem", "tickers", ticker) \
-          tickers = redis.call("smembers", "tickers") \
-          needtopublish = 1 \
-        end \
-      end \
-    end \
-    return {needtounsubscribe, ticker, needtopublish, tickers} \
+  exports.scriptsubscribesymbol = watchlistnew + subscribesymbol + '\
+  local brokerid = ARGV[1] \
+  local clientid = ARGV[2] \
+  local symbolid = ARGV[3] \
+  --[[ get the watchlist for this client ]] \
+  local watchlistid = redis.call("hget", "broker:" .. brokerid .. ":client:" .. clientid, "watchlistid") \
+  --[[ create if one does not exist ]] \
+  if not watchlistid or watchlistid == "" then \
+    watchlistid = watchlistnew(brokerid, clientid) \
   end \
+  subscribesymbol(symbolid, watchlistid) \
+  return \
   ';
 
   //
-  // subscribe to a new instrument
-  // params: symbol, client/user/ifa id, serverid, feedtype
-  // i.e. "BARC.L", 1, 1, "digitallook"
+  // script to unsubscribe a client from a symbol
+  // params: brokerid, clientid, symbolid
+  // returns: 0 if successful else 1, error message
   //
-  exports.scriptsubscribesymbol = subscribesymbolpq + subscribesymboldl + subscribesymbolnbt + '\
-  local ret = {0, ""} \
-  if ARGV[4] == "proquote" then \
-    ret = subscribesymbolpq(ARGV[1], ARGV[2], ARGV[3]) \
-  elseif ARGV[4] == "digitallook" then \
-    ret = subscribesymboldl(ARGV[1], ARGV[2], ARGV[3]) \
-  elseif ARGV[4] == "nbtrader" then \
-    ret = subscribesymbolnbt(ARGV[1], ARGV[2], ARGV[3]) \
+  exports.scriptunsubscribesymbol = unsubscribesymbol + '\
+  local brokerid = ARGV[1] \
+  local clientid = ARGV[2] \
+  local symbolid = ARGV[3] \
+  --[[ get the watchlist for this client ]] \
+  local watchlistid = redis.call("hget", "broker:" .. brokerid .. ":client:" .. clientid, "watchlistid") \
+  if not watchlistid or watchlistid == "" then \
+    return {1, "Watchlist not found"} \
   end \
-  return ret \
+  unsubscribesymbol(symbolid, watchlistid) \
+  return {0} \
   ';
 
   //
-  // unsubscribe from an instrument
-  // params: symbol, client/user id, serverid, feedtype
-  // i.e. "BARC.L", 1, 1, "digitallook"
+  // scriptgetwatchlist
+  // get a watchlist for a client & subscribe to all symbols in the watchlist
+  // params: broker id, client id
+  // returns: list of symbols in the watchlist for this client
   //
-  exports.scriptunsubscribesymbol = unsubscribesymbolpq + unsubscribesymboldl + unsubscribesymbolnbt + '\
+  exports.scriptgetwatchlist = watchlistnew + subscribesymbol + '\
+    local brokerid = ARGV[1] \
+    local clientid = ARGV[2] \
+    local tblresults = {} \
+    --[[ get the watchlist for this client ]] \
+    local watchlistid = redis.call("hget", "broker:" .. brokerid .. ":client:" .. clientid, "watchlistid") \
+    --[[ create if one does not exist ]] \
+    if not watchlistid or watchlistid == "" then \
+      watchlistid = watchlistnew(brokerid, clientid) \
+    end \
+    --[[ subscribe to the symbols in the watchlist ]] \
+    local watchlist = redis.call("smembers", "watchlist:" .. watchlistid) \
+    for i = 1, #watchlist do \
+      subscribesymbol(watchlist[i], watchlistid) \
+      table.insert(tblresults, {symbolid=watchlist[i]}) \
+    end \
+    return {cjson.encode(tblresults)} \
+  ';
+
+  //
+  // scriptunwatchlist
+  // unsubscribe all symbols from watchlist for this client
+  // params: broker id, client id
+  //
+  exports.scriptunwatchlist = unsubscribesymbol + '\
+  local brokerid = ARGV[1] \
+  local clientid = ARGV[2] \
+  --[[ get the watchlist for this client ]] \
+  local watchlistid = redis.call("hget", "broker:" .. brokerid .. ":client:" .. clientid, "watchlistid") \
+  if watchlistid and watchlistid ~= "" then \
+    local watchlist = redis.call("smembers", "watchlist:" .. watchlistid) \
+    --[[ unsubscribe each symbol ]] \
+    for i = 1, #watchlist do \
+      unsubscribesymbol(watchlist[i], watchlistid) \
+    end \
+  end \
+  return \
+  ';
+
+  //
+  // scriptgetsubscriptions
+  // get a list of clients who are subscribed to a symbol
+  // params: symbol id
+  // returns: a list of broker:client combinations
+  //
+  exports.scriptgetsubscriptions = '\
   local symbolid = ARGV[1] \
-  local id = ARGV[2] \
-  local serverid = ARGV[3] \
-  local ret = {0, ""} \
-  if ARGV[4] == "proquote" then \
-    ret = unsubscribesymbolpq(symbolid, id, serverid) \
-  elseif ARGV[4] == "digitallook" then \
-    ret = unsubscribesymboldl(symbolid, id, serverid) \
-  elseif ARGV[4] == "nbtrader" then \
-    ret = unsubscribesymbolnbt(symbolid, id, serverid) \
-  end \
-  return ret \
-  ';
-
-  //
-  // unsubscribe a user/client/other connection
-  // params: client/user id, serverid, feedtype
-  // i.e. 1, 1, "digitallook"
-  //
-  exports.scriptunsubscribeid = unsubscribesymbolpq + unsubscribesymboldl + unsubscribesymbolnbt + '\
-  local id = ARGV[1] \
-  local serverid = ARGV[2] \
-  local symbols = redis.call("smembers", "server:" .. serverid .. ":id:" .. id .. ":symbols") \
-  local unsubscribetopics = {} \
-  for i = 1, #symbols do \
-    local ret = {0, ""} \
-    if ARGV[3] == "proquote" then \
-      ret = unsubscribesymbolpq(symbols[i], id, serverid) \
-    elseif ARGV[3] == "digitallook" then \
-      ret = unsubscribesymboldl(symbols[i], id, serverid) \
-    elseif ARGV[3] == "nbtrader" then \
-      ret = unsubscribesymbolnbt(symbols[i], id, serverid) \
-    end \
-    if ret[1] == 1 then \
-      table.insert(unsubscribetopics, ret[2]) \
+  local subscriptions = {} \
+  --[[ get the watchlists with this symbol ]] \
+  local watchlists = redis.call("sadd", "symbol:" .. symbolid .. ":watchlists") \
+  for i = 1, #watchlists do \
+    --[[ get the broker:client who owns this watchlist ]] \
+    local brokerclient = redis.call("get", "watchlist:" .. watchlists[i] .. ":client") \
+    table.insert(subscriptions, brokerclient) \
     end \
   end \
-  return unsubscribetopics \
-  ';
-
-  //
-  // unsubscribe a server from nbtrader
-  // params: serverid, i.e. 1
-  //
-  exports.scriptunsubscribeserver = unsubscribesymbolnbt + '\
-  local serverid = ARGV[1] \
-  local unsubscribetopics = {} \
-  local ids = redis.call("smembers", "server:" .. serverid .. ":ids") \
-  for i = 1, #ids do \
-    local symbols = redis.call("smembers", "server:" .. serverid .. ":id:" .. ids[i] .. ":symbols") \
-    for j = 1, #symbols do \
-      local ret = unsubscribesymbolnbt(symbols[j], ids[i], serverid) \
-      if ret[1] == 1 then \
-        table.insert(unsubscribetopics, ret[2]) \
-      end \
-    end \
-  end \
-  return unsubscribetopics \
-  ';
-
-  exports.scriptgetclienttypes = '\
-  local clienttypes = redis.call("sort", "clienttypes:" .. ARGV[1], "ALPHA") \
-  local clienttype = {} \
-  local val \
-  for index = 1, #clienttypes do \
-    val = redis.call("get", "clienttype:" .. clienttypes[index]) \
-    table.insert(clienttype, {clienttypeid = clienttypes[index], description = val}) \
-  end \
-  return cjson.encode(clienttype) \
+  return cjson.encode(subscriptions) \
   ';
 
   //
@@ -1096,128 +224,12 @@ exports.registerScripts = function () {
       publish = true \
     end \
     if publish then \
-      --[[ publish msg ]] \
+      --[[ publish the message to the price channel ]] \
       pricemsg = pricemsg .. "}}" \
-      redis.call("publish", "price:" .. symbols[index], pricemsg) \
+      redis.call("publish", 9, pricemsg) \
     end \
   end \
   ';
 
   exports.scriptpriceupdate = scriptpriceupdate;
-
-  // update the latest price & add a tick to price history
-  // params: symbol, timestamp, bid, offer
-  // todo: needs updating for devivs
-  // todo - symbolid?
-  scriptpricehistoryupdate = '\
-  --[[ get an id for this tick ]] \
-  local pricehistoryid = redis.call("incr", "pricehistoryid") \
-  --[[ may only get bid or ask, so make sure we have the latest of both ]] \
-  local nbtsymbol = KEYS[1] \
-  local bid = KEYS[3] \
-  local ask = KEYS[4] \
-  local pricemsg = "" \
-  if bid == "" then \
-    bid = redis.call("hget", "symbol:" .. nbtsymbol, "bid") \
-    if ask == "" then \
-      return \
-    else \
-      pricemsg = cjson.encode("ask") .. ":" .. ask \
-    end \
-  else \
-    if ask == "" then \
-      ask = redis.call("hget", "symbol:" .. nbtsymbol, "ask") \
-      pricemsg = cjson.encode("bid") .. ":" .. bid \
-    else \
-      pricemsg = cjson.encode("bid") .. ":" .. bid .. "," .. cjson.encode("ask") .. ":" .. ask \
-    end \
-  end \
-  --[[ publish a price message, store latest price & history for any symbols subscribed to that use this nbtsymbol ]] \
-  local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbols") \
-  for index = 1, #symbols do \
-    pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbolid") .. ":" .. cjson.encode(symbols[index]) .. "," .. pricemsg .. "}}" \
-    --[[ publish price ]] \
-    redis.call("publish", "price:" .. symbols[index], pricemsg) \
-    --[[ store latest price ]] \
-    redis.call("hmset", "symbol:" .. symbols[index], "bid", bid, "ask", ask, "timestamp", KEYS[2]) \
-    --[[ add id to sorted set, indexed on timestamp ]] \
-    redis.call("zadd", "pricehistory:" .. symbols[index], KEYS[2], pricehistoryid) \
-    redis.call("hmset", "pricehistory:" .. pricehistoryid, "timestamp", KEYS[2], "symbolid", symbols[index], "bid", bid, "ask", ask, "id", pricehistoryid) \
-  end \
-  return {nbtsymbol, bid, ask} \
-  ';
-
-  exports.scriptpricehistoryupdate = scriptpricehistoryupdate;
-
-  //
-  // get watchlist for a client
-  // params: client id, server id, server type
-  //
-  scriptgetwatchlist = subscribesymbolnbt + '\
-    local tblresults = {} \
-    local tblsubscribe = {} \
-    local fields = {"bid", "ask", "midnetchg", "midpctchg"} \
-    local watchlist = redis.call("smembers", ARGV[3] .. ":" .. ARGV[1] .. ":watchlist") \
-    for index = 1, #watchlist do \
-      --[[ subscribe to this symbol ]] \
-      local subscribe = subscribesymbolnbt(watchlist[index], ARGV[1], ARGV[2]) \
-      if subscribe[1] == 1 then \
-        table.insert(tblsubscribe, watchlist[index]) \
-      end \
-      --[[ get current prices ]] \
-      local vals = redis.call("hmget", "symbol:" .. watchlist[index], unpack(fields)) \
-      table.insert(tblresults, {symbolid=watchlist[index], bid=vals[1], ask=vals[2], midnetchg=vals[3], midpctchg=vals[4]}) \
-    end \
-    return {cjson.encode(tblresults), tblsubscribe} \
-  ';
-
-  exports.scriptgetwatchlist = scriptgetwatchlist;
-
-  //
-  // unsubscribe from watchlist for this client
-  // params: client id, server id, server type
-  //
-  scriptunwatchlist = unsubscribesymbolnbt + '\
-    local tblunsubscribe = {} \
-    local watchlist = redis.call("smembers", ARGV[3] .. ":" .. ARGV[1] .. ":watchlist") \
-    for index = 1, #watchlist do \
-      --[[ unsubscribe from this symbol ]] \
-      local unsubscribe = unsubscribesymbolnbt(watchlist[index], ARGV[1], ARGV[2]) \
-      if unsubscribe[1] == 1 then \
-        table.insert(tblunsubscribe, watchlist[index]) \
-      end \
-    end \
-    return tblunsubscribe \
-  ';
-
-  exports.scriptunwatchlist = scriptunwatchlist;
-
-  //
-  // add a symbol to a watchlist
-  // params: symbol, brokerid, clientid, serverid, servertype
-  //
-  scriptaddtowatchlist = subscribesymbolnbt + '\
-    redis.call("sadd", ARGV[4] .. ":" .. ARGV[2] .. ":watchlist", ARGV[1]) \
-    local subscribe = subscribesymbolnbt(ARGV[1], ARGV[2], ARGV[3]) \
-    --[[ get current prices ]] \
-    local fields = {"bid", "ask", "midnetchg", "midpctchg"} \
-    local vals = redis.call("hmget", "symbol:" .. ARGV[1], unpack(fields)) \
-    local tblresults = {} \
-    table.insert(tblresults, {symbolid=ARGV[1], bid=vals[1], ask=vals[2], midnetchg=vals[3], midpctchg=vals[4]}) \
-    return {cjson.encode(tblresults), subscribe[1]} \
-  ';
-
-  exports.scriptaddtowatchlist = scriptaddtowatchlist;
-
-  //
-  // remove a symbol from a watchlist
-  // params: symbol, client id, server id, server type
-  //
-  scriptremovewatchlist = unsubscribesymbolnbt + '\
-    redis.call("srem", ARGV[4] .. ":" .. ARGV[2] .. ":watchlist", ARGV[1]) \
-    local unsubscribe = unsubscribesymbolnbt(ARGV[1], ARGV[2], ARGV[3]) \
-    return unsubscribe[1] \
-  ';
-
-  exports.scriptremovewatchlist = scriptremovewatchlist;
 };
