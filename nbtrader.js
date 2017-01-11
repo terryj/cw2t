@@ -4,7 +4,9 @@
 * Cantwaittotrade Limited
 * Terry Johnston
 * August 2014
-****************/
+* Mods:
+* Jan 11 2017 - changed fixsequence number handling, ouch!
+* ****************/
 
 // avoids DEPTH_ZERO_SELF_SIGNED_CERT error for self-signed certs
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -37,9 +39,12 @@ var matchtestreqid;
 var messagerecoveryinrequested = false; // flag to show we have requested resend of some incoming messages
 var messagerecoveryinstarted = false;	// flag to show we are in the process of recovering incoming messages
 var nextseqnumin; // store the next sequence number in when resetting stored value for resend request
+var nextseqnumout; // next sequence number out
 var messagerecoveryout = false; // flag to indicate we are in a resend process for outgoing messages
 var sequencegapnum = 0; // sequence gap starting message number
-var resendrequestrequired = false; // indicates we need to do our own resend once we have serviced a resend request
+var resendrequestrequired = false; // indicates we need to do our own resend request once we have serviced a resend request
+var resendrequired = false; // indicates we need to service a resend request when we have finished our own resend request
+var resendbody = ""; // stores resend request message
 //var settlmnttyp = '6'; // indicates a settlement date is being used, rather than a number of days
 var norelatedsym = '1'; // number of related symbols in a request, always 1
 var idsource = '4'; // indicates ISIN is to be used to identify a security
@@ -49,7 +54,7 @@ var connectstatus = 2; // status of connection, 1=connected, 2=disconnected
 var connectstatusint = 30;
 var connectstatusinterval = 30;
 var datareceivedsinceheartbeat = false; // indicates whether data has been received since the last heartbeat
-
+ 
 var options = {
   key: fs.readFileSync('scripts/key.pem'),
   cert: fs.readFileSync('scripts/cert.pem'),
@@ -148,6 +153,7 @@ function initFlags() {
   messagerecoveryinstarted = false;
   messagerecoveryout = false;
   resendrequestrequired = false;
+  resendrequired = false;
 }
 
 function init(self) {
@@ -156,6 +162,34 @@ function init(self) {
 
   // publish status every time period
   connectstatusinterval = setInterval(publishStatus, connectstatusint * 1000);
+
+  db.hget("config", "nextfixseqnumout", function(err, nextfixseqnumout) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (nextfixseqnumout == null) {
+      console.log("nextfixseqnumout not found");
+      return;
+    }
+
+    nextseqnumout = nextfixseqnumout;
+  });
+
+  db.hget("config", "nextfixseqnumin", function(err, nextfixseqnumin) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    if (nextfixseqnumin == null) {
+      console.log("nextfixseqnumin not found");
+      return;
+    }
+
+    nextseqnumin = nextfixseqnumin;
+  });
 
   db.hget("config", "tradingipaddress", function(err, ipaddr) {
     if (err) {
@@ -377,16 +411,16 @@ Nbt.prototype.newOrder = function(order) {
     + '54=' + order.side + SOH
     + '60=' + order.timestamp + SOH
     + '63=' + order.settlmnttypid + SOH
-    + '59=' + order.timeinforce + SOH
+    + '59=' + order.timeinforceid + SOH
     + '120=' + order.settlcurrencyid + SOH
     + '15=' + order.currencyid + SOH
-    + '40=' + order.ordertype + SOH;
+    + '40=' + order.ordertypeid + SOH;
 
-    if (order.ordertype == 'D') { // previously quoted
+    if (order.ordertypeid == 'D') { // previously quoted
       // add quote id & who the quote was from
       msg += '117=' + order.externalquoteid + SOH;
       delivertocompid = order.quoterid;
-    } else if (parseInt(order.ordertype) == 1) { // market
+    } else if (parseInt(order.ordertypeid) == 1) { // market
       delivertocompid = "BEST";
     } else if (order.delivertocompid != "") {
       delivertocompid = order.delivertocompid;
@@ -405,7 +439,7 @@ Nbt.prototype.newOrder = function(order) {
     }
 
     // add date & time if timeinforce = "GTD"
-    if (order.timeinforce == '6') {
+    if (order.timeinforceid == '6') {
       msg += '432=' + order.expiredate + SOH;
       //+ '126=' + order.expiretime + SOH;
     }
@@ -441,28 +475,19 @@ function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, m
   if (resend) {
     console.log('resending message #' + msgseqnum);
 
-    // we are resending, so no need to store, just send
-    sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, timestamp, origtimestamp);
+    // we are resending, so use the passed sequence number
+    sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, timestamp, origtimestamp, brokerid, businessobjectid, businessobjecttypeid);
   } else {
-    // store the message in case it needs to be resent later
-    db.eval(scriptfixmessageout, 0, msgtype, onbehalfofcompid, delivertocompid, body, timestamp, brokerid, businessobjectid, businessobjecttypeid, function(err, ret) {
-      if (err) {
-        console.log(err);
-        return;
-      }
-
-      var msgseqnumout = ret;
-
-      // this is a new message, but if we are in a recovery phase, don't send now
-      // instead, the message should be sent by the recovery process itself
-      if (!messagerecoveryout) {
-        sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnumout, timestamp, origtimestamp);
-      }
-    });                 
+    // if this is a new message & we are in a recovery phase, don't send now
+    // instead, the message should be sent by the recovery process itself
+    // otherwise, use the next sequence number
+    if (!messagerecoveryout) {
+      sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, nextseqnumout, timestamp, origtimestamp, brokerid, businessobjectid, businessobjecttypeid);
+    }
   }
 }
 
-function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, timestamp, origtimestamp) {
+function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, timestamp, origtimestamp, brokerid, businessobjectid, businessobjecttypeid) {
   var msg;
   var checksumstr;
 
@@ -506,8 +531,24 @@ function sendData(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgs
     console.log("---------------");
   }
 
-  // send the message
-  nbconn.write(msg, 'ascii'); // todo: need ascii option?
+  if (resend) {
+    // just send the message
+    nbconn.write(msg, 'ascii'); // todo: need ascii option?
+  } else {
+    // store & send the message
+    db.eval(scriptfixmessageout, 0, msgtype, onbehalfofcompid, delivertocompid, msg, timestamp, brokerid, businessobjectid, businessobjecttypeid, nextseqnumout, function(err, ret) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      // store the next sequence number
+      nextseqnumout = ret;
+
+      // send the message
+      nbconn.write(msg, 'ascii'); // todo: need ascii option?
+    });
+  }
 }
 
 function parseData(self) {
@@ -596,7 +637,7 @@ function completeMessage(tagvalarr, self, endtag) {
       return;
     }
 
-    var fixseqnumin = ret[0];
+    nextseqnumin = ret[0];
     var fixseqnumid = ret[1];
 
     // id created may be used to link to a record
@@ -612,6 +653,10 @@ function completeMessage(tagvalarr, self, endtag) {
     } else {
       if (messagerecoveryinrequested) {
         // we are waiting for the first resend message, so just ignore
+        if (header.msgtype == '2') {
+          resendbody = body;
+          resendrequired = true; 
+        }
         return;
       }
 
@@ -619,18 +664,21 @@ function completeMessage(tagvalarr, self, endtag) {
         // we are done recovering
         console.log('message recovery finished');
         messagerecoveryinstarted = false;
+        if (resendrequired) {
+          resendRequestReceived(resendbody, self);
+        }
       }
     }
 
-    // check fix sequence number matches what we expect
-    if (parseInt(header.msgseqnum) < parseInt(fixseqnumin)) {
-      console.log("incoming sequence number: " + header.msgseqnum + " less than expected: " + fixseqnumin);
+    // check for sequence reset as this overrides any sequence number processing
+    if (header.msgtype == '4') {
+      sequenceReset(body, self);
+      return;
+    }
 
-      // check for sequence reset as this overrides any sequence number processing
-      if (header.msgtype == '4') {
-        sequenceReset(body, fixseqnumin, self);
-	return;
-      }
+    // check fix sequence number matches what we expect
+    if (parseInt(header.msgseqnum) < parseInt(nextseqnumin)) {
+      console.log("incoming sequence number: " + header.msgseqnum + " less than expected: " + nextseqnumin);
 
       if (header.possdupflag == 'Y') {
         // duplicate received but we are catching up, so just ignore
@@ -642,7 +690,7 @@ function completeMessage(tagvalarr, self, endtag) {
 	  } else {
 	    // normal logon reply & we haven't missed anything, so just set the stored sequence number to that received
 	    console.log("Resetting incoming sequence number to: " + header.msgseqnum);
-	    db.hset("config", "lastfixseqnumin", header.msgseqnum);
+	    db.hset("config", "nextfixseqnumin", header.msgseqnum);
 	  }
         } else if (header.msgtype == '5') {
           if ('text' in body) {
@@ -657,14 +705,8 @@ function completeMessage(tagvalarr, self, endtag) {
 	  return;
         }
       }
-    } else if (parseInt(header.msgseqnum) > parseInt(fixseqnumin)) {
-      console.log("incoming sequence number: " + header.msgseqnum + " greater than expected: " + fixseqnumin);
-
-      // check for sequence reset as this overrides any sequence number processing
-      if (header.msgtype == '4') {
-        sequenceReset(body, fixseqnumin);
-	return;
-      }
+    } else if (parseInt(header.msgseqnum) > parseInt(nextseqnumin)) {
+      console.log("incoming sequence number: " + header.msgseqnum + " greater than expected: " + nextseqnumin);
 
       if (header.msgtype == '5') {
         // we have been logged out & will be disconnected by the other side, just exit & try again
@@ -681,20 +723,18 @@ function completeMessage(tagvalarr, self, endtag) {
         return;
       }
 
-      // reset incoming sequence number as we incremented & did not get what we expected 
-      db.hset("config", "lastfixseqnumin", fixseqnumin - 1);
-
       if (messagerecoveryinrequested) {
         // already requested a resend, so this should just be a message sent before the resend request
         // so, just ignore, it should be handled as part of the resend
+        if (header.msgtype == '2') {
+          resendbody = body;
+          resendrequired = true; 
+        }
         return;
       } else {
-        // store the next sequence number in, as it is used to update the stored value later
-        nextseqnumin = fixseqnumin;
-
         // request resend of messages from this point, but wait to adjust the stored value
         // until we know the recovery process has started, as in the first possible duplicate received
-        resendRequest(fixseqnumin);
+        resendRequest(nextseqnumin);
 
         // we may need to act on this message, once the resend process has finished
         messagerecoveryinrequested = true;
@@ -1010,7 +1050,7 @@ function getBody(msgtype, tagvalarr) {
 				body.text = tagvalarr[i].value;
 				break;
 			case 59:
-				body.timeinforce = tagvalarr[i].value;
+				body.timeinforceid = tagvalarr[i].value;
 				break;
 			case 167:
 				body.securitytype = tagvalarr[i].value;
@@ -1257,16 +1297,16 @@ function resetSequenceNumbers() {
   });
 }
 
-function sequenceReset(body, nextnumin, self) {
+function sequenceReset(body, self) {
   console.log("sequence reset");
 
-  if (body.newseqno < nextnumin) {
-    console.log("sequence reset number less than expected sequence number, aborting...");
+  if (parseInt(body.newseqno) < nextseqnumin) {
+    console.log("sequence reset number:" + body.newseqno + " less than expected sequence number:" + nextseqnumin + ", aborting...");
     disconnect(self);
   }
 
   // reset the incoming sequence number
-  db.hset("config", "lastfixseqnumin", body.newseqno - 1);
+  db.hset("config", "nextfixseqnumin", body.newseqno);
 }
 
 function resendRequest(beginseqno) {
@@ -1287,7 +1327,7 @@ function sequenceGapReceived(seqgap) {
     console.log('resetting incoming sequence number');
 
     // reset the expected incoming sequence number
-    db.hset("lastfixseqnumin", seqgap.newseqno - 1);
+    db.hset("config","nextfixseqnumin", seqgap.newseqno);
   }
 }
 
@@ -1370,7 +1410,7 @@ function testRequestReply(reqid) {
 }
 
 function resendRequestReceived(resendrequest, self) {
-  console.log("resendRequestReceived");
+  console.log("resendRequestReceived, begin:" + resendrequest.beginseqno + ", end: " + resendrequest.endseqno);
 	
   // check we have a valid begin & end sequence number
   // end number may be '0' to indicate infinity
@@ -1410,7 +1450,10 @@ function resendMessage(msgno, endseqno, self) {
     if (ret[0] == 1) {
       console.log("unable to find message:" + msgno);
       sequencegaptimestamp = commonbo.getUTCTimeStamp(new Date());
-      sequenceGap(sequencegapnum, msgno, sequencegaptimestamp);
+      sequenceGap(sequencegapnum, endseqno, sequencegaptimestamp);
+
+      // we are done
+      doneResending();
       return;
     }
 
@@ -1420,7 +1463,7 @@ function resendMessage(msgno, endseqno, self) {
     if (fixmessage == "" || fixmessage.msgtype == '0' || fixmessage.msgtype == '1' || fixmessage.msgtype == '2' || fixmessage.msgtype == '4' || fixmessage.msgtype == '5' || fixmessage.msgtype == 'A' || oldMessage(fixmessage)) {
       // don't resend this message, instead send a sequence gap message
       if (sequencegapnum == 0) {
-        // store the first in a possible sequence of admin messages
+        // store the first message number in a possible sequence of admin messages
         sequencegapnum = msgno;
         if (fixmessage == "") {
           sequencegaptimestamp = commonbo.getUTCTimeStamp(new Date());
@@ -1439,44 +1482,26 @@ function resendMessage(msgno, endseqno, self) {
 
     // check for infinity
     if (endseqno == 0) {
-      // get the last outgoing message sequence number
-      db.hget("config", "lastfixseqnumout", function(err, msgseqnumout) {
-        if (err) {
-          console.log(err);
-          disconnect(self);
-          return;
+      // have we reached the last stored message?
+      if (msgno == parseInt(nextseqnumout) - 1) {
+        // send any sequence gap message
+	if (sequencegapnum != 0) {
+          sequenceGap(sequencegapnum, msgno, sequencegaptimestamp);
         }
 
-        // have we reached the last stored message?
-        if (msgno == msgseqnumout) {
-          // send any sequence gap message
-	  if (sequencegapnum != 0) {
-            sequenceGap(sequencegapnum, parseInt(msgseqnumout) + 1, sequencegaptimestamp);
-          }
+        // we are done
+	doneResending();
+	return;
+      }
 
-          // we are done
-	  doneResending();
-	  return;
-        }
-
-        // keep on going
-        resendMessage(msgno + 1, endseqno);
-      });
+      // keep on going
+      resendMessage(msgno + 1, endseqno);
     } else {
       // check for having reached the requested number
       if (msgno == endseqno) {
         // send any sequence gap message
         if (sequencegapnum != 0) {
-          // get the last outgoing message sequence number, so we can tell the other side what to expect next
-          db.hget("config", "lastfixseqnumout", function(err, msgseqnumout) {
-            if (err) {
-              console.log(err);
-              disconnect(self);
-              return;
-            }
-
-            sequenceGap(sequencegapnum, parseInt(msgseqnumout) + 1, sequencegaptimestamp);
-          });
+          sequenceGap(sequencegapnum, msgno, sequencegaptimestamp);
         }
 
         // we are done
@@ -1492,6 +1517,7 @@ function resendMessage(msgno, endseqno, self) {
   function doneResending() {
     console.log("doneResending");
     messagerecoveryout = false;
+    resendrequired = false;
 
     // we may need to do our own resend request
     if (resendrequestrequired) {
@@ -1513,11 +1539,15 @@ function oldMessage(msg) {
 function sequenceGap(beginnum, endnum, timestamp) {
 	var msg;
 
-	console.log('sending sequence gap, beginnum=' + beginnum + ', endnum=' + endnum);
+	console.log('sending sequence gap, beginnum:' + beginnum + ', endnum=:' + endnum);
+
+        // new sequence number
+        var newseqnum = endnum + 1;
 
 	msg = '123=' + 'Y' + SOH
-		+ '36=' + endnum + SOH;
+		+ '36=' + newseqnum + SOH;
 
+        // send as a resend so message gets sent as message number beginnum 
 	sendMessage('4', "", "", msg, true, beginnum, timestamp, "", "", "");
 
 	sequencegapnum = 0;
@@ -1619,12 +1649,14 @@ Nbt.prototype.getBusinessRejectReason = function(reason) {
 function registerScripts() {
   /*
   * scriptfixmessageout
-  * increment the outgoing sequence number & store the message
+  * get the outgoing sequence number, store the message & then increment the number
   * params: msgtype, onbehalfofcompid, delivertocompid, message, timestamp, brokerid, businessobjectid, businessobjecttypeid
+  * returns: next outgoing sequence number
+  * note: we use the current sequnce number to store & then increment as this enables a single call to redis
   */
   scriptfixmessageout = '\
+  local fixseqnumout = ARGV[9] \
   local fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
-  local fixseqnumout = redis.call("hincrby", "config", "lastfixseqnumout", 1) \
   redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumout", fixseqnumout, "fixseqnumid", fixseqnumid) \
   --[[ set a key so we can get to the stored message from the outgoing fix sequence number ]] \
   redis.call("set", "fixseqnumout:" .. fixseqnumout .. ":fixseqnumid", fixseqnumid) \
@@ -1634,20 +1666,25 @@ function registerScripts() {
   elseif ARGV[1] == "D" or tonumber(ARGV[1]) == 1 then \
     redis.call("hset", "broker:" .. ARGV[6] .. ":order:" ..  ARGV[7], "fixseqnumid", fixseqnumid) \
   end \
-  return fixseqnumout \
+  local nextfixseqnumout = redis.call("hincrby", "config", "nextfixseqnumout", 1) \
+  return nextfixseqnumout \
   ';
 
   /*
   * scriptfixmessagein
   * store the incoming message & get the next incoming sequence number
   * params: msgtype, onbehalfofcompid, delivertocompid, message, timestamp, brokerid, businessobjectid, businessobjecttypeid
-  * returns: fixseqnumin - used for fix sequence processing, fixseqnumid - may be used to link to record id yet to be created
+  * returns: nextfixseqnumin - used for fix sequence processing, fixseqnumid - may be used to link to record id yet to be created
   */
   scriptfixmessagein = '\
+  local fixseqnumin = ARGV[9] \
   local fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
-  local fixseqnumin = redis.call("hincrby", "config", "lastfixseqnumin", 1) \
-  redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumid", fixseqnumid, "fixseqnumin", fixseqnumin, "externalfixseqnumin", ARGV[9]) \
-  return {fixseqnumin, fixseqnumid} \
+  redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumid", fixseqnumid, "fixseqnumin", fixseqnumin) \
+  local nextfixseqnumin = redis.call("hget", "get", "nextfixseqnumin") \
+  if tonumber(fixseqnumin) == tonumber(nextfixseqnumin) then \
+    nextfixseqnumin = redis.call("hincrby", "config", "nextfixseqnumin", 1) \
+  end \
+  return {nextfixseqnumin, fixseqnumid} \
   ';
 
   /*
@@ -1656,8 +1693,8 @@ function registerScripts() {
   * params: none
   */
   scriptresetsequencenumbers = '\
-  redis.call("hset", "config", "lastfixseqnumin" 0) \
-  redis.call("hset", "config", "lastfixseqnumout" 0) \
+  redis.call("hset", "config", "nextfixseqnumin", 1) \
+  redis.call("hset", "config", "nextfixseqnumout", 1) \
   ';
 
   /*
