@@ -19,7 +19,7 @@ exports.registerScripts = function () {
   //
   // watchlistnew()
   // create a new watchlist
-  // params: symbolid, watchlistid
+  // params: brokerid, clientid
   // returns: watchlistid
   //
   watchlistnew = round + '\
