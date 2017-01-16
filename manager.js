@@ -223,7 +223,7 @@ function listen() {
   server.listen(cw2tport, '0.0.0.0');
   console.log('Listening on port ' + cw2tport);
 
-    //applyCorporateAction(1, 1);
+    applyCorporateAction(1, 1);
     //test();
     //testtrade();
     //testSettle();
@@ -238,7 +238,7 @@ function listen() {
     //testSql();
     //testQuoteRequest();
     //testQuoteRequests();
-    testWatchlist();
+    //testWatchlist();
     //testSubscribeSymbol();
     //testUnsubscribeSymbol();
     //testUnwatchlist();

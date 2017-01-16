@@ -2115,12 +2115,12 @@ exports.registerScripts = function () {
       local rate = 1 \
       local stubcashlocal = stubcash * rate \
       if mode == 2 then \
-        local retval = transactiondividend(accountid, stubcash, 0, brokerid, account["currencyid"], stubcashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "DVP", timestampms) \
+        local retval = transactiondividend(accountid, stubcash, 0, brokerid, account["currencyid"], stubcashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateaction["corporateactionid"], timestamp, "DVP", timestampms) \
         if retval[1] == 1 then \
           return retval \
         end \
       elseif mode == 3 then \
-        local retval = transactiondividend(accountid, -stubcash, 0, brokerid, account["currencyid"], -stubcashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "DVR", timestampms) \
+        local retval = transactiondividend(accountid, -stubcash, 0, brokerid, account["currencyid"], -stubcashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateaction["corporateactionid"], timestamp, "DVR", timestampms) \
         if retval[1] == 1 then \
           return retval \
         end \
@@ -2129,7 +2129,6 @@ exports.registerScripts = function () {
     return {0, stubcash} \
   end \
   ';
-
 
   /*
   * dividendasshares()
@@ -2151,11 +2150,18 @@ exports.registerScripts = function () {
       end \
     end \
     if sharesdue[2] > 0 then \
-      local ret = convertsharesascash(position["accountid"], brokerid, corporateaction, sharesdue[2], timestamp, timestampms, mode) \
-      if ret[1] == 1 then \
-        return ret \
+      if tonumber(corporateaction["fractiontypeid"]) == 1 then \
+        local ret = convertsharesascash(position["accountid"], brokerid, corporateaction, sharesdue[2], timestamp, timestampms, mode) \
+        if ret[1] == 1 then \
+          return ret \
+        end \
+        residuecash = residuecash + ret[2] \
+      elseif tonumber(corporateaction["fractiontypeid"]) == 2 then \
+        if mode == 2 then \
+          --[[ add the shares to the broker client account ]] \
+          newpositiontransaction(0, brokerid, 0, "", corporateaction["corporateactionid"], 2, sharesdue[2], corporateaction["symbolid"], timestamp, timestampms) \
+        end \
       end \
-      residuecash = residuecash + ret[2] \
     end \
     redis.log(redis.LOG_NOTICE, "sharesdue: " .. sharesdue[1] .. ", residuecash: " .. residuecash) \
     return {0, sharesdue[1], residuecash} \
@@ -2833,32 +2839,20 @@ exports.registerScripts = function () {
         --[[ get shares due & any remainder ]] \
         local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
         if sharesdue[1] > 0 then \
-          --[[ create a position in the rights ]] \
-          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolidnew"], timestamp, timestampms) \
+          if mode == 2 then \
+            --[[ create a position in the rights ]] \
+            newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolidnew"], timestamp, timestampms) \
+          end \
           totrightsquantity = totrightsquantity + sharesdue[1] \
         end \
         if sharesdue[2] > 0 then \
-          --[[ get the account for the currency ]] \
-          local account = getaccount(positions[i]["accountid"], brokerid) \
-          --[[ calculate how much cash is due ]] \
-          local stubcash = round(sharesdue[2] * eodprice["bid"], 2) \
-          if stubcash > 0 then \
-            local stubcashlocal = stubcash * rate \
-            if mode == 2 then \
-              --[[ apply the transaction ]] \
-              local retval = transactiondividend(positions[i]["accountid"], stubcash, 0, brokerid, account["currencyid"], stubcashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "DVP", timestampms) \
-              if retval[1] == 1 then \
-                return retval \
-              end \
-            elseif mode == 3 then \
-              --[[ reverse the transaction ]] \
-              local retval = transactiondividend(positions[i]["accountid"], -stubcash, 0, brokerid, account["currencyid"], -stubcashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "DVR", timestampms) \
-              if retval[1] == 1 then \
-                return retval \
-              end \
+          if mode == 2 then \
+            if tonumber(corporateaction["fractiontypeid"]) == 2 then \
+              --[[ create a fractional position in the rights for the broker client account ]] \
+              newpositiontransaction(0, brokerid, 0, "", corporateactionid, 2, sharesdue[2], corporateaction["symbolidnew"], timestamp, timestampms) \
             end \
-            totresidue = totresidue + stubcash \
           end \
+          totresidue = totresidue + sharesdue[2] \
         end \
         totquantity = totquantity + positions[i]["quantity"] \
       end \
@@ -3005,13 +2999,19 @@ exports.registerScripts = function () {
             totsharesdue = totsharesdue + sharesdue[1] \
           end \
           if sharesdue[2] > 0 then \
-            local ret = convertsharesascash(positions[i]["accountid"], brokerid, corporateaction, sharesdue[2], timestamp, timestampms, mode) \
-            if ret[1] == 1 then \
-              return ret \
+            if tonumber(corporateaction["fractiontypeid"]) == 1 then \
+              local ret = convertsharesascash(position["accountid"], brokerid, corporateaction, sharesdue[2], timestamp, timestampms, mode) \
+              if ret[1] == 1 then \
+                return ret \
+              end \
+              totresidue = totresidue + ret[2] \
+            elseif tonumber(corporateaction["fractiontypeid"]) == 2 then \
+              if mode == 2 then \
+                --[[ add the shares to the broker client account ]] \
+                newpositiontransaction(0, brokerid, 0, "", corporateaction["corporateactionid"], 2, sharesdue[2], corporateaction["symbolid"], timestamp, timestampms) \
+              end \
             end \
-            totresidue = totresidue + ret[2] \
-           end \
-         end \
+          end \
         end \
       end \
     end \
@@ -3069,17 +3069,17 @@ exports.registerScripts = function () {
           totsharesdue = totsharesdue + sharesdue[1] \
         end \
         if sharesdue[2] > 0 then \
-          local fractiontype = redis.call("get", "fractiontype:" .. corporateaction["fractiontypeid"]) \
-          if not fractiontype then \
-          elseif fractiontype == "AMALGAMATE" then \
-            --[[ update position for broker own client account ]] \
-            newpositiontransaction(0, brokerid, 0, "", corporateactionid, 2, sharesdue[2], corporateaction["symbolid"], timestamp, timestampms) \
-          elseif fractiontype == "CASH" then \
+          if tonumber(corporateaction["fractiontypeid"]) == 1 then \
             stubcash = convertsharesascash(positions[i]["accountid"], brokerid, corporateaction, positions[i]["quantity"], timestamp, timestampms, mode) \
             if stubcash[1] == 1 then \
               return stubcash \
             end \
             totresidue = totresidue + stubcash[2] \
+          elseif tonumber(corporateaction["fractiontypeid"]) == 2 then \
+            if mode == 2 then \
+              --[[ update position for broker own client account ]] \
+              newpositiontransaction(0, brokerid, 0, "", corporateactionid, 2, sharesdue[2], corporateaction["symbolid"], timestamp, timestampms) \
+            end \
           end \
         end \
       end \
