@@ -43,7 +43,7 @@ exports.registerScripts = function () {
     if exchangeid == "L" then \
       redis.call("publish", 7, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. nbtsymbol) .. "}") \
     else \
-      redis.call("publish", 13, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. nbtsymbol) .. "}") \
+      redis.call("publish", 12, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. nbtsymbol) .. "}") \
     end \
     --[[ add the symbol to the watchlist ]] \
     redis.call("sadd", "watchlist:" .. watchlistid, symbolid) \
@@ -70,7 +70,7 @@ exports.registerScripts = function () {
       if exchangeid == "L" then \
         redis.call("publish", 7, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. nbtsymbol) .. "}") \
       else \
-        redis.call("publish", 13, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. nbtsymbol) .. "}") \
+        redis.call("publish", 12, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. nbtsymbol) .. "}") \
       end \
     end \
   end \
@@ -167,12 +167,11 @@ exports.registerScripts = function () {
   local symbolid = ARGV[1] \
   local subscriptions = {} \
   --[[ get the watchlists with this symbol ]] \
-  local watchlists = redis.call("sadd", "symbol:" .. symbolid .. ":watchlists") \
+  local watchlists = redis.call("smembers", "symbol:" .. symbolid .. ":watchlists") \
   for i = 1, #watchlists do \
     --[[ get the broker:client who owns this watchlist ]] \
     local brokerclient = redis.call("get", "watchlist:" .. watchlists[i] .. ":client") \
     table.insert(subscriptions, brokerclient) \
-    end \
   end \
   return cjson.encode(subscriptions) \
   ';
