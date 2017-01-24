@@ -54,7 +54,7 @@ var connectstatus = 2; // status of connection, 1=connected, 2=disconnected
 var connectstatusint = 30;
 var connectstatusinterval = 30;
 var datareceivedsinceheartbeat = false; // indicates whether data has been received since the last heartbeat
- 
+
 var options = {
   key: fs.readFileSync('scripts/key.pem'),
   cert: fs.readFileSync('scripts/cert.pem'),
@@ -197,7 +197,7 @@ function init(self) {
       return;
     }
 
-    if (ipaddr == null) {
+    if (ipaddr == null  || ipaddr == "0") {
       console.log("ip address not found");
       return;
     }
@@ -211,7 +211,7 @@ function init(self) {
       return;
     }
 
-    if (port == null) {
+    if (port == null || port == "0") {
       console.log("port not found");
       return;
     }
@@ -225,7 +225,7 @@ function init(self) {
       return;
     }
 
-    if (senderid == null) {
+    if (senderid == null || senderid == "") {
       console.log("sendercompid not found");
       return;
     }
@@ -239,7 +239,7 @@ function init(self) {
       return;
     }
 
-    if (targetid == null) {
+    if (targetid == null || targetid == "") {
       console.log("targetcompid not found");
       return;
     }
@@ -253,7 +253,7 @@ function init(self) {
       return;
     }
 
-    if (onbehalfofid == null) {
+    if (onbehalfofid == null || onbehalfofid == "") {
       console.log("onbehalfofcompid not found");
       return;
     }
@@ -357,7 +357,7 @@ function disconnect(self) {
 function setStatus(status) {
   // tell everyone our status has changed
   connectstatus = status;
-  publishStatus();	
+  publishStatus();
 }
 
 Nbt.prototype.quoteRequest = function(quoterequest) {
@@ -382,7 +382,7 @@ Nbt.prototype.quoteRequest = function(quoterequest) {
   if (quoterequest.quantity != "") {
     msg += '38=' + quoterequest.quantity + SOH;
   } else {
-    msg += '152=' + quoterequest.cashorderqty + SOH;			
+    msg += '152=' + quoterequest.cashorderqty + SOH;
   }
 
   // side, if present
@@ -416,37 +416,37 @@ Nbt.prototype.newOrder = function(order) {
     + '15=' + order.currencyid + SOH
     + '40=' + order.ordertypeid + SOH;
 
-    if (order.ordertypeid == 'D') { // previously quoted
-      // add quote id & who the quote was from
-      msg += '117=' + order.externalquoteid + SOH;
-      delivertocompid = order.quoterid;
-    } else if (parseInt(order.ordertypeid) == 1) { // market
-      delivertocompid = "BEST";
-    } else if (order.delivertocompid != "") {
-      delivertocompid = order.delivertocompid;
-    }
+  if (order.ordertypeid == 'D') { // previously quoted
+    // add quote id & who the quote was from
+    msg += '117=' + order.externalquoteid + SOH;
+    delivertocompid = order.quoterid;
+  } else if (parseInt(order.ordertypeid) == 1) { // market
+    delivertocompid = "BEST";
+  } else if (order.delivertocompid != "") {
+    delivertocompid = order.delivertocompid;
+  }
 
-    // quantity as shares or cash
-    if (order.quantity != '') {
-      msg += '38=' + order.quantity + SOH;
-    } else {
-      msg += '152=' + order.cashorderqty + SOH;				
-    }
+  // quantity as shares or cash
+  if (order.quantity != '') {
+    msg += '38=' + order.quantity + SOH;
+  } else {
+    msg += '152=' + order.cashorderqty + SOH;
+  }
 
-    // add price if specified
-    if (order.price != '') {
-      msg += '44=' + order.price + SOH;
-    }
+  // add price if specified
+  if (order.price != '') {
+    msg += '44=' + order.price + SOH;
+  }
 
-    // add date & time if timeinforce = "GTD"
-    if (order.timeinforceid == '6') {
-      msg += '432=' + order.expiredate + SOH;
-      //+ '126=' + order.expiretime + SOH;
-    }
+  // add date & time if timeinforceid = "GTD"
+  if (order.timeinforceid == '6') {
+    msg += '432=' + order.expiredate + SOH;
+    //+ '126=' + order.expiretime + SOH;
+  }
 
-    if (order.futsettdate != '') {
-      msg += '64=' + order.futsettdate + SOH;
-    }
+  if (order.futsettdate != '') {
+    msg += '64=' + order.futsettdate + SOH;
+  }
 
     sendMessage('D', onbehalfofcompid, delivertocompid, msg, false, null, null, order.brokerid, order.orderid, 2);
 }
@@ -467,7 +467,7 @@ Nbt.prototype.orderCancelRequest = function(ocr) {
 //
 // resend=false, msgseqnum=null, origtimestamp=null for a new message
 // resend=true, msgseqnum=original message number, origtimestamp=original timespamp if a message is being resent
-// 
+//
 function sendMessage(msgtype, onbehalfofcompid, delivertocompid, body, resend, msgseqnum, origtimestamp, brokerid, businessobjectid, businessobjecttypeid) {
   // we need our own timestamp
   var timestamp = commonbo.getUTCTimeStamp(new Date());
@@ -593,7 +593,7 @@ function parseData(self) {
         tagvalarr = [];
 
         // may be another message, so reset state
-    	messagestate = 0;
+      messagestate = 0;
       }
       break;
     }
@@ -642,11 +642,13 @@ function completeMessage(tagvalarr, self, endtag) {
 
     // id created may be used to link to a record
     body.fixseqnumid = fixseqnumid;
- 
+
     if (header.possdupflag == 'Y') {
       if (messagerecoveryinrequested) {
         // this is the start of the recovery process
+        // set the stored value to the first value requested & set started flag
         console.log('message recovery started');
+        db.hset("config", "lastfixseqnumin", nextseqnumin - 1);
         messagerecoveryinrequested = false;
         messagerecoveryinstarted = true;
       }
@@ -682,31 +684,37 @@ function completeMessage(tagvalarr, self, endtag) {
 
       if (header.possdupflag == 'Y') {
         // duplicate received but we are catching up, so just ignore
-	return;
+        return;
       } else {
         if (header.msgtype == 'A') {
-	  if ('resetseqnumflag' in body) {
-	    // resetting sequence numbers, allow to pass through - todo: check & test this
-	  } else {
-	    // normal logon reply & we haven't missed anything, so just set the stored sequence number to that received
-	    console.log("Resetting incoming sequence number to: " + header.msgseqnum);
-	    db.hset("config", "nextfixseqnumin", header.msgseqnum);
-	  }
+    if ('resetseqnumflag' in body) {
+      // resetting sequence numbers, allow to pass through - todo: check & test this
+    } else {
+      // normal logon reply & we haven't missed anything, so just set the stored sequence number to that received
+      console.log("Resetting incoming sequence number to: " + header.msgseqnum);
+      db.hset("config", "nextfixseqnumin", header.msgseqnum);
+    }
         } else if (header.msgtype == '5') {
           if ('text' in body) {
-	    console.log("logout text received: " + body.text);
+      console.log("logout text received: " + body.text);
           }
 
-	  // we have been logged out & will be disconnected by the other side, just exit & try again
+    // we have been logged out & will be disconnected by the other side, just exit & try again
           return;
         } else {
           // serious error, abort
           disconnect(self);
-	  return;
+    return;
         }
       }
     } else if (parseInt(header.msgseqnum) > parseInt(nextseqnumin)) {
       console.log("incoming sequence number: " + header.msgseqnum + " greater than expected: " + nextseqnumin);
+
+      // check for sequence reset as this overrides any sequence number processing
+      if (header.msgtype == '4') {
+        sequenceReset(body, fixseqnumin);
+  return;
+      }
 
       if (header.msgtype == '5') {
         // we have been logged out & will be disconnected by the other side, just exit & try again
@@ -738,7 +746,7 @@ function completeMessage(tagvalarr, self, endtag) {
 
         // we may need to act on this message, once the resend process has finished
         messagerecoveryinrequested = true;
-	return;
+  return;
       }
     }
 
@@ -792,450 +800,450 @@ function processMessage(body, header, self) {
 }
 
 function getHeader(tagvalarr) {
-	var header = {};
+  var header = {};
 
-	var taglen = tagvalarr.length;
+  var taglen = tagvalarr.length;
 
-	for (var i = 0; i < taglen; i++) {
-		switch (tagvalarr[i].tag) {
-			case 8:
-			case 9:
-				// ignore
-				break;
-			case 35:
-				header.msgtype = tagvalarr[i].value;
-				break;
-			case 49:
-				header.sendercompid = tagvalarr[i].value;
-				break;
-			case 56:
-				header.targetcompid = tagvalarr[i].value;
-				break;
-			case 34:
-				header.msgseqnum = tagvalarr[i].value;
-				break;
-			case 52:
-				header.sendingtime = tagvalarr[i].value;
-				break;
-			case 43:
-				header.possdupflag = tagvalarr[i].value;
-				break;
-			case 97:
-				header.possresend = tagvalarr[i].value;
-				break;
-			case 115:
-				header.onbehalfofcompid = tagvalarr[i].value;
-				break;
-			case 122:
-				header.origsendingtime = tagvalarr[i].value;
-				break;
-			case 128:
-				header.delivertocompid = tagvalarr[i].value;
-				break;
-			default:
-		}
-	}
+  for (var i = 0; i < taglen; i++) {
+    switch (tagvalarr[i].tag) {
+      case 8:
+      case 9:
+        // ignore
+        break;
+      case 35:
+        header.msgtype = tagvalarr[i].value;
+        break;
+      case 49:
+        header.sendercompid = tagvalarr[i].value;
+        break;
+      case 56:
+        header.targetcompid = tagvalarr[i].value;
+        break;
+      case 34:
+        header.msgseqnum = tagvalarr[i].value;
+        break;
+      case 52:
+        header.sendingtime = tagvalarr[i].value;
+        break;
+      case 43:
+        header.possdupflag = tagvalarr[i].value;
+        break;
+      case 97:
+        header.possresend = tagvalarr[i].value;
+        break;
+      case 115:
+        header.onbehalfofcompid = tagvalarr[i].value;
+        break;
+      case 122:
+        header.origsendingtime = tagvalarr[i].value;
+        break;
+      case 128:
+        header.delivertocompid = tagvalarr[i].value;
+        break;
+      default:
+    }
+  }
 
-	return header;
+  return header;
 }
 
 function getBody(msgtype, tagvalarr) {
-	var body = {};
+  var body = {};
 
-	var tagarrlen = tagvalarr.length;
+  var tagarrlen = tagvalarr.length;
 
-	switch (msgtype) {
-	case 'S': // quote
-		for (var i = 0; i < tagarrlen; i++) {
-			switch (tagvalarr[i].tag) {
-			case 131:
-				var res = tagvalarr[i].value.split(":");
-				body.brokerid = res[0];
-				body.quoterequestid = res[1];
-				break;
-			case 117:
-				body.externalquoteid = tagvalarr[i].value;
-				break;
-			case 55:
-			 	body.mnemonic = tagvalarr[i].value;
-			 	break;
-			case 48:
-				body.securityid = tagvalarr[i].value;
-				break;
-			case 22:
-				body.idsource = tagvalarr[i].value;
-				break;
-			case 132:
-				body.bidpx = tagvalarr[i].value;
-				break;
-			case 133:
-				body.offerpx = tagvalarr[i].value;
-				break;
-			case 134:
-				body.bidsize = tagvalarr[i].value;
-				break;
-			case 135:
-				body.offersize = tagvalarr[i].value;
-				break;
-			case 63:
-				body.settlmnttypid = tagvalarr[i].value;
-				break;
-			case 64:
-				body.futsettdate = tagvalarr[i].value;
-				break;
-			case 62:
-				body.validuntiltime = tagvalarr[i].value;
-				break;
-			case 60:
-				body.transacttime = tagvalarr[i].value;
-				break;
-			case 15:
-				body.currencyid = tagvalarr[i].value;
-				break;
-			case 30:
-				body.lastmkt + tagvalarr[i].value;
-				break;
-			case 300:
-				body.quoterejectreasonid = tagvalarr[i].value;
-				break;
-			case 152:
-				body.cashorderqty = tagvalarr[i].value;
-				break;
-			case 120:
-				body.settlcurrencyid = tagvalarr[i].value;
-				break;
-			case 167:
-				body.securitytype = tagvalarr[i].value;
-				break;
-			case 207:
-				body.securityexchange = tagvalarr[i].value;
-				break;
-			case 6158:
-				body.quoterid = tagvalarr[i].value;
-				break;
-			case 159:
-				body.accruedinterest = tagvalarr[i].value;
-				break;
-			case 5814:
-				body.bestbidpx = tagvalarr[i].value;
-				break;
-			case 5815:
-				body.bestofferpx = tagvalarr[i].value;
-				break;
-			case 5816:
-				body.bidquotedepth = tagvalarr[i].value;
-				break;
-			case 5817:
-				body.offerquotedepth = tagvalarr[i].value;
-				break;
-			case 5818:
-				body.maxquotedepth = tagvalarr[i].value;
-				break;
-			case 5819:
-				// list of individual quotes, ignore, at least for time being
-				break;
-			case 645:
-				body.mktbidx = tagvalarr[i].value;
-				break;
-			case 646:
-				body.mktofferpx = tagvalarr[i].value;
-				break;
-			case 188:
-				body.bidspotrate = tagvalarr[i].value;
-				break;
-			case 190:
-				body.offerspotrate = tagvalarr[i].value;
-				break;
-			case 9007:
-				body.settledays = tagvalarr[i].value;
-				break;
-			case 537:
-				body.quotetype = tagvalarr[i].value;
-				break;
-			default:
-				unknownTag(tagvalarr[i].tag);
-			}
-		}
-		break;
-	case '8': // executionreport
-		for (var i = 0; i < tagarrlen; ++i) {
-			switch (tagvalarr[i].tag) {
-			case 37:
-				body.orderid = tagvalarr[i].value;
-				break;
-			case 11:
-				var res = tagvalarr[i].value.split(":");
-				body.brokerid = res[0];
-				body.clordid = res[1];
-				break;
-			case 17:
-				body.execid = tagvalarr[i].value;
-				break;
-			case 150:
-				body.exectype = tagvalarr[i].value;
-				break;
-			case 39:
-				body.ordstatus = tagvalarr[i].value;
-				break;
-			case 20:
-				body.exectranstype = tagvalarr[i].value;
-				break;
-			case 103:
-				body.ordrejreason = tagvalarr[i].value;
-				break;
-			case 55:
-				body.mnemonic = tagvalarr[i].value;
-				break;
-			case 48:
-				body.securityid = tagvalarr[i].value;
-				break;
-			case 22:
-				body.idsource = tagvalarr[i].value;
-				break;
-			case 63:
-				body.settlmnttypid = tagvalarr[i].value;
-				break;
-			case 64:
-				body.futsettdate = tagvalarr[i].value;
-				break;
-			case 54:
-				body.side = tagvalarr[i].value;
-				break;
-			case 38:
-				body.orderqty = tagvalarr[i].value;
-				break;
-			case 152:
-				body.cashorderqty = tagvalarr[i].value;
-				break;
-			case 44:
-				body.price = tagvalarr[i].value;
-				break;
-			case 15:
-				body.currencyid = tagvalarr[i].value;
-				break;
-			case 151:
-				body.leavesqty = tagvalarr[i].value;
-				break;
-			case 14:
-				body.cumqty = tagvalarr[i].value;
-				break;
-			case 6:
-				body.avgpx = tagvalarr[i].value;
-				break;
-			case 60:
-				body.transacttime = tagvalarr[i].value;
-				break;
-			case 119:
-				body.settlcurramt = tagvalarr[i].value;
-				break;
-			case 120:
-				body.settlcurrencyid = tagvalarr[i].value;
-				break;
-			case 32:
-				body.lastshares = tagvalarr[i].value;
-				break;
-			case 31:
-				body.lastpx = tagvalarr[i].value;
-				break;
-			case 30:
-				body.lastmkt = tagvalarr[i].value;
-				break;
-			case 40:
-				body.ordtype = tagvalarr[i].value;
-				break;
-			case 76:
-				body.execbroker = tagvalarr[i].value;
-				break;
-			case 58:
-				body.text = tagvalarr[i].value;
-				break;
-			case 59:
-				body.timeinforceid = tagvalarr[i].value;
-				break;
-			case 167:
-				body.securitytype = tagvalarr[i].value;
-				break;
-			case 207:
-				body.securityexchange = tagvalarr[i].value;
-				break;
-			case 155:
-				body.settlcurrfxrate = tagvalarr[i].value;
-				break;
-			case 41:
-				body.origclordid = tagvalarr[i].value;
-				break;
-			case 645:
-				body.mktbidx = tagvalarr[i].value;
-				break;
-			case 646:
-				body.mktofferpx = tagvalarr[i].value;
-				break;
-			case 117:
-				body.quoteid = tagvalarr[i].value;
-				break;
-			case 159:
-				body.accruedinterest = tagvalarr[i].value;
-				break;
-			default:
-				unknownTag(tagvalarr[i].tag);
-			}
-		}
-		break;
-	case '9': // ordercancelreject
-		for (var i = 0; i < tagarrlen; ++i) {
-			switch (tagvalarr[i].tag) {
-			case 37:
-				body.orderid = tagvalarr[i].value;
-				break;
-			case 11:
-				var res = tagvalarr[i].value.split(":");
-				body.brokerid = res[0];
-				body.clordid = res[1];
-				break;
-			case 102:
-				body.cxlrejreason = tagvalarr[i].value;
-				break;
-			case 41:
-				body.origclordid = tagvalarr[i].value;
-				break;
-			case 39:
-				body.ordstatus = tagvalarr[i].value;
-				break;
-			case 434:
-				body.cxlresponseto = tagvalarr[i].value;
-				break;
-			case 58:
-				body.text = tagvalarr[i].value;
-				break;
-			default:
-				unknownTag(tagvalarr[i].tag);
-			}
-		}
-		break;
-	case 'b': // quote acknowledgement
-		for (var i = 0; i < tagarrlen; ++i) {
-			switch (tagvalarr[i].tag) {
-			case 58:
-				body.text = tagvalarr[i].value;
-				break;
-			case 131:
-				var res = tagvalarr[i].value.split(":");
-				body.brokerid = res[0];
-				body.quoterequestid = res[1];
-				break;
-			case 297:
-				body.quoteackstatus = tagvalarr[i].value;
-				break;
-			case 300:
-				body.quoterejectreasonid = tagvalarr[i].value;
-				break;
-			case 6158:
-				body.quoterid = tagvalarr[i].value;
-				break;
-			default:
-				unknownTag(tagvalarr[i].tag);
-			}
-		}
-		break;
-	case '3': // reject
-		for (var i = 0; i < tagarrlen; ++i) {
-			switch (tagvalarr[i].tag) {
-			case 45:
-				body.refseqnum = tagvalarr[i].value;
-				break;
-			case 58:
-				body.text = tagvalarr[i].value;
-				break;
-			case 371:
-				body.reftagid = tagvalarr[i].value;				
-				break;
-			case 372:
-				body.refmsgtype = tagvalarr[i].value;
-				break;
-			case 373:
-				body.sessionrejectreason = tagvalarr[i].value;
-				break;
-			default:
-				unknownTag(tagvalarr[i].tag);
-			}
-		}
-		break;
-	case 'A': // logon
-		for (var i = 0; i < tagarrlen; i++) {
-			switch (tagvalarr[i].tag) {
-			case 141:
-				body.resetseqnumflag = true;
-				break;
-			}
-		}
-		break;
-	case '0': // heartbeat
-	case '1': // testrequest
-		for (var i = 0; i < tagarrlen; ++i) {
-			switch (tagvalarr[i].tag) {
-			case 112:
-				body.testreqid = tagvalarr[i].value;
-				break;
-			}
-		}
-		break;
-	case '2': // resendrequest
-		for (var i = 0; i < tagarrlen; ++i) {
-			switch (tagvalarr[i].tag) {
-			case 7:
-				body.beginseqno = parseInt(tagvalarr[i].value);
-				break;
-			case 16:
-				body.endseqno = parseInt(tagvalarr[i].value);
-				break;
-			}
-		}
-		break;
-	case '4': // sequence reset
-		for (var i = 0; i < tagarrlen; ++i) {
-			switch (tagvalarr[i].tag) {
-			case 123:
-				body.gapfillflag = tagvalarr[i].value;
-				break;
-			case 36:
-				body.newseqno = parseInt(tagvalarr[i].value);
-				break;
-			}
-		}
-		break;
-	case '5':
-		// logout
-		for (var i = 0; i < tagarrlen; ++i) {
-			switch (tagvalarr[i].tag) {
-			case 58:
-				body.text = tagvalarr[i].value;
-				break;
-			}
-		}
-		break;
-	case 'j': // business message reject
-		for (var i = 0; i < tagarrlen; ++i) {
-			switch (tagvalarr[i].tag) {
-			case 58:
-				body.text = tagvalarr[i].value;
-				break;
-			case 45:
-				body.refseqnum = tagvalarr[i].value;
-				break;
-			case 372:
-				body.refmsgtype = tagvalarr[i].value;
-				break;
-			case 380:
-				body.businessrejectreason = tagvalarr[i].value;
-				break;
-			}
-		}		
-		break;
-	default:
-		console.log("unknown message type");
-	}
+  switch (msgtype) {
+  case 'S': // quote
+    for (var i = 0; i < tagarrlen; i++) {
+      switch (tagvalarr[i].tag) {
+      case 131:
+        var res = tagvalarr[i].value.split(":");
+        body.brokerid = res[0];
+        body.quoterequestid = res[1];
+        break;
+      case 117:
+        body.externalquoteid = tagvalarr[i].value;
+        break;
+      case 55:
+         body.mnemonic = tagvalarr[i].value;
+         break;
+      case 48:
+        body.securityid = tagvalarr[i].value;
+        break;
+      case 22:
+        body.idsource = tagvalarr[i].value;
+        break;
+      case 132:
+        body.bidpx = tagvalarr[i].value;
+        break;
+      case 133:
+        body.offerpx = tagvalarr[i].value;
+        break;
+      case 134:
+        body.bidsize = tagvalarr[i].value;
+        break;
+      case 135:
+        body.offersize = tagvalarr[i].value;
+        break;
+      case 63:
+        body.settlmnttypid = tagvalarr[i].value;
+        break;
+      case 64:
+        body.futsettdate = tagvalarr[i].value;
+        break;
+      case 62:
+        body.validuntiltime = tagvalarr[i].value;
+        break;
+      case 60:
+        body.transacttime = tagvalarr[i].value;
+        break;
+      case 15:
+        body.currencyid = tagvalarr[i].value;
+        break;
+      case 30:
+        body.lastmkt + tagvalarr[i].value;
+        break;
+      case 300:
+        body.quoterejectreasonid = tagvalarr[i].value;
+        break;
+      case 152:
+        body.cashorderqty = tagvalarr[i].value;
+        break;
+      case 120:
+        body.settlcurrencyid = tagvalarr[i].value;
+        break;
+      case 167:
+        body.securitytype = tagvalarr[i].value;
+        break;
+      case 207:
+        body.securityexchange = tagvalarr[i].value;
+        break;
+      case 6158:
+        body.quoterid = tagvalarr[i].value;
+        break;
+      case 159:
+        body.accruedinterest = tagvalarr[i].value;
+        break;
+      case 5814:
+        body.bestbidpx = tagvalarr[i].value;
+        break;
+      case 5815:
+        body.bestofferpx = tagvalarr[i].value;
+        break;
+      case 5816:
+        body.bidquotedepth = tagvalarr[i].value;
+        break;
+      case 5817:
+        body.offerquotedepth = tagvalarr[i].value;
+        break;
+      case 5818:
+        body.maxquotedepth = tagvalarr[i].value;
+        break;
+      case 5819:
+        // list of individual quotes, ignore, at least for time being
+        break;
+      case 645:
+        body.mktbidx = tagvalarr[i].value;
+        break;
+      case 646:
+        body.mktofferpx = tagvalarr[i].value;
+        break;
+      case 188:
+        body.bidspotrate = tagvalarr[i].value;
+        break;
+      case 190:
+        body.offerspotrate = tagvalarr[i].value;
+        break;
+      case 9007:
+        body.settledays = tagvalarr[i].value;
+        break;
+      case 537:
+        body.quotetype = tagvalarr[i].value;
+        break;
+      default:
+        unknownTag(tagvalarr[i].tag);
+      }
+    }
+    break;
+  case '8': // executionreport
+    for (var i = 0; i < tagarrlen; ++i) {
+      switch (tagvalarr[i].tag) {
+      case 37:
+        body.orderid = tagvalarr[i].value;
+        break;
+      case 11:
+        var res = tagvalarr[i].value.split(":");
+        body.brokerid = res[0];
+        body.clordid = res[1];
+        break;
+      case 17:
+        body.execid = tagvalarr[i].value;
+        break;
+      case 150:
+        body.exectype = tagvalarr[i].value;
+        break;
+      case 39:
+        body.ordstatus = tagvalarr[i].value;
+        break;
+      case 20:
+        body.exectranstype = tagvalarr[i].value;
+        break;
+      case 103:
+        body.ordrejreason = tagvalarr[i].value;
+        break;
+      case 55:
+        body.mnemonic = tagvalarr[i].value;
+        break;
+      case 48:
+        body.securityid = tagvalarr[i].value;
+        break;
+      case 22:
+        body.idsource = tagvalarr[i].value;
+        break;
+      case 63:
+        body.settlmnttypid = tagvalarr[i].value;
+        break;
+      case 64:
+        body.futsettdate = tagvalarr[i].value;
+        break;
+      case 54:
+        body.side = tagvalarr[i].value;
+        break;
+      case 38:
+        body.orderqty = tagvalarr[i].value;
+        break;
+      case 152:
+        body.cashorderqty = tagvalarr[i].value;
+        break;
+      case 44:
+        body.price = tagvalarr[i].value;
+        break;
+      case 15:
+        body.currencyid = tagvalarr[i].value;
+        break;
+      case 151:
+        body.leavesqty = tagvalarr[i].value;
+        break;
+      case 14:
+        body.cumqty = tagvalarr[i].value;
+        break;
+      case 6:
+        body.avgpx = tagvalarr[i].value;
+        break;
+      case 60:
+        body.transacttime = tagvalarr[i].value;
+        break;
+      case 119:
+        body.settlcurramt = tagvalarr[i].value;
+        break;
+      case 120:
+        body.settlcurrencyid = tagvalarr[i].value;
+        break;
+      case 32:
+        body.lastshares = tagvalarr[i].value;
+        break;
+      case 31:
+        body.lastpx = tagvalarr[i].value;
+        break;
+      case 30:
+        body.lastmkt = tagvalarr[i].value;
+        break;
+      case 40:
+        body.ordtype = tagvalarr[i].value;
+        break;
+      case 76:
+        body.execbroker = tagvalarr[i].value;
+        break;
+      case 58:
+        body.text = tagvalarr[i].value;
+        break;
+      case 59:
+        body.timeinforceid = tagvalarr[i].value;
+        break;
+      case 167:
+        body.securitytype = tagvalarr[i].value;
+        break;
+      case 207:
+        body.securityexchange = tagvalarr[i].value;
+        break;
+      case 155:
+        body.settlcurrfxrate = tagvalarr[i].value;
+        break;
+      case 41:
+        body.origclordid = tagvalarr[i].value;
+        break;
+      case 645:
+        body.mktbidx = tagvalarr[i].value;
+        break;
+      case 646:
+        body.mktofferpx = tagvalarr[i].value;
+        break;
+      case 117:
+        body.quoteid = tagvalarr[i].value;
+        break;
+      case 159:
+        body.accruedinterest = tagvalarr[i].value;
+        break;
+      default:
+        unknownTag(tagvalarr[i].tag);
+      }
+    }
+    break;
+  case '9': // ordercancelreject
+    for (var i = 0; i < tagarrlen; ++i) {
+      switch (tagvalarr[i].tag) {
+      case 37:
+        body.orderid = tagvalarr[i].value;
+        break;
+      case 11:
+        var res = tagvalarr[i].value.split(":");
+        body.brokerid = res[0];
+        body.clordid = res[1];
+        break;
+      case 102:
+        body.cxlrejreason = tagvalarr[i].value;
+        break;
+      case 41:
+        body.origclordid = tagvalarr[i].value;
+        break;
+      case 39:
+        body.ordstatus = tagvalarr[i].value;
+        break;
+      case 434:
+        body.cxlresponseto = tagvalarr[i].value;
+        break;
+      case 58:
+        body.text = tagvalarr[i].value;
+        break;
+      default:
+        unknownTag(tagvalarr[i].tag);
+      }
+    }
+    break;
+  case 'b': // quote acknowledgement
+    for (var i = 0; i < tagarrlen; ++i) {
+      switch (tagvalarr[i].tag) {
+      case 58:
+        body.text = tagvalarr[i].value;
+        break;
+      case 131:
+        var res = tagvalarr[i].value.split(":");
+        body.brokerid = res[0];
+        body.quoterequestid = res[1];
+        break;
+      case 297:
+        body.quoteackstatus = tagvalarr[i].value;
+        break;
+      case 300:
+        body.quoterejectreasonid = tagvalarr[i].value;
+        break;
+      case 6158:
+        body.quoterid = tagvalarr[i].value;
+        break;
+      default:
+        unknownTag(tagvalarr[i].tag);
+      }
+    }
+    break;
+  case '3': // reject
+    for (var i = 0; i < tagarrlen; ++i) {
+      switch (tagvalarr[i].tag) {
+      case 45:
+        body.refseqnum = tagvalarr[i].value;
+        break;
+      case 58:
+        body.text = tagvalarr[i].value;
+        break;
+      case 371:
+        body.reftagid = tagvalarr[i].value;
+        break;
+      case 372:
+        body.refmsgtype = tagvalarr[i].value;
+        break;
+      case 373:
+        body.sessionrejectreason = tagvalarr[i].value;
+        break;
+      default:
+        unknownTag(tagvalarr[i].tag);
+      }
+    }
+    break;
+  case 'A': // logon
+    for (var i = 0; i < tagarrlen; i++) {
+      switch (tagvalarr[i].tag) {
+      case 141:
+        body.resetseqnumflag = true;
+        break;
+      }
+    }
+    break;
+  case '0': // heartbeat
+  case '1': // testrequest
+    for (var i = 0; i < tagarrlen; ++i) {
+      switch (tagvalarr[i].tag) {
+      case 112:
+        body.testreqid = tagvalarr[i].value;
+        break;
+      }
+    }
+    break;
+  case '2': // resendrequest
+    for (var i = 0; i < tagarrlen; ++i) {
+      switch (tagvalarr[i].tag) {
+      case 7:
+        body.beginseqno = parseInt(tagvalarr[i].value);
+        break;
+      case 16:
+        body.endseqno = parseInt(tagvalarr[i].value);
+        break;
+      }
+    }
+    break;
+  case '4': // sequence reset
+    for (var i = 0; i < tagarrlen; ++i) {
+      switch (tagvalarr[i].tag) {
+      case 123:
+        body.gapfillflag = tagvalarr[i].value;
+        break;
+      case 36:
+        body.newseqno = parseInt(tagvalarr[i].value);
+        break;
+      }
+    }
+    break;
+  case '5':
+    // logout
+    for (var i = 0; i < tagarrlen; ++i) {
+      switch (tagvalarr[i].tag) {
+      case 58:
+        body.text = tagvalarr[i].value;
+        break;
+      }
+    }
+    break;
+  case 'j': // business message reject
+    for (var i = 0; i < tagarrlen; ++i) {
+      switch (tagvalarr[i].tag) {
+      case 58:
+        body.text = tagvalarr[i].value;
+        break;
+      case 45:
+        body.refseqnum = tagvalarr[i].value;
+        break;
+      case 372:
+        body.refmsgtype = tagvalarr[i].value;
+        break;
+      case 380:
+        body.businessrejectreason = tagvalarr[i].value;
+        break;
+      }
+    }
+    break;
+  default:
+    console.log("unknown message type");
+  }
 
-	return body;
+  return body;
 }
 
 function unknownTag(tag) {
@@ -1256,6 +1264,7 @@ function unknownTag(tag) {
 }
 
 function rejectReceived(reject, self) {
+  console.log(reject);
   self.emit('reject', reject);
 }
 
@@ -1279,7 +1288,7 @@ function logoutReceived(logout, self) {
   console.log('logout received');
 
   if ('text' in logout) {
-    console.log('logout text: ' + logout.text);
+    console.log('logout text=' + logout.text);
   }
 
   // we are done
@@ -1367,9 +1376,9 @@ function heartbeatReceived(heartbeat, self) {
   // if we have a test request running, check the value of the string returned
   if (testrequesttimer != null) {
     //if ('testreqid' in heartbeat) {
-    //if (heartbeat.testreqid == matchtestreqid) {
-    stopTestRequestTimer();
-    //}
+      //if (heartbeat.testreqid == matchtestreqid) {
+        stopTestRequestTimer();
+      //}
     //}
   } else {
     sendHeartbeat();
@@ -1381,7 +1390,7 @@ function heartbeatReceived(heartbeat, self) {
       setStatus(1);
 
       var timestamp = commonbo.getUTCTimeStamp(new Date());
-      console.log(timestamp + " - heartbeat received from NBTrader");
+        console.log(timestamp + " - heartbeat received from NBTrader");
     }
   }
 }
@@ -1394,7 +1403,7 @@ function startTestRequestTimer(self) {
 
 function stopTestRequestTimer() {
   clearTimeout(testrequesttimer);
-  testrequesttimer = null;	
+  testrequesttimer = null;
 }
 
 function testRequestReceived(testrequest, self) {
@@ -1403,7 +1412,7 @@ function testRequestReceived(testrequest, self) {
   testRequestReply(testrequest.testreqid);
 }
 
-function testRequestReply(reqid) {	
+function testRequestReply(reqid) {
   var msg = '112=' + reqid + SOH;
 
   sendMessage('0', "", "", msg, false, null, null, "", "", "");
@@ -1411,7 +1420,7 @@ function testRequestReply(reqid) {
 
 function resendRequestReceived(resendrequest, self) {
   console.log("resendRequestReceived, begin:" + resendrequest.beginseqno + ", end: " + resendrequest.endseqno);
-	
+  
   // check we have a valid begin & end sequence number
   // end number may be '0' to indicate infinity
   if (resendrequest.beginseqno < 1 || (resendrequest.endseqno < resendrequest.beginseqno && resendrequest.endseqno != 0)) {
@@ -1450,7 +1459,12 @@ function resendMessage(msgno, endseqno, self) {
     if (ret[0] == 1) {
       console.log("unable to find message:" + msgno);
       sequencegaptimestamp = commonbo.getUTCTimeStamp(new Date());
-      sequenceGap(sequencegapnum, endseqno, sequencegaptimestamp);
+      
+      if (sequencegapnum != 0) {
+        sequenceGap(sequencegapnum, endseqno, sequencegaptimestamp);
+      } else {
+        sequenceGap(msgno, endseqno, sequencegaptimestamp);
+      }
 
       // we are done
       doneResending();
@@ -1485,13 +1499,13 @@ function resendMessage(msgno, endseqno, self) {
       // have we reached the last stored message?
       if (msgno == parseInt(nextseqnumout) - 1) {
         // send any sequence gap message
-	if (sequencegapnum != 0) {
+  if (sequencegapnum != 0) {
           sequenceGap(sequencegapnum, msgno, sequencegaptimestamp);
         }
 
         // we are done
-	doneResending();
-	return;
+  doneResending();
+  return;
       }
 
       // keep on going
@@ -1529,28 +1543,28 @@ function resendMessage(msgno, endseqno, self) {
 }
 
 function oldMessage(msg) {
-	// todo:
-	//if (msg.timestamp) {
+  // todo:
+  //if (msg.timestamp) {
 
-	//}
-	return true;
+  //}
+  return true;
 }
 
 function sequenceGap(beginnum, endnum, timestamp) {
-	var msg;
+  var msg;
 
-	console.log('sending sequence gap, beginnum:' + beginnum + ', endnum=:' + endnum);
+  console.log('sending sequence gap, beginnum:' + beginnum + ', endnum=:' + endnum);
 
-        // new sequence number
-        var newseqnum = endnum + 1;
+  // new sequence number
+  var newseqnum = endnum + 1;
 
-	msg = '123=' + 'Y' + SOH
-		+ '36=' + newseqnum + SOH;
+  msg = '123=' + 'Y' + SOH
+    + '36=' + newseqnum + SOH;
 
-        // send as a resend so message gets sent as message number beginnum 
-	sendMessage('4', "", "", msg, true, beginnum, timestamp, "", "", "");
+  // send as a resend so message gets sent as message number beginnum 
+  sendMessage('4', "", "", msg, true, beginnum, timestamp, "", "", "");
 
-	sequencegapnum = 0;
+  sequencegapnum = 0;
 }
 
 function checksum(msg) {
@@ -1581,7 +1595,7 @@ Nbt.prototype.getSessionRejectReason = function(reason) {
   case 0:
     desc = "Invalid tag number";
     break;
-  case 1:	
+  case 1:
     desc = "Required tag missing";
     break;
   case 2:
@@ -1605,7 +1619,7 @@ Nbt.prototype.getSessionRejectReason = function(reason) {
   case 8:
     desc = "Signature problem";
     break;
-  case 9:	
+  case 9:
     desc = "CompID problem";
     break;
   case 10:
@@ -1623,7 +1637,7 @@ Nbt.prototype.getBusinessRejectReason = function(reason) {
   var desc;
 
   switch (parseInt(reason)) {
-  case 0:	
+  case 0:
     desc = "Other";
     break;
   case 1:
