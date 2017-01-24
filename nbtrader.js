@@ -1672,6 +1672,7 @@ function registerScripts() {
   local fixseqnumout = ARGV[9] \
   local fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
   redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumout", fixseqnumout, "fixseqnumid", fixseqnumid) \
+  redis.call("sadd", "fixmessage:fixmessages", fixseqnumid) \
   --[[ set a key so we can get to the stored message from the outgoing fix sequence number ]] \
   redis.call("set", "fixseqnumout:" .. fixseqnumout .. ":fixseqnumid", fixseqnumid) \
   --[[ where possible, link the fix message back to the originating message ]] \
@@ -1694,6 +1695,7 @@ function registerScripts() {
   local fixseqnumin = ARGV[9] \
   local fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
   redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumid", fixseqnumid, "fixseqnumin", fixseqnumin) \
+  redis.call("sadd", "fixmessage:fixmessages", fixseqnumid) \
   local nextfixseqnumin = redis.call("hget", "get", "nextfixseqnumin") \
   if tonumber(fixseqnumin) == tonumber(nextfixseqnumin) then \
     nextfixseqnumin = redis.call("hincrby", "config", "nextfixseqnumin", 1) \
