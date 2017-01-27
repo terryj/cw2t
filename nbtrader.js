@@ -6,7 +6,8 @@
 * August 2014
 * Mods:
 * Jan 11 2017 - changed fixsequence number handling, ouch!
-* ****************/
+* Jan 27 2017 - updated in & out message scripts to not store heartbeats
+* * ****************/
 
 // avoids DEPTH_ZERO_SELF_SIGNED_CERT error for self-signed certs
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -1669,17 +1670,19 @@ function registerScripts() {
   * note: we use the current sequnce number to store & then increment as this enables a single call to redis
   */
   scriptfixmessageout = '\
-  local fixseqnumout = ARGV[9] \
-  local fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
-  redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumout", fixseqnumout, "fixseqnumid", fixseqnumid) \
-  redis.call("sadd", "fixmessage:fixmessages", fixseqnumid) \
-  --[[ set a key so we can get to the stored message from the outgoing fix sequence number ]] \
-  redis.call("set", "fixseqnumout:" .. fixseqnumout .. ":fixseqnumid", fixseqnumid) \
-  --[[ where possible, link the fix message back to the originating message ]] \
-  if ARGV[1] == "R" then \
-    redis.call("hset", "broker:" .. ARGV[6] .. ":quoterequest:" ..  ARGV[7], "fixseqnumid", fixseqnumid) \
-  elseif ARGV[1] == "D" or tonumber(ARGV[1]) == 1 then \
-    redis.call("hset", "broker:" .. ARGV[6] .. ":order:" ..  ARGV[7], "fixseqnumid", fixseqnumid) \
+  local msgtype = ARGV[1] \
+  if msgtype ~= "0" then \
+    local fixseqnumout = ARGV[9] \
+    local fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
+    redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", msgtype, "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumout", fixseqnumout, "fixseqnumid", fixseqnumid) \
+    --[[ set a key so we can get to the stored message from the outgoing fix sequence number ]] \
+    redis.call("set", "fixseqnumout:" .. fixseqnumout .. ":fixseqnumid", fixseqnumid) \
+    --[[ where possible, link the fix message back to the originating message ]] \
+    if ARGV[1] == "R" then \
+      redis.call("hset", "broker:" .. ARGV[6] .. ":quoterequest:" ..  ARGV[7], "fixseqnumid", fixseqnumid) \
+    elseif ARGV[1] == "D" or tonumber(ARGV[1]) == 1 then \
+      redis.call("hset", "broker:" .. ARGV[6] .. ":order:" ..  ARGV[7], "fixseqnumid", fixseqnumid) \
+    end \
   end \
   local nextfixseqnumout = redis.call("hincrby", "config", "nextfixseqnumout", 1) \
   return nextfixseqnumout \
@@ -1692,10 +1695,13 @@ function registerScripts() {
   * returns: nextfixseqnumin - used for fix sequence processing, fixseqnumid - may be used to link to record id yet to be created
   */
   scriptfixmessagein = '\
+  local msgtype = ARGV[1] \
   local fixseqnumin = ARGV[9] \
-  local fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
-  redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", ARGV[1], "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumid", fixseqnumid, "fixseqnumin", fixseqnumin) \
-  redis.call("sadd", "fixmessage:fixmessages", fixseqnumid) \
+  local fixseqnumid = redis.call("hget", "config", "lastfixseqnumid") \
+  if msgtype ~= "0" then \
+    fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
+    redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", msgtype, "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumid", fixseqnumid, "fixseqnumin", fixseqnumin) \
+  end \
   local nextfixseqnumin = redis.call("hget", "get", "nextfixseqnumin") \
   if tonumber(fixseqnumin) == tonumber(nextfixseqnumin) then \
     nextfixseqnumin = redis.call("hincrby", "config", "nextfixseqnumin", 1) \
