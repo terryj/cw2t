@@ -22,12 +22,25 @@ exports.registerScripts = function () {
   // params: brokerid, clientid
   // returns: watchlistid
   //
-  watchlistnew = round + '\
+  watchlistnew = '\
   local watchlistnew = function(brokerid, clientid) \
     local watchlistid = redis.call("hincrby", "config", "lastwatchlistid", 1) \
     redis.call("hset", "broker:" .. brokerid .. ":client:" .. clientid, "watchlistid", watchlistid) \
     redis.call("set", "watchlist:" .. watchlistid .. ":client", brokerid .. ":" .. clientid) \
     return watchlistid \
+  end \
+  ';
+  //
+  // addsymboltowatchlist
+  // params: watchlistid, symbolid
+  // This method will add the given symbol to given watch list
+  //
+  addsymboltowatchlist = '\
+  local addsymboltowatchlist = function(watchlistid, symbolid) \
+    --[[ add the symbol to the watchlist ]] \
+    redis.call("sadd", "watchlist:" .. watchlistid, symbolid) \
+    --[[ add this watchlist to the set watching this symbol ]] \
+    redis.call("sadd", "symbol:" .. symbolid .. ":watchlists", watchlistid) \
   end \
   ';
 
@@ -37,18 +50,13 @@ exports.registerScripts = function () {
   //
   subscribesymbol = '\
   local subscribesymbol = function(symbolid, watchlistid) \
-    local nbtsymbol = redis.call("hget", "symbol:" .. symbolid, "nbtsymbol") \
-    local exchangeid = redis.call("hget", "symbol:" .. symbolid, "exchangeid") \
+    local symbol = redis.call("hmget", "symbol:" .. symbolid, "nbtsymbol", "exchangeid") \
     --[[ subscribe to this symbol, either UK or international price feed ]] \
-    if exchangeid == "L" then \
-      redis.call("publish", 7, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. nbtsymbol) .. "}") \
+    if symbol[2] == "L" then \
+      redis.call("publish", 7, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. symbol[1]) .. "}") \
     else \
-      redis.call("publish", 12, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. nbtsymbol) .. "}") \
+      redis.call("publish", 12, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. symbol[1]) .. "}") \
     end \
-    --[[ add the symbol to the watchlist ]] \
-    redis.call("sadd", "watchlist:" .. watchlistid, symbolid) \
-    --[[ add this watchlist to the set watching this symbol ]] \
-    redis.call("sadd", "symbol:" .. symbolid .. ":watchlists", watchlistid) \
   end \
   ';
 
@@ -64,13 +72,12 @@ exports.registerScripts = function () {
     redis.call("srem", "symbol:" .. symbolid .. ":watchlists", watchlistid) \
     --[[ if there are no watchlists subscribed to this symbol, unsubscribe from this symbol ]] \
     if redis.call("scard", "symbol:" .. symbolid .. ":watchlists") == 0 then \
-      local nbtsymbol = redis.call("hget", "symbol:" .. symbolid, "nbtsymbol") \
-      local exchangeid = redis.call("hget", "symbol:" .. symbolid, "exchangeid") \
+      local symbol = redis.call("hmget", "symbol:" .. symbolid, "nbtsymbol", "exchangeid") \
       --[[ unsubscribe this symbol from either the UK or international price feed ]] \
-      if exchangeid == "L" then \
-        redis.call("publish", 7, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. nbtsymbol) .. "}") \
+      if symbol[2] == "L" then \
+        redis.call("publish", 7, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. symbol[1]) .. "}") \
       else \
-        redis.call("publish", 12, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. nbtsymbol) .. "}") \
+        redis.call("publish", 12, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. symbol[1]) .. "}") \
       end \
     end \
   end \
@@ -80,7 +87,7 @@ exports.registerScripts = function () {
   // script to subscribe a client to a symbol
   // params: brokerid, clientid, symbolid
   //
-  exports.scriptsubscribesymbol = watchlistnew + subscribesymbol + '\
+  exports.scriptsubscribesymbol = watchlistnew + subscribesymbol + addsymboltowatchlist + '\
   local brokerid = ARGV[1] \
   local clientid = ARGV[2] \
   local symbolid = ARGV[3] \
@@ -91,6 +98,7 @@ exports.registerScripts = function () {
     watchlistid = watchlistnew(brokerid, clientid) \
   end \
   subscribesymbol(symbolid, watchlistid) \
+  addsymboltowatchlist(watchlistid, symbolid) \
   return \
   ';
 
@@ -178,56 +186,60 @@ exports.registerScripts = function () {
 
   //
   // update & publish the latest price, together with the change, used for variation margin calculation
-  // params: nbtsymbol, timestamp, bid, offer, calcmidnetchg, calcmidpctchg
+  // params: 1=nbtsymbol, 2=timestamp, 3=bid, 4=offer(ask), 5=calcmidnetchg, 6=calcmidpctchg
   // any symbols related to this nbtsymbol will be updated
   //
   scriptpriceupdate = round + '\
-  local nbtsymbol = ARGV[1] \
-  local bid = tonumber(ARGV[3]) \
-  local ask = tonumber(ARGV[4]) \
-  local publish = false \
-  local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbols") \
-  for index = 1, #symbols do \
-    --[[ adjust prices from pence to pounds if currency is GBP ]] \
-    local currencyid = redis.call("hget", "symbol:" .. symbols[index], "currencyid") \
-    if currencyid == "GBP" then \
-      bid = bid / 100 \
-      ask = ask / 100 \
+    local nbtsymbol = ARGV[1] \
+    local bid = tonumber(ARGV[3]) \
+    local ask = tonumber(ARGV[4]) \
+    local symbols = redis.call("smembers", "nbtsymbol:" .. nbtsymbol .. ":symbols") \
+    if #symbols >= 1 then \
+      for index = 1, #symbols do \
+        --[[ adjust prices from pence to pounds if currency is GBP ]] \
+        local currencyid = redis.call("hget", "symbol:" .. symbols[index], "currencyid") \
+        if currencyid == "GBP" then \
+          if bid and bid ~= "" then bid = bid / 100 end \
+          if ask and ask ~= "" then ask = ask / 100 end \
+        end \
+        local pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbolid") .. ":" .. cjson.encode(symbols[index]) \
+        --[[ may get all or none of params ]] \
+        local publish = false \
+        if bid and bid ~= "" then \
+          local oldbid = redis.call("hget", "symbol:" .. symbols[index], "bid") \
+          if not oldbid then oldbid = 0 end \
+          local bidchange = round(bid - tonumber(oldbid), 4) \
+          pricemsg = pricemsg .. "," .. cjson.encode("bid") .. ":" .. tostring(bid) .. "," .. cjson.encode("bidchange") .. ":" .. bidchange \
+          redis.call("hset", "symbol:" .. symbols[index], "bid", tostring(bid)) \
+          publish = true \
+        end \
+        if ask and ask ~= "" then \
+          local oldask = redis.call("hget", "symbol:" .. symbols[index], "ask") \
+          if not oldask then oldask = 0 end \
+          local askchange = round(ask - tonumber(oldask), 4) \
+          pricemsg = pricemsg .. "," .. cjson.encode("ask") .. ":" .. tostring(ask) .. "," .. cjson.encode("askchange") .. ":" .. askchange \
+          redis.call("hset", "symbol:" .. symbols[index], "ask", tostring(ask)) \
+          publish = true \
+        end \
+        if ARGV[5] ~= "" then \
+          pricemsg = pricemsg .. "," .. cjson.encode("midnetchg") .. ":" .. ARGV[5] \
+          redis.call("hset", "symbol:" .. symbols[index], "midnetchg", ARGV[5]) \
+          publish = true \
+        end \
+        if ARGV[6] ~= "" then \
+          pricemsg = pricemsg .. "," .. cjson.encode("midpctchg") .. ":" .. cjson.encode(ARGV[6]) \
+          redis.call("hset", "symbol:" .. symbols[index], "midpctchg", ARGV[6]) \
+          publish = true \
+        end \
+        if publish then \
+          --[[ updating timestamp ]] \
+          redis.call("hset", "symbol:" .. symbols[index], "timestamp", ARGV[2]) \
+          --[[ publish the message to the price channel ]] \
+          pricemsg = pricemsg .. "}}" \
+          redis.call("publish", 9, pricemsg) \
+        end \
+      end \
     end \
-    local pricemsg = "{" .. cjson.encode("price") .. ":{" .. cjson.encode("symbolid") .. ":" .. cjson.encode(symbols[index]) \
-    --[[ may get all or none of params ]] \
-    if ARGV[3] ~= "" then \
-      local oldbid = redis.call("hget", "symbol:" .. symbols[index], "bid") \
-      if not oldbid then oldbid = 0 end \
-      local bidchange = round(bid - tonumber(oldbid), 4) \
-      pricemsg = pricemsg .. "," .. cjson.encode("bid") .. ":" .. tostring(bid) .. "," .. cjson.encode("bidchange") .. ":" .. bidchange \
-      redis.call("hmset", "symbol:" .. symbols[index], "bid", tostring(bid), "timestamp", ARGV[2]) \
-      publish = true \
-    end \
-    if ARGV[4] ~= "" then \
-      local oldask = redis.call("hget", "symbol:" .. symbols[index], "ask") \
-      if not oldask then oldask = 0 end \
-      local askchange = round(ask - tonumber(oldask), 4) \
-      pricemsg = pricemsg .. "," .. cjson.encode("ask") .. ":" .. tostring(ask) .. "," .. cjson.encode("askchange") .. ":" .. askchange \
-      redis.call("hmset", "symbol:" .. symbols[index], "ask", tostring(ask), "timestamp", ARGV[2]) \
-      publish = true \
-    end \
-    if ARGV[5] ~= "" then \
-      pricemsg = pricemsg .. "," .. cjson.encode("midnetchg") .. ":" .. ARGV[5] \
-      redis.call("hmset", "symbol:" .. symbols[index], "midnetchg", ARGV[5], "timestamp", ARGV[2]) \
-      publish = true \
-    end \
-    if ARGV[6] ~= "" then \
-      pricemsg = pricemsg .. "," .. cjson.encode("midpctchg") .. ":" .. cjson.encode(ARGV[6]) \
-      redis.call("hmset", "symbol:" .. symbols[index], "midpctchg", ARGV[6], "timestamp", ARGV[2]) \
-      publish = true \
-    end \
-    if publish then \
-      --[[ publish the message to the price channel ]] \
-      pricemsg = pricemsg .. "}}" \
-      redis.call("publish", 9, pricemsg) \
-    end \
-  end \
   ';
 
   exports.scriptpriceupdate = scriptpriceupdate;

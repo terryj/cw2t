@@ -296,7 +296,7 @@ function parse(data) {
         if (functioncode == "340") {
           parsestate = 4;
         } else {
-          parsestate = 5;          
+          parsestate = 5;
         }
       } else if (buf[i] == 30) { // <RS>
         var errorcode = buf.toString('utf8', groupseparator+1, i);
@@ -459,6 +459,11 @@ function updateRec(fid, value, instrec) {
   }
 }
 
+// validating given value is empty or not
+function isEmpty(value) {
+  return (value === null || value === undefined || value === '' || typeof value === 'undefined');
+}
+
 function updateDb(functioncode, instrumentcode, instrec) {
   console.log("updateDb: " + instrumentcode);
 
@@ -488,11 +493,32 @@ function updateDb(functioncode, instrumentcode, instrec) {
 
       console.log("creating..." + instrumentcode);
 
+      // filtering and deleting empty fields from object
+      var fields = Object.keys(dbinstrec);
+      if (fields.length > 0) {
+        fields.forEach(function(field) {
+          if (isEmpty(dbinstrec[field])) {
+            delete dbinstrec[field];
+          }
+        });
+      }
       // create/update the symbol & related sets
       db.hmset("symbol:" + instrumentcode, dbinstrec);
       db.sadd("symbol:symbolid", "symbol:" + instrumentcode);
       db.sadd("nbtsymbol:" + dbinstrec.nbtsymbol + ":symbols", instrumentcode);
-      db.set("isin:" + dbinstrec.isin, instrumentcode);
+      // checking the symbolid
+      if (dbinstrec.symbolid) {
+        db.sadd("symbol:_indicies:symbolid", dbinstrec.symbolid);
+        // checking the isin
+        if (dbinstrec.isin) {
+          db.set("isin:" + dbinstrec.isin, dbinstrec.symbolid);
+          // checking the shortname
+          if (dbinstrec.shortname && dbinstrec.shortname !== instrumentcode) {
+            // adding/updating symbol information in symbol search index
+            db.zadd("symbol:id_shortname", 0, (dbinstrec.symbolid).toUpperCase() + ":" + (dbinstrec.shortname).toUpperCase() + ":" + (dbinstrec.isin).toUpperCase());
+          }
+        }
+      }
 
       // create tab delimitted text
       /*var txt = dbinstrec.ask + "\t"
@@ -519,9 +545,13 @@ function updateDb(functioncode, instrumentcode, instrec) {
       });*/
     }
   }
-
+  // setting empty values if fields value undefined or null
+  instrec.bid = instrec.bid || '';
+  instrec.ask = instrec.ask || '';
+  instrec.midnetchange = instrec.midnetchange || '';
+  instrec.midpercentchange = instrec.midpercentchange || '';
   // update price
-  db.eval(commonfo.scriptpriceupdate, 0, instrumentcode, instrec.timestamp, instrec.bid, instrec.ask, instrec.midprice, instrec.midnetchange, instrec.midpercentchange, function(err, ret) {
+  db.eval(commonfo.scriptpriceupdate, 0, instrumentcode, instrec.timestamp, instrec.bid, instrec.ask, instrec.midnetchange, instrec.midpercentchange, function(err, ret) {
     if (err) throw err;
   });
 }
@@ -548,7 +578,7 @@ function getDbInstrec(instrumentcode, instrec) {
   //dbinstrec.mnemonic = instrec.mnemonic;
   dbinstrec.timestamp = instrec.timestamp;
   dbinstrec.timezoneid = instrec.timezoneid;
-
+  dbinstrec.countrycodeid = instrec.countryofissue;
   // we need a mnemonic as this is used in the trade feed
   if (instrec.mnemonic == "") {
     dbinstrec.mnemonic = instrumentcode.split(".")[0];
@@ -583,7 +613,7 @@ function getExchangeId(instrumentcode) {
   var exchange = "";
 
   if (instrumentcode.indexOf('.') > -1) {
-    var s = instrumentcode.split('.'); 
+    var s = instrumentcode.split('.');
     exchange = s[s.length-1];
   }
 
@@ -684,7 +714,7 @@ function requestData(msg) {
     buf[17+instcodelen] = 30;
     buf.write("25", 18+instcodelen); // offer
     buf[20+instcodelen] = 28;
-  
+
     conn.write(buf);*/
   } else if (msg.substr(0, 2) == "rf") {
     // real-time full record i.e. "rf:BARC.L"
