@@ -1404,6 +1404,50 @@ exports.registerScripts = function () {
   ';
 
   /*
+  * getpositionvaluesbysymbol()
+  * gets all position values for a symbol
+  * params: brokerid, symbolid
+  * returns: a table of position values
+  */
+  getpositionvaluesbysymbol = getpositionvalue + '\
+  local getpositionvaluesbysymbol = function(brokerid, symbolid) \
+    redis.log(redis.LOG_NOTICE, "getpositionvaluesbysymbol") \
+    local tblresults = {} \
+    local positions = redis.call("smembers", "broker:" .. brokerid .. ":symbol:" .. symbolid .. ":positions") \
+    for index = 1, #positions do \
+      local vals = getpositionvalue(brokerid, positions[index]) \
+      if tonumber(vals["quantity"]) > 0 then \
+        table.insert(tblresults, vals) \
+      end \
+    end \
+    return tblresults \
+  end \
+  ';
+
+  /*
+  * getpositionvaluesbysymbolbydate()
+  * gets all position values for a symbol as at a date
+  * params: brokerid, symbolid, valuedate, date in milliseconds
+  * returns: a table of position values
+  */
+  getpositionvaluesbysymbolbydate = getpositionvaluebydate + '\
+  local getpositionvaluesbysymbolbydate = function(brokerid, symbolid, valuedate, milliseconds) \
+    redis.log(redis.LOG_NOTICE, "getpositionvaluesbysymbolbydate") \
+    local tblresults = {} \
+    --[[ get position ids ]] \
+    local positionids = redis.call("smembers", "broker:" .. brokerid .. ":symbol:" .. symbolid .. ":positions") \
+    for i = 1, #positionids do \
+      local position = getpositionvaluebydate(brokerid, positionids[i], valuedate, milliseconds) \
+      --[[ only interested in non-zero positions ]] \
+      if position["quantity"] ~= 0 then \
+        table.insert(tblresults, position) \
+      end \
+    end \
+    return tblresults \
+  end \
+  ';
+
+  /*
   * getpositionquantitiesbysymbolbydate()
   * gets all position quantities for a symbol as at a date
   * params: brokerid, symbolid, date in milliseconds
@@ -1420,7 +1464,6 @@ exports.registerScripts = function () {
       --[[ only interested in non-zero positions ]] \
       if position["quantity"] ~= 0 then \
         table.insert(tblresults, position) \
-      end \
     end \
     return tblresults \
   end \
@@ -2420,6 +2463,28 @@ exports.registerScripts = function () {
   */
   exports.scriptgetpositionsbysymbolbydate = getpositionsbysymbolbydate + '\
     local positions = getpositionsbysymbolbydate(ARGV[1], ARGV[2], ARGV[3]) \
+    return cjson.encode(positions) \
+  ';
+
+  /*
+  * scriptgetpositionvaluesbysymbol
+  * get position values for a symbol
+  * params: brokerid, symbolid
+  * returns: a table of position values
+  */
+  exports.scriptgetpositionvaluesbysymbol = getpositionvaluesbysymbol + '\
+    local positions = getpositionvaluesbysymbol(ARGV[1], ARGV[2]) \
+    return cjson.encode(positions) \
+  ';
+
+  /*
+  * getpositionvaluesbysymbolbydate
+  * get position values for a symbol as at a date
+  * params: brokerid, symbolid, value date, millisecond representation of date
+  * returns: a table of position values
+  */
+  exports.scriptgetpositionvaluesbysymbolbydate = getpositionvaluesbysymbolbydate + '\
+    local positions = getpositionvaluesbysymbolbydate(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
     return cjson.encode(positions) \
   ';
 
