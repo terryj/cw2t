@@ -18,6 +18,7 @@
 * 20 Jan 2017 - added electedquantityasshares to carightspaydate()
 * 14 Feb 2017 - added getpositionvaluesbysymbol(), getpositionvaluesbysymbolbydate(), scriptgetpositionvaluesbysymbol() & scriptgetpositionvaluesbysymbolbydate()
 * 14 Feb 2017 - added valueposition(), valuepositiondate() & modified getunrealisedpandl() & getunrealisedpandlvaluedate() to enable summary positions to be valued
+* 15 Feb 2017 - amended getcurrencyrate() to use revised format currency pair symbolid i.e. "USDGBP" 
 ****************/
 
 exports.registerScripts = function () {
@@ -508,7 +509,7 @@ exports.registerScripts = function () {
   local getcurrencyrate = function(currencyid1, currencyid2) \
     local midprice = 1 \
     if currencyid1 ~= currencyid2 then \
-      midprice = redis.call("hget", "symbol:" .. currencyid1 .. "/" .. currencyid2, "midprice") \
+      midprice = redis.call("hget", "symbol:" .. currencyid1 .. currencyid2, "midprice") \
       if not midprice then \
         midprice = 0 \
       end \
