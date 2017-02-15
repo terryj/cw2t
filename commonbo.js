@@ -16,6 +16,8 @@
 * 21 Dec 2016 - updated publishposition() & publishtrade() to use a specific channel
 * 31 Dec 2016 - added caconversion()
 * 20 Jan 2017 - added electedquantityasshares to carightspaydate()
+* 14 Feb 2017 - added getpositionvaluesbysymbol(), getpositionvaluesbysymbolbydate(), scriptgetpositionvaluesbysymbol() & scriptgetpositionvaluesbysymbolbydate()
+* 14 Feb 2017 - added valueposition(), valuepositiondate() & modified getunrealisedpandl() & getunrealisedpandlvaluedate() to enable summary positions to be valued
 ****************/
 
 exports.registerScripts = function () {
@@ -516,60 +518,156 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * getunrealisedpandl()
+  * getcurrencyratedate()
+  * gets current mid price between two currencies
+  * params: currency id 1, currency id 2
+  * returns: midprice if symbol is found, else 0
+  */
+  getcurrencyrate = '\
+  local getcurrencyrate = function(currencyid1, currencyid2) \
+    local midprice = 1 \
+    if currencyid1 ~= currencyid2 then \
+      midprice = redis.call("hget", "symbol:" .. currencyid1 .. "/" .. currencyid2, "midprice") \
+      if not midprice then \
+        midprice = 0 \
+      end \
+    end \
+    return midprice \
+  end \
+  ';
+
+  /* valueposition()
   * calculate the unrealised profit/loss for a position
-  * params: position
+  * params: quantity, symbolid, valuecurrencyid, cost
   * returns: table as follows:
   * price = price of stock in account currency
   * value = value of positon in account currency
   * unrealisedpandl = unrealised p&l in account currency
-  * symbolcurrencyid = currency of symbol  
+  * symbolcurrencyid = currency of symbol 
   * symbolcurrencyprice = price in currency of symbol
-  * currencyrate - currency rate used to convert price 
+  * currencyrate - currency rate used to convert price
   */
-  getunrealisedpandl = getcurrencyrate + round + '\
-  local getunrealisedpandl = function(position) \
+  valueposition = getcurrencyrate + round + '\
+  local valueposition = function(quantity, symbolid, valuecurrencyid, cost) \
     local ret = {} \
-    ret["price"] = 0 \
-    ret["value"] = 0 \
-    ret["unrealisedpandl"] = 0 \
-    --[[ get the account currency & symbol currency as the symbol may be priced in a different currency ]] \
-    local accountcurrencyid = redis.call("hget", "broker:" .. position.brokerid .. ":account:" .. position["accountid"], "currencyid") \
-    ret["symbolcurrencyid"] = redis.call("hget", "symbol:" .. position.symbolid, "currencyid") \
-    ret["symbolcurrencyprice"] = 0 \
-    ret["currencyrate"] = 1 \
-    local qty = tonumber(position.quantity) \
+    ret.price = 0 \
+    ret.value = 0 \
+    ret.unrealisedpandl = 0 \
+    ret.symbolcurrencyid = redis.call("hget", "symbol:" .. symbolid, "currencyid") \
+    ret.symbolcurrencyprice = 0 \
+    ret.currencyrate = 1 \
+    local qty = tonumber(quantity) \
     if qty > 0 then \
       --[[ position is long, so we would sell, so use the bid price ]] \
-      local bidprice = redis.call("hget", "symbol:" .. position.symbolid, "bid") \
+      local bidprice = redis.call("hget", "symbol:" .. symbolid, "bid") \
       if bidprice and tonumber(bidprice) ~= 0 then \
-        ret["symbolcurrencyprice"] = tonumber(bidprice) \
-        if ret["symbolcurrencyid"] ~= accountcurrencyid then \
+        ret.symbolcurrencyprice = tonumber(bidprice) \
+        if ret.symbolcurrencyid ~= valuecurrencyid then \
           --[[ get currency rate & adjust price ]] \
-          ret["currencyrate"] = getcurrencyrate(ret["symbolcurrencyid"], accountcurrencyid) \
-          ret["price"] = ret["symbolcurrencyprice"] * ret["currencyrate"] \
+          ret.currencyrate = getcurrencyrate(ret.symbolcurrencyid, valuecurrencyid) \
+          ret.price = ret.symbolcurrencyprice * ret.currencyrate \
         else \
-          ret["price"] = ret["symbolcurrencyprice"] \
+          ret.price = ret.symbolcurrencyprice \
         end \
-        ret["value"] = qty * ret["price"] \
-        ret["unrealisedpandl"] = round(ret["value"] - position.cost, 2) \
+        ret.value = qty * ret.price \
+        ret.unrealisedpandl = round(ret.value - cost, 2) \
       end \
     elseif qty < 0 then \
       --[[ position is short, so we would buy, so use the ask price ]] \
-      local askprice = redis.call("hget", "symbol:" .. position.symbolid, "ask") \
+      local askprice = redis.call("hget", "symbol:" .. symbolid, "ask") \
       if askprice and tonumber(askprice) ~= 0 then \
-        ret["symbolcurrencyprice"] = tonumber(askprice) \
-        if ret["symbolcurrencyid"] ~= accountcurrencyid then \
+        ret.symbolcurrencyprice = tonumber(askprice) \
+        if ret.symbolcurrencyid ~= valuecurrencyid then \
           --[[ get currency rate & adjust price ]] \
-          ret["currencyrate"] = getcurrencyrate(ret["symbolcurrencyid"], accountcurrencyid) \
-          ret["price"] = ret["symbolcurrencyprice"] * ret["currencyrate"] \
+          ret.currencyrate = getcurrencyrate(ret.symbolcurrencyid, valuecurrencyid) \
+          ret.price = ret.symbolcurrencyprice * ret.currencyrate \
         else \
-          ret["price"] = ret["symbolcurrencyprice"] \
+          ret.price = ret.symbolcurrencyprice \
         end \
-        ret["value"] = qty * ret["price"] \
-        ret["unrealisedpandl"] = round(ret["value"] + position.cost, 2) \
+        ret.value = qty * ret.price \
+        ret.unrealisedpandl = round(ret.value + cost, 2) \
       end \
     end \
+    return ret \
+  end \
+  ';
+
+  /*
+  * valuepositiondate()
+  * calculate the unrealised profit/loss for a position as at a date
+  * params: position, value date
+  * returns: table as follows:
+  * price = end of day price of stock in account currency as at value date
+  * value = value of positon in account currency as at value date
+  * unrealisedpandl = unrealised p&l in account currency as at value date
+  * symbolcurrencyid = currency of symbol
+  * symbolcurrencyprice = price in currency of symbol at end of value date
+  * currencyrate - currency rate at end of value date used to convert price
+  */
+  valuepositiondate = geteodprice + round + '\
+  local valuepositiondate = function(quantity, symbolid, valuecurrencyid, cost, valuedate) \
+    local ret = {} \
+    ret.price = 0 \
+    ret.value = 0 \
+    ret.unrealisedpandl = 0 \
+    ret.symbolcurrencyid = redis.call("hget", "symbol:" .. symbolid, "currencyid") \
+    ret.symbolcurrencyprice = 0 \
+    ret.currencyrate = 1 \
+    --[[ get the end of day price for the valuedate ]] \
+    local eodprice = geteodprice(valuedate, symbolid) \
+    local qty = tonumber(quantity) \
+    if qty > 0 then \
+      --[[ position is long, so we would sell, so use the bid price ]] \
+      if eodprice.bid and tonumber(eodprice.bid) ~= 0 then \
+        ret.symbolcurrencyprice = tonumber(eodprice.bid) \
+        if ret.symbolcurrencyid ~= valuecurrencyid then \
+          --[[ get currency rate at value date & adjust price ]] \
+          local currencypairsymbolid = ret.symbolcurrencyid .. valuecurrencyid \
+          local currencyeodprice = geteodprice(valuedate, currencypairsymbolid) \
+          if currencyeodprice.bid then \
+            ret.currencyrate = tonumber(currencyeodprice.bid) \
+          end \
+          ret.price = ret.symbolcurrencyprice * ret.currencyrate \
+        else \
+          ret.price = ret.symbolcurrencyprice \
+        end \
+        ret.value = qty * ret.price \
+        ret.unrealisedpandl = round(ret.value - cost, 2) \
+      end \
+    elseif qty < 0 then \
+      --[[ position is short, so we would buy, so use the ask price ]] \
+      if eodprice.ask and tonumber(eodprice.ask) ~= 0 then \
+        ret.symbolcurrencyprice = tonumber(eodprice.ask) \
+        if ret.symbolcurrencyid ~= valuecurrencyid then \
+          --[[ get currency rate at value date & adjust price ]] \
+          local currencypairsymbolid = ret.symbolcurrencyid .. valuecurrencyid \
+          local currencyeodprice = geteodprice(valuedate, currencypairsymbolid) \
+          if currencyeodprice.bid then \
+            ret.currencyrate = tonumber(currencyeodprice.bid) \
+          end \
+          ret.price = ret.symbolcurrencyprice * ret.currencyrate \
+        else \
+          ret.price = ret.symbolcurrencyprice \
+        end \
+        ret.value = qty * ret.price \
+        ret.unrealisedpandl = round(ret.value + cost, 2) \
+      end \
+    end \
+    return ret \
+  end \
+  ';
+
+  /*
+  * getunrealisedpandl()
+  * calculate the unrealised profit/loss for a position
+  * params: position
+  * returns: see valueposition()
+  */
+  getunrealisedpandl = valueposition + '\
+  local getunrealisedpandl = function(position) \
+    --[[ get the account currency as the symbol may be priced in a different currency ]] \
+    local accountcurrencyid = redis.call("hget", "broker:" .. position.brokerid .. ":account:" .. position["accountid"], "currencyid") \
+    local ret = valueposition(position.quantity, position.symbolid, accountcurrencyid, position.cost) \
     return ret \
   end \
   ';
@@ -588,50 +686,12 @@ exports.registerScripts = function () {
   * symbolcurrencyprice = price in currency of symbol at end of value date
   * currencyrate - currency rate at end of value date used to convert price 
   */
-  getunrealisedpandlvaluedate = getcurrencyrate + geteodprice + round + '\
+  getunrealisedpandlvaluedate = valuepositiondate + '\
   local getunrealisedpandlvaluedate = function(position, valuedate) \
     redis.log(redis.LOG_NOTICE, "getunrealisedpandlvaluedate") \
-    local ret = {} \
-    ret.price = 0 \
-    ret.value = 0 \
-    ret.unrealisedpandl = 0 \
     --[[ get the account currency & symbol currency as may be different ]] \
     local accountcurrencyid = redis.call("hget", "broker:" .. position.brokerid .. ":account:" .. position.accountid, "currencyid") \
-    ret.symbolcurrencyid = redis.call("hget", "symbol:" .. position.symbolid, "currencyid") \
-    ret.symbolcurrencyprice = 0 \
-    ret.currencyrate = 1 \
-    --[[ get the end of day price for the valuedate ]] \
-    local eodprice = geteodprice(valuedate, position.symbolid) \
-    local qty = tonumber(position.quantity) \
-    if qty > 0 then \
-      --[[ position is long, so we would sell, so use the bid price ]] \
-      if eodprice.bid and tonumber(eodprice.bid) ~= 0 then \
-        ret.symbolcurrencyprice = tonumber(eodprice.bid) \
-        if ret.symbolcurrencyid ~= accountcurrencyid then \
-          --[[ get currency rate & adjust price ]] \
-          ret.currencyrate = getcurrencyrate(ret.symbolcurrencyid, accountcurrencyid) \
-          ret.price = ret.symbolcurrencyprice * ret.currencyrate \
-        else \
-          ret.price = ret.symbolcurrencyprice \
-        end \
-        ret.value = qty * ret.price \
-        ret.unrealisedpandl = round(ret.value - position.cost, 2) \
-      end \
-    elseif qty < 0 then \
-      --[[ position is short, so we would buy, so use the ask price ]] \
-      if eodprice.ask and tonumber(eodprice.ask) ~= 0 then \
-        ret.symbolcurrencyprice = tonumber(eodprice.ask) \
-        if ret.symbolcurrencyid ~= accountcurrencyid then \
-          --[[ get currency rate & adjust price ]] \
-          ret.currencyrate = getcurrencyrate(ret.symbolcurrencyid, accountcurrencyid) \
-          ret.price = ret.symbolcurrencyprice * ret.currencyrate \
-        else \
-          ret.price = ret.symbolcurrencyprice \
-        end \
-        ret.value = qty * ret.price \
-        ret.unrealisedpandl = round(ret.value + position.cost, 2) \
-      end \
-    end \
+    local ret = valuepositiondate(position.quantity, position.symbolid, accountcurrencyid, position.cost, valuedate) \
     return ret \
   end \
   ';
