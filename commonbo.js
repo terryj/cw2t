@@ -19,6 +19,8 @@
 * 14 Feb 2017 - added getpositionvaluesbysymbol(), getpositionvaluesbysymbolbydate(), scriptgetpositionvaluesbysymbol() & scriptgetpositionvaluesbysymbolbydate()
 * 14 Feb 2017 - added valueposition(), valuepositiondate() & modified getunrealisedpandl() & getunrealisedpandlvaluedate() to enable summary positions to be valued
 * 15 Feb 2017 - amended getcurrencyrate() to use revised format currency pair symbolid i.e. "USDGBP" 
+* 21 Feb 2017 - added getaccountsummarydate() & gettotalpositionvaluedate()
+* 24 Feb 2017 - replaced getcurrencyrate() with getcurrencyratedate() in valuepositiondate()
 ****************/
 
 exports.registerScripts = function () {
@@ -520,15 +522,16 @@ exports.registerScripts = function () {
 
   /*
   * getcurrencyratedate()
-  * gets current mid price between two currencies
-  * params: currency id 1, currency id 2
+  * gets current mid price between two currencies as a date
+  * params: currency id 1, currency id 2, eoddate
   * returns: midprice if symbol is found, else 0
   */
-  getcurrencyrate = '\
-  local getcurrencyrate = function(currencyid1, currencyid2) \
+  getcurrencyratedate = '\
+  local getcurrencyratedate = function(currencyid1, currencyid2, eoddate) \
     local midprice = 1 \
     if currencyid1 ~= currencyid2 then \
-      midprice = redis.call("hget", "symbol:" .. currencyid1 .. "/" .. currencyid2, "midprice") \
+      local symbolid = currencyid1 .. currencyid2 \
+      midprice = geteodprice(eoddate, symbolid) \
       if not midprice then \
         midprice = 0 \
       end \
@@ -605,7 +608,7 @@ exports.registerScripts = function () {
   * symbolcurrencyprice = price in currency of symbol at end of value date
   * currencyrate - currency rate at end of value date used to convert price
   */
-  valuepositiondate = geteodprice + round + '\
+  valuepositiondate = getcurrencyratedate + round + '\
   local valuepositiondate = function(quantity, symbolid, valuecurrencyid, cost, valuedate) \
     local ret = {} \
     ret.price = 0 \
@@ -623,11 +626,7 @@ exports.registerScripts = function () {
         ret.symbolcurrencyprice = tonumber(eodprice.bid) \
         if ret.symbolcurrencyid ~= valuecurrencyid then \
           --[[ get currency rate at value date & adjust price ]] \
-          local currencypairsymbolid = ret.symbolcurrencyid .. valuecurrencyid \
-          local currencyeodprice = geteodprice(valuedate, currencypairsymbolid) \
-          if currencyeodprice.bid then \
-            ret.currencyrate = tonumber(currencyeodprice.bid) \
-          end \
+          ret.currencyrate = getcurrencyratedate(ret.symbolcurrencyid, valuecurrencyid, eoddate) \
           ret.price = ret.symbolcurrencyprice * ret.currencyrate \
         else \
           ret.price = ret.symbolcurrencyprice \
@@ -641,11 +640,7 @@ exports.registerScripts = function () {
         ret.symbolcurrencyprice = tonumber(eodprice.ask) \
         if ret.symbolcurrencyid ~= valuecurrencyid then \
           --[[ get currency rate at value date & adjust price ]] \
-          local currencypairsymbolid = ret.symbolcurrencyid .. valuecurrencyid \
-          local currencyeodprice = geteodprice(valuedate, currencypairsymbolid) \
-          if currencyeodprice.bid then \
-            ret.currencyrate = tonumber(currencyeodprice.bid) \
-          end \
+          ret.currencyrate = getcurrencyratedate(ret.symbolcurrencyid, valuecurrencyid, eoddate) \
           ret.price = ret.symbolcurrencyprice * ret.currencyrate \
         else \
           ret.price = ret.symbolcurrencyprice \
@@ -1592,6 +1587,32 @@ exports.registerScripts = function () {
   exports.gettotalpositionvalue = gettotalpositionvalue;
 
   /*
+  * gettotalpositionvaluedate()
+  * gets sum of p&l for all positions for an account as a date
+  * params: accountid, brokerid, valuedate, valuedate as milliseconds
+  * returns: total cost, total value, total unrealisedpandl as a table
+  */
+  gettotalpositionvaluedate = getpositionvaluebydate + '\
+  local gettotalpositionvaluedate = function(accountid, brokerid, valuedate, valuedatems) \
+    redis.log(redis.LOG_NOTICE, "gettotalpositionvaluedate") \
+    local totalpositionvalue = {} \
+    totalpositionvalue.cost = 0 \
+    totalpositionvalue.value = 0 \
+    totalpositionvalue.unrealisedpandl = 0 \
+    --[[ get the ids for the positions held by this account ]] \
+    local positionids = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. ":positions") \
+    --[[ calculate each position together with value as at the value date ]] \
+    for index = 1, #positionids do \
+      local position = getpositionvaluebydate(brokerid, positionids[index], valuedate, valuedatems) \
+      totalpositionvalue.cost = totalpositionvalue.cost + tonumber(position.cost) \
+      totalpositionvalue.value = totalpositionvalue.value + tonumber(position.value) \
+      totalpositionvalue.unrealisedpandl = totalpositionvalue.unrealisedpandl + tonumber(position.unrealisedpandl) \
+    end \
+    return totalpositionvalue \
+  end \
+  ';
+
+  /*
   * Account Summary Notes:
   * balance = cleared + uncleared cash
   * equity = balance + unrealised p&l across all positions
@@ -1626,12 +1647,40 @@ exports.registerScripts = function () {
   end \
   ';
 
- /*
+  /*
+  * getaccountsummarydate()
+  * calculates account p&l, margin & equity for a client account at a date
+  * params: accountid, brokerid, valuedate, valuedate in milliseconds
+  * returns: account cash balances, unrealised p&l, equity, free margin
+  */
+  getaccountsummarydate = getaccount + gettotalpositionvaluedate + '\
+  local getaccountsummarydate = function(accountid, brokerid, valuedate, valuedatems) \
+    redis.log(redis.LOG_NOTICE, "getaccountsummarydate") \
+    local accountsummary = {} \
+    local account = getaccount(accountid, brokerid) \
+    if account["balance"] then \
+      local totalpositionvalue = gettotalpositionvaluedate(accountid, brokerid, valuedate, valuedatems) \
+      local equity = tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) + totalpositionvalue["unrealisedpandl"] \
+      local freemargin = equity - totalpositionvalue["margin"] \
+      accountsummary["balance"] = account["balance"] \
+      accountsummary["balanceuncleared"] = account["balanceuncleared"] \
+      accountsummary["positioncost"] = totalpositionvalue["cost"] \
+      accountsummary["positionvalue"] = totalpositionvalue["value"] \
+      accountsummary["unrealisedpandl"] = totalpositionvalue["unrealisedpandl"] \
+      accountsummary["equity"] = equity \
+      accountsummary["margin"] = totalpositionvalue["margin"] \
+      accountsummary["freemargin"] = freemargin \
+    end \
+    return accountsummary \
+  end \
+  ';
+
+  /*
   * getfreemargin()
   * calculates free margin for an account
   * params: accountid, brokerid
   * returns: accounnt free margin if ok, else 0
- */
+  */
   getfreemargin = getaccountsummary + '\
   local getfreemargin = function(accountid, brokerid) \
     redis.log(redis.LOG_NOTICE, "getfreemargin") \
