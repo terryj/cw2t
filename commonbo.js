@@ -1,10 +1,11 @@
-/****************
+/******************
 * commonbo.js
 * Common back-office functions
 * Cantwaittotrade Limited
 * Terry Johnston
 * June 2015
 * Changes:
+* reverseca() used to reverse the ca, no need to handle mode == 3 in any ca
 *  1 Sep 2016 - modified corporate action functions to take account of default client decisions - added dividendasshares(), dividendascash()
 *  1 Sep 2016 - modified corporate action functions to use account rather than symbol for currency of transactions
 * 21 Oct 2016 - added getorderbook(), getorderbooktop(), getorderbooktopall()
@@ -18,10 +19,57 @@
 * 20 Jan 2017 - added electedquantityasshares to carightspaydate()
 * 14 Feb 2017 - added getpositionvaluesbysymbol(), getpositionvaluesbysymbolbydate(), scriptgetpositionvaluesbysymbol() & scriptgetpositionvaluesbysymbolbydate()
 * 14 Feb 2017 - added valueposition(), valuepositiondate() & modified getunrealisedpandl() & getunrealisedpandlvaluedate() to enable summary positions to be valued
-* 15 Feb 2017 - amended getcurrencyrate() to use revised format currency pair symbolid i.e. "USDGBP" 
+* 15 Feb 2017 - amended getcurrencyrate() to use revised format currency pair symbolid i.e. "USDGBP"
 * 21 Feb 2017 - added getaccountsummarydate() & gettotalpositionvaluedate()
 * 24 Feb 2017 - replaced getcurrencyrate() with getcurrencyratedate() in valuepositiondate()
-****************/
+* 28 Feb 2017 - renamed isholiday() to isExchangeClosed()
+* 02 Mar 2017 - modified getSettDate() to use exchangeid instead of holidays list to calculate settlement date
+* 13 Mar 2017 - added getdefaultsettletype()
+* 15 Mar 2017 - added isValidTradingDay() and getPreviousTradingDay()
+* 22 Mar 2017 - modified scriptedittrade
+* 23 Mar 2017 - added updatetradeindexes and modified newtrade
+* 24 Mar 2017 - modified round
+* 14 Apr 2017 - added getorderfromorderbook()
+*             - removed broker parameter from getorderbook(), getorderbooktop(), getorderbooktopall()
+*             - updated scriptgetorderbook, scriptgetorderbooktop, scriptgetorderbooktopall
+*  8 May 2017 - updated getclientaccountid() to include currencyid & use getaccountsbyclient()
+*  8 May 2017 - added applybenefits()
+*  8 May 2017 - replaced dividendascash() with benefitascash()
+*  8 May 2017 - replace dividendasshares() with benefitasshares()
+* 22 May 2017 - Added getcaclientoption()
+* 22 May 2017 - Removed dividendasshares() dividendascash()
+* 22 May 2017 - modified getsharesdue()
+* 22 May 2017 - renamed getclientfromaccount() to getclientidfromaccount()
+* 22 May 2017 - added getclientfromaccount()
+* 24 May 2017 - removed cacashdividend(), cadividendscrip(), cadividendoption(), carightsexdate()
+* 24 May 2017 - added caapply()
+* 24 May 2017 - added cavalidate()
+* 24 May 2017 - removed carightspaydate()
+* 24 May 2017 - added benefitasshares()
+* 25 May 2017 - updated convertsharesascash()
+* 25 May 2017 - removed cacapitalrepayment(), castocksplit(), catakeover(), caconversion()
+* 30 May 2017 - fixed getaccount() call in getclientaccountid()
+* 30 May 2017 - modified caapply(), applybenefits(), benefitascash(), benefitasshares()
+*  1 Jun 2017 - added benefit percentage parameter to getsharesdue()
+*  2 Jun 2017 - updated caapply(), benefitasshares(), benefitascash(), applybenefits()
+*             - removed convertsharesasshares()
+*             - added getaccountforcurrency()
+*  3 Jun 2017 - updated convertsharesascash()
+*  4 Jun 2017 - updated applybenefits()
+*  8 Jun 2017 - added getpostingdetails() and updated getpostingdescription(), getpostingsbydate(), scriptgetstatement() & scriptsgethistory()
+*  9 Jun 2017 - removed getcaclientoption()
+*             - amended getcaclientdecision() to use accountid
+*             - amended applybenefits() to use getcaclientdecision()
+*             - added valuebenefit(), valuebenefitascash() valuebenefitasshares()
+* 10 Jun 2017 - added updatebenefit(), updatebenefitascash(), updatebenefitasshares()
+*             - modified applybenefits() to use separate value & update routines
+* 12 Jun 2017 - tidied caapply()
+* 23 Jun 2017 - operatortimestamp removed - newtrade()
+*             - localtimestamp removed - scriptedittrade(), scriptdeletetrade(), deletetrade(), newtradetransaction(), deletetradetransaction(), newcollectaggregateinvest(), newtransaction() and newposting()
+**********************/
+var utils = require('./utils.js');
+
+utils.utils();
 
 exports.registerScripts = function () {
   // publish & subscribe channels
@@ -36,15 +84,17 @@ exports.registerScripts = function () {
   exports.pricechannel = 9;
   exports.positionchannel = 10;
   exports.quoterequestchannel = 11;
-  exports.orderbookchannel = 12;
+  exports.priceserverchannel_int = 12;
   exports.errorchannel = 13;
+  exports.orderbookchannel = 14;
+  exports.systemmonitorchannel = 15;
 
+  exports.holidays = [];
   /*** Functions ***/
 
   round = '\
   local round = function(num, dp) \
-    local mult = 10 ^ (dp or 0) \
-    return math.floor(num * mult + 0.5) / mult \
+    return string.format("%0." .. dp .. "f", num) \
   end \
   ';
 
@@ -269,7 +319,7 @@ exports.registerScripts = function () {
       desc = "Broker account for corporate action not found";
       break;
     case 1029:
-      desc = "No closing price for symbol found";
+      desc = "No closing price for symbol found as at ex date";
       break;
     case 1030:
       desc = "New symbol required for rights";
@@ -307,6 +357,12 @@ exports.registerScripts = function () {
     case 1041:
       desc = "Insufficient funds";
       break;
+    case 1042:
+      desc = "Insufficient scheme cash";
+      break;
+    case 1043:
+      desc = "No orders found";
+      break;
     default:
       desc = "Unknown reason";
     }
@@ -322,63 +378,192 @@ exports.registerScripts = function () {
   */
   gethashvalues = '\
   local gethashvalues = function(key) \
-    local vals = {} \
-    local rawvals = redis.call("hgetall", key) \
-    for index = 1, #rawvals, 2 do \
-      vals[rawvals[index]] = rawvals[index + 1] \
+    local temp = {} \
+    temp.vals = {} \
+    temp.rawvals = redis.call("hgetall", key) \
+    for index = 1, #temp.rawvals, 2 do \
+      temp.vals[temp.rawvals[index]] = temp.rawvals[index + 1] \
     end \
-    return vals \
+    return temp.vals \
   end \
   ';
 
   exports.gethashvalues = gethashvalues;
 
   /*
-  * isHoliday()
+  * getsettlementdetails()
+  * params: KEYS[1] = symbolid
+  * function returns exchangeid and defaultsettledays
+  */
+  getsettlementdetails = '\
+    local defaultsettledays = redis.call("hget", "config", "defaultsettledays") \
+    local exchangeid = redis.call("hget", "symbol:" .. KEYS[1], "exchangeid") \
+    return {exchangeid, defaultsettledays} \
+  ';
+
+  exports.getsettlementdetails = getsettlementdetails;
+
+ /*
+  * getdefaultsettletype()
+  * gets a default settlement type based on the default number of settlement days
+  * returns: default settlement type
+  * note: using a 'standard' settlement type of 0 does not always return a settlement date from the market via NBTrader FIX 4.2,
+  *       depending on the market-maker, so this function attempts to set the default type
+  */
+  getdefaultsettletype = '\
+  local getdefaultsettletype = function() \
+    local defaultsettledays = redis.call("hget", "config", "defaultsettledays") \
+    return tonumber(defaultsettledays) + 1 \
+  end \
+  ';
+
+  exports.getdefaultsettletype = getdefaultsettletype;
+  /*
+  * isExchangeClosed()
   * checks whether a date is a holiday
-  * params: date object, set of holidays
+  * params: date object, exchangeid
   * returns: true if the date is a holiday else false
   */
-  function isHoliday(datetocheck, holidays) {
+  function isExchangeClosed(datetocheck, exchangeid, cb) {
     var datetocheckstr = getUTCDateString(datetocheck);
-    if (datetocheckstr in holidays) {
-      return true;
-    }
-
-    return false;
+    db.sismember('exchangesclosed:'+ exchangeid, datetocheckstr, function(err, isExchangeClosed) {
+      if (err) {
+        console.log("isExchangeClosed", err);
+        return cb(err);
+      }
+      if (isExchangeClosed) {
+        cb(null, true);
+      } else {
+        cb(null, false);
+      }
+    });
   }
 
-  /*
-  * getSettDate()
+ /*
+  * calculateSettDate()
   * returns valid trading day as date object, taking into account weekends and holidays
   * params: date object, number of settlement days
   * returns: settlement date object
   * note: this is in javascript as the lua date library is not available from redis
   */
-  function getSettDate(dt, nosettdays, holidays) {
+  function calculateSettDate(dt, exchangeid, nosettdays, cb) {
     var days = 0;
-
     if (nosettdays > 0) {
-      while (true) {
-        // add a day
-        dt.setDate(dt.getDate() + 1);
-
-        // ignore weekends & holidays
-        if (dt.getDay() == 6 || dt.getDay() == 0) {
-        } else if (isHoliday(dt, holidays)) {
-        } else {
-          // add to days & check to see if we are there
-          days++;
-
-          if (days >= nosettdays) {
-            break;
-          }
-        }
-      }
+      getSettlmentDate();
+    } else {
+      cb(null, dt);
     }
-
-    return dt;
+    function getSettlmentDate() {
+      // add a day
+      dt.setDate(dt.getDate() + 1);
+      // promise used to hold the process until isExchangeClosed is fetched
+      var promise = new Promise(function(resolve, reject) {
+        if (dt.getDay() == 6 || dt.getDay() == 0) {
+          reject();
+        } else {
+          isExchangeClosed(dt, exchangeid, function(err, isExchangeClosed) {
+            if (err) {
+              reject();
+            } else {
+              if (isExchangeClosed) {
+                reject();
+              } else {
+                resolve();
+              }
+            }
+          });
+        }
+      });
+      promise.then(function(isExchangeClosed) {
+        // add to days & check to see if we are there
+        days++;
+        if (days >= nosettdays) {
+          cb(null, dt);
+        } else {
+          getSettlmentDate();
+        }
+      }).catch(function(err) {
+        getSettlmentDate();
+      });
+    }
   }
+
+  exports.calculateSettDate = calculateSettDate;
+
+ /*
+  * getSettDate()
+  * returns valid trading day as date object, taking into account weekends and holidays
+  * params: date object, symbolid
+  * returns: settlement date object
+  */
+  function getSettDate(tradedate, symbolid, cb) {
+    var days = 0;
+    db.eval(getsettlementdetails, 1, symbolid, function(err, ret) {
+      if (err) {
+        console.log('getSettDate', err);
+      } else {
+        calculateSettDate(tradedate, ret[0], parseInt(ret[1]), cb);
+      }
+    });
+  }
+
+  exports.getSettDate = getSettDate;
+
+  /*
+   * isValidTradingDay()
+   * params: date object, exchangeid
+   * returns true if the date is valid trading day else false
+  */
+  function isValidTradingDay(datetocheck, exchangeid, cb) {
+    // Promise is used for carrying out synchronous operation
+    var promise = new Promise(function(resolve, reject) {
+      if (datetocheck.getDay() === 6 || datetocheck.getDay() === 0) {
+        resolve(false);
+      } else if (true) {
+        isExchangeClosed(datetocheck, exchangeid, function(err, isExchangeClosed) {
+          if (err) {
+            // In error condition, the function returns false
+            resolve(false);
+          } else {
+            if (isExchangeClosed) {
+              resolve(false);
+            } else {
+              resolve(true);
+            }
+          }
+        });
+      }
+    });
+    promise.then(function(isValidTradingDay) {
+      cb(null, isValidTradingDay);
+    });
+  }
+
+  exports.isValidTradingDay = isValidTradingDay;
+
+  /*
+   * getPreviousTradingDay()
+   * params: date object, exchangeid
+   * returns previous valid trading date object
+   */
+  function getPreviousTradingDay(datetocheck, exchangeid, cb) {
+    // getTradindDay is self-invoking function
+    (function getTradindDay() {
+      datetocheck.setDate(datetocheck.getDate() - 1);
+      isValidTradingDay(datetocheck, exchangeid, function(err, isValidDate) {
+        if (err) {
+          console.log('Error in getting previous trading day');
+          cb(null, datetocheck);
+        } else if (isValidDate) {
+          cb(null, datetocheck);
+        } else {
+          getTradindDay();
+        }
+      });
+    })();
+  }
+
+  exports.getPreviousTradingDay = getPreviousTradingDay;
 
   /*
   * function to split a string based on a pattern
@@ -402,16 +587,17 @@ exports.registerScripts = function () {
   */
   setsymbolkey = '\
   local setsymbolkey = function(accountid, brokerid, futsettdate, positionid, symbolid) \
-    local symbolkey = symbolid \
+    local temp = {} \
+    temp.symbolkey = symbolid \
     --[[ add settlement date to symbol key for devivs ]] \
     if futsettdate ~= "" then \
-      local instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
-      if instrumenttypeid == "CFD" or instrumenttypeid == "SPD" or instrumenttypeid == "CCFD" then \
-        symbolkey = symbolkey .. ":" .. futsettdate \
+      temp.instrumenttypeid = redis.call("hget", "symbol:" .. symbolid, "instrumenttypeid") \
+      if temp.instrumenttypeid == "CFD" or temp.instrumenttypeid == "SPD" or temp.instrumenttypeid == "CCFD" then \
+        temp.symbolkey = temp.symbolkey .. ":" .. futsettdate \
       end \
     end \
-    redis.call("set", "broker:" .. brokerid .. ":account:" .. accountid .. ":symbol:" .. symbolkey, positionid) \
-    redis.call("sadd", "broker:" .. brokerid .. ":symbol:" .. symbolkey .. ":positions", positionid) \
+    redis.call("set", "broker:" .. brokerid .. ":account:" .. accountid .. ":symbol:" .. temp.symbolkey, positionid) \
+    redis.call("sadd", "broker:" .. brokerid .. ":symbol:" .. temp.symbolkey .. ":positions", positionid) \
   end \
   ';
 
@@ -443,6 +629,7 @@ exports.registerScripts = function () {
   */
   rejectorder = '\
   local rejectorder = function(brokerid, orderid, orderrejectreasonid, text) \
+    redis.log(redis.LOG_NOTICE, "order rejected: " .. text) \
     if orderid ~= "" then \
       redis.call("hmset", "broker:" .. brokerid .. ":order:" .. orderid, "orderstatusid", "8", "orderrejectreasonid", orderrejectreasonid, "text", text) \
     end \
@@ -453,16 +640,17 @@ exports.registerScripts = function () {
 
   /*
   * geteodprice()
-  * get end of day prices for a symbol as a date 
+  * get end of day prices for a symbol as a date
   * params: eoddate, symbolid
-  * returns: all fields in eodprices hash 
+  * returns: all fields in eodprices hash
   */
   geteodprice = gethashvalues + '\
   local geteodprice = function(eoddate, symbolid) \
-    local eodprice = gethashvalues("symbol:" .. symbolid .. ":eoddate:" .. eoddate) \
-    return eodprice \
+    return gethashvalues("symbol:" .. symbolid .. ":eoddate:" .. eoddate) \
   end \
   ';
+
+  exports.geteodprice = geteodprice;
 
   /*
   * getmargin()
@@ -526,7 +714,7 @@ exports.registerScripts = function () {
   * params: currency id 1, currency id 2, eoddate
   * returns: midprice if symbol is found, else 0
   */
-  getcurrencyratedate = '\
+  getcurrencyratedate = geteodprice + '\
   local getcurrencyratedate = function(currencyid1, currencyid2, eoddate) \
     local midprice = 1 \
     if currencyid1 ~= currencyid2 then \
@@ -547,7 +735,7 @@ exports.registerScripts = function () {
   * price = price of stock in account currency
   * value = value of positon in account currency
   * unrealisedpandl = unrealised p&l in account currency
-  * symbolcurrencyid = currency of symbol 
+  * symbolcurrencyid = currency of symbol
   * symbolcurrencyprice = price in currency of symbol
   * currencyrate - currency rate used to convert price
   */
@@ -626,7 +814,7 @@ exports.registerScripts = function () {
         ret.symbolcurrencyprice = tonumber(eodprice.bid) \
         if ret.symbolcurrencyid ~= valuecurrencyid then \
           --[[ get currency rate at value date & adjust price ]] \
-          ret.currencyrate = getcurrencyratedate(ret.symbolcurrencyid, valuecurrencyid, eoddate) \
+          ret.currencyrate = getcurrencyratedate(ret.symbolcurrencyid, valuecurrencyid, valuedate) \
           ret.price = ret.symbolcurrencyprice * ret.currencyrate \
         else \
           ret.price = ret.symbolcurrencyprice \
@@ -640,7 +828,7 @@ exports.registerScripts = function () {
         ret.symbolcurrencyprice = tonumber(eodprice.ask) \
         if ret.symbolcurrencyid ~= valuecurrencyid then \
           --[[ get currency rate at value date & adjust price ]] \
-          ret.currencyrate = getcurrencyratedate(ret.symbolcurrencyid, valuecurrencyid, eoddate) \
+          ret.currencyrate = getcurrencyratedate(ret.symbolcurrencyid, valuecurrencyid, valuedate) \
           ret.price = ret.symbolcurrencyprice * ret.currencyrate \
         else \
           ret.price = ret.symbolcurrencyprice \
@@ -678,9 +866,9 @@ exports.registerScripts = function () {
   * price = end of day price of stock in account currency as at value date
   * value = value of positon in account currency as at value date
   * unrealisedpandl = unrealised p&l in account currency as at value date
-  * symbolcurrencyid = currency of symbol  
+  * symbolcurrencyid = currency of symbol
   * symbolcurrencyprice = price in currency of symbol at end of value date
-  * currencyrate - currency rate at end of value date used to convert price 
+  * currencyrate - currency rate at end of value date used to convert price
   */
   getunrealisedpandlvaluedate = valuepositiondate + '\
   local getunrealisedpandlvaluedate = function(position, valuedate) \
@@ -733,12 +921,12 @@ exports.registerScripts = function () {
   */
   getinitialmargin = '\
   local getinitialmargin = function(brokerid, symbolid, consid, totalcost) \
-    local marginpercent = redis.call("hget", "broker:" .. brokerid .. "brokersymbol:" .. symbolid, "marginpercent") \
+    local marginpercent = redis.call("hget", "broker:" .. brokerid .. ":brokersymbol:" .. symbolid, "marginpercent") \
     if not marginpercent then marginpercent = 100 end \
-    local initialmargin = tonumber(consid) * tonumber(marginpercent) / 100 \
-    return initialmargin \
+    return (tonumber(consid) * tonumber(marginpercent)) / 100 \
   end \
   ';
+  exports.getinitialmargin = getinitialmargin;
 
   /*
   * getaccountbalance()
@@ -747,9 +935,7 @@ exports.registerScripts = function () {
   */
   getaccountbalance = '\
   local getaccountbalance = function(accountid, brokerid) \
-    local fields = {"balance","localbalance"} \
-    local vals = redis.call("hmget", "broker:" .. brokerid .. ":account:" .. accountid, unpack(fields)) \
-    return vals \
+    return redis.call("hmget", "broker:" .. brokerid .. ":account:" .. accountid, "balance", "localbalance") \
   end \
   ';
 
@@ -760,9 +946,7 @@ exports.registerScripts = function () {
   */
   getaccountbalanceuncleared = '\
   local getaccountbalanceuncleared = function(accountid, brokerid) \
-    local fields = {"balanceuncleared","localbalanceuncleared"} \
-    local vals = redis.call("hmget", "broker:" .. brokerid .. ":account:" .. accountid, unpack(fields)) \
-    return vals \
+    return redis.call("hmget", "broker:" .. brokerid .. ":account:" .. accountid, "balanceuncleared", "localbalanceuncleared") \
   end \
   ';
 
@@ -773,8 +957,7 @@ exports.registerScripts = function () {
   */
   getaccount = gethashvalues + '\
   local getaccount = function(accountid, brokerid) \
-    local account = gethashvalues("broker:" .. brokerid .. ":account:" .. accountid) \
-    return account \
+    return gethashvalues("broker:" .. brokerid .. ":account:" .. accountid) \
   end \
   ';
 
@@ -785,13 +968,14 @@ exports.registerScripts = function () {
   * updates cleared account balance & local currency balance
   * note: amount & localamount can be -ve
   */
-  updateaccountbalance = getaccountbalance + '\
+  updateaccountbalance = round + getaccountbalance + '\
   local updateaccountbalance = function(accountid, amount, brokerid, localamount) \
-    local vals = getaccountbalance(accountid, brokerid) \
-    if not vals[1] then return end \
-    local balance = tonumber(vals[1]) + tonumber(amount) \
-    local localbalance = tonumber(vals[2]) + tonumber(localamount) \
-    redis.call("hmset", "broker:" .. brokerid .. ":account:" .. accountid, "balance", tostring(balance), "localbalance", tostring(localbalance)) \
+    local temp = {} \
+    temp.vals = getaccountbalance(accountid, brokerid) \
+    if not temp.vals[1] then return end \
+    temp.balance = round(tonumber(temp.vals[1]) + tonumber(amount), 2) \
+    temp.localbalance = round(tonumber(temp.vals[2]) + tonumber(localamount), 2) \
+    redis.call("hmset", "broker:" .. brokerid .. ":account:" .. accountid, "balance", tostring(temp.balance), "localbalance", tostring(temp.localbalance)) \
   end \
   ';
 
@@ -800,13 +984,14 @@ exports.registerScripts = function () {
   * updates uncleared account balance & local currency balance
   * note: amount & localamount can be -ve
   */
-  updateaccountbalanceuncleared = getaccountbalanceuncleared + '\
+  updateaccountbalanceuncleared = getaccountbalanceuncleared + round + '\
   local updateaccountbalanceuncleared = function(accountid, amount, brokerid, localamount) \
-    local vals = getaccountbalanceuncleared(accountid, brokerid) \
-    if not vals[1] then return end \
-    local balanceuncleared = tonumber(vals[1]) + tonumber(amount) \
-    local localbalanceuncleared = tonumber(vals[2]) + tonumber(localamount) \
-    redis.call("hmset", "broker:" .. brokerid .. ":account:" .. accountid, "balanceuncleared", tostring(balanceuncleared), "localbalanceuncleared", tostring(localbalanceuncleared)) \
+    local temp = {} \
+    temp.vals = getaccountbalanceuncleared(accountid, brokerid) \
+    if not temp.vals[1] then return end \
+    temp.balanceuncleared = round((tonumber(temp.vals[1]) + tonumber(amount)), 2) \
+    temp.localbalanceuncleared = round((tonumber(temp.vals[2]) + tonumber(localamount)), 2) \
+    redis.call("hmset", "broker:" .. brokerid .. ":account:" .. accountid, "balanceuncleared", tostring(temp.balanceuncleared), "localbalanceuncleared", tostring(temp.localbalanceuncleared)) \
   end \
   ';
 
@@ -874,9 +1059,17 @@ exports.registerScripts = function () {
   * params: brokerid, tradeid, tradesettlestatusid
   */
   updatetradesettlestatusindex = '\
-  local updatetradesettlestatusindex = function(brokerid, tradeid, tradesettlestatusid) \
-    redis.call("zadd", "trade:tradesettlestatus", 0, tradesettlestatusid .. ":" .. brokerid .. ":" .. tradeid) \
-  end \
+    local updatetradesettlestatusindex = function(brokerid, tradeid, oldtradesettlestatusid, newtradesettlestatusid) \
+      if oldtradesettlestatusid ~= "" then \
+        redis.call("zrem", "trade:tradesettlestatus", 0, oldtradesettlestatusid .. ":" .. brokerid .. ":" .. tradeid) \
+      end \
+      redis.call("zadd", "trade:tradesettlestatus", 0, newtradesettlestatusid .. ":" .. brokerid .. ":" .. tradeid) \
+    end \
+  ';
+
+  exports.updatetradesettlestatusindex = updatetradesettlestatusindex + '\
+    updatetradesettlestatusindex(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
+    return 0 \
   ';
 
  /*
@@ -885,9 +1078,9 @@ exports.registerScripts = function () {
   * params: brokerid, tradeid, tradesettlestatusid
   */
   removetradesettlestatusindex = '\
-  local removetradesettlestatusindex = function(brokerid, tradeid, tradesettlestatusid) \
-    redis.call("zrem", "trade:tradesettlestatus", tradesettlestatusid .. ":" .. brokerid .. ":" .. tradeid) \
-  end \
+    local removetradesettlestatusindex = function(brokerid, tradeid, tradesettlestatusid) \
+      redis.call("zrem", "trade:tradesettlestatus", tradesettlestatusid .. ":" .. brokerid .. ":" .. tradeid) \
+    end \
   ';
 
   /*
@@ -897,64 +1090,88 @@ exports.registerScripts = function () {
   * returns: table of trades
   */
   gettradesbysettlementstatus = split + gethashvalues + '\
-  local gettradesbysettlementstatus = function(mintradesettlementstatusid, maxtradesettlementstatusid) \
-    local tbltrades = {} \
-    redis.log(redis.LOG_NOTICE, "gettradesbysettlementstatus") \
-    --[[ get the character beyond the maximum requested to mark the end of the search ]] \
-    local nextchar = string.char(string.byte(maxtradesettlementstatusid) + 1) \
-    local trades = redis.call("zrangebylex", "trade:tradesettlestatus", "[" .. mintradesettlementstatusid, "(" .. nextchar) \
-    for i = 1, #trades do \
-      local brokertradeids = split(trades[i], ":") \
-      local trade = gethashvalues("broker:" .. brokertradeids[2] .. ":trade:" .. brokertradeids[3]) \
-      table.insert(tbltrades, trade) \
+    local gettradesbysettlementstatus = function(mintradesettlementstatusid, brokerid) \
+      local tbltrades = {} \
+      redis.log(redis.LOG_NOTICE, "gettradesbysettlementstatus") \
+      --[[ get the character beyond the maximum requested to mark the end of the search ]] \
+      --[[ local nextchar = string.char(string.byte(maxtradesettlementstatusid) + 1) ]] \
+      --[[ calculate the next brokerid to the currently requested broker(id) to mark the end of the search ]] \
+      local nextbroker = tonumber(brokerid) + 1 \
+      local trades = redis.call("zrangebylex", "trade:tradesettlestatus", "[" .. mintradesettlementstatusid .. ":" .. brokerid, "(" .. mintradesettlementstatusid .. ":" .. nextbroker) \
+      for i = 1, #trades do \
+        local brokertradeids = split(trades[i], ":") \
+        local trade = gethashvalues("broker:" .. brokertradeids[2] .. ":trade:" .. brokertradeids[3]) \
+        table.insert(tbltrades, trade) \
+      end \
+      return tbltrades \
     end \
-    return tbltrades \
-  end \
   ';
 
  /*
   * newposting()
   * creates a posting record
-  * params: accountid, amount, brokerid, localamount, transactionid, timestamp in milliseconds
+  * params: accountid, amount, brokerid, localamount, transactionid, timestamp in milliseconds, timestamp, linktype, linkid
   */
-  newposting = updatefieldindexes + '\
-  local newposting = function(accountid, amount, brokerid, localamount, transactionid, timestampms) \
-    local brokerkey = "broker:" .. brokerid \
-    local postingid = redis.call("hincrby", brokerkey, "lastpostingid", 1) \
-    local stramount = tostring(amount) \
-    redis.call("hmset", brokerkey .. ":posting:" .. postingid, "accountid", accountid, "brokerid", brokerid, "amount", stramount, "localamount", tostring(localamount), "postingid", postingid, "transactionid", transactionid) \
-    redis.call("sadd", brokerkey .. ":transaction:" .. transactionid .. ":postings", postingid) \
-    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":postings", postingid) \
+  newposting = '\
+  local newposting = function(accountid, amount, brokerid, localamount, note, transactionid, timestampms, timestamp, linktype, linkid) \
+    redis.log(redis.LOG_NOTICE, "newposting") \
+    local temp = {} \
+    temp.brokerkey = "broker:" .. brokerid \
+    temp.postingid = redis.call("hincrby", temp.brokerkey, "lastpostingid", 1) \
+    temp.stramount = round(amount, 2) \
+    temp.strlocalamount = round(localamount, 2) \
+    redis.call("hmset", temp.brokerkey .. ":posting:" .. temp.postingid, "accountid", accountid, "brokerid", brokerid, "amount", temp.stramount, "localamount", temp.strlocalamount, "postingid", temp.postingid, "note", note, "transactionid", transactionid) \
+    redis.call("sadd", temp.brokerkey .. ":transaction:" .. transactionid .. ":postings", temp.postingid) \
+    redis.call("sadd", temp.brokerkey .. ":account:" .. accountid .. ":postings", temp.postingid) \
     --[[ add a sorted set for time based queries by account ]] \
-    redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":postingsbydate", timestampms, postingid) \
-    redis.call("sadd", brokerkey .. ":postings", postingid) \
-    redis.call("sadd", brokerkey .. ":postingid", "posting:" .. postingid) \
+    redis.call("zadd", temp.brokerkey .. ":account:" .. accountid .. ":postingsbydate", timestampms, temp.postingid) \
+    redis.call("sadd", temp.brokerkey .. ":postings", temp.postingid) \
+    createaddtionalindex(brokerid, "postings", temp.postingid, linktype, linkid) \
+    redis.call("sadd", temp.brokerkey .. ":postingid", "posting:" .. temp.postingid) \
+    temp.searchvalue = temp.postingid .. ":" .. transactionid .. ":" .. tostring(temp.strlocalamount) .. ":" .. tostring(temp.stramount) .. ":" .. lowercase(trim(gettimestampindex(timestamp))) \
+    --[[ redis.call("zadd", temp.brokerkey .. ":postings:search_index", temp.postingid, temp.searchvalue) ]] \
+    createsearchindex(brokerid, "postings:search_index", temp.postingid, temp.searchvalue, linktype, linkid) \
     --[[ add sorted sets for columns that require sorting capability ]] \
-    local indexamount = tonumber(stramount) * 100 \
-    local fieldscorekeys = {"amount", indexamount, postingid, "accountid", accountid, postingid} \
-    updatefieldindexes(brokerid, "posting", fieldscorekeys) \
-    return postingid \
+    --[[ temp.indexamount = tonumber(temp.stramount) * 100 ]] \
+    --[[ temp.fieldscorekeys = {"amount", indexamount, temp.postingid, "accountid", accountid, temp.postingid} ]] \
+    --[[ updatefieldindexes(brokerid, "posting", fieldscorekeys) ]] \
+    --[[ if linktype and linkid then ]] \
+      --[[ updateaddtionalindex(brokerid, "postings", temp.postingid, linktype, linkid, "posting:search_index", temp.searchvalue) ]] \
+    --[[ end ]] \
+    return temp.postingid \
   end \
   ';
-
-  /*
+ /*
   * newtransaction()
   * creates a transaction record
-  * params: amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid, timestamp in milliseconds
+  * params: amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid, timestamp in milliseconds, linktype, linkid
   */
-  newtransaction = updatefieldindexes + '\
-  local newtransaction = function(amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid, timestampms) \
-    local transactionid = redis.call("hincrby", "broker:" .. brokerid, "lasttransactionid", 1) \
-    local brokerkey = "broker:" .. brokerid \
-    local stramount = tostring(amount) \
-    redis.call("hmset", brokerkey .. ":transaction:" .. transactionid, "amount", stramount, "brokerid", brokerid, "currencyid", currencyid, "localamount", tostring(localamount), "note", note, "rate", rate, "reference", reference, "timestamp", timestamp, "transactiontypeid", transactiontypeid, "transactionid", transactionid) \
-    redis.call("sadd", brokerkey .. ":transactions", transactionid) \
-    redis.call("sadd", brokerkey .. ":transactionid", "transaction:" .. transactionid) \
+  newtransaction = utils.lowercase + utils.trim + utils.replace + utils.gettimestampindex + utils.createaddtionalindex + utils.createsearchindex + updateaddtionaltimeindex + '\
+  local newtransaction = function(amount, brokerid, currencyid, localamount, note, rate, reference, timestamp, transactiontypeid, timestampms, linktype, linkid) \
+    redis.log(redis.LOG_NOTICE, "newtransaction") \
+    local temp = {} \
+    temp.transactionid = redis.call("hincrby", "broker:" .. brokerid, "lasttransactionid", 1) \
+    temp.brokerkey = "broker:" .. brokerid \
+    temp.stramount = round(amount, 2) \
+    temp.strlocalamount = round(localamount, 2) \
+    redis.call("hmset", temp.brokerkey .. ":transaction:" .. temp.transactionid, "amount", temp.stramount, "brokerid", brokerid, "currencyid", currencyid, "localamount", temp.strlocalamount, "note", note, "rate", rate, "reference", reference, "timestamp", timestamp, "transactiontypeid", transactiontypeid, "transactionid", temp.transactionid) \
+    redis.call("sadd", temp.brokerkey .. ":transactions", temp.transactionid) \
+    createaddtionalindex(brokerid, "transactions", temp.transactionid, linktype, linkid) \
+    redis.call("zadd", temp.brokerkey .. ":transaction:timestamp", timestampms, temp.transactionid) \
+    updateaddtionaltimeindex(brokerid, "transaction:timestamp", temp.transactionid, linktype, linkid, timestampms) \
+    redis.call("sadd", temp.brokerkey .. ":transactionid", "transaction:" .. temp.transactionid) \
+    --[[ the following index is used for table search using localamount, amount, currencyid and etc.. ]] \
+    temp.searchvalue = temp.transactionid .. ":" .. lowercase(trim(transactiontypeid)) .. ":" .. lowercase(trim(currencyid)) .. ":" .. tostring(temp.strlocalamount) .. ":" .. tostring(temp.stramount) .. ":" .. lowercase(trim(replace(reference, ":", "-"))) .. ":" .. lowercase(trim(note) .. ":" .. lowercase(trim(gettimestampindex(timestamp)))) \
+    --[[ redis.call("zadd", temp.brokerkey .. ":transaction:search_index", temp.transactionid, temp.searchvalue) ]] \
+    createsearchindex(brokerid, "transaction:search_index", temp.transactionid, temp.searchvalue, linktype, linkid) \
     --[[ add sorted sets for columns that require sorting capability ]] \
-    local indexamount = tonumber(stramount) * 100 \
-    local fieldscorekeys = {"amount", indexamount, transactionid, "timestamp", timestampms, transactionid, "transactiontypeid", 0, transactiontypeid .. ":" .. transactionid} \
-    updatefieldindexes(brokerid, "transaction", fieldscorekeys) \
-    return transactionid \
+    --[[ temp.indexamount = tonumber(temp.stramount) * 100 ]] \
+    --[[ temp.fieldscorekeys = {"amount", indexamount, temp.transactionid, "timestamp", timestampms, temp.transactionid, "transactiontypeid", 0, transactiontypeid .. ":" .. temp.transactionid} ]] \
+    --[[ updatefieldindexes(brokerid, "transaction", fieldscorekeys) ]] \
+    --[[ if linktype and linkid then ]] \
+     --[[ updateaddtionalindex(brokerid, "transactions", temp.transactionid, linktype, linkid, "transaction:search_index", temp.searchvalue) ]] \
+    --[[ end ]] \
+    return temp.transactionid \
   end \
   ';
 
@@ -969,6 +1186,18 @@ exports.registerScripts = function () {
     return transaction \
   end \
   ';
+  /*
+  * getbrokerlist()
+  * get all brokers id
+  */
+  getbrokerlist = '\
+  local getbrokerlist = function() \
+    return redis.call("smembers", "brokers") \
+  end \
+  ';
+  exports.getbrokerlist = getbrokerlist + '\
+    return getbrokerlist() \
+  ';
 
   /*
   * gettradedescription()
@@ -976,7 +1205,7 @@ exports.registerScripts = function () {
   * params: trade reference i.e. broker:1:trade:1
   * returns: a description of the trade or empty string if not found
   */
-  gettradedescription = gethashvalues + '\
+  gettradedescription = gethashvalues + utils.getdateindex + '\
   local gettradedescription = function(traderef) \
     local desc = "" \
     local trade = gethashvalues(traderef) \
@@ -987,32 +1216,74 @@ exports.registerScripts = function () {
       else \
         desc = "Sold " \
       end \
-      desc = desc .. trade["quantity"] .. " " .. symbol["shortname"] .. " @ " .. trade["price"] \
+      desc = desc .. tonumber(trade["quantity"]) .. " " .. symbol["shortname"] .. " @ " .. trade["price"] .. " to settle " .. getdateindex(trade["futsettdate"]) \
     end \
     return desc \
   end \
   ';
-
+  /*
+   * getpostingdescription
+   * This script used to get posting description
+   * params: brokerid, transactionid
+   */
+   getpostingdescription = utils.stringmatch + gettradedescription + '\
+     local getpostingdescription = function(brokerid, transactionid, postingnote) \
+       redis.log(redis.LOG_NOTICE, "getpostingdescription") \
+       local transaction = redis.call("hmget", "broker:" .. brokerid .. ":transaction:" .. transactionid, "reference", "transactiontypeid", "note") \
+       if stringmatch(transaction[1], "trade:") and transaction[2] ~= "TRR" and transaction[2] ~= "TPR" then \
+         return gettradedescription("broker:" .. ARGV[2] .. ":" .. transaction[1]) \
+       elseif transaction[2] == "JE" then \
+         return postingnote \
+       else \
+         return transaction[3] \
+       end \
+     end \
+   ';
+  /*
+   * getpostingdetails
+   * returns posting and transaction details
+   * params: brokerid, postingid
+   * returns: posting detail
+   */
+  getpostingdetails = gethashvalues + gettransaction + getpostingdescription + '\
+    local getpostingdetails = function(brokerid, postingid) \
+      --[[ get the posting ]] \
+      local posting = gethashvalues("broker:" .. brokerid .. ":posting:" .. postingid) \
+      --[[ get additional details from the transaction ]] \
+      local transaction = gettransaction(brokerid, posting.transactionid) \
+      posting.description = getpostingdescription(brokerid, posting.transactionid, posting.note) \
+      posting.reference = transaction.reference \
+      posting.timestamp = transaction.timestamp \
+      posting.transactiontypeid = transaction.transactiontypeid \
+      return posting \
+    end \
+  ';
   /*
   * getpostingsbydate()
   * gets postings for an account between two dates, sorted by datetime
-  * params: accountid, brokerid, start of period, end of period - datetimes expressed in milliseconds
+  * params: accountid, brokerid, start of period, end of period - (datetimes expressed in milliseconds) and view
   * returns: array of postings
   */
-  getpostingsbydate = gettransaction + gettradedescription + '\
-  local getpostingsbydate = function(accountid, brokerid, startmilliseconds, endmilliseconds) \
+  getpostingsbydate = getpostingdetails + '\
+  local getpostingsbydate = function(accountid, brokerid, startmilliseconds, endmilliseconds, view) \
     redis.log(redis.LOG_NOTICE, "getpostingsbydate") \
     local tblpostings = {} \
+    local posting = {} \
     local brokerkey = "broker:" .. brokerid \
     local postings = redis.call("zrangebyscore", brokerkey .. ":account:" .. accountid .. ":postingsbydate", startmilliseconds, endmilliseconds) \
+    local hiddenpostings = redis.call("sort", brokerkey .. ":account:" .. accountid .. ":hidepostings") \
+    if view == "client" then \
+      postings = filter(postings, hiddenpostings) \
+    end \
     for i = 1, #postings do \
-      --[[ get the posting ]] \
-      local posting = gethashvalues(brokerkey .. ":posting:" .. postings[i]) \
-      --[[ get additional details from the transaction ]] \
-      local transaction = gettransaction(brokerid, posting["transactionid"]) \
-      posting["reference"] = transaction["reference"] \
-      posting["timestamp"] = transaction["timestamp"] \
-      posting["transactiontypeid"] = transaction["transactiontypeid"] \
+      posting = getpostingdetails(brokerid, postings[i]) \
+      if view == "user" then \
+        if find(hiddenpostings, postings[i]) == true then \
+          posting.hide = 1 \
+        else \
+          posting.hide = 0 \
+        end \
+      end \
       table.insert(tblpostings, posting) \
     end \
     return tblpostings \
@@ -1020,15 +1291,27 @@ exports.registerScripts = function () {
   ';
 
   /*
-  * getclientfromaccount()
-  * get a client from an account
+  * getclientidfromaccount()
+  * get a clientid from an accountid
   * params: accountid, brokerid
   * returns: clientid
   */
-  getclientfromaccount = '\
+  getclientidfromaccount = '\
+  local getclientidfromaccount = function(accountid, brokerid) \
+    return redis.call("get", "broker:" .. brokerid .. ":account:" .. accountid .. ":client") \
+  end \
+  ';
+
+  /*
+  * getclientfromaccount()
+  * get a client from an accountid
+  * params: accountid, brokerid
+  * returns: client
+  */
+  getclientfromaccount = utils.getclient + '\
   local getclientfromaccount = function(accountid, brokerid) \
     local clientid = redis.call("get", "broker:" .. brokerid .. ":account:" .. accountid .. ":client") \
-    return clientid \
+    return getclient(brokerid, clientid) \
   end \
   ';
 
@@ -1036,15 +1319,23 @@ exports.registerScripts = function () {
   * addunclearedcashlistitem()
   * add an item to the uncleared cash list
   */
-  addunclearedcashlistitem = '\
-  local addunclearedcashlistitem = function(brokerid, clearancedate, clientaccountid, transactionid) \
+  addunclearedcashlistitem = utils.getclientnamebyaccount + utils.lowercase + utils.trim + '\
+  local addunclearedcashlistitem = function(brokerid, clearancedate, clientaccountid, transactionid, timestamp, timestampms, paymenttypeid, currencyid, linktype, linkid) \
     redis.log(redis.LOG_NOTICE, "addunclearedcashlistitem") \
     local brokerkey = "broker:" .. brokerid \
     local unclearedcashlistid = redis.call("hincrby", brokerkey, "lastunclearedcashlistid", 1) \
-    redis.call("hmset", brokerkey .. ":unclearedcashlist:" .. unclearedcashlistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "transactionid", transactionid, "unclearedcashlistid", unclearedcashlistid) \
+    --[[ local clientdetails = getclientnamebyaccount(brokerid, clientaccountid) ]] \
+    redis.call("hmset", brokerkey .. ":unclearedcashlist:" .. unclearedcashlistid, "clientaccountid", clientaccountid, "brokerid", brokerid, "clearancedate", clearancedate, "transactionid", transactionid, "unclearedcashlistid", unclearedcashlistid, "currencyid", currencyid, "paymenttypeid", paymenttypeid, "timestamp", timestamp) \
     redis.call("sadd", brokerkey .. ":unclearedcashlist", unclearedcashlistid) \
+    createaddtionalindex(brokerid, "unclearedcashlist", unclearedcashlistid, linktype, linkid) \
     redis.call("sadd", brokerkey .. ":unclearedcashlistid", "unclearedcashlist:" .. unclearedcashlistid) \
-    redis.call("zadd", brokerkey .. ":unclearedcashlist:unclearedcashlistbydate", clearancedate, unclearedcashlistid) \
+    redis.call("zadd", brokerkey .. ":account:" .. clientaccountid .. ":unclearedcashbreakdown", timestampms, "unclearedcash:" .. unclearedcashlistid) \
+    --[[ redis.call("zadd", brokerkey .. ":unclearedcashlist:unclearedcashlistbydate", clearancedate, unclearedcashlistid) ]] \
+    createsearchindex(brokerid, "unclearedcashlist:unclearedcashlistbydate", clearancedate, unclearedcashlistid, linktype, linkid) \
+    --[[ redis.call("zadd", brokerkey .. ":unclearedcashlist:search_index", unclearedcashlistid, lowercase(trim(clientdetails[1])).. ":" .. unclearedcashlistid) ]] \
+    --[[ local searchvalue = lowercase(trim(clientdetails[1])).. ":" .. unclearedcashlistid ]] \
+    --[[ createsearchindex(brokerid, "unclearedcashlist:search_index", unclearedcashlistid, searchvalue, linktype, linkid) ]] \
+    return {0, unclearedcashlistid} \
   end \
   ';
 
@@ -1078,8 +1369,7 @@ exports.registerScripts = function () {
     local position = gethashvalues("broker:" .. brokerid .. ":position:" .. positionid) \
     --[[ add isin as external systems seem to rely on this ]] \
     if position["symbolid"] then \
-      local isin = redis.call("hget", "symbol:" .. position["symbolid"], "isin") \
-      position["isin"] = isin \
+      position["isin"] = redis.call("hget", "symbol:" .. position["symbolid"], "isin") \
     end \
     return position \
   end \
@@ -1088,12 +1378,12 @@ exports.registerScripts = function () {
   /*
   * publishposition()
   * publish a position
+  * here 10 refer to the positionchannel
   * params: brokerid, positionid
   */
   publishposition = getposition + '\
   local publishposition = function(brokerid, positionid) \
-    local position = getposition(brokerid, positionid) \
-    redis.call("publish", 10, "{" .. cjson.encode("position") .. ":" .. cjson.encode(position) .. "}") \
+    redis.call("publish", 10, "{" .. cjson.encode("position") .. ":" .. cjson.encode(getposition(brokerid, positionid)) .. "}") \
   end \
   ';
 
@@ -1103,18 +1393,27 @@ exports.registerScripts = function () {
   * params: accountid, brokerid, cost, futsettdate, quantity, symbolid
   * returns: positionid
   */
-  newposition = setsymbolkey + publishposition + '\
+  newposition = setsymbolkey + publishposition + utils.getparentlinkdetails + utils.updateaddtionalindex + utils.getclientnamebyaccount + trim + lowercase + '\
   local newposition = function(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
     redis.log(redis.LOG_NOTICE, "newposition") \
-    local brokerkey = "broker:" .. brokerid \
-    local positionid = redis.call("hincrby", brokerkey, "lastpositionid", 1) \
-    redis.call("hmset", brokerkey .. ":position:" .. positionid, "brokerid", brokerid, "accountid", accountid, "symbolid", symbolid, "quantity", quantity, "cost", tostring(cost), "positionid", positionid, "futsettdate", futsettdate) \
-    setsymbolkey(accountid, brokerid, futsettdate, positionid, symbolid) \
-    redis.call("sadd", brokerkey .. ":positions", positionid) \
-    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":positions", positionid) \
-    redis.call("sadd", brokerkey .. ":positionid", "position:" .. positionid) \
-    publishposition(brokerid, positionid) \
-    return positionid \
+    local fields = {} \
+    fields.linkdetails = getparentlinkdetails(brokerid, accountid) \
+    fields.positionid = redis.call("hincrby", "broker:" .. brokerid, "lastpositionid", 1) \
+    redis.call("hmset", "broker:" .. brokerid .. ":position:" .. fields.positionid, "brokerid", brokerid, "accountid", accountid, "symbolid", symbolid, "quantity", quantity, "cost", tostring(cost), "positionid", fields.positionid, "futsettdate", futsettdate) \
+    setsymbolkey(accountid, brokerid, futsettdate, fields.positionid, symbolid) \
+    redis.call("sadd", "broker:" .. brokerid .. ":positions", fields.positionid) \
+    redis.call("sadd", "broker:" .. brokerid .. ":account:" .. accountid .. ":positions", fields.positionid) \
+    fields.client = getclientnamebyaccount(brokerid, accountid) \
+    --[[ The position search index will get updated whenever position created/updated ]] \
+    --[[ redis.call("zadd", "broker:" .. brokerid .. ":position:search_index", fields.positionid, fields.client[2] .. ":" .. accountid .. ":" .. lowercase(trim(symbolid))) ]] \
+    if tonumber(quantity) ~= 0 then \
+      redis.call("sadd", "broker:" .. brokerid .. ":account:" .. accountid .. ":nonzeropositions", fields.positionid) \
+      redis.call("sadd", "broker:" .. brokerid .. ":position:nonzerosymbols", symbolid) \
+    end \
+    redis.call("sadd", "broker:" .. brokerid .. ":positionid", "position:" .. fields.positionid) \
+    updateaddtionalindex(brokerid, "positions", fields.positionid, fields.linkdetails[1], fields.linkdetails[2], "", "") \
+    publishposition(brokerid, fields.positionid) \
+    return fields.positionid \
   end \
   ';
 
@@ -1125,22 +1424,26 @@ exports.registerScripts = function () {
   * update an existing position
   * quantity & cost can be +ve/-ve
   */
-  updateposition = round + setsymbolkey + publishposition + '\
+  updateposition = round + '\
   local updateposition = function(accountid, brokerid, cost, futsettdate, positionid, quantity, symbolid) \
     redis.log(redis.LOG_NOTICE, "updateposition") \
-    local positionkey = "broker:" .. brokerid .. ":position:" .. positionid \
-    local position = gethashvalues(positionkey) \
-    local newquantity = tonumber(position["quantity"]) + tonumber(quantity) \
-    local newcost \
-    if newquantity == 0 then \
-      newcost = 0 \
+    local temp = {} \
+    temp.positionkey = "broker:" .. brokerid .. ":position:" .. positionid \
+    temp.position = gethashvalues(temp.positionkey) \
+    temp.newquantity = tonumber(temp.position["quantity"]) + tonumber(quantity) \
+    if temp.newquantity == 0 then \
+      temp.newcost = 0 \
+      --[[ when quantity becomes zero, need to remove from nonzeropositions ]] \
+      redis.call("srem", "broker:" .. brokerid .. ":account:" .. accountid .. ":nonzeropositions", positionid) \
     elseif tonumber(quantity) > 0 then \
-      newcost = tonumber(position["cost"]) + tonumber(cost) \
+      --[[ when quantity greater than zero, need to add in nonzeropositions ]] \
+      redis.call("sadd", "broker:" .. brokerid .. ":account:" .. accountid .. ":nonzeropositions", positionid) \
+      temp.newcost = tonumber(temp.position["cost"]) + tonumber(cost) \
     else \
-      newcost = round(newquantity / tonumber(position["quantity"]) * tonumber(position["cost"]), 2) \
+      temp.newcost = round(temp.newquantity / tonumber(temp.position["quantity"]) * tonumber(temp.position["cost"]), 2) \
     end \
-    redis.call("hmset", positionkey, "accountid", accountid, "symbolid", symbolid, "quantity", newquantity, "cost", tostring(newcost), "futsettdate", futsettdate) \
-    if symbolid ~= position["symbolid"] or (futsettdate ~= "" and futsettdate ~= position["futsettdate"]) then \
+    redis.call("hmset", temp.positionkey, "accountid", accountid, "symbolid", symbolid, "quantity", temp.newquantity, "cost", tostring(temp.newcost), "futsettdate", futsettdate) \
+    if symbolid ~= temp.position["symbolid"] or (futsettdate ~= "" and futsettdate ~= temp.position["futsettdate"]) then \
       setsymbolkey(accountid, brokerid, futsettdate, positionid, symbolid) \
     end \
     publishposition(brokerid, positionid) \
@@ -1150,18 +1453,23 @@ exports.registerScripts = function () {
   /*
   * newpositionposting()
   * creates a positionposting for a position
+  * **dependency function declared in main function
   */
   newpositionposting = '\
   local newpositionposting = function(brokerid, cost, linkid, positionid, positionpostingtypeid, quantity, timestamp, milliseconds) \
     redis.log(redis.LOG_NOTICE, "newpositionposting") \
-    local brokerkey = "broker:" .. brokerid \
-    local positionpostingid = redis.call("hincrby", brokerkey, "lastpositionpostingid", 1) \
-    redis.call("hmset", brokerkey .. ":positionposting:" .. positionpostingid, "brokerid", brokerid, "cost", cost, "linkid", linkid, "positionid", positionid, "positionpostingid", positionpostingid, "positionpostingtypeid", positionpostingtypeid, "quantity", quantity, "timestamp", timestamp) \
-    redis.call("sadd", brokerkey .. ":position:" .. positionid .. ":positionpostings", positionpostingid) \
-    redis.call("zadd", brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", milliseconds, positionpostingid) \
-    redis.call("sadd", brokerkey .. ":positionpostings", positionpostingid) \
-    redis.call("sadd", brokerkey .. ":positionpostingid", "positionposting:" .. positionpostingid) \
-    return positionpostingid \
+    local temp = {} \
+    temp.brokerkey = "broker:" .. brokerid \
+    temp.accountid = redis.call("hget", temp.brokerkey .. ":position:" .. positionid, "accountid") \
+    temp.linkdetails = getparentlinkdetails(brokerid, temp.accountid) \
+    temp.positionpostingid = redis.call("hincrby", temp.brokerkey, "lastpositionpostingid", 1) \
+    redis.call("hmset", temp.brokerkey .. ":positionposting:" .. temp.positionpostingid, "brokerid", brokerid, "cost", tostring(cost), "linkid", linkid, "positionid", positionid, "positionpostingid", temp.positionpostingid, "positionpostingtypeid", positionpostingtypeid, "quantity", quantity, "timestamp", timestamp) \
+    redis.call("sadd", temp.brokerkey .. ":position:" .. positionid .. ":positionpostings", temp.positionpostingid) \
+    redis.call("zadd", temp.brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", milliseconds, temp.positionpostingid) \
+    redis.call("sadd", temp.brokerkey .. ":positionpostings", temp.positionpostingid) \
+    redis.call("sadd", temp.brokerkey .. ":positionpostingid", "positionposting:" .. temp.positionpostingid) \
+    updateaddtionalindex(brokerid, "positionpostings", temp.positionpostingid, temp.linkdetails[1], temp.linkdetails[2], "", "") \
+    return temp.positionpostingid \
   end \
   ';
 
@@ -1179,6 +1487,7 @@ exports.registerScripts = function () {
     local positionpostings = redis.call("zrangebyscore", brokerkey .. ":position:" .. positionid .. ":positionpostingsbydate", startmilliseconds, endmilliseconds) \
     for i = 1, #positionpostings do \
       local positionposting = gethashvalues(brokerkey .. ":positionposting:" .. positionpostings[i]) \
+      positionposting["quantity"] = tonumber(positionposting["quantity"]) \
       table.insert(tblpositionpostings, positionposting) \
     end \
     return tblpositionpostings \
@@ -1193,9 +1502,7 @@ exports.registerScripts = function () {
   */
   getpositionid = getsymbolkey + '\
   local getpositionid = function(accountid, brokerid, symbolid, futsettdate) \
-    local symbolkey = getsymbolkey(futsettdate, symbolid) \
-    local positionid = redis.call("get", "broker:" .. brokerid .. ":account:" .. accountid .. ":symbol:" .. symbolkey) \
-    return positionid \
+    return redis.call("get", "broker:" .. brokerid .. ":account:" .. accountid .. ":symbol:" .. getsymbolkey(futsettdate, symbolid)) \
   end \
   ';
 
@@ -1209,12 +1516,12 @@ exports.registerScripts = function () {
   */
   getpositionbysymbol = getpositionid + getposition + '\
   local getpositionbysymbol = function(accountid, brokerid, symbolid, futsettdate) \
-    local position \
     local positionid = getpositionid(accountid, brokerid, symbolid, futsettdate) \
     if positionid then \
-      position = getposition(brokerid, positionid) \
+      return getposition(brokerid, positionid) \
+    else \
+      return \
     end \
-    return position \
   end \
   ';
 
@@ -1258,6 +1565,7 @@ exports.registerScripts = function () {
     local positions = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. ":positions") \
     for index = 1, #positions do \
       local vals = getposition(brokerid, positions[index]) \
+      vals["quantity"] = tonumber(vals["quantity"]) \
       table.insert(tblresults, vals) \
     end \
     return tblresults \
@@ -1270,13 +1578,16 @@ exports.registerScripts = function () {
   * params: accountid, brokerid
   * returns: all positions with margin & p&l
   */
-  getpositionvalues = getpositionvalue + '\
+  getpositionvalues = getpositionvalue + utils.getsymbolshortname + '\
   local getpositionvalues = function(accountid, brokerid) \
     redis.log(redis.LOG_NOTICE, "getpositionvalues") \
     local tblresults = {} \
     local positionids = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. ":positions") \
     for index = 1, #positionids do \
       local vals = getpositionvalue(brokerid, positionids[index]) \
+      vals["quantity"] = tonumber(vals["quantity"]) \
+      local symbolshortname = getsymbolshortname(vals["symbolid"]) \
+      vals["symbolshortname"] = symbolshortname[1] \
       table.insert(tblresults, vals) \
     end \
     return tblresults \
@@ -1328,17 +1639,19 @@ exports.registerScripts = function () {
     --[[ get the position postings for this position since the beginning of time ]] \
     local positionpostings = getpositionpostingsbydate(brokerid, positionid, "-inf", dtmilli) \
     --[[ update quantity and cost to reflect these postings ]] \
-    for i = 1, #positionpostings do \
-      local postingquantity = tonumber(positionpostings[i]["quantity"]) \
-      local newquantity = position["quantity"] + postingquantity \
-      if newquantity == 0 then \
-        position["cost"] = 0 \
-      elseif postingquantity > 0 then \
-        position["cost"] = position["cost"] + tonumber(positionpostings[i]["cost"]) \
-      else \
-        position["cost"] = round(newquantity / position["quantity"] * position["cost"], 2) \
+    if #positionpostings > 0 then \
+      for i = 1, #positionpostings do \
+        local postingquantity = tonumber(positionpostings[i]["quantity"]) \
+        local newquantity = position["quantity"] + postingquantity \
+        if newquantity == 0 then \
+          position["cost"] = 0 \
+        elseif postingquantity > 0 then \
+          position["cost"] = position["cost"] + tonumber(positionpostings[i]["cost"]) \
+        else \
+          position["cost"] = round(newquantity / position["quantity"] * position["cost"], 2) \
+        end \
+        position["quantity"] = newquantity \
       end \
-      position["quantity"] = newquantity \
     end \
     return position \
   end \
@@ -1380,7 +1693,7 @@ exports.registerScripts = function () {
   * returns: quantity, unsettledquantity, settledquantity
   * note: calculates quantities only
   */
-  getpositionquantitiesbydate = getposition + getpositionpostingsbydate + gethashvalues + '\
+  getpositionquantitiesbydate = getposition + getpositionpostingsbydate + '\
   local getpositionquantitiesbydate = function(brokerid, positionid, dtmilli) \
     redis.log(redis.LOG_NOTICE, "getpositionquantitiesbydate") \
     --[[ get the position ]] \
@@ -1401,7 +1714,7 @@ exports.registerScripts = function () {
         --[[ if posting is a trade, see if it is unsettled, otherwise treat is as settled ]] \
         if tonumber(positionpostings[i]["positionpostingtypeid"]) == 1 then \
           local trade = gethashvalues("broker:" .. brokerid .. ":trade:" .. positionpostings[i]["linkid"]) \
-          if trade["tradeid"] and tonumber(trade["tradesettlestatusid"]) < 4 then \
+          if trade["tradeid"] and trade["tradesettlestatusid"] ~= "YYI" then \
             position["unsettledquantity"] = position["unsettledquantity"] + tonumber(positionpostings[i]["quantity"]) \
           else \
             position["settledquantity"] = position["settledquantity"] + tonumber(positionpostings[i]["quantity"]) \
@@ -1421,13 +1734,19 @@ exports.registerScripts = function () {
   * params: brokerid, symbolid
   * returns: a table of positions
   */
-  getpositionsbysymbol = getposition + '\
+  getpositionsbysymbol = getposition + utils.getclientnamebyaccount + utils.getaccountname + '\
   local getpositionsbysymbol = function(brokerid, symbolid) \
     redis.log(redis.LOG_NOTICE, "getpositionsbysymbol") \
     local tblresults = {} \
     local positions = redis.call("smembers", "broker:" .. brokerid .. ":symbol:" .. symbolid .. ":positions") \
     for index = 1, #positions do \
       local vals = getposition(brokerid, positions[index]) \
+      vals["quantity"] = tonumber(vals["quantity"]) \
+      local clientname = getclientnamebyaccount(brokerid, vals["accountid"]) \
+      local accountname = getaccountname(brokerid, vals["accountid"]) \
+      vals["clientname"] = clientname[1] \
+      vals["clientid"] = clientname[2] \
+      vals["accountname"] = accountname[2] \
       if tonumber(vals["quantity"]) > 0 then \
         table.insert(tblresults, vals) \
       end \
@@ -1442,7 +1761,7 @@ exports.registerScripts = function () {
   * params: brokerid, symbolid, date in milliseconds
   * returns: a table of positions
   */
-  getpositionsbysymbolbydate = getpositionbydate + '\
+  getpositionsbysymbolbydate = getpositionbydate + utils.getclientnamebyaccount + utils.getaccountname + '\
   local getpositionsbysymbolbydate = function(brokerid, symbolid, milliseconds) \
     redis.log(redis.LOG_NOTICE, "getpositionsbysymbolbydate") \
     local tblresults = {} \
@@ -1451,9 +1770,14 @@ exports.registerScripts = function () {
     for i = 1, #positionids do \
       local position = getpositionbydate(brokerid, positionids[i], milliseconds) \
       --[[ only interested in non-zero positions ]] \
-      if position["quantity"] ~= 0 then \
-        table.insert(tblresults, position) \
+      if tonumber(position["quantity"]) ~= 0 then \
+        local clientname = getclientnamebyaccount(brokerid, position["accountid"]) \
+        local accountname = getaccountname(brokerid, position["accountid"]) \
+        position["clientname"] = clientname[1] \
+        position["clientid"] = clientname[2] \
+        position["accountname"] = accountname[2] \
       end \
+      table.insert(tblresults, position) \
     end \
     return tblresults \
   end \
@@ -1465,7 +1789,7 @@ exports.registerScripts = function () {
   * params: brokerid, symbolid
   * returns: a table of position values
   */
-  getpositionvaluesbysymbol = getpositionvalue + '\
+  getpositionvaluesbysymbol = getpositionvalue + utils.getclientnamebyaccount + utils.getaccountname + '\
   local getpositionvaluesbysymbol = function(brokerid, symbolid) \
     redis.log(redis.LOG_NOTICE, "getpositionvaluesbysymbol") \
     local tblresults = {} \
@@ -1473,6 +1797,11 @@ exports.registerScripts = function () {
     for index = 1, #positions do \
       local vals = getpositionvalue(brokerid, positions[index]) \
       if tonumber(vals["quantity"]) > 0 then \
+        local clientname = getclientnamebyaccount(brokerid, vals["accountid"]) \
+        local accountname = getaccountname(brokerid, vals["accountid"]) \
+        vals["clientname"] = clientname[1] \
+        vals["clientid"] = clientname[2] \
+        vals["accountname"] = accountname[2] \
         table.insert(tblresults, vals) \
       end \
     end \
@@ -1486,7 +1815,7 @@ exports.registerScripts = function () {
   * params: brokerid, symbolid, valuedate, date in milliseconds
   * returns: a table of position values
   */
-  getpositionvaluesbysymbolbydate = getpositionvaluebydate + '\
+  getpositionvaluesbysymbolbydate = getpositionvaluebydate + utils.getclientnamebyaccount + utils.getaccountname + '\
   local getpositionvaluesbysymbolbydate = function(brokerid, symbolid, valuedate, milliseconds) \
     redis.log(redis.LOG_NOTICE, "getpositionvaluesbysymbolbydate") \
     local tblresults = {} \
@@ -1496,6 +1825,11 @@ exports.registerScripts = function () {
       local position = getpositionvaluebydate(brokerid, positionids[i], valuedate, milliseconds) \
       --[[ only interested in non-zero positions ]] \
       if position["quantity"] ~= 0 then \
+        local clientname = getclientnamebyaccount(brokerid, position["accountid"]) \
+        local accountname = getaccountname(brokerid, position["accountid"]) \
+        position["clientname"] = clientname[1] \
+        position["clientid"] = clientname[2] \
+        position["accountname"] = accountname[2] \
         table.insert(tblresults, position) \
       end \
     end \
@@ -1520,6 +1854,7 @@ exports.registerScripts = function () {
       --[[ only interested in non-zero positions ]] \
       if position["quantity"] ~= 0 then \
         table.insert(tblresults, position) \
+      end \
     end \
     return tblresults \
   end \
@@ -1587,30 +1922,32 @@ exports.registerScripts = function () {
   exports.gettotalpositionvalue = gettotalpositionvalue;
 
   /*
-  * gettotalpositionvaluedate()
-  * gets sum of p&l for all positions for an account as a date
-  * params: accountid, brokerid, valuedate, valuedate as milliseconds
-  * returns: total cost, total value, total unrealisedpandl as a table
-  */
-  gettotalpositionvaluedate = getpositionvaluebydate + '\
-  local gettotalpositionvaluedate = function(accountid, brokerid, valuedate, valuedatems) \
-    redis.log(redis.LOG_NOTICE, "gettotalpositionvaluedate") \
-    local totalpositionvalue = {} \
-    totalpositionvalue.cost = 0 \
-    totalpositionvalue.value = 0 \
-    totalpositionvalue.unrealisedpandl = 0 \
-    --[[ get the ids for the positions held by this account ]] \
-    local positionids = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. ":positions") \
-    --[[ calculate each position together with value as at the value date ]] \
-    for index = 1, #positionids do \
-      local position = getpositionvaluebydate(brokerid, positionids[index], valuedate, valuedatems) \
-      totalpositionvalue.cost = totalpositionvalue.cost + tonumber(position.cost) \
-      totalpositionvalue.value = totalpositionvalue.value + tonumber(position.value) \
-      totalpositionvalue.unrealisedpandl = totalpositionvalue.unrealisedpandl + tonumber(position.unrealisedpandl) \
-    end \
-    return totalpositionvalue \
-  end \
-  ';
+ * gettotalpositionvaluedate()
+ * gets sum of p&l for all positions for an account as a date
+ * params: accountid, brokerid, valuedate, valuedate as milliseconds
+ * returns: total cost, total value, total unrealisedpandl as a table
+ */
+ gettotalpositionvaluedate = getpositionvaluebydate + '\
+ local gettotalpositionvaluedate = function(accountid, brokerid, valuedate, valuedatems) \
+   redis.log(redis.LOG_NOTICE, "gettotalpositionvaluedate") \
+   local totalpositionvalue = {} \
+   totalpositionvalue.cost = 0 \
+   totalpositionvalue.value = 0 \
+   totalpositionvalue.unrealisedpandl = 0 \
+   --[[ get the ids for the positions held by this account ]] \
+   local positionids = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. ":positions") \
+   --[[ calculate each position together with value as at the value date ]] \
+   for index = 1, #positionids do \
+     local position = getpositionvaluebydate(brokerid, positionids[index], valuedate, valuedatems) \
+     totalpositionvalue.cost = totalpositionvalue.cost + tonumber(position.cost) \
+     totalpositionvalue.value = totalpositionvalue.value + tonumber(position.value) \
+     totalpositionvalue.unrealisedpandl = totalpositionvalue.unrealisedpandl + tonumber(position.unrealisedpandl) \
+   end \
+   return totalpositionvalue \
+ end \
+ ';
+
+exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
 
   /*
   * Account Summary Notes:
@@ -1623,27 +1960,28 @@ exports.registerScripts = function () {
   * getaccountsummary()
   * calculates account p&l, margin & equity for a client account
   * params: accountid, brokerid
-  * returns: account cash balances, unrealised p&l, equity, free margin
+  * returns: account cash balances, currency, unrealised p&l, equity, free margin
   */
   getaccountsummary = getaccount + gettotalpositionvalue + '\
   local getaccountsummary = function(accountid, brokerid) \
     redis.log(redis.LOG_NOTICE, "getaccountsummary") \
-    local accountsummary = {} \
-    local account = getaccount(accountid, brokerid) \
-    if account["balance"] then \
-      local totalpositionvalue = gettotalpositionvalue(accountid, brokerid) \
-      local equity = tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) + totalpositionvalue["unrealisedpandl"] \
-      local freemargin = equity - totalpositionvalue["margin"] \
-      accountsummary["balance"] = account["balance"] \
-      accountsummary["balanceuncleared"] = account["balanceuncleared"] \
-      accountsummary["positioncost"] = totalpositionvalue["cost"] \
-      accountsummary["positionvalue"] = totalpositionvalue["value"] \
-      accountsummary["unrealisedpandl"] = totalpositionvalue["unrealisedpandl"] \
-      accountsummary["equity"] = equity \
-      accountsummary["margin"] = totalpositionvalue["margin"] \
-      accountsummary["freemargin"] = freemargin \
+    local temp = {} \
+    temp.accountsummary = {} \
+    temp.account = getaccount(accountid, brokerid) \
+    if temp.account["balance"] then \
+      temp.totalpositionvalue = gettotalpositionvalue(accountid, brokerid) \
+      temp.equity = tonumber(temp.account["balance"]) + tonumber(temp.account["balanceuncleared"]) + temp.totalpositionvalue["unrealisedpandl"] \
+      temp.accountsummary["currencyid"] = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid , "currencyid") \
+      temp.accountsummary["balance"] = temp.account["balance"] \
+      temp.accountsummary["balanceuncleared"] = temp.account["balanceuncleared"] \
+      temp.accountsummary["positioncost"] = temp.totalpositionvalue["cost"] \
+      temp.accountsummary["positionvalue"] = temp.totalpositionvalue["value"] \
+      temp.accountsummary["unrealisedpandl"] = temp.totalpositionvalue["unrealisedpandl"] \
+      temp.accountsummary["equity"] = temp.equity \
+      temp.accountsummary["margin"] = temp.totalpositionvalue["margin"] \
+      temp.accountsummary["freemargin"] = temp.equity - temp.totalpositionvalue["margin"] \
     end \
-    return accountsummary \
+    return temp.accountsummary \
   end \
   ';
 
@@ -1675,12 +2013,12 @@ exports.registerScripts = function () {
   end \
   ';
 
-  /*
+ /*
   * getfreemargin()
   * calculates free margin for an account
   * params: accountid, brokerid
   * returns: accounnt free margin if ok, else 0
-  */
+ */
   getfreemargin = getaccountsummary + '\
   local getfreemargin = function(accountid, brokerid) \
     redis.log(redis.LOG_NOTICE, "getfreemargin") \
@@ -1703,49 +2041,67 @@ exports.registerScripts = function () {
   */
   getbrokeraccountsmapid = '\
   local getbrokeraccountsmapid = function(brokerid, currencyid, name) \
-    local brokerkey = "broker:" .. brokerid \
-    local brokeraccountsmapid = redis.call("get", brokerkey .. ":" .. name .. ":" .. currencyid) \
-    local accountid = 0 \
-    if brokeraccountsmapid then \
-      accountid = redis.call("hget", brokerkey .. ":brokeraccountsmap:" .. brokeraccountsmapid, "accountid") \
+    local broker = {} \
+    broker.key = "broker:" .. brokerid \
+    broker.accountsmapid = redis.call("get", broker.key .. ":" .. name .. ":" .. currencyid) \
+    if broker.accountsmapid then \
+      return redis.call("hget", broker.key .. ":brokeraccountsmap:" .. broker.accountsmapid, "accountid") \
+    else \
+      return 0 \
     end \
-    return accountid \
   end \
   ';
 
   exports.getbrokeraccountsmapid = getbrokeraccountsmapid;
 
-  /*
+ /*
   * getclientaccountid()
-  * gets the account of a designated type for a client
-  * params: brokerid, clientid, accounttypeid
-  * returns the first account id found for the account type
+  * gets the account of a designated type and currency for a client
+  * params: brokerid, clientid, accounttypeid, currencyid
+  * returns the account id if found, else 0
   */
-  getclientaccountid = '\
-  local getclientaccountid = function(brokerid, clientid, accounttypeid) \
-    local acctid \
+  getclientaccountid = getaccount + '\
+  local getclientaccountid = function(brokerid, clientid, accounttypeid, currencyid) \
     local clientaccounts = redis.call("smembers", "broker:" .. brokerid .. ":client:" .. clientid .. ":clientaccounts") \
-    for index = 1, #clientaccounts do \
-      local accttypeid = redis.call("hget", "broker:" .. brokerid .. ":account:" .. clientaccounts[index], "accounttypeid") \
-      if tonumber(accttypeid) == tonumber(accounttypeid) then \
-        acctid = clientaccounts[index] \
-        break \
+    local account = {} \
+    for i = 1, #clientaccounts do \
+      account = getaccount(clientaccounts[i], brokerid) \
+      if tonumber(account.accounttypeid) == tonumber(accounttypeid) and account.currencyid == currencyid then \
+        return clientaccounts[i] \
       end \
     end \
-    return acctid \
+    return 0 \
   end \
   ';
 
-  exports.getclientaccountid = getclientaccountid; 
+  exports.getclientaccountid = getclientaccountid;
+
+  /*
+  * getorderfromorderbook()
+  * get an order from a brokerid/orderid string key
+  * params: orderbook key (i.e. 1:1)
+  * returns 0, errorcode, orderid if error else order
+  */
+  getorderfromorderbook = gethashvalues + '\
+  local getorderfromorderbook = function(orderbookkey) \
+    local brokerorderid = split(orderbookkey, ":") \
+    local order = gethashvalues("broker:" .. brokerorderid[1] .. ":order:" .. brokerorderid[2]) \
+    if not order["orderid"] then \
+      return {0, 1009, brokerorderid[2]} \
+    end \
+    order.symbolshortname = redis.call("hget", "symbol:" .. order.symbolid, "shortname") \
+    return {1, order} \
+  end \
+  ';
 
   /*
   * getorderbook()
   * get the orderbook buy or sell orders for a symbol
-  * params: brokerid, symbol, side
-  * returns: all orders in the orderbook for this symbol & side
+  * params: symbolid, side
+  * returns: 0, errorcode, orderid if error else 1, table of orders
   */
-  getorderbook = gethashvalues + '\
-  local getorderbook = function(brokerid, symbolid, side) \
+  getorderbook = getorderfromorderbook + '\
+  local getorderbook = function(symbolid, side) \
     local orders = {} \
     local lowerbound \
     local upperbound \
@@ -1758,489 +2114,680 @@ exports.registerScripts = function () {
       upperbound = "inf" \
     end \
     --[[ get the orders ]] \
-    local orders = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. symbolid, lowerbound, upperbound) \
-    for i = 1, #orders do \
-      local order = gethashvalues("broker:" .. brokerid .. ":order:" .. orders[i]) \
-      table.insert(orders, order) \
+    local symbolshortname = redis.call("hget", "symbol:" .. symbolid, "shortname") \
+    local ordersbyside = redis.call("zrangebyscore", "orderbook:" .. symbolid, lowerbound, upperbound) \
+    for i = 1, #ordersbyside do \
+      local order = getorderfromorderbook(ordersbyside[i]) \
+      if order[1] == 0 then \
+        return order \
+      end \
+      order[2].symbolshortname = symbolshortname \
+      table.insert(orders, order[2]) \
     end \
-    return orders \
+    return {1, orders, symbolid, side} \
   end \
   ';
+
+  exports.getorderbook = getorderbook;
 
   /*
   * getorderbooktop()
-  * get the lowest buy & highest sell price and quantity on the orderbook for a symbol
-  * params: brokerid, symbol
-  * returns: highest price sell & lowest price buy orders
+  * get the lowest buy or highest sell priced order on the orderbook
+  * params: symbolid, side
+  * returns: 0, errorcode if error, else 1, order
   */
-  getorderbooktop = gethashvalues + '\
-  local getorderbooktop = function(brokerid, symbolid) \
-    local orders = {} \
-    local bestbuyprice \
-    --[[ buy orders are stored in the orderbook with a -ve price, so run from -inf to 0 ]] \
-    local topbuyorderids = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. symbolid, "-inf", 0) \
-    for i = 1, #buyorderids do \
-      local buyorder = gethashvalues("broker:" .. brokerid .. ":order:" .. buyorderids[i]) \
-      if i == 1 then \
-        bestbuyprice = buyorder.price \
-      else \
-      end \
-      table.insert(orders, buyorder) \
+  getorderbooktop = getorderfromorderbook + '\
+  local getorderbooktop = function(symbolid, side) \
+    local lowerbound \
+    local upperbound \
+    --[[ buy orders are -ve ]] \
+    if tonumber(side) == 1 then \
+      lowerbound = "-inf" \
+      upperbound = 0 \
+    else \
+      lowerbound = 0 \
+      upperbound = "inf" \
     end \
-    --[[ sell orders have a +ve price, so run from 0 to inf ]] \
-    local topsellorderids = redis.call("zrangebyscore", "broker:" .. brokerid .. ":orderbook:" .. symbolid, 0, "inf") \
-    for i = 1, #topsellorderids do \
-      local sellorder = gethashvalues("broker:" .. brokerid .. ":order:" .. topsellorderids[i]) \
-      table.insert(orders, sellorder) \
+    --[[ get the first order ]] \
+    local orderid = redis.call("zrangebyscore", "orderbook:" .. symbolid, lowerbound, upperbound, "limit", 0, 1) \
+    if #orderid == 0 then \
+      return {0, 1043, symbolid, side} \
     end \
-    return orders \
+    local order = getorderfromorderbook(orderid[1]) \
+    order[2].symbolshortname = redis.call("hget", "symbol:" .. symbolid, "shortname") \
+    return {order[1], order[2], symbolid, side} \
   end \
   ';
 
+  exports.getorderbooktop = getorderbooktop;
+
   /*
   * getorderbooktopall()
-  * get the lowest buy & highest sell orders on the orderbook for all symbols
-  * params: brokerid
+  * get the lowest buy or highest sell orders on the orderbook for all symbols
+  * params: side
   * returns: list of orders
   */
   getorderbooktopall = getorderbooktop + '\
-  local getorderbooktopall = function(brokerid) \
-    local toporders = {} \
+  local getorderbooktopall = function(side) \
+    local orders = {} \
     --[[ get the symbols that have orderbooks ]] \
-    local orderbooks = redis.call("smembers", "broker:" .. brokerid .. ":orderbooks") \
+    local orderbooks = redis.call("smembers", "orderbooks") \
     for i = 1, #orderbooks do \
-      local orders = getorderbooktop(brokerid, orderbooks[i]) \
-      for j = 1, #orders do \
-        table.insert(toporders, orders[j]) \
+      local order = getorderbooktop(orderbooks[i], side) \
+      if order[1] == 1 then \
+        table.insert(orders, order[2]) \
       end \
     end \
-    return toporders \
+    return orders \
   end \
   ';
 
   /*
   * creditcheck()
   * credit checks an order or trade
-  * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, settlcurramt, currencyid, futsettdate, totalcost, instrumenttypeid 
-  * returns: 0=fail, error code/1=succeed, inialmargin
+  * params: accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, settlcurramt, currencyid, futsettdate, totalcost, instrumenttypeid
+  * returns: 0=succeed, inialmargin/1=fail, error code
   */
-  creditcheck = rejectorder + getinitialmargin + getpositionbysymbol + getfreemargin + getaccount + '\
-  local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, settlcurramt, currencyid, futsettdate, totalcost, instrumenttypeid) \
-    redis.log(redis.LOG_NOTICE, "creditcheck") \
-    side = tonumber(side) \
-    quantity = tonumber(quantity) \
-    --[[ calculate margin required for order ]] \
-    local initialmargin = getinitialmargin(brokerid, symbolid, settlcurramt, totalcost) \
-    --[[ get position, if there is one, as may be a closing buy or sell ]] \
-    local position = getpositionbysymbol(accountid, brokerid, symbolid, futsettdate) \
-    if position then \
-      --[[ we have a position - always allow closing trades ]] \
-      local posqty = tonumber(position["quantity"]) \
-      if (side == 1 and posqty < 0) or (side == 2 and posqty > 0) then \
-        if quantity <= math.abs(posqty) then \
-          --[[ closing trade, so ok ]] \
-          return {1, initialmargin} \
+  creditcheck = rejectorder + getinitialmargin + getpositionbysymbol + getfreemargin + '\
+    local creditcheck = function(accountid, brokerid, orderid, clientid, symbolid, side, quantity, price, settlcurramt, currencyid, futsettdate, totalcost, instrumenttypeid) \
+      redis.log(redis.LOG_NOTICE, "creditcheck") \
+      side = tonumber(side) \
+      quantity = tonumber(quantity) \
+      local temp = {} \
+      --[[ calculate margin required for order ]] \
+      temp.initialmargin = getinitialmargin(brokerid, symbolid, settlcurramt, totalcost) \
+      --[[ get position, if there is one, as may be a closing buy or sell ]] \
+      temp.position = getpositionbysymbol(accountid, brokerid, symbolid, futsettdate) \
+      if temp.position then \
+        --[[ we have a position - always allow closing trades ]] \
+        temp.posqty = tonumber(temp.position["quantity"]) \
+        if (side == 1 and temp.posqty < 0) or (side == 2 and temp.posqty > 0) then \
+          if quantity <= math.abs(temp.posqty) then \
+            --[[ closing trade, so ok ]] \
+            return {0, temp.initialmargin} \
+          end \
+          if side == 2 and (instrumenttypeid == "DE" or instrumenttypeid == "IE") then \
+              --[[ equity, so cannot sell more than we have ]] \
+              rejectorder(brokerid, orderid, 0, "Quantity greater than position quantity") \
+              return {1, 1019} \
+          end \
+          --[[ we are trying to close a quantity greater than current position, so need to check we can open a new position ]] \
+          temp.freemargin = getfreemargin(accountid, brokerid) \
+          --[[ add the margin returned by closing the position ]] \
+          temp.margin = getmargin(symbolid, math.abs(temp.posqty)) \
+          --[[ get initial margin for remaining quantity after closing position ]] \
+          temp.initialmargin = getinitialmargin(brokerid, symbolid, (quantity - math.abs(temp.posqty)) * price, totalcost) \
+          if temp.initialmargin + totalcost > temp.freemargin + temp.margin then \
+            rejectorder(brokerid, orderid, 0, "Insufficient free margin") \
+            return {1, 1020} \
+          end \
+          --[[ closing trade or enough margin to close & open a new position, so ok ]] \
+          return {0, temp.initialmargin} \
         end \
-        if side == 2 and (instrumenttypeid == "DE" or instrumenttypeid == "IE") then \
-            --[[ equity, so cannot sell more than we have ]] \
-            rejectorder(brokerid, orderid, 0, "Quantity greater than position quantity") \
-            return {0, 1019} \
-        end \
-        --[[ we are trying to close a quantity greater than current position, so need to check we can open a new position ]] \
-        local freemargin = getfreemargin(accountid, brokerid) \
-        --[[ add the margin returned by closing the position ]] \
-        local margin = getmargin(symbolid, math.abs(posqty)) \
-        --[[ get initial margin for remaining quantity after closing position ]] \
-        initialmargin = getinitialmargin(brokerid, symbolid, (quantity - math.abs(posqty)) * price, totalcost) \
-        if initialmargin + totalcost > freemargin + margin then \
-          rejectorder(brokerid, orderid, 0, "Insufficient free margin") \
-          return {0, 1020} \
-        end \
-        --[[ closing trade or enough margin to close & open a new position, so ok ]] \
-        return {1, initialmargin} \
       end \
-    end \
-    if instrumenttypeid == "DE" or instrumenttypeid == "IE" then \
-      if side == 1 then \
-        local account = getaccount(accountid, brokerid) \
-        if tonumber(account["balance"]) + tonumber(account["balanceuncleared"]) + tonumber(account["creditlimit"]) < settlcurramt + totalcost then \
-          rejectorder(brokerid, orderid, 0, "Insufficient funds") \
-          return {0, 1041} \
-        end \
-      else \
-        --[[ allow ifa certificated equity sells ]] \
-        if instrumenttypeid == "DE" then \
-          if redis.call("hget", "broker:" .. brokerid .. ":client:" .. clientid, "clienttypeid") == "3" then \
-            return {1, initialmargin} \
+      if instrumenttypeid == "DE" or instrumenttypeid == "IE" then \
+        if side == 1 then \
+          temp.account = getaccount(accountid, brokerid) \
+          if (tonumber(temp.account["balance"]) + tonumber(temp.account["balanceuncleared"]) + tonumber(temp.account["creditlimit"])) == 0 or (tonumber(temp.account["balance"]) + tonumber(temp.account["balanceuncleared"]) + tonumber(temp.account["creditlimit"])) < settlcurramt + totalcost then \
+            rejectorder(brokerid, orderid, 0, "Insufficient funds") \
+            return {1, 1041} \
+          end \
+        else \
+          --[[ allow ifa certificated equity sells ]] \
+          if instrumenttypeid == "DE" then \
+            if redis.call("hget", "broker:" .. brokerid .. ":client:" .. clientid, "clienttypeid") == "3" then \
+              return {0, temp.initialmargin} \
+            end \
+          end \
+          --[[ check there is a position ]] \
+          if not temp.position then \
+            rejectorder(brokerid, orderid, 0, "No position held in this instrument") \
+            return {1, 1003} \
+          end \
+          --[[ check the position is of sufficient size ]] \
+          temp.posqty = tonumber(temp.position["quantity"]) \
+          if temp.posqty < 0 or quantity > temp.posqty then \
+            rejectorder(brokerid, orderid, 0, "Insufficient position size in this instrument") \
+            return {1, 1004} \
           end \
         end \
-        --[[ check there is a position ]] \
-        if not position then \
-          rejectorder(brokerid, orderid, 0, "No position held in this instrument") \
-          return {0, 1003} \
-        end \
-        --[[ check the position is of sufficient size ]] \
-        local posqty = tonumber(position["quantity"]) \
-        if posqty < 0 or quantity > posqty then \
-          rejectorder(brokerid, orderid, 0, "Insufficient position size in this instrument") \
-          return {0, 1004} \
+      elseif instrumenttypeid == "CFD" or instrumenttypeid == "SPB" or instrumenttypeid == "CCFD" then \
+        --[[ check free margin for all derivative trades ]] \
+        temp.freemargin = getfreemargin(accountid, brokerid) \
+        if temp.initialmargin + totalcost > temp.freemargin then \
+          rejectorder(brokerid, orderid, 0, "Insufficient free margin") \
+          return {1, 1020} \
         end \
       end \
-    elseif instrumenttypeid == "CFD" or instrumenttypeid == "SPB" or instrumenttypeid == "CCFD" then \
-      --[[ check free margin for all derivative trades ]] \
-      local freemargin = getfreemargin(accountid, brokerid) \
-      if initialmargin + totalcost > freemargin then \
-        rejectorder(brokerid, orderid, 0, "Insufficient free margin") \
-        return {0, 1020} \
-      end \
+      return {0, temp.initialmargin} \
     end \
-    return {1, initialmargin} \
-  end \
   ';
-
   exports.creditcheck = creditcheck;
-
-  /*
-  * settradestatus()
+ /*
+  * getpostingnote()
+  * get a note of a trade for a trade transaction
+  * params: brokerid, tradeid, isbrokernote
+  * returns: a note of the trade posting
+  * currently we are not using this function ***
   */
-  settradestatus = '\
-  local settradestatus = function(brokerid, tradeid, status) \
-    redis.call("hset", "broker:" .. brokerid .. ":trade:" .. tradeid, "status", status) \
-  end \
+  getpostingnote = utils.getdateindex + utils.getclientnamebyaccount + utils.firsttoupper + '\
+    local getpostingnote = function(brokerid, tradeid, isbrokernote) \
+      local temp = {} \
+      local trade = {} \
+      temp.trade = redis.call("hmget", "broker:" .. brokerid .. ":trade:" .. tradeid, "side", "quantity", "price", "futsettdate", "symbolid", "accountid") \
+      trade.side = temp.trade[1] \
+      trade.quantity = temp.trade[2] \
+      trade.price = temp.trade[3] \
+      trade.futsettdate = temp.trade[4] \
+      trade.symbolid = temp.trade[5] \
+      trade.accountid = temp.trade[6] \
+      trade.symbolshortname = redis.call("hget", "symbol:" .. trade.symbolid, "shortname") \
+      if trade.accountid then \
+        trade.clientname = getclientnamebyaccount(brokerid, trade.accountid) \
+      end \
+      if tonumber(trade.side) == 1 then \
+        if isbrokernote == 1 and trade.clientname then \
+          temp.desc = firsttoupper(trade.clientname[1]) .. " A/c: " .. trade.accountid .. "  bought" \
+        else \
+          temp.desc = "Bought" \
+        end \
+      else \
+        if isbrokernote == 1 and trade.clientname then \
+          temp.desc = firsttoupper(trade.clientname[1]) .. " A/c: " .. trade.accountid .. "  sold" \
+        else \
+          temp.desc = "Sold" \
+        end \
+      end \
+      return temp.desc .. " " .. trade.quantity .. " " .. trade.symbolshortname .. " @ " .. trade.price .. " to settle " .. getdateindex(trade.futsettdate) \
+    end \
   ';
-
   /*
   * newtradetransaction()
   * cash side of a client trade
+  * args: consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, rate, timestamp, tradeid, side, timestampms, linktype, linkid
   */
-  newtradetransaction = getbrokeraccountsmapid + newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + '\
-  local newtradetransaction = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, rate, timestamp, tradeid, side, timestampms) \
+  newtradetransaction = getbrokeraccountsmapid + newtransaction + newposting + getaccountbalance + updateaccountbalanceuncleared + updateaccountbalance + '\
+  local newtradetransaction = function(consideration, commission, ptmlevy, stampduty, contractcharge, brokerid, clientaccountid, currencyid, rate, timestamp, tradeid, side, timestampms, linktype, linkid) \
     redis.log(redis.LOG_NOTICE, "newtradetransaction") \
+    local fields = {} \
     --[[ get broker accounts ]] \
-    local considerationaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Stock B/S") \
-    local commissionaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Commission") \
-    local ptmaccountid = getbrokeraccountsmapid(brokerid, currencyid, "PTM levy") \
-    local sdrtaccountid = getbrokeraccountsmapid(brokerid, currencyid, "SDRT") \
+    fields.considerationaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Stock B/S") \
+    fields.commissionaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Commission") \
+    fields.ptmaccountid = getbrokeraccountsmapid(brokerid, currencyid, "PTM levy") \
+    fields.sdrtaccountid = getbrokeraccountsmapid(brokerid, currencyid, "SDRT") \
     --[[ calculate amounts in broker currency ]] \
     consideration = tonumber(consideration) \
-    local considerationlocalamount = consideration * rate \
-    local commissionlocalamount = commission * rate \
-    local transactionid \
+    fields.considerationlocalamount = consideration * rate \
+    fields.commissionlocalamount = commission * rate \
+    fields.ptmlevylocalamount = ptmlevy * rate \
+    fields.transactionid = "" \
     if tonumber(side) == 1 then \
       --[[ buy includes all costs ]] \
-      local totalamount = consideration + commission + stampduty + ptmlevy \
+      fields.totalamount = consideration + commission + stampduty + ptmlevy \
       --[[ calculate amounts in local currency ]] \
-      local localamount = totalamount * rate \
-      local ptmlevylocalamount = ptmlevy * rate \
-      local stampdutylocalamount = stampduty * rate \
-      --[[ the transaction ]] \
-      transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt", rate, "trade:" .. tradeid, timestamp, "TRC", timestampms) \
-      --[[ client account posting - note: update cleared balance ]] \
-      newposting(clientaccountid, -totalamount, brokerid, -localamount, transactionid, timestampms) \
-      updateaccountbalance(clientaccountid, -totalamount, brokerid, -localamount) \
-      --[[ consideration posting ]] \
-      newposting(considerationaccountid, consideration, brokerid, considerationlocalamount, transactionid, timestampms) \
-      updateaccountbalance(considerationaccountid, consideration, brokerid, considerationlocalamount) \
-      --[[ commission posting ]] \
-      if commission > 0 then \
-        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, timestampms) \
-        updateaccountbalance(commissionaccountid, commission, brokerid, commissionlocalamount) \
+      fields.localamount = fields.totalamount * rate \
+      fields.stampdutylocalamount = stampduty * rate \
+      fields.note = "Trade receipt" \
+      --[[ create new transaction, "" - localtimestamp ]] \
+      fields.transactionid = newtransaction(fields.totalamount, brokerid, currencyid, fields.localamount, fields.note, rate, "trade:" .. tradeid, timestamp, "TRC", timestampms, linktype, linkid) \
+      --[[ create client account posting - note: update cleared balance ]] \
+      newposting(clientaccountid, -fields.totalamount, brokerid, -fields.localamount, "", fields.transactionid, timestampms, timestamp, linktype, linkid) \
+      updateaccountbalance(clientaccountid, -fields.totalamount, brokerid, -fields.localamount) \
+      --[[ create consideration posting ]] \
+      newposting(fields.considerationaccountid, consideration, brokerid, fields.considerationlocalamount, "", fields.transactionid, timestampms, timestamp, linktype, linkid) \
+      updateaccountbalance(fields.considerationaccountid, consideration, brokerid, fields.considerationlocalamount) \
+      --[[ create commission posting ]] \
+      if tonumber(commission) ~= 0 then \
+        newposting(fields.commissionaccountid, commission, brokerid, fields.commissionlocalamount, "", fields.transactionid, timestampms, timestamp, linktype, linkid) \
+        updateaccountbalance(fields.commissionaccountid, commission, brokerid, fields.commissionlocalamount) \
       end \
-      --[[ ptm levy posting ]] \
-      if ptmlevy > 0 then \
-        newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid, timestampms) \
-        updateaccountbalance(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount) \
+      --[[ create ptm levy posting ]] \
+      if tonumber(ptmlevy) ~= 0 then \
+        newposting(fields.ptmaccountid, ptmlevy, brokerid, fields.ptmlevylocalamount, "", fields.transactionid, timestampms, timestamp, linktype, linkid) \
+        updateaccountbalance(fields.ptmaccountid, ptmlevy, brokerid, fields.ptmlevylocalamount) \
       end \
-      --[[ sdrt posting ]] \
-      if stampduty > 0 then \
-        newposting(sdrtaccountid, stampduty, brokerid, stampdutylocalamount, transactionid, timestampms) \
-        updateaccountbalance(sdrtaccountid, stampduty, brokerid, stampdutylocalamount) \
+      --[[ create sdrt posting ]] \
+      if tonumber(stampduty) ~= 0 then \
+        newposting(fields.sdrtaccountid, stampduty, brokerid, fields.stampdutylocalamount, "", fields.transactionid, timestampms, timestamp, linktype, linkid) \
+        updateaccountbalance(fields.sdrtaccountid, stampduty, brokerid, fields.stampdutylocalamount) \
       end \
-   else \
+    else \
       --[[ we are selling so only commission & PTM apply ]] \
-      local totalamount = consideration - commission - ptmlevy \
-      local localamount = totalamount * rate \
-      --[[ the transaction ]] \
-      transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade payment", rate, "trade:" .. tradeid, timestamp, "TPC", timestampms) \
-      --[[ client account posting - note: update uncleared balance ]] \
-      newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, timestampms) \
-      updateaccountbalanceuncleared(clientaccountid, totalamount, brokerid, localamount) \
-      --[[ consideration posting ]] \
-      newposting(considerationaccountid, -consideration, brokerid, -considerationlocalamount, transactionid, timestampms) \
-      updateaccountbalance(considerationaccountid, -consideration, brokerid, -considerationlocalamount) \
-      --[[ commission posting ]] \
-      if commission > 0 then \
-        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, timestampms) \
-        updateaccountbalance(commissionaccountid, commission, brokerid, commissionlocalamount) \
+      fields.totalamount = consideration - commission - ptmlevy \
+      fields.localamount = fields.totalamount * rate \
+      fields.note = "Trade payment" \
+      --[[ create new transaction ]] \
+      fields.transactionid = newtransaction(fields.totalamount, brokerid, currencyid, fields.localamount, fields.note, rate, "trade:" .. tradeid, timestamp, "TPC", timestampms, linktype, linkid) \
+      --[[ create client account posting - note: update uncleared balance ]] \
+      newposting(clientaccountid, fields.totalamount, brokerid, fields.localamount, "", fields.transactionid, timestampms, timestamp, linktype, linkid) \
+      updateaccountbalanceuncleared(clientaccountid, fields.totalamount, brokerid, fields.localamount) \
+      --[[ create consideration posting ]] \
+      newposting(fields.considerationaccountid, -consideration, brokerid, -fields.considerationlocalamount, "", fields.transactionid, timestampms, timestamp, linktype, linkid) \
+      updateaccountbalance(fields.considerationaccountid, -consideration, brokerid, -fields.considerationlocalamount) \
+      --[[ create commission posting ]] \
+      if tonumber(commission) ~= 0 then \
+        newposting(fields.commissionaccountid, commission, brokerid, fields.commissionlocalamount, "", fields.transactionid, timestampms, timestamp, linktype, linkid) \
+        updateaccountbalance(fields.commissionaccountid, commission, brokerid, fields.commissionlocalamount) \
       end \
-       --[[ ptm levy posting ]] \
-      if ptmlevy > 0 then \
-        newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid, timestampms) \
-        updateaccountbalance(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount) \
+      --[[ create ptm levy posting ]] \
+      if tonumber(ptmlevy) ~= 0 then \
+        newposting(fields.ptmaccountid, ptmlevy, brokerid, fields.ptmlevylocalamount, "", fields.transactionid, timestampms, timestamp, linktype, linkid) \
+        updateaccountbalance(fields.ptmaccountid, ptmlevy, brokerid, fields.ptmlevylocalamount) \
       end \
    end \
+   --[[ add transactionid index to the trade ]] \
+   redis.call("set", "broker:" .. brokerid .. ":trade:" .. tradeid .. ":transactionid", fields.transactionid) \
   end \
   ';
 
-  /*
+ /*
   * deletetradetransaction()
+  * params: consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, rate, timestamp, tradeid, side, timestampms
   * cash side of deleting a client trade
   */
-  deletetradetransaction = getbrokeraccountsmapid + newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + '\
-  local deletetradetransaction = function(consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, rate, timestamp, tradeid, side, timestampms) \
-    redis.log(redis.LOG_NOTICE, "deletetradetransaction") \
-    --[[ get broker accounts ]] \
-    local considerationaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Stock B/S") \
-    local commissionaccountid = getbrokeraccountsmapid(brokerid, currencyid, "Commission") \
-    local ptmaccountid = getbrokeraccountsmapid(brokerid, currencyid, "PTM levy") \
-    local sdrtaccountid = getbrokeraccountsmapid(brokerid, currencyid, "SDRT") \
-    --[[ get reverse amounts because we are deleting ]] \
-    consideration = -tonumber(consideration) \
-    commission = -tonumber(commission) \
-    stampduty = -tonumber(stampduty) \
-    ptmlevy = -tonumber(ptmlevy) \
-    --[[ calculate amounts in broker currency ]] \
-    rate = tonumber(rate) \
-    local considerationlocalamount = consideration * rate \
-    local commissionlocalamount = commission * rate \
-    local transactionid \
-    if tonumber(side) == 1 then \
-      --[[ buy includes all costs ]] \
-      local totalamount = consideration + commission + stampduty + ptmlevy \
-      --[[ calculate amounts in local currency ]] \
-      local localamount = totalamount * rate \
-      local ptmlevylocalamount = ptmlevy * rate \
-      local stampdutylocalamount = stampduty * rate \
-      --[[ the transaction ]] \
-      transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade receipt reversal", rate, "trade:" .. tradeid, timestamp, "TPC", timestampms) \
-      --[[ client account posting - note: update cleared balance ]] \
-      newposting(clientaccountid, -totalamount, brokerid, -localamount, transactionid, timestampms) \
-      updateaccountbalance(clientaccountid, -totalamount, brokerid, -localamount) \
-      --[[ consideration posting ]] \
-      newposting(considerationaccountid, consideration, brokerid, considerationlocalamount, transactionid, timestampms) \
-      updateaccountbalance(considerationaccountid, consideration, brokerid, considerationlocalamount) \
-      --[[ commission posting ]] \
-      if commission ~= 0 then \
-        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, timestampms) \
-        updateaccountbalance(commissionaccountid, commission, brokerid, commissionlocalamount) \
+  deletetradetransaction = getbrokeraccountsmapid + newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + utils.getparentlinkdetails + '\
+    local deletetradetransaction = function(consideration, commission, ptmlevy, stampduty, brokerid, clientaccountid, currencyid, rate, timestamp, tradeid, side, timestampms) \
+      redis.log(redis.LOG_NOTICE, "deletetradetransaction") \
+      --[[ get broker accounts ]] \
+      local accounts = {} \
+      local trade = {} \
+      accounts.considerationid = getbrokeraccountsmapid(brokerid, currencyid, "Stock B/S") \
+      accounts.commissionid = getbrokeraccountsmapid(brokerid, currencyid, "Commission") \
+      accounts.ptmid = getbrokeraccountsmapid(brokerid, currencyid, "PTM levy") \
+      accounts.sdrtid = getbrokeraccountsmapid(brokerid, currencyid, "SDRT") \
+      --[[ get reverse amounts because we are deleting ]] \
+      consideration = -tonumber(consideration) \
+      commission = -tonumber(commission) \
+      stampduty = -tonumber(stampduty) \
+      ptmlevy = -tonumber(ptmlevy) \
+      --[[ calculate amounts in broker currency ]] \
+      rate = tonumber(rate) \
+      trade.considerationlocalamount = consideration * rate \
+      trade.commissionlocalamount = commission * rate \
+      trade.ptmlevylocalamount = ptmlevy * rate \
+      trade.linkdetails = getparentlinkdetails(brokerid, clientaccountid) \
+      trade.linktype = tonumber(trade.linkdetails[1]) \
+      trade.linkid = tonumber(trade.linkdetails[2]) \
+      if tonumber(side) == 1 then \
+        --[[ buy includes all costs ]] \
+        trade.totalamount = consideration + commission + stampduty + ptmlevy \
+        --[[ calculate amounts in local currency ]] \
+        trade.localamount = trade.totalamount * rate \
+        trade.stampdutylocalamount = stampduty * rate \
+        --[[ the transaction ]] \
+        trade.transactionid = newtransaction(trade.totalamount, brokerid, currencyid, trade.localamount, "", rate, "trade:" .. tradeid, timestamp, "TRR", timestampms, trade.linktype, trade.linkid) \
+        --[[ client account posting - note: update cleared balance ]] \
+        newposting(clientaccountid, -trade.totalamount, brokerid, -trade.localamount, "", trade.transactionid, timestampms, timestamp, trade.linktype, trade.linkid) \
+        updateaccountbalance(clientaccountid, -trade.totalamount, brokerid, -trade.localamount) \
+        --[[ consideration posting ]] \
+        newposting(accounts.considerationid, consideration, brokerid, trade.considerationlocalamount, "", trade.transactionid, timestampms, timestamp, trade.linktype, trade.linkid) \
+        updateaccountbalance(accounts.considerationid, consideration, brokerid, trade.considerationlocalamount) \
+        --[[ commission posting ]] \
+        if commission ~= 0 then \
+          newposting(accounts.commissionid, commission, brokerid, trade.commissionlocalamount, "", trade.transactionid, timestampms, timestamp, trade.linktype, trade.linkid) \
+          updateaccountbalance(accounts.commissionid, commission, brokerid, trade.commissionlocalamount) \
+        end \
+        --[[ ptm levy posting ]] \
+        if ptmlevy ~= 0 then \
+          newposting(accounts.ptmid, ptmlevy, brokerid, trade.ptmlevylocalamount, "", trade.transactionid, timestampms, timestamp, trade.linktype, trade.linkid) \
+          updateaccountbalance(accounts.ptmid, ptmlevy, brokerid, trade.ptmlevylocalamount) \
+        end \
+        --[[ sdrt posting ]] \
+        if stampduty ~= 0 then \
+          newposting(accounts.sdrtid, stampduty, brokerid, trade.stampdutylocalamount, "", trade.transactionid, timestampms, timestamp, trade.linktype, trade.linkid) \
+          updateaccountbalance(accounts.sdrtid, stampduty, brokerid, trade.stampdutylocalamount) \
+        end \
+      else \
+        --[[ we are selling so only commission & PTM apply ]] \
+        trade.totalamount = consideration - commission - ptmlevy \
+        trade.localamount = trade.totalamount * rate \
+        --[[ the transaction ]] \
+        trade.transactionid = newtransaction(trade.totalamount, brokerid, currencyid, trade.localamount, "", rate, "trade:" .. tradeid, timestamp, "TPR", timestampms, trade.linktype, trade.linkid) \
+        --[[ client account posting - note: update uncleared balance ]] \
+        newposting(clientaccountid, trade.totalamount, brokerid, trade.localamount, "", trade.transactionid, timestampms, timestamp, trade.linktype, trade.linkid) \
+        updateaccountbalanceuncleared(clientaccountid, trade.totalamount, brokerid, trade.localamount) \
+        --[[ consideration posting ]] \
+        newposting(accounts.considerationid, -consideration, brokerid, -trade.considerationlocalamount, "", trade.transactionid, timestampms, timestamp, trade.linktype, trade.linkid) \
+        updateaccountbalance(accounts.considerationid, -consideration, brokerid, -trade.considerationlocalamount) \
+        --[[ commission posting ]] \
+        if commission ~= 0 then \
+          newposting(accounts.commissionid, commission, brokerid, trade.commissionlocalamount, "", trade.transactionid, timestampms, timestamp, trade.linktype, trade.linkid) \
+          updateaccountbalance(accounts.commissionid, commission, brokerid, trade.commissionlocalamount) \
+        end \
+         --[[ ptm levy posting ]] \
+        if ptmlevy ~= 0 then \
+          newposting(accounts.ptmid, ptmlevy, brokerid, trade.ptmlevylocalamount, "", trade.transactionid, timestampms, timestamp, trade.linktype, trade.linkid) \
+          updateaccountbalance(accounts.ptmid, ptmlevy, brokerid, trade.ptmlevylocalamount) \
+        end \
       end \
-      --[[ ptm levy posting ]] \
-      if ptmlevy ~= 0 then \
-        newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid, timestampms) \
-        updateaccountbalance(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount) \
-      end \
-      --[[ sdrt posting ]] \
-      if stampduty ~= 0 then \
-        newposting(sdrtaccountid, stampduty, brokerid, stampdutylocalamount, transactionid, timestampms) \
-        updateaccountbalance(sdrtaccountid, stampduty, brokerid, stampdutylocalamount) \
-      end \
-   else \
-      --[[ we are selling so only commission & PTM apply ]] \
-      local totalamount = consideration - commission - ptmlevy \
-      local localamount = totalamount * rate \
-      --[[ the transaction ]] \
-      transactionid = newtransaction(totalamount, brokerid, currencyid, localamount, "Trade payment reversal", rate, "trade:" .. tradeid, timestamp, "TRC", timestampms) \
-      --[[ client account posting - note: update uncleared balance ]] \
-      newposting(clientaccountid, totalamount, brokerid, localamount, transactionid, timestampms) \
-      updateaccountbalanceuncleared(clientaccountid, totalamount, brokerid, localamount) \
-      --[[ consideration posting ]] \
-      newposting(considerationaccountid, -consideration, brokerid, -considerationlocalamount, transactionid, timestampms) \
-      updateaccountbalance(considerationaccountid, -consideration, brokerid, -considerationlocalamount) \
-      --[[ commission posting ]] \
-      if commission ~= 0 then \
-        newposting(commissionaccountid, commission, brokerid, commissionlocalamount, transactionid, timestampms) \
-        updateaccountbalance(commissionaccountid, commission, brokerid, commissionlocalamount) \
-      end \
-       --[[ ptm levy posting ]] \
-      if ptmlevy ~= 0 then \
-        newposting(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount, transactionid, timestampms) \
-        updateaccountbalance(ptmaccountid, ptmlevy, brokerid, ptmlevylocalamount) \
-      end \
-   end \
-  end \
+    end \
   ';
-
   /*
   * newpositiontransaction()
   * a transaction to either create or update a position and create a position posting
   */
-  newpositiontransaction = getpositionid + newposition + updateposition + newpositionposting + '\
-  local newpositiontransaction = function(accountid, brokerid, cost, futsettdate, linkid, positionpostingtypeid, quantity, symbolid, timestamp, milliseconds) \
-    local positionid = getpositionid(accountid, brokerid, symbolid, futsettdate) \
-    if not positionid then \
-      --[[ no position, so create a new one ]] \
-      positionid = newposition(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
-    else \
-      --[[ just update it ]] \
-      updateposition(accountid, brokerid, cost, futsettdate, positionid, quantity, symbolid) \
+  newpositiontransaction = utils.removefromnonzerosymbolindex + utils.addtononzerosymbolindex + getpositionid + newposition + updateposition + newpositionposting + '\
+    local newpositiontransaction = function(accountid, brokerid, cost, futsettdate, linkid, positionpostingtypeid, quantity, symbolid, timestamp, milliseconds) \
+      redis.log(redis.LOG_NOTICE, "newpositiontransaction") \
+      local temp = {} \
+      temp.positionid = getpositionid(accountid, brokerid, symbolid, futsettdate) \
+      quantity = tonumber(quantity) \
+      if not temp.positionid then \
+        --[[ no position, so create a new one ]] \
+        temp.positionid = newposition(accountid, brokerid, cost, futsettdate, quantity, symbolid) \
+      else \
+        --[[ just update it ]] \
+        temp.oldquantity = redis.call("hget", "broker:" .. brokerid .. ":position:" .. temp.positionid, "quantity") \
+        temp.newquantity = tonumber(temp.oldquantity + quantity) \
+        updateposition(accountid, brokerid, cost, futsettdate, temp.positionid, quantity, symbolid) \
+        if tonumber(temp.oldquantity) == 0 and tonumber(temp.newquantity) > 0 then \
+          addtononzerosymbolindex(brokerid, symbolid) \
+        elseif tonumber(temp.newquantity) == 0 then \
+          removefromnonzerosymbolindex(brokerid, symbolid) \
+        end \
+      end \
+      if tonumber(quantity) ~= 0 then \
+        temp.positionpostingid = newpositionposting(brokerid, cost, linkid, temp.positionid, positionpostingtypeid, quantity, timestamp, milliseconds) \
+        if tonumber(positionpostingtypeid) == 2 then \
+          redis.call("sadd", "corporateaction:" .. linkid .. ":positionpostings", brokerid .. ":" .. temp.positionpostingid) \
+        end \
+      end \
+      return {temp.positionid, temp.positionpostingid} \
     end \
-    newpositionposting(brokerid, cost, linkid, positionid, positionpostingtypeid, quantity, timestamp, milliseconds) \
-  end \
   ';
 
-  exports.newpositiontransaction = newpositiontransaction;
+  exports.newpositiontransaction = newpositiontransaction + '\
+    return newpositiontransaction(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10]) \
+  ';
 
-  /*
+  updateunclearedcashbreakdownindex = '\
+    local updateunclearedcashbreakdownindex = function(brokerid, tradeid, accountid) \
+      redis.log(redis.LOG_NOTICE, "updateunclearedcashbreakdownindex") \
+      redis.call("zrem", "broker:" .. brokerid .. ":account:" .. accountid .. ":unclearedcashbreakdown", "trade:" .. tradeid) \
+      return \
+    end \
+  ';
+
+  exports.updateunclearedcashbreakdownindex = updateunclearedcashbreakdownindex + '\
+    return updateunclearedcashbreakdownindex(ARGV[1], ARGV[2], ARGV[3]) \
+  ';
+ /*
   * deletetrade()
   * function to handle processing for deleting a trade
-  * params: trade, timestamp, timestampms
+  * params: trade, timestamp, timestampms, localtimestamp
   */
-  deletetrade = gethashvalues + deletetradetransaction + newpositiontransaction + settradestatus + '\
-  local deletetrade = function(trade, timestamp, timestampms) \
-  local rate = 1 \
-  local quantity \
-  local cost \
-  if tonumber(trade["side"]) == 1 then \
-    quantity = trade["quantity"]) \
-    cost = trade["settlcurramt"] \
-  else \
-    quantity = -tonumber(trade["quantity"]) \
-    cost = -tonumber(trade["settlcurramt"]) \
-  end \
-  deletetradetransaction(trade["settlcurramt"], trade["commission"], trade["ptmlevy"], trade["stampduty"], trade["brokerid"], trade["accountid"], trade["currencyid"], rate, timestamp, trade["tradeid"], trade["side"], timestampms) \
-  newpositiontransaction(trade["accountid"], trade["brokerid"], -cost, trade["futsettdate"], trade["tradeid"], 5, -quantity, trade["symbolid"], timestamp, timestampms) \
-  settradestatus(trade["brokerid"], trade["tradeid"], 3) \
-  --[[ ensure trade is removed from CREST list ]] \
-  removetradesettlestatusindex(trade["brokerid"], trade["tradeid"], trade["tradesettlestatusid"]) \
-  --[[ remove from list for sending contract notes ]] \
-  redis.call("lrem", "contractnotes", 1, trade["brokerid"] .. ":" .. trade["tradeid"]) \
- end \
+  deletetrade = gethashvalues + round + updateunclearedcashbreakdownindex + deletetradetransaction + newpositiontransaction + utils.settradestatus + removetradesettlestatusindex + '\
+    local deletetrade = function(trade, timestamp, timestampms) \
+      local temp = {} \
+      temp.rate = 1 \
+      if tonumber(trade["side"]) == 1 then \
+        temp.quantity = trade["quantity"] \
+        temp.cost = trade["settlcurramt"] \
+      else \
+        temp.quantity = -tonumber(trade["quantity"]) \
+        temp.cost = -tonumber(trade["settlcurramt"]) \
+        updateunclearedcashbreakdownindex(trade["brokerid"], trade["tradeid"], trade["accountid"]) \
+      end \
+      deletetradetransaction(trade["settlcurramt"], trade["commission"], trade["ptmlevy"], trade["stampduty"], trade["brokerid"], trade["accountid"], trade["currencyid"], temp.rate, timestamp, trade["tradeid"], trade["side"], timestampms) \
+      newpositiontransaction(trade["accountid"], trade["brokerid"], -temp.cost, trade["futsettdate"], trade["tradeid"], 5, -temp.quantity, trade["symbolid"], timestamp, timestampms) \
+      settradestatus(trade["brokerid"], trade["tradeid"], 3) \
+      --[[ ensure trade is removed from CREST list ]] \
+      removetradesettlestatusindex(trade["brokerid"], trade["tradeid"], trade["tradesettlestatusid"]) \
+      --[[ remove from list for sending contract notes ]] \
+      redis.call("lrem", "contractnotes", 1, trade["brokerid"] .. ":" .. trade["tradeid"]) \
+    end \
   ';
 
   /*
   * publishtrade()
-  * publish a trade to the trade channel
-  * params: brokerid, tradeid
+  * here 6 refer to tradechannel
+  * publish a trade
   */
   publishtrade = gethashvalues + '\
   local publishtrade = function(brokerid, tradeid) \
-    local trade = gethashvalues("broker:" .. brokerid .. ":trade:" .. tradeid) \
-    redis.call("publish", 6, "{" .. cjson.encode("trade") .. ":" .. cjson.encode(trade) .. "}") \
+    redis.log(redis.LOG_NOTICE, "publishtrade") \
+    redis.call("publish", 6, "{" .. cjson.encode("trade") .. ":" .. cjson.encode(gethashvalues("broker:" .. brokerid .. ":trade:" .. tradeid)) .. "}") \
   end \
   ';
+  generatetradeid = '\
+    local generatetradeid = function(brokerid, tradeid) \
+      while #tradeid < 8 do \
+        tradeid = "0" .. tradeid \
+      end \
+      local prefix = redis.call("hget", "broker:" .. brokerid, "tradeidprefix") \
+      if prefix then \
+        tradeid = prefix .. tradeid \
+      end \
+      return tradeid \
+    end \
+  ';
 
+  exports.generatetradeid = generatetradeid + '\
+    return generatetradeid(ARGV[1], ARGV[2]) \
+  ';
   /*
   * newtrade()
+  * args: accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, stampdutyid, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms, tradesettlestatusid, linkedfromtrade, linkedtotrade, fixseqnumid, lastcrestmessagestatus, markettimestamp, tradesettlestatustime
   * stores a trade & updates cash & position
   */
-  newtrade = newtradetransaction + newpositiontransaction + updatetradesettlestatusindex + updatefieldindexes + publishtrade + '\
-  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms, fixseqnumid) \
+  newtrade = generatetradeid + newtradetransaction + newpositiontransaction + updatetradesettlestatusindex + updatefieldindexes + publishtrade + utils.getparentlinkdetails + utils.updateaddtionalindex +  utils.updateaddtionaltimeindex + '\
+  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, stampdutyid, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms, tradesettlestatusid, linkedfromtrade, linkedtotrade, fixseqnumid, lastcrestmessagestatus, markettimestamp, tradesettlestatustime) \
     redis.log(redis.LOG_NOTICE, "newtrade") \
-    local brokerkey = "broker:" .. brokerid \
-    local tradeid = redis.call("hincrby", brokerkey, "lasttradeid", 1) \
-    if not tradeid then return 0 end \
-    local strsettlcurramt = tostring(settlcurramt) \
-    redis.call("hmset", brokerkey .. ":trade:" .. tradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", tostring(commission), "ptmlevy", tostring(ptmlevy), "stampduty", tostring(stampduty), "contractcharge", tostring(contractcharge), "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", strsettlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "finance", finance, "tradesettlestatusid", 0, "fixseqnumid", fixseqnumid) \
-    redis.call("sadd", brokerkey .. ":tradeid", "trade:" .. tradeid) \
-    redis.call("sadd", brokerkey .. ":trades", tradeid) \
-    redis.call("sadd", brokerkey .. ":account:" .. accountid .. ":trades", tradeid) \
-    redis.call("sadd", brokerkey .. ":order:" .. orderid .. ":trades", tradeid) \
-    --[[ add to a system wide index of trades by settlementstatus for CREST ]] \
-    updatetradesettlestatusindex(brokerid, tradeid, 0) \
+    local trade = {} \
+    trade.brokerkey = "broker:" .. brokerid \
+    quantity = tonumber(quantity) \
+    trade.tradeid = redis.call("hincrby", trade.brokerkey, "lasttradeid", 1) \
+    trade.linkdetails = getparentlinkdetails(brokerid, accountid) \
+    trade.linktype = trade.linkdetails[1] \
+    trade.linkid = trade.linkdetails[2] \
+    if not trade.tradeid then return 0 end \
+    trade.gentradeid = generatetradeid(brokerid, tostring(trade.tradeid)) \
+    trade.tradeindexid = trade.gentradeid \
+    if #trade.gentradeid > 8 then \
+      trade.tradeindexid = substring(trade.gentradeid, 3) \
+    end \
+    trade.strsettlcurramt = tostring(settlcurramt) \
+    if not tradesettlestatustime then \
+      tradesettlestatustime = "" \
+    end \
+    redis.call("hmset", trade.brokerkey .. ":trade:" .. trade.gentradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", round(commission, 2), "ptmlevy", round(ptmlevy, 2), "stampduty", round(stampduty, 2), "contractcharge", round(contractcharge, 2), "stampdutyid", stampdutyid, "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", trade.gentradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", trade.strsettlcurramt, "settlcurrfxrate", round(settlcurrfxrate, 6), "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "operatortype", operatortype, "operatorid", operatorid, "finance", finance, "tradesettlestatusid", tradesettlestatusid, "linkedfromtrade", linkedfromtrade, "linkedtotrade", linkedtotrade, "status", 1, "fixseqnumid", fixseqnumid, "lastcrestmessagestatus", lastcrestmessagestatus, "markettimestamp", markettimestamp, "tradesettlestatustime", tradesettlestatustime) \
+    redis.call("sadd", trade.brokerkey .. ":tradeid", "trade:" .. trade.gentradeid) \
+    redis.call("sadd", trade.brokerkey .. ":trades", trade.gentradeid) \
+    redis.call("sadd", trade.brokerkey .. ":account:" .. accountid .. ":trades", trade.gentradeid) \
     --[[ add to a system wide list of items for sending contract notes ]] \
-    redis.call("rpush", "contractnotes", brokerid .. ":" .. tradeid) \
+    redis.call("rpush", "contractnotes", brokerid .. ":" .. trade.gentradeid) \
+    --[[ add to a system wide index of trades by settlementstatus for CREST ]] \
+    updatetradesettlestatusindex(brokerid, trade.gentradeid, "", "000") \
+    updateaddtionalindex(brokerid, "trades", trade.gentradeid, trade.linktype, trade.linkid, "", "") \
+    if orderid ~= "" then \
+      redis.call("sadd", trade.brokerkey .. ":order:" .. orderid .. ":trades", trade.gentradeid) \
+    end \
+    redis.call("zadd", trade.brokerkey .. ":account:" .. accountid .. ":tradesbydate", timestampms, trade.gentradeid) \
+    trade.searchKey = clientid .. ":" .. accountid .. ":" .. lowercase(trade.gentradeid) .. ":" .. lowercase(trim(symbolid)) .. ":" .. lowercase(getdateindex(futsettdate)) .. ":" .. lowercase(gettimestampindex(timestamp)) \
+    redis.call("zadd", "broker:" .. brokerid .. ":trade:search_index", trade.tradeindexid, trade.searchKey) \
+    updateaddtionaltimeindex(brokerid, "trade:search_index", trade.searchKey, trade.linktype, trade.linkid, trade.tradeindexid) \
     --[[ add sorted sets for columns that require sorting capability ]] \
-    local indexsettlcurramt = tonumber(strsettlcurramt) * 100 \
-    local fieldscorekeys = {"symbolid", 0, symbolid .. ":" .. tradeid, "timestamp", timestampms, tradeid, "settlcurramt", indexsettlcurramt, tradeid} \
-    updatefieldindexes(brokerid, "trade", fieldscorekeys) \
-    local cost \
+    trade.indexsettlcurramt = tonumber(trade.strsettlcurramt) * 100 \
+    trade.fieldscorekeys = {"symbolid", 0, symbolid .. ":" .. trade.gentradeid, "timestamp", timestampms, trade.gentradeid, "settlcurramt", trade.indexsettlcurramt, trade.gentradeid, "settlementdate", futsettdate, trade.gentradeid,  "tradesettlementstatus", 0, tradesettlestatusid .. ":" .. trade.gentradeid} \
+    updatefieldindexes(brokerid, "trade", trade.fieldscorekeys) \
+    updateaddtionaltimeindex(brokerid, "trade:timestamp", trade.gentradeid, trade.linktype, trade.linkid, timestampms) \
+    updateaddtionaltimeindex(brokerid, "trade:settlementdate", trade.gentradeid, trade.linktype, trade.linkid, futsettdate) \
+    updateaddtionaltimeindex(brokerid, "trade:tradesettlementstatus", tradesettlestatusid .. ":" .. trade.gentradeid, trade.linktype, trade.linkid, 0) \
+    updateaddtionaltimeindex(brokerid, "trade:symbolid", symbolid .. ":" .. trade.gentradeid, trade.linktype, trade.linkid, 0) \
+    updateaddtionaltimeindex(brokerid, "trade:settlcurramt", trade.gentradeid, trade.linktype, trade.linkid, trade.indexsettlcurramt) \
     if tonumber(side) == 1 then \
-      cost = settlcurramt \
+      trade.cost = settlcurramt \
     else \
       quantity = -tonumber(quantity) \
-      cost = -tonumber(settlcurramt) \
+      trade.cost = -tonumber(settlcurramt) \
+      redis.call("zadd", trade.brokerkey .. ":account:" .. accountid .. ":unclearedcashbreakdown", timestampms, "trade:" .. trade.gentradeid) \
     end \
-    local retval = newtradetransaction(settlcurramt, commission, ptmlevy, stampduty, contractcharge, brokerid, accountid, settlcurrencyid, 1, timestamp, tradeid, side, timestampms) \
-    newpositiontransaction(accountid, brokerid, cost, futsettdate, tradeid, 1, quantity, symbolid, timestamp, timestampms) \
-    publishtrade(brokerid, tradeid) \
-    return tradeid \
+    newtradetransaction(settlcurramt, commission, ptmlevy, stampduty, contractcharge, brokerid, accountid, settlcurrencyid, 1, timestamp, trade.gentradeid, side, timestampms, trade.linktype, trade.linkid) \
+    newpositiontransaction(accountid, brokerid, trade.cost, futsettdate, trade.gentradeid, 1, quantity, symbolid, timestamp, timestampms) \
+    publishtrade(brokerid, trade.gentradeid, operatortype) \
+    return trade.gentradeid \
   end \
   ';
 
   exports.newtrade = newtrade;
-
-  /*
-  * updatetrade()
-  * update trade values
+ /*
+  * updateorderindex()
+  * update order index of the trade
   */
-  updatetrade = '\
-  local updatetrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms, tradeid, tradesettlestatusid) \
-    redis.log(redis.LOG_NOTICE, "updatetrade") \
-    redis.call("hmset", brokerkey .. ":trade:" .. tradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", tostring(commission), "ptmlevy", tostring(ptmlevy), "stampduty", tostring(stampduty), "contractcharge", tostring(contractcharge), "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", strsettlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "finance", finance, "tradesettlestatusid", tradesettlestatusid) \
-  end \
-  ';
-
-  /*
-  * getcorporateactionclientdecisionbyclient()
-  * get a corporate action client decision
-  * params: brokerid, clientid, corporateactionid
-  * returns: corporate action client decision as a string or nil if not found
-  */
-  getcorporateactionclientdecisionbyclient = '\
-  local getcorporateactionclientdecisionbyclient = function(brokerid, clientid, corporateactionid) \
-    redis.log(redis.LOG_NOTICE, "getcorporateactionclientdecisionbyclient") \
-    local brokerkey = "broker:" .. brokerid \
-    local corporateactiondecisionid = redis.call("get", brokerkey .. ":client:" .. clientid .. ":corporateaction:" .. corporateactionid .. ":corporateactiondecision") \
-    local corporateactiondecision \
-    if corporateactiondecisionid then \
-      corporateactiondecision = redis.call("hget", brokerkey .. ":corporateactiondecision:" .. corporateactiondecisionid, "decision") \
+  updateorderindex = '\
+    local updateorderindex = function(brokerid, oldorderid, neworderid, tradeid) \
+      redis.log(redis.LOG_NOTICE, "updateorderindex") \
+      redis.call("srem", "broker:" .. brokerid .. ":order:" .. oldorderid .. ":trades", tradeid) \
+      if neworderid ~= "" then \
+        redis.call("sadd", "broker:" .. brokerid .. ":order:" .. neworderid .. ":trades", tradeid) \
+      end \
     end \
-    return corporateactiondecision \
-  end \
   ';
-
+ /*
+  * updatesettlementdateindex()
+  * update settlement date index of the trade
+  */
+  updatesettlementdateindex = '\
+    local updatesettlementdateindex = function(brokerid, oldtradeid, newtradeid, futsettdate) \
+      redis.log(redis.LOG_NOTICE, "updatesettlementdateindex") \
+      redis.call("zrem", "broker:" .. brokerid .. ":trade:settlementdate", oldtradeid) \
+      redis.call("zadd", "broker:" .. brokerid .. ":trade:settlementdate", futsettdate, newtradeid) \
+    end \
+  ';
+ /*
+  * updatetrade()
+  * script used to update the trade values
+  * accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms, tradeid, tradesettlestatusid, markettimestamp
+  */
+  updatetrade = updateorderindex + updatesettlementdateindex + updatetradesettlestatusindex + '\
+    local updatetrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms, tradeid, tradesettlestatusid, markettimestamp) \
+      redis.log(redis.LOG_NOTICE, "updatetrade") \
+      local trade = {} \
+      trade.key = "broker:" .. brokerid .. ":trade:" .. tradeid \
+      trade.old = redis.call("hmget", trade.key, "orderid", "futsettdate") \
+      local oldtradesettlestatus = "" \
+      if tradesettlestatusid and tradesettlestatusid ~= "" then \
+        oldtradesettlestatus = redis.call("hget", "broker:" .. brokerid .. ":trade:" .. tradeid, "tradesettlestatusid") \
+      end \
+      redis.call("hmset", trade.key, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", tostring(commission), "ptmlevy", tostring(ptmlevy), "stampduty", tostring(stampduty), "contractcharge", tostring(contractcharge), "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", tradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", settlcurramt, "settlcurrfxrate", settlcurrfxrate, "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "finance", finance, "tradesettlestatusid", tradesettlestatusid, "markettimestamp", markettimestamp) \
+      if orderid ~= trade.old[1] then \
+        updateorderindex(brokerid, trade.old[1], orderid, tradeid) \
+      end \
+      if futsettdate ~= trade.old[2] then \
+        updatesettlementdateindex(brokerid, trade.old[2], tradeid, futsettdate) \
+      end \
+      if oldtradesettlestatus and oldtradesettlestatus ~= "" then \
+        updatetradesettlestatusindex(brokerid, tradeid, oldtradesettlestatus, tradesettlestatusid) \
+        --[[ updating broker level trade index(by trade settlement status) for report ]] \
+        redis.call("zrem", "broker:" .. brokerid .. ":trade:tradesettlementstatus", oldtradesettlestatus .. ":" .. tradeid) \
+        redis.call("zadd", "broker:" .. brokerid .. ":trade:tradesettlementstatus", 0, tradesettlestatusid .. ":" .. tradeid) \
+      end \
+    end \
+  ';
+  /*
+   * updatetradenote()
+   * This script used to update trade note.
+   * params: brokerid, accountid, tradeid
+   */
+  updatetradenote = getpostingnote + '\
+    local updatetradenote = function(brokerid, tradeid) \
+      redis.log(redis.LOG_WARNING, "updatetradenote") \
+      local fields = {} \
+      fields.brokerkey = "broker:" .. brokerid \
+      fields.transactionid = redis.call("get", fields.brokerkey .. ":trade:" .. tradeid .. ":transactionid") \
+      if fields.transactionid then \
+        fields.postingids = redis.call("smembers", fields.brokerkey .. ":transaction:" .. fields.transactionid .. ":postings") \
+        if #fields.postingids > 0 then \
+          for i = 1, #fields.postingids do \
+            fields.accountid = redis.call("hget", fields.brokerkey .. ":posting:" .. fields.postingids[i], "accountid") \
+            fields.clientid = redis.call("get", fields.brokerkey .. ":account:" .. fields.accountid .. ":client") \
+            if fields.clientid then \
+              fields.note = getpostingnote(brokerid, tradeid, 0) \
+            else \
+              fields.note = getpostingnote(brokerid, tradeid, 1) \
+            end \
+            redis.call("hset", fields.brokerkey .. ":posting:" .. fields.postingids[i], "note", fields.note) \
+          end \
+        end \
+      end \
+    end \
+  ';
+  /*
+  * getcaclientdecision()
+  * get a corporate action client decision
+  * params: accountid, brokerid, corporateactionid
+  * returns: 0, corporate action client decision as a table if found, else 1
+  */
+  getcaclientdecision = '\
+    local getcaclientdecision = function(accountid, brokerid, corporateactionid) \
+      redis.log(redis.LOG_NOTICE, "getcaclientdecision") \
+      local decision = {} \
+      decision.brokerkey = "broker:" .. brokerid \
+      decision.cadecisionid = redis.call("get", decision.brokerkey .. ":account:" .. accountid .. ":corporateaction:" .. corporateactionid .. ":corporateactiondecision") \
+      if decision.cadecisionid then \
+        return {0, gethashvalues(decision.brokerkey .. ":corporateactiondecision:" .. decision.cadecisionid)} \
+      else \
+        return {1} \
+      end \
+    end \
+  ';
   /*
   * getsharesdue()
   * get the whole number of shares due & any remainder for a quantity & ratio
-  * params: position quantity, shares per share ratio
+  * params: position quantity, shares per share ratio, percentage of position quantity to apply ratio to
   * returns: whole number of shares due, remainder
   */
   getsharesdue = round + '\
-  local getsharesdue = function(posqty, sharespershare) \
+  local getsharesdue = function(posqty, sharespershare, qtypercentage) \
     redis.log(redis.LOG_NOTICE, "getsharesdue") \
-    local sharesdue = round(tonumber(posqty) * tonumber(sharespershare), 2) \
-    local sharesdueint = math.floor(sharesdue) \
-    local sharesduerem = sharesdue - sharesdueint \
-    return {sharesdueint, sharesduerem} \
+    local sharesdue = {} \
+    local numberofshares = round(tonumber(posqty) * (tonumber(qtypercentage) / 100) * tonumber(sharespershare), 2) \
+    sharesdue.wholenumber = math.floor(numberofshares) \
+    sharesdue.remainder = numberofshares - sharesdue.wholenumber \
+    return sharesdue \
   end \
   ';
 
   /*
   * transactiondividend()
   * cash dividend transaction
-  * params: clientaccountid, dividend, unsettled dividend, brokerid, currencyid, dividend in local currency, unsettled dividend in local currency, description, rate, reference, timestamp, transactiontypeid, timestampms
+  * params: clientaccountid, dividend, unsettled dividend, brokerid, currencyid, dividend in local currency, unsettled dividend in local currency, description, rate, reference, timestamp, transactiontypeid, timestampms, corporateactionid, linktype, linkid
   * returns: 0 if ok, else 1 followed by error message
   */
   transactiondividend = getbrokeraccountsmapid + newtransaction + newposting + updateaccountbalance + '\
-  local transactiondividend = function(clientaccountid, dividend, unsettleddividend, brokerid, currencyid, dividendlocal, unsettleddividendlocal, description, rate, reference, timestamp, transactiontypeid, timestampms) \
+  local transactiondividend = function(clientaccountid, dividend, unsettleddividend, brokerid, currencyid, dividendlocal, unsettleddividendlocal, description, rate, reference, timestamp, transactiontypeid, timestampms, corporateactionid, linktype, linkid) \
+    redis.log(redis.LOG_NOTICE, "transactiondividend") \
+    local accounts = {} \
     --[[ get the relevant broker accounts ]] \
-    local clientfundsaccount = getbrokeraccountsmapid(brokerid, currencyid, "Client funds") \
-    if not clientfundsaccount then \
+    accounts.clientfundsaccount = getbrokeraccountsmapid(brokerid, currencyid, "Client funds") \
+    if not accounts.clientfundsaccount then \
       return {1, 1027} \
     end \
-    local clientsettlementaccount = getbrokeraccountsmapid(brokerid, currencyid, "Client settlement") \
-    if not clientsettlementaccount then \
+    accounts.clientsettlementaccount = getbrokeraccountsmapid(brokerid, currencyid, "Client settlement") \
+    if not accounts.clientsettlementaccount then \
       return {1, 1027} \
     end \
-    local cmaaccount = getbrokeraccountsmapid(brokerid, currencyid, "CMA") \
-    if not cmaaccount then \
+    accounts.cmaaccount = getbrokeraccountsmapid(brokerid, currencyid, "CMA") \
+    if not accounts.cmaaccount then \
       return {1, 1027} \
     end \
     --[[ create the transaction ]] \
-    local transactionid = newtransaction(dividend, brokerid, currencyid, dividendlocal, description, rate, reference, timestamp, transactiontypeid, timestampms) \
+    local transactionid = newtransaction(dividend, brokerid, currencyid, dividendlocal, description, rate, reference, timestamp, transactiontypeid, timestampms, linktype, linkid) \
+    redis.call("sadd", "corporateaction:" .. corporateactionid .. ":transactions", brokerid .. ":" .. transactionid) \
     --[[ client posting ]] \
-    newposting(clientaccountid, dividend, brokerid, dividendlocal, transactionid, timestampms) \
+    newposting(clientaccountid, dividend, brokerid, dividendlocal, "", transactionid, timestampms, timestamp, linktype, linkid) \
     updateaccountbalance(clientaccountid, dividend, brokerid, dividendlocal) \
     --[[ broker side of client posting ]] \
-    newposting(clientfundsaccount, -dividend, brokerid, -dividendlocal, transactionid, timestampms) \
-    updateaccountbalance(clientfundsaccount, -dividend, brokerid, -dividendlocal) \
+    newposting(accounts.clientfundsaccount, -dividend, brokerid, -dividendlocal, "", transactionid, timestampms, timestamp, linktype, linkid) \
+    updateaccountbalance(accounts.clientfundsaccount, -dividend, brokerid, -dividendlocal) \
     if unsettleddividend ~= 0 then \
       --[[ unsettled transaction ]] \
-      local unsettledtransactionid = newtransaction(unsettleddividend, brokerid, currencyid, unsettleddividendlocal, description, rate, reference, timestamp, transactiontypeid, timestampms) \
-      newposting(cmaaccount, unsettleddividend, brokerid, unsettleddividendlocal, unsettledtransactionid, timestampms) \
-      updateaccountbalance(cmaaccount, unsettleddividend, brokerid, unsettleddividendlocal) \
-      newposting(clientsettlementaccount, -unsettleddividend, brokerid, -unsettleddividendlocal, unsettledtransactionid, timestampms) \
-      updateaccountbalance(clientsettlementaccount, -unsettleddividend, brokerid, -unsettleddividendlocal) \
+      local unsettledtransactionid = newtransaction(unsettleddividend, brokerid, currencyid, unsettleddividendlocal, description, rate, reference, timestamp, transactiontypeid, timestampms, linktype, linkid) \
+      redis.call("sadd", "corporateaction:" .. corporateactionid .. ":transactions", brokerid .. ":" .. unsettledtransactionid) \
+      newposting(accounts.cmaaccount, unsettleddividend, brokerid, unsettleddividendlocal, "", unsettledtransactionid, timestampms, timestamp, linktype, linkid) \
+      updateaccountbalance(accounts. cmaaccount, unsettleddividend, brokerid, unsettleddividendlocal) \
+      newposting(accounts.clientsettlementaccount, -unsettleddividend, brokerid, -unsettleddividendlocal, "", unsettledtransactionid, timestampms, timestamp, linktype, linkid) \
+      updateaccountbalance(accounts.clientsettlementaccount, -unsettleddividend, brokerid, -unsettleddividendlocal) \
     end \
     return {0} \
   end \
@@ -2248,149 +2795,293 @@ exports.registerScripts = function () {
 
   /*
   * convertsharesascash()
-  * processing for converting remainder shares to cash
-  * params: accountid, brokerid, corporateaction, exdate, quantity, timestamp, timestampms, mode
+  * calculate remainder shares as cash
+  * params: symbolid, quantity, exdate
   * returns: 0, amount of cash if ok, else 1, error message
   */
-  convertsharesascash = getaccount + geteodprice + transactiondividend + '\
-  local convertsharesascash = function(accountid, brokerid, corporateaction, quantity, timestamp, timestampms, mode) \
+  convertsharesascash = geteodprice + round + getdateindex + '\
+  local convertsharesascash = function(symbolid, quantity, exdate) \
     redis.log(redis.LOG_NOTICE, "convertsharesascash") \
-    --[[ get the account for the currency ]] \
-    local account = getaccount(accountid, brokerid) \
     --[[ get the closing price at the ex-date ]] \
-    local eodprice = geteodprice(corporateaction["exdate"], corporateaction["symbolid"]) \
-    if not eodprice["bid"] then \
-      return {1, 1029} \
+    local eodprice = geteodprice(exdate, symbolid) \
+    if not eodprice.bid then \
+      return {1, "There needs to be an end of day price for " .. symbolid .. " as at " .. getdateindex(exdate)} \
     end \
     --[[ calculate how much cash is due ]] \
-    local stubcash = round(quantity * eodprice["bid"], 2) \
-    if stubcash > 0 then \
-      --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
-      local rate = 1 \
-      local stubcashlocal = stubcash * rate \
-      if mode == 2 then \
-        local retval = transactiondividend(accountid, stubcash, 0, brokerid, account["currencyid"], stubcashlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateaction["corporateactionid"], timestamp, "DVP", timestampms) \
-        if retval[1] == 1 then \
-          return retval \
-        end \
-      elseif mode == 3 then \
-        local retval = transactiondividend(accountid, -stubcash, 0, brokerid, account["currencyid"], -stubcashlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateaction["corporateactionid"], timestamp, "DVR", timestampms) \
-        if retval[1] == 1 then \
-          return retval \
-        end \
-      end \
-    end \
+    local stubcash = {} \
+    stubcash.amount = tonumber(round(tonumber(quantity) * tonumber(eodprice.bid), 2)) \
+    --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
+    stubcash.rate = 1 \
+    stubcash.amountlocal = tonumber(round(stubcash.amount * stubcash.rate, 2)) \
     return {0, stubcash} \
   end \
   ';
 
-  /*
-  * dividendasshares()
-  * processing for dividend taken as shares
-  * params: brokerid, position, corporateaction, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: 0, whole number of shares due, remainder of shares expressed as cash based on end of exdate price if ok, else 1, error message
+ /*
+  * getaccountforcurrency()
+  * params: account, brokerid, currencyid
+  * returns: an accountid for this client and currency
   */
-  dividendasshares = getsharesdue + newpositiontransaction + convertsharesascash + '\
-  local dividendasshares = function(brokerid, position, corporateaction, timestamp, timestampms, mode) \
-    redis.log(redis.LOG_NOTICE, "dividendasshares") \
-    local sharesdue = getsharesdue(position["quantity"], corporateaction["sharespershare"]) \
-    local residuecash = 0 \
-    if sharesdue[1] > 0 then \
-      --[[ add any shares to position ]] \
-      if mode == 2 then \
-        newpositiontransaction(position["accountid"], brokerid, 0, "", corporateaction["corporateactionid"], 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
-      elseif mode == 3 then \
-        newpositiontransaction(position["accountid"], brokerid, 0, "", corporateaction["corporateactionid"], 2, -sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
+  getaccountforcurrency = getclientidfromaccount + utils.getclientname + getclientaccountid + utils.newaccount + '\
+    local getaccountforcurrency = function(account, brokerid, currencyid) \
+      --[[ get the client ]] \
+      local clientid = getclientidfromaccount(account.accountid, brokerid) \
+      local clientname = getclientname(brokerid, clientid) \
+      --[[ see if an account already exists for this client in this currency, if not create one ]] \
+      local newaccountid = getclientaccountid(brokerid, clientid, account.accounttypeid, currencyid) \
+      if newaccountid == 0 then \
+        local name = client.clientid .. " " .. client.name .. " " .. currencyid \
+        --[[ todo: sort ]] \
+        local exdiffdate = "05-May-2015" \
+        --[[ set default(0) value for following fields balance, balanceuncleared, creditlimit, debitlimit, exdiff, exdiffuncleared, localbalance, localbalanceuncleared ]] \
+        newaccountid = newaccount(account.accountgroupid, account.accounttaxtypeid, account.accounttypeid, 0, 0, brokerid, 0, currencyid, 0, 0, 0, exdiffdate, 0, 0, name, account.active, clientid) \
+        if newaccountid[1] == 1 then \
+          newaccountid = "" \
+        else \
+          newaccountid = newaccountid[2] \
+        end \
+      end \
+      return newaccountid \
+    end \
+  ';
+
+  /*
+  * valuebenefitascash()
+  * value a cash benefit
+  * params: benefit, position
+  * returns: cash amounts and rate as a table
+  */
+  valuebenefitascash = round + '\
+  local valuebenefitascash = function(benefit, position) \
+    redis.call("RPUSH", "cadebug", "valuebenefitascash") \
+    local cash = {} \
+    --[[ we are assuming rate = 1 - todo: get fx rate if necessary ]] \
+    cash.rate = 1 \
+    cash.dividend = tonumber(round(tonumber(benefit.benefitratio) * (tonumber(benefit.benefitpercentage) / 100) * tonumber(position.quantity), 2)) \
+    if benefit.debitorcredit == "D" then \
+      cash.dividend = -cash.dividend \
+    end \
+    cash.dividendlocal = cash.dividend * cash.rate \
+    redis.call("RPUSH", "cadebug", "end valuebenefitascash") \
+    return cash \
+  end \
+  ';
+
+  /*
+  * valuebenefitasshares()
+  * value a shares benefit
+  * params: benefit, corporateaction, position
+  * returns: share amounts and any residual cash
+  */
+  valuebenefitasshares = getsharesdue + convertsharesascash + '\
+  local valuebenefitasshares = function(benefit, corporateaction, position) \
+    redis.call("RPUSH", "cadebug", "valuebenefitasshares") \
+    local sharesdue = getsharesdue(position.quantity, benefit.benefitratio, benefit.benefitpercentage) \
+    --[[ amount of shares due may be a debit or credit ]] \
+    if benefit.debitorcredit == "D" then \
+      sharesdue.wholenumber = -sharesdue.wholenumber \
+      sharesdue.remainder = -sharesdue.remainder \
+    end \
+    sharesdue.residuecash = 0 \
+    sharesdue.rate = 1 \
+    sharesdue.residuecashlocal = 0 \
+    if sharesdue.remainder ~= 0 and tonumber(corporateaction.fractionspaidbyissuer) == 1 then \
+      local stubcash = convertsharesascash(benefit.symbolid, sharesdue.remainder, corporateaction.exdate) \
+      if stubcash[1] == 1 then \
+        return stubcash \
+      end \
+      sharesdue.residuecash = stubcash[2].amount \
+      sharesdue.rate = stubcash[2].rate \
+      sharesdue.residuecashlocal = stubcash[2].amountlocal \
+    end \
+    redis.call("RPUSH", "cadebug", "end valuebenefitasshares") \
+    return {0, sharesdue} \
+  end \
+  ';
+
+  /*
+  * valuebenefit()
+  * values a benefit
+  * params: benefit, corporateaction, position
+  * returns: 0, benefit value else 1, error message
+  */
+  valuebenefit = valuebenefitascash + valuebenefitasshares + '\
+  local valuebenefit = function(benefit, corporateaction, position) \
+    redis.call("RPUSH", "cadebug", "valuebenefit") \
+    local temp = {} \
+    temp.value = {} \
+    if benefit.benefittypeid == "CASH" then \
+      temp.cash = valuebenefitascash(benefit, position) \
+      temp.value.cash = temp.cash.dividend \
+      temp.value.cashlocal = temp.cash.dividendlocal \
+      temp.value.rate = temp.cash.rate \
+      temp.value.shares = 0 \
+      temp.value.residuecash = 0 \
+      temp.value.residuecashlocal = 0 \
+    elseif benefit.benefittypeid == "SECU" then \
+      temp.share = valuebenefitasshares(benefit, corporateaction, position) \
+      if temp.share[1] == 1 then \
+        return temp.share \
+      end \
+      temp.value.shares = temp.share[2].wholenumber \
+      temp.value.residuecash = temp.share[2].residuecash\
+      temp.value.residuecashlocal = temp.share[2].residuecashlocal \
+      temp.value.rate = temp.share[2].rate \
+      temp.value.cash = 0 \
+      temp.value.cashlocal = 0 \
+    end \
+    redis.call("RPUSH", "cadebug", "end valuebenefit") \
+    return {0, temp.value} \
+  end \
+  ';
+
+  /*
+  * updatebenefitascash()
+  * processing for benefit taken as cash
+  * params: brokerid, position, corporateaction, benefit, timestamp, timestampms
+  * returns: 0, else 1, error message
+  */
+  updatebenefitascash = transactiondividend + getclientfromaccount + getaccountforcurrency + '\
+  local updatebenefitascash = function(brokerid, position, corporateaction, benefit, timestamp, timestampms) \
+    redis.log(redis.LOG_NOTICE, "updatebenefitascash") \
+    if benefit.cash ~= 0 then \
+      --[[ get account currency ]] \
+      local account = getaccount(position.accountid, brokerid) \
+      local accountid \
+      local currencyid \
+      --[[ if the benefit currency does not match the position currency, we need to get an account in the benefit currency ]] \
+      if benefit.currencyid and benefit.currencyid ~= account.currencyid then \
+      accountid = getaccountforcurrency(account, brokerid, benefit.currencyid) \
+        currencyid = benefit.currencyid \
+      else \
+        accountid = position.accountid \
+        currencyid = account.currencyid \
+      end \
+      local client = getclientfromaccount(position.accountid, brokerid) \
+      local retval = transactiondividend(accountid, benefit.cash, 0, brokerid, currencyid, benefit.cashlocal, 0, corporateaction.description, benefit.rate, "corporateaction:" .. corporateaction.corporateactionid, timestamp, "DVP", timestampms, corporateaction.corporateactionid, client.linktype, client.linkid) \
+      if retval[1] == 1 then \
+        return retval \
       end \
     end \
-    if sharesdue[2] > 0 then \
-      if tonumber(corporateaction["fractiontypeid"]) == 1 then \
-        local ret = convertsharesascash(position["accountid"], brokerid, corporateaction, sharesdue[2], timestamp, timestampms, mode) \
-        if ret[1] == 1 then \
-          return ret \
+    redis.call("RPUSH", "cadebug", "end updatebenefitascash") \
+    return {0} \
+  end \
+  ';
+
+ /*
+  * updatebenefitasshares()
+  * processing for benefit taken as shares
+  * params: brokerid, position, corporateaction, benefit, timestamp, timestampms
+  * returns: 0, else 1, error message
+  */
+  updatebenefitasshares = newpositiontransaction + getclientfromaccount + transactiondividend + getaccountforcurrency + '\
+  local updatebenefitasshares = function(brokerid, position, corporateaction, benefit, timestamp, timestampms) \
+    redis.log(redis.LOG_NOTICE, "updatebenefitasshares") \
+    redis.call("RPUSH", "cadebug", "updatebenefitasshares") \
+    --[[ add any shares to the position ]] \
+    if benefit.shares ~= 0 then \
+      --[[ calculate cost of shares ]] \
+      local costofshares = 0 \
+      if benefit.price and tonumber(benefit.price) ~= 0 then \
+        costofshares = benefit.shares * tonumber(benefit.price) \
+      end \
+      newpositiontransaction(position.accountid, brokerid, costofshares, "", corporateaction.corporateactionid, 2, benefit.shares, benefit.symbolid, timestamp, timestampms) \
+    end \
+    --[[ add any residual cash ]] \
+    if benefit.residuecash ~= 0 then \
+    --[[ get account currency ]] \
+      local account = getaccount(position.accountid, brokerid) \
+      local accountid \
+      local currencyid \
+      --[[ if the benefit currency does not match the position currency, we need to get an account in the benefit currency ]] \
+      if benefit.currencyid and benefit.currencyid ~= account.currencyid then \
+        accountid = getaccountforcurrency(account, brokerid, benefit.currencyid) \
+        currencyid = benefit.currencyid \
+      else \
+        accountid = position.accountid \
+        currencyid = account.currencyid \
+      end \
+      --[[ get the client ]] \
+      local client = getclientfromaccount(position.accountid, brokerid) \
+      --[[ apply transactions & postings ]] \
+      local retval = transactiondividend(accountid, benefit.residuecash, 0, brokerid, currencyid, benefit.residuecashlocal, 0, corporateaction.description, benefit.rate, "corporateaction:" .. corporateaction.corporateactionid, timestamp, "DVP", timestampms, corporateaction.corporateactionid, client.linktype, client.linkid) \
+      if retval[1] == 1 then \
+        return retval \
+      end \
+    end \
+    redis.call("RPUSH", "cadebug", "end updatebenefitasshares") \
+    return {0} \
+  end \
+  ';
+
+  /*
+  * updatebenefit()
+  * updates positions, transactions & postings for a benefit
+  * params: brokerid, position, corporateaction, benefit, timestamp, timestampms
+  * returns: 0, else 1, error message
+  */
+  updatebenefit = updatebenefitascash + updatebenefitasshares + '\
+  local updatebenefit = function(brokerid, position, corporateaction, benefit, timestamp, timestampms) \
+    local ret \
+    if benefit.benefittypeid == "CASH" then \
+      ret = updatebenefitascash(brokerid, position, corporateaction, benefit, timestamp, timestampms) \
+    elseif benefit.benefittypeid == "SECU" then \
+      ret = updatebenefitasshares(brokerid, position, corporateaction, benefit, timestamp, timestampms) \
+    end \
+    return ret \
+  end \
+  ';
+
+  /*
+  * applybenefits()
+  * apply the benefits of a corporate action
+  * params: brokerid, position, corporateaction, timestamp, timestampms, mode
+  * returns: 0, table of benefits for this position if successful, else 1, error message
+  */
+  applybenefits = getcaclientdecision + valuebenefit + updatebenefit + '\
+  local applybenefits = function(brokerid, position, corporateaction, timestamp, timestampms, mode) \
+    redis.call("RPUSH", "cadebug", "applybenefits") \
+    local benefits = {} \
+    --[[ get the client option for a voluntary ca, default as per ca, usually 1 ]] \
+    local optionid = corporateaction.defaultoptionid \
+    if corporateaction.mandatoryorvoluntaryind ~= "M" then \
+      local caclientdecision = getcaclientdecision(position.accountid, brokerid, corporateaction.corporateactionid) \
+      if caclientdecision[1] == 0 then \
+        optionid = caclientdecision[2].optionid \
+      end \
+    end \
+    local benefitids = redis.call("smembers", "corporateaction:" .. corporateaction.corporateactionid .. ":benefits") \
+    for i = 1, #benefitids do \
+      local benefit = gethashvalues("corporateaction:" .. corporateaction.corporateactionid .. ":benefit:" .. benefitids[i]) \
+      if tonumber(benefit.optionid) == tonumber(optionid) then \
+        local benefitvalue = valuebenefit(benefit, corporateaction, position) \
+        if benefitvalue[1] == 1 then \
+          return benefitvalue \
         end \
-        residuecash = residuecash + ret[2] \
-      elseif tonumber(corporateaction["fractiontypeid"]) == 2 then \
+        benefit.cash = benefitvalue[2].cash \
+        benefit.cashlocal = benefitvalue[2].cashlocal \
+        benefit.shares = benefitvalue[2].shares \
+        benefit.residuecash = benefitvalue[2].residuecash \
+        benefit.residuecashlocal = benefitvalue[2].residuecashlocal \
+        benefit.rate = benefitvalue[2].rate \
+        table.insert(benefits, benefit) \
         if mode == 2 then \
-          --[[ add the shares to the broker client account ]] \
-          newpositiontransaction(0, brokerid, 0, "", corporateaction["corporateactionid"], 2, sharesdue[2], corporateaction["symbolid"], timestamp, timestampms) \
+          local ret = updatebenefit(brokerid, position, corporateaction, benefit, timestamp, timestampms) \
+          if ret[1] == 1 then \
+            return ret \
+          end \
         end \
       end \
     end \
-    redis.log(redis.LOG_NOTICE, "sharesdue: " .. sharesdue[1] .. ", residuecash: " .. residuecash) \
-    return {0, sharesdue[1], residuecash} \
-  end \
-  ';
-
-  /*
-  * dividendascash()
-  * processing for dividend taken as cash
-  * params: brokerid, position, corporateaction, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: 0, dividend amount if ok, else 1, error message
-  */
-  dividendascash = getaccount + transactiondividend + '\
-  local dividendascash = function(brokerid, position, corporateaction, timestamp, timestampms, mode) \
-    redis.log(redis.LOG_NOTICE, "dividendascash") \
-    --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
-    local rate = 1 \
-    local dividend = round(corporateaction["cashpershare"] * position["quantity"], 2) \
-    local dividendlocal = dividend * rate \
-    if dividend > 0 then \
-      --[[ get the account for the currency ]] \
-      local account = getaccount(position["accountid"], brokerid) \
-      if mode == 2 then \
-        --[[ apply transactions & postings ]] \
-        local retval = transactiondividend(position["accountid"], dividend, 0, brokerid, account["currencyid"], dividendlocal, 0, corporateaction["description"], rate, "corporateaction:" .. corporateaction["corporateactionid"], timestamp, "DVP", timestampms) \
-        if retval[1] == 1 then \
-          return retval \
-        end \
-      elseif mode == 3 then \
-        --[[ reverse transactions & postings ]] \
-        local retval = transactiondividend(position["accountid"], -dividend, 0, brokerid, account["currencyid"], -dividendlocal, 0, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateaction["corporateactionid"], timestamp, "DVR", timestampms) \
-        if retval[1] == 1 then \
-          return retval \
-        end \
-      end \
-    end \
-    redis.log(redis.LOG_NOTICE, "dividend: " .. dividend) \
-    return {0, dividend} \
-  end \
-  ';
-
-  /*
-  * convertsharesasshares()
-  * processing for converting position in one share to another, based on a share per share ratio
-  * params: brokerid, position, corporateaction, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: 0, whole number of shares due, remainder of shares, else 1, error message
-  */
-  convertsharesasshares = getsharesdue + newpositiontransaction + convertsharesascash + '\
-  local convertsharesasshares = function(brokerid, position, corporateaction, timestamp, timestampms, mode) \
-    redis.log(redis.LOG_NOTICE, "convertsharesasshares") \
-    local sharesdue = getsharesdue(position["quantity"], corporateaction["sharespershare"]) \
-    local residuecash = 0 \
-    if sharesdue[1] > 0 then \
-      if mode == 2 then \
-        --[[ flatten the position in the stock being converted ]] \
-        newpositiontransaction(position["accountid"], brokerid, 0, "", corporateaction["corporateactionid"], 2, -position["quantity"], corporateaction["symbolid"], timestamp, timestampms) \
-        --[[ create a position in the new symbol ]] \
-        newpositiontransaction(position["accountid"], brokerid, position["cost"], "", corporateaction["corporateactionid"], 2, sharesdue[1], corporateaction["symbolidnew"], timestamp, timestampms) \
-      end \
-    end \
-    if sharesdue[2] > 0 then \
-      local ret = convertsharesascash(position["accountid"], brokerid, corporateaction, sharesdue[2], timestamp, timestampms, mode) \
-      if ret[1] == 1 then \
-        return ret \
-      end \
-      residuecash = residuecash + ret[2] \
-    end \
-    redis.log(redis.LOG_NOTICE, "sharesdue: " .. sharesdue[1] .. ", residuecash: " .. residuecash) \
-    return {0, sharesdue[1], residuecash} \
+    redis.call("RPUSH", "cadebug", "end applybenefits") \
+    return {0, benefits} \
   end \
   ';
 
   /*
   * publisherror()
   * publish an error
+  * here 13 refers to errorchannel
   * params: errorlogid
   */
   publisherror = gethashvalues + '\
@@ -2403,16 +3094,17 @@ exports.registerScripts = function () {
   /*
   * errorlog()
   * store details of errors
-  * params: brokerid, businessobjectid, businessobjecttypeid, errortypeid, messageid, messagetypeid, module, rejectreasonid, text, timestamp
+  * params: 1=brokerid, 2=businessobjectid, 3=businessobjecttypeid, 4=errortypeid, 5=messageid, 6=messagetypeid, 7=module, 8=rejectreasonid, 9=text, 10=timestamp
   * returns:
   */
   errorlog = publisherror + '\
-  local errorlog = function(brokerid, businessobjectid, businessobjecttypeid, errortypeid, messageid, messagetypeid, module, rejectreasonid, text, timestamp) \
-    redis.log(redis.LOG_NOTICE, "errorlog") \
-    local errorlogid = redis.call("hincrby", "config", "lasterrorlogid", 1) \
-    redis.call("hmset", "errorlog:" .. errorlogid, "brokerid", brokerid, "businessobjectid", businessobjectid, "businessobjecttypeid", businessobjecttypeid, "errorlogid", errorlogid, "errortypeid", errortypeid, "messageid", messageid, "messagetypeid", messagetypeid, "module", module, "rejectreasonid", rejectreasonid, "text", text, "timestamp", timestamp) \
-    publisherror(errorlogid) \
-  end \
+    local errorlog = function(brokerid, businessobjectid, businessobjecttypeid, errortypeid, messageid, messagetypeid, module, rejectreasonid, text, timestamp) \
+      redis.log(redis.LOG_NOTICE, "errorlog") \
+      local errorlogid = redis.call("hincrby", "config", "lasterrorlogid", 1) \
+      redis.call("hmset", "errorlog:" .. errorlogid, "brokerid", brokerid, "businessobjectid", businessobjectid, "businessobjecttypeid", businessobjecttypeid, "errorlogid", errorlogid, "errortypeid", errortypeid, "messageid", messageid, "messagetypeid", messagetypeid, "module", module, "rejectreasonid", rejectreasonid, "text", text, "timestamp", timestamp) \
+      redis.call("sadd", "errorlog:errorlogs", errorlogid) \
+      publisherror(errorlogid) \
+    end \
   ';
 
   exports.errorlog = errorlog;
@@ -2428,20 +3120,6 @@ exports.registerScripts = function () {
   exports.scripterrorlog = errorlog + '\
     errorlog(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10]) \
  ';
-
-  /*
-  * scriptgetholidays
-  * get holidays
-  * note: assumes UK holidays
-  */
-  exports.scriptgetholidays = '\
-  local tblresults = {} \
-  local holidays = redis.call("smembers", "holidays" .. ARGV[1]) \
-  for index = 1, #holidays do \
-    table.insert(tblresults, {holidays[index]}) \
-  end \
-  return cjson.encode(tblresults) \
-  ';
 
   /*
   * scriptgetquoterequests
@@ -2505,32 +3183,29 @@ exports.registerScripts = function () {
 
   /*
   * get an orderbook for a symbol & side
-  * params: brokerid, symbolid, side
+  * params: symbolid, side
   * returns: array of orders as JSON
   */
   exports.scriptgetorderbook = getorderbook + '\
-  local orders = getorderbook(ARGV[1], ARGV[2], ARGV[3]) \
-  return cjson.encode(orders) \
+    return cjson.encode(getorderbook(ARGV[1], ARGV[2]) \
   ';
 
   /*
-  * get the lowest buy & highest sell orders on an orderbook for a symbol
-  * params: brokerid, symbolid
+  * get the lowest buy or highest sell order on an orderbook for a symbol
+  * params: symbolid, side
   * returns: array of orders as JSON
   */
   exports.scriptgetorderbooktop = getorderbooktop + '\
-  local orders = getorderbooktop(ARGV[1], ARGV[2]) \
-  return cjson.encode(orders) \
+    return cjson.encode(getorderbooktop(ARGV[1], ARGV[2])) \
   ';
 
   /*
-  * get the lowest buy & highest sell orders on the orderbook for all symbols
-  * params: brokerid
+  * get the lowest buy or highest sell orders on the orderbook for all symbols
+  * params: side
   * returns: array of orders as JSON
   */
   exports.scriptgetorderbooktopall = getorderbooktopall + '\
-  local orders = getorderbooktopall(ARGV[1]) \
-  return cjson.encode(orders) \
+    return cjson.encode(getorderbooktopall(ARGV[1])) \
   ';
 
   /*
@@ -2539,8 +3214,7 @@ exports.registerScripts = function () {
   * returns an array of positions as JSON
   */
   exports.scriptgetpositions = getpositions + '\
-  local positions = getpositions(ARGV[1], ARGV[2]) \
-  return cjson.encode(positions) \
+    return cjson.encode(getpositions(ARGV[1], ARGV[2])) \
   ';
 
   /*
@@ -2550,8 +3224,7 @@ exports.registerScripts = function () {
   * returns: positions with their values
   */
   exports.scriptgetpositionvalues = getpositionvalues + '\
-  local positionvalues = getpositionvalues(ARGV[1], ARGV[2]) \
-  return cjson.encode(positionvalues) \
+    return cjson.encode(getpositionvalues(ARGV[1], ARGV[2])) \
   ';
 
   /*
@@ -2561,8 +3234,12 @@ exports.registerScripts = function () {
   * returns: a table of positions
   */
   exports.scriptgetpositionsbysymbol = getpositionsbysymbol + '\
-    local positions = getpositionsbysymbol(ARGV[1], ARGV[2]) \
-    return cjson.encode(positions) \
+    redis.log(redis.LOG_NOTICE, "scriptgetpositionsbysymbol") \
+    local issymbolid = redis.call("hget", "symbol:" ..  ARGV[2], "symbolid") \
+    if issymbolid ~=  ARGV[2] then \
+      return{1, "symbol not found"} \
+    end \
+    return {0, cjson.encode(getpositionsbysymbol(ARGV[1], ARGV[2]))} \
   ';
 
   /*
@@ -2572,8 +3249,12 @@ exports.registerScripts = function () {
   * returns: a table of positions
   */
   exports.scriptgetpositionsbysymbolbydate = getpositionsbysymbolbydate + '\
-    local positions = getpositionsbysymbolbydate(ARGV[1], ARGV[2], ARGV[3]) \
-    return cjson.encode(positions) \
+    redis.log(redis.LOG_NOTICE, "scriptgetpositionsbysymbol") \
+    local issymbolid = redis.call("sismember", "symbol:_indicies:symbolid", ARGV[2]) \
+    if issymbolid == 0 then \
+      return{1, "symbol not found"} \
+    end \
+    return {0, cjson.encode(getpositionsbysymbolbydate(ARGV[1], ARGV[2], ARGV[3]))} \
   ';
 
   /*
@@ -2583,8 +3264,11 @@ exports.registerScripts = function () {
   * returns: a table of position values
   */
   exports.scriptgetpositionvaluesbysymbol = getpositionvaluesbysymbol + '\
-    local positions = getpositionvaluesbysymbol(ARGV[1], ARGV[2]) \
-    return cjson.encode(positions) \
+    local issymbolid = redis.call("sismember", "symbol:_indicies:symbolid", ARGV[2]) \
+    if issymbolid == 0 then \
+      return{1, "symbol not found"} \
+    end \
+    return {0, cjson.encode(getpositionvaluesbysymbol(ARGV[1], ARGV[2]))} \
   ';
 
   /*
@@ -2594,8 +3278,11 @@ exports.registerScripts = function () {
   * returns: a table of position values
   */
   exports.scriptgetpositionvaluesbysymbolbydate = getpositionvaluesbysymbolbydate + '\
-    local positions = getpositionvaluesbysymbolbydate(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
-    return cjson.encode(positions) \
+    local issymbolid = redis.call("sismember", "symbol:_indicies:symbolid", ARGV[2]) \
+    if issymbolid == 0 then \
+      return{1, "symbol not found"} \
+    end \
+    return {0, cjson.encode(getpositionvaluesbysymbolbydate(ARGV[1], ARGV[2], ARGV[3], ARGV[4]))} \
   ';
 
   /*
@@ -2605,8 +3292,7 @@ exports.registerScripts = function () {
   * returns: a table of positions
   */
   exports.scriptgetpositionsbybroker = getpositionsbybroker + '\
-    local positions = getpositionsbybroker(ARGV[1]) \
-    return cjson.encode(positions) \
+    return cjson.encode(getpositionsbybroker(ARGV[1])) \
   ';
 
   /*
@@ -2615,8 +3301,7 @@ exports.registerScripts = function () {
   * returns: array of postings
   */
   exports.scriptgetpositionpostings = getpositionpostingsbydate + '\
-  local positionpostings = getpositionpostingsbydate(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
-  return cjson.encode(positionpostings) \
+    return cjson.encode(getpositionpostingsbydate(ARGV[1], ARGV[2], ARGV[3], ARGV[4])) \
   ';
 
   /*
@@ -2626,8 +3311,7 @@ exports.registerScripts = function () {
   * returns: array of values as JSON string
   */
   exports.scriptgetaccountsummary = getaccountsummary + '\
-  local accountsummary = getaccountsummary(ARGV[1], ARGV[2]) \
-  return cjson.encode(accountsummary) \
+    return cjson.encode(getaccountsummary(ARGV[1], ARGV[2])) \
   ';
 
  /*
@@ -2636,7 +3320,7 @@ exports.registerScripts = function () {
   * params: accountid, brokerid, value date, end of value date in milliseconds
   * returns: array of positions with their associated values in JSON
   */
-  exports.scriptvaluation = getpositionvaluebydate + '\
+  exports.scriptvaluation = getpositionvaluebydate + getsymbollongname + '\
     redis.log(redis.LOG_NOTICE, "scriptvaluation") \
     local accountid = ARGV[1] \
     local brokerid = ARGV[2] \
@@ -2649,6 +3333,9 @@ exports.registerScripts = function () {
     for index = 1, #positionids do \
       local position = getpositionvaluebydate(brokerid, positionids[index], valuedate, valuedatems) \
       if position["quantity"] ~= 0 then \
+        position.symbollongname = getsymbollongname(position.symbolid) \
+        position.cost = tonumber(round(tonumber(position.cost), 2)) \
+        position.symbolcountrycodeid = redis.call("hget", "symbol:" .. position.symbolid, "countrycodeid" ) \
         table.insert(tblvaluation, position) \
       end \
     end \
@@ -2662,784 +3349,266 @@ exports.registerScripts = function () {
   * args: 1=action, 2=amount, 3=brokerid, 4=clientaccountid, 5=currencyid, 6=localamount, 7=note, 8=paymenttypeid, 9=rate, 10=reference, 11=timestamp, 12=timestampms, 13=clearancedate
   * returns: 0 if successful, else 1 & an error message code if unsuccessful
   */
-  exports.newclientfundstransfer = newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + getbrokeraccountsmapid + addunclearedcashlistitem + creditcheckwithdrawal + '\
+  exports.newclientfundstransfer = round + newtransaction + newposting + updateaccountbalanceuncleared + updateaccountbalance + getbrokeraccountsmapid + addunclearedcashlistitem + creditcheckwithdrawal + utils.getparentlinkdetails + utils.createaddtionalindex + '\
     redis.log(redis.LOG_NOTICE, "newclientfundstransfer") \
     local action = tonumber(ARGV[1]) \
     local paymenttypeid = ARGV[8] \
+    local note = ARGV[7] \
+    local transactionid \
+    local linkdetails = getparentlinkdetails(ARGV[3], ARGV[4])\
+    if trim(note) == "" then \
+       note = redis.call("hget", "paymenttypes:" .. paymenttypeid, "name") \
+    end \
     if paymenttypeid == "DCR" then \
       if action == 1 then \
-        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CRR", ARGV[12]) \
-        newposting(ARGV[4], ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
+        transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], note, ARGV[9], ARGV[10], ARGV[11], "CRR", ARGV[12], linkdetails[1], linkdetails[2]) \
+        newposting(ARGV[4], ARGV[2], ARGV[3], ARGV[6], "", transactionid, ARGV[12], ARGV[11], linkdetails[1], linkdetails[2]) \
         updateaccountbalanceuncleared(ARGV[4], ARGV[2], ARGV[3], ARGV[6]) \
         local clientsettlementaccountid = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client settlement") \
-        newposting(clientsettlementaccountid, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), transactionid, ARGV[12]) \
+        newposting(clientsettlementaccountid, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), "", transactionid, ARGV[12], ARGV[11], linkdetails[1], linkdetails[2]) \
         updateaccountbalance(clientsettlementaccountid, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
-        addunclearedcashlistitem(ARGV[3], ARGV[13], ARGV[4],  transactionid) \
-      else \
+        addunclearedcashlistitem(ARGV[3], ARGV[13], ARGV[4], transactionid, ARGV[11], ARGV[12], ARGV[8], ARGV[5], linkdetails[1], linkdetails[2]) \
       end \
-    elseif paymenttypeid == "BAC" or paymenttypeid == "FP" or paymenttypeid == "CHAPS" then \
+    elseif paymenttypeid == "BAC" or paymenttypeid == "FP" or paymenttypeid == "CHAPS" or paymenttypeid == "CHQ" then \
       if action == 1 then \
-        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CAR", ARGV[12]) \
-        newposting(ARGV[4], ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
+        transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], note, ARGV[9], ARGV[10], ARGV[11], "CAR", ARGV[12], linkdetails[1], linkdetails[2]) \
+        newposting(ARGV[4], ARGV[2], ARGV[3], ARGV[6], "", transactionid, ARGV[12], ARGV[11], linkdetails[1], linkdetails[2]) \
         updateaccountbalance(ARGV[4], ARGV[2], ARGV[3], ARGV[6]) \
         local clientfundsaccount = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client funds") \
-        newposting(clientfundsaccount, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), transactionid, ARGV[12]) \
+        newposting(clientfundsaccount, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), "", transactionid, ARGV[12], ARGV[11], linkdetails[1], linkdetails[2]) \
         updateaccountbalance(clientfundsaccount, -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
       else \
         if creditcheckwithdrawal(ARGV[3], ARGV[4], ARGV[2]) == 1 then \
           return {1, "Insufficient cleared funds"} \
         end \
-        local transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], ARGV[7], ARGV[9], ARGV[10], ARGV[11], "CAP", ARGV[12]) \
-        newposting(ARGV[4], -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), transactionid, ARGV[12]) \
+        transactionid = newtransaction(ARGV[2], ARGV[3], ARGV[5], ARGV[6], note, ARGV[9], ARGV[10], ARGV[11], "CAP", ARGV[12], linkdetails[1], linkdetails[2]) \
+        newposting(ARGV[4], -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6]), "", transactionid, ARGV[12], ARGV[11], linkdetails[1], linkdetails[2]) \
         updateaccountbalance(ARGV[4], -tonumber(ARGV[2]), ARGV[3], -tonumber(ARGV[6])) \
         local clientfundsaccount = getbrokeraccountsmapid(ARGV[3], ARGV[5], "Client funds") \
-        newposting(clientfundsaccount, ARGV[2], ARGV[3], ARGV[6], transactionid, ARGV[12]) \
+        newposting(clientfundsaccount, ARGV[2], ARGV[3], ARGV[6], "", transactionid, ARGV[12], ARGV[11], linkdetails[1], linkdetails[2]) \
         updateaccountbalance(clientfundsaccount, ARGV[2], ARGV[3], ARGV[6]) \
       end \
-    elseif paymenttypeid == "CHQ" then \
-      if action == 1 then \
-      else \
+    end \
+    if transactionid then \
+      redis.call("sadd", "broker:" .. ARGV[3] .. ":transaction:clientfundtransfers", transactionid) \
+      createaddtionalindex(ARGV[3], "transaction:clientfundtransfers", transactionid, linkdetails[1], linkdetails[2]) \
+      local newreference = ARGV[10] \
+      if  trim(newreference) == "" then \
+        if action == 1 then \
+          newreference = paymenttypeid .. " IN " .. transactionid \
+        else \
+          newreference = paymenttypeid .. " OUT " .. transactionid \
+        end \
+        redis.call("hset", "broker:" .. ARGV[3] .. ":transaction:" .. transactionid, "reference", newreference) \
       end \
     end \
-   return {0} \
+   return {0, transactionid} \
   ';
-
   /*
   * scriptgetstatement
   * prepares a statement for an account between two dates
   * params: accountid, brokerid, start date, end date
   */
-  exports.scriptgetstatement = getpostingsbydate + '\
+  exports.scriptgetstatement = round + utils.filter + getpostingsbydate + utils.sorttransaction + getclientidbyaccount + utils.getlimitopeningbalance + '\
     redis.log(redis.LOG_NOTICE, "scriptgetstatement") \
     local tblresults = {} \
+    local tbloutput = {} \
     local balance = 0 \
+    local clientdata \
+    local posting = {} \
     --[[ get all the postings up to the end date ]] \
-    local postings = getpostingsbydate(ARGV[1], ARGV[2], "-inf", ARGV[4]) \
+    local postings = getpostingsbydate(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[6]) \
+    table.sort(postings, sorttransaction) \
+    balance = getlimitopeningbalance(ARGV[2], ARGV[1], ARGV[3], ARGV[6]) \
+    tbloutput.openingbalance = balance \
     --[[ go through all the postings, adjusting the cleared/uncleared balances as we go ]] \
     for index = 1, #postings do \
-      balance = balance + tonumber(postings[index]["amount"]) \
-      postings[index]["balance"] = balance \
-      table.insert(tblresults, postings[index]) \
+      posting = postings[index] \
+      balance = balance + tonumber(posting.amount) \
+      posting.clientid = getclientidbyaccount(ARGV[2], posting.accountid) \
+      clientdata = redis.call("hmget", "broker:" .. ARGV[2] .. ":client:" .. posting.clientid, "name", "address") \
+      posting.clientname = clientdata[1] \
+      posting.clientaddress = clientdata[2] \
+      posting.date = ARGV[5] \
+      posting.balance = round(balance, 2) \
+      table.insert(tblresults, posting) \
     end \
-    return cjson.encode(tblresults) \
+    tbloutput.closingbalance = balance \
+    tbloutput.data = tblresults \
+    return cjson.encode(tbloutput) \
   ';
-
   /*
   * scriptgethistory
   * prepares a history for an account from beginning to now
   * params: accountid, brokerid
   */
-  exports.scriptsgethistory = getpostingsbydate + '\
+  exports.scriptsgethistory = round + utils.filter + getpostingsbydate + utils.sorttransaction + utils.getlimitopeningbalance + '\
     redis.log(redis.LOG_NOTICE, "scriptsgethistory") \
     local tblresults = {} \
+    local tbloutput = {} \
     local balance = 0 \
+    local posting = {} \
     --[[ get all the postings up to the end date ]] \
-    local postings = getpostingsbydate(ARGV[1], ARGV[2], "-inf", "+inf") \
+    local postings = getpostingsbydate(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[6]) \
+    table.sort(postings, sorttransaction) \
+    balance = getlimitopeningbalance(ARGV[2], ARGV[1], ARGV[3], ARGV[6]) \
+    tbloutput["openingbalance"] = balance \
     --[[ go through all the postings, adjusting the cleared/uncleared balances as we go ]] \
     for index = 1, #postings do \
-      balance = balance + tonumber(postings[index]["amount"]) \
-      postings[index]["balance"] = balance \
-      table.insert(tblresults, postings[index]) \
+      posting = postings[index] \
+      balance = balance + tonumber(posting.amount) \
+      posting.balance = round(balance, 2) \
+      table.insert(tblresults, posting) \
     end \
-    return cjson.encode(tblresults) \
-  ';
-
-  /*
-  * cacashdividend()
-  * script to test/apply/reverse a cash dividend
-  * params: brokerid, corporateactionid, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: 0, total position quantity, total unsettled quantity, total dividend, total unsettled dividend, number of accounts updated if successful, else 1 + an error message if unsuccessful
-  */
-  exports.cacashdividend = getpositionquantitiesbysymbolbydate + getaccount + round + transactiondividend + '\
-    redis.log(redis.LOG_NOTICE, "cacashdividend") \
-    local brokerid = ARGV[1] \
-    local corporateactionid = ARGV[2] \
-    local exdatems = ARGV[3] \
-    local timestamp = ARGV[4] \
-    local timestampms = ARGV[5] \
-    local mode = tonumber(ARGV[6]) \
-    local totquantity = 0 \
-    local totunsettledquantity = 0 \
-    local totdividend = 0 \
-    local totunsettleddividend = 0 \
-    local numaccounts = 0 \
-    --[[ get the corporate action ]] \
-    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
-    if not corporateaction["corporateactionid"] then \
-      return {1, 1027} \
-    end \
-    --[[ there needs to be a cash per share figure for this ca ]] \
-    if not corporateaction["cashpershare"] then \
-      return {1, 1036} \
-    end \
-    --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
-    local rate = 1 \
-    --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
-    local positions = getpositionquantitiesbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
-    for i = 1, #positions do \
-      redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"] .. ", unsettledquantity: " .. positions[i]["unsettledquantity"] .. ", settledquantity: " .. positions[i]["settledquantity"]) \
-      --[[ may have a position with no quantity ]] \
-      if positions[i]["quantity"] ~= 0 then \
-        --[[ get the account for the currency - may change - todo: consider ]] \
-        local account = getaccount(positions[i]["accountid"], brokerid) \
-        local dividend = round(positions[i]["quantity"] * tonumber(corporateaction["cashpershare"]), 2) \
-        local unsettleddividend = round(positions[i]["unsettledquantity"] * tonumber(corporateaction["cashpershare"]), 2) \
-        redis.log(redis.LOG_NOTICE, "dividend: " .. dividend) \
-        local dividendlocal = dividend * rate \
-        local unsettleddividendlocal = unsettleddividend * rate \
-        if dividend ~= 0 then \
-          if mode == 2 then \
-            --[[ apply the dividend ]] \
-            local retval = transactiondividend(positions[i]["accountid"], dividend, unsettleddividend, brokerid, account["currencyid"], dividendlocal, unsettleddividendlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "DVP", timestampms) \
-            if retval[1] == 1 then \
-              return retval \
-            end \
-          elseif mode == 3 then \
-            --[[ reverse the dividend ]] \
-            local retval = transactiondividend(positions[i]["accountid"], -dividend, -unsettleddividend, brokerid, account["currencyid"], -dividendlocal, -unsettleddividendlocal, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "DVR", timestampms) \
-            if retval[1] == 1 then \
-              return retval \
-            end \
-          end \
-          totquantity = totquantity + positions[i]["quantity"] \
-          totunsettledquantity = totunsettledquantity + positions[i]["unsettledquantity"] \
-          totdividend = totdividend + dividend \
-          totunsettleddividend = totunsettleddividend + unsettleddividend \
-          numaccounts = numaccounts + 1 \
-        end \
-      end \
-    end \
-    redis.log(redis.LOG_NOTICE, "totquantity: " .. totquantity .. ", totdividend: " .. totdividend) \
-    return {0, tostring(totquantity), tostring(totunsettledquantity), tostring(totdividend), tostring(totunsettleddividend), numaccounts} \
+    tbloutput["closingbalance"] = balance \
+    tbloutput["data"] = tblresults \
+    return cjson.encode(tbloutput) \
   ';
 
  /*
-  * cadividendscrip()
-  * script to test/apply/reverse a scrip dividend
-  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: 0, total position quantity, total shares due, total residue cash if ok, else 1 + an error message if unsuccessful
+  * cavalidate
+  * validate a corporate action
+  * params: corporateaction
+  * returns: 0 if ok, else 1, error message if invalid
   */
-  exports.cadividendscrip = getpositionsbysymbolbydate + dividendasshares + '\
-    redis.log(redis.LOG_NOTICE, "cadividendscrip") \
-    local brokerid = ARGV[1] \
-    local corporateactionid = ARGV[2] \
-    local exdate = ARGV[3] \
-    local exdatems = ARGV[4] \
-    local timestamp = ARGV[5] \
-    local timestampms = ARGV[6] \
-    local mode = tonumber(ARGV[7]) \
-    local totquantity = 0 \
-    local totsharesdue = 0 \
-    local totresiduecash = 0 \
-    --[[ get the corporate action ]] \
-    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
-    if not corporateaction then \
-      return {1, 1028} \
+  cavalidate = geteodprice + utils.getdateindex + '\
+  local cavalidate = function(corporateaction) \
+    local ca = {} \
+    if corporateaction.processed == 1 then \
+      return {1, "Corporate action already applied"} \
     end \
-    --[[ there needs to be a shares per share figure for this ca ]] \
-    if not corporateaction["sharespershare"] then \
-      return {1, 1035} \
+    --[[ validate the symbol ]] \
+    ca.symbol = gethashvalues("symbol:" .. corporateaction.symbolid) \
+    if not ca.symbol.symbolid then \
+      return {1, "Symbol: " .. ca.symbol.symbolid .. " not found"} \
     end \
-    --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
-    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
-    for i = 1, #positions do \
-      redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"]) \
-      if positions[i]["quantity"] > 0 then \
-        local retdivscrip = dividendasshares(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-        if retdivscrip[1] == 1 then \
-          return retdivscrip \
+    --[[ validate the benefits ]] \
+    ca.benefit = {} \
+    ca.benefits = redis.call("smembers", "corporateaction:" .. corporateaction.corporateactionid .. ":benefits") \
+    if #ca.benefits == 0 then \
+      return {1, "No benefits added to apply"} \
+    end \
+    for i = 1, #ca.benefits do \
+      ca.benefit = gethashvalues("corporateaction:" .. corporateaction.corporateactionid .. ":benefit:" .. ca.benefits[i]) \
+      if ca.benefit.benefittypeid == "SECU" then \
+        --[[ validate the benefit symbol ]] \
+        ca.symbol = gethashvalues("symbol:" .. ca.benefit.symbolid) \
+        if not ca.symbol.symbolid then \
+          return {1, "Symbol: " .. ca.benefit.symbolid .. " not found"} \
         end \
-        totsharesdue = totsharesdue + retdivscrip[2] \
-        totresiduecash = totresiduecash + retdivscrip[3] \
-        totquantity = totquantity + positions[i]["quantity"] \
-      end \
-    end \
-    return {0, tostring(totquantity), tostring(totsharesdue), tostring(totresiduecash)} \
-  ';
-
- /*
-  * cadividendoption()
-  * script to test/apply/reverse a cash/scrip dividend
-  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: 0, total position quantity, total shares due, total residue cash, total dividend as cash if ok, else 1 + an error message if unsuccessful
-  */
-  exports.cadividendoption = getpositionsbysymbolbydate + getclientfromaccount + getcorporateactionclientdecisionbyclient + dividendasshares + dividendascash + '\
-    redis.log(redis.LOG_NOTICE, "cadividendoption") \
-    local brokerid = ARGV[1] \
-    local corporateactionid = ARGV[2] \
-    local exdate = ARGV[3] \
-    local exdatems = ARGV[4] \
-    local timestamp = ARGV[5] \
-    local timestampms = ARGV[6] \
-    local mode = tonumber(ARGV[7]) \
-    local totquantity = 0 \
-    local totsharesdue = 0 \
-    local totresiduecash = 0 \
-    local totdividendascash = 0 \
-    --[[ get the corporate action ]] \
-    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
-    if not corporateaction then \
-      return {1, 1028} \
-    end \
-    --[[ there needs to be a shares per share figure for this ca ]] \
-    if not corporateaction["sharespershare"] then \
-      return {1, 1035} \
-    end \
-    --[[ there needs to be a cash per share figure for this ca ]] \
-    if not corporateaction["cashpershare"] then \
-      return {1, 1036} \
-    end \
-    --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
-    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
-    for i = 1, #positions do \
-      redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"]) \
-      if positions[i]["quantity"] > 0 then \
-        --[[ get the client ]] \
-        local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
-        if not clientid then \
-          return {1, 1017} \
-        end \
-        --[[ get the client decision to take cash or scrip & act on it, else use default ]] \
-        local corporateactiondecision = getcorporateactionclientdecisionbyclient(brokerid, clientid, corporateactionid) \
-        if not corporateactiondecision then \
-          if corporateaction["decisiondefault"] == "SCRIP" then \
-            local retdivscrip = dividendasshares(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-            if retdivscrip[1] == 1 then \
-              return retdivscrip \
-            end \
-            totsharesdue = totsharesdue + retdivscrip[2] \
-            totresiduecash = totresiduecash + retdivscrip[3] \
-          else \
-            local dividend = dividendascash(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-            if dividend[1] == 1 then \
-              return dividend \
-            end \
-            totdividendascash = totdividendascash + dividend[2] \
-          end \
-        elseif corporateactiondecision == "SCRIP" then \
-          local retdivscrip = dividendasshares(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-          if retdivscrip[1] == 1 then \
-            return retdivscrip \
-          end \
-          totsharesdue = totsharesdue + retdivscrip[2] \
-          totresiduecash = totresiduecash + retdivscrip[3] \
-        else \
-          local dividend = dividendascash(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-          if dividend[1] == 1 then \
-            return dividend \
-          end \
-          totdividendascash = totdividendascash + dividend[2] \
-        end \
-        totquantity = totquantity + positions[i]["quantity"] \
-      end \
-    end \
-    return {0, tostring(totquantity), tostring(totsharesdue), tostring(totresiduecash), tostring(totdividendascash)} \
-  ';
-
-   /*
-  * cacapitalrepayment()
-  * script to apply a capital repayment
-  * params: brokerid, corporateactionid, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: 0, total position quantity, total unsettled quantity, total dividend, total unsettled dividend, number of accounts updated if successful, else 1 + an error message if unsuccessful
-  */
-  exports.cacapitalrepayment = getpositionquantitiesbysymbolbydate + getaccount + round + transactiondividend + '\
-    redis.log(redis.LOG_NOTICE, "cacapitalrepayment") \
-    local brokerid = ARGV[1] \
-    local corporateactionid = ARGV[2] \
-    local exdatems = ARGV[3] \
-    local timestamp = ARGV[4] \
-    local timestampms = ARGV[5] \
-    local mode = tonumber(ARGV[6]) \
-    local totquantity = 0 \
-    local totunsettledquantity = 0 \
-    local totdividend = 0 \
-    local totunsettleddividend = 0 \
-    local numaccounts = 0 \
-    --[[ get the corporate action ]] \
-    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
-    if not corporateaction["corporateactionid"] then \
-      return {1, 1027} \
-    end \
-    --[[ there needs to be a cash per share figure for this ca ]] \
-    if not corporateaction["cashpershare"] then \
-      return {1, 1036} \
-    end \
-   --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
-    local rate = 1 \
-    --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
-    local positions = getpositionquantitiesbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
-    for i = 1, #positions do \
-      redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"] .. ", unsettledquantity: " .. positions[i]["unsettledquantity"] .. ", settledquantity: " .. positions[i]["settledquantity"]) \
-      --[[ may have a position with no quantity ]] \
-      if positions[i]["quantity"] ~= 0 then \
-        --[[ get the account for the currency - may change - todo: consider ]] \
-        local account = getaccount(positions[i]["accountid"], brokerid) \
-        local dividend = round(positions[i]["quantity"] * tonumber(corporateaction["cashpershare"]), 2) \
-        local unsettleddividend = round(positions[i]["unsettledquantity"] * tonumber(corporateaction["cashpershare"]), 2) \
-        redis.log(redis.LOG_NOTICE, "dividend: " .. dividend) \
-        local dividendlocal = dividend * rate \
-        local unsettleddividendlocal = unsettleddividend * rate \
-        if dividend ~= 0 then \
-          if mode == 2 then \
-            --[[ apply the dividend ]] \
-            local retval = transactiondividend(positions[i]["accountid"], dividend, unsettleddividend, brokerid, account["currencyid"], dividendlocal, unsettleddividendlocal, corporateaction["description"], rate, "corporateaction:" .. corporateactionid, timestamp, "CAP", timestampms) \
-            if retval[1] == 1 then \
-              return retval \
-            end \
-          elseif mode == 3 then \
-            --[[ reverse the dividend ]] \
-            local retval = transactiondividend(positions[i]["accountid"], -dividend, -unsettleddividend, brokerid, account["currencyid"], -dividendlocal, -unsettleddividendlocal, corporateaction["description"] .. " - REVERSAL", rate, "corporateaction:" .. corporateactionid, timestamp, "CAR", timestampms) \
-            if retval[1] == 1 then \
-              return retval \
-            end \
-          end \
-          totquantity = totquantity + positions[i]["quantity"] \
-          totunsettledquantity = totunsettledquantity + positions[i]["unsettledquantity"] \
-          totdividend = totdividend + dividend \
-          totunsettleddividend = totunsettleddividend + unsettleddividend \
-          numaccounts = numaccounts + 1 \
+        --[[ get the closing price at the ex-date ]] \
+        ca.eodprice = geteodprice(corporateaction.exdate, ca.benefit.symbolid) \
+        if not ca.eodprice["bid"] then \
+          return {1, "There needs to be an end of day price for " .. ca.benefit.symbolid .. " as at " .. getdateindex(corporateaction.exdate)} \
         end \
       end \
     end \
-    redis.log(redis.LOG_NOTICE, "totquantity: " .. totquantity .. ", totdividend: " .. totdividend) \
-    return {0, tostring(totquantity), tostring(totunsettledquantity), tostring(totdividend), tostring(totunsettleddividend), numaccounts} \
+    return {0} \
+  end \
   ';
-
   /*
-  * carightsexdate()
-  * script to apply the first part of a rights issue, as at the ex-date
-  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * note: exdate is actual exdate - 1 & exdatems is millisecond representation of time at the end of exdate - 1
-  * returns: 0, total position quantity, total rights quantity, total residue if ok, else 1 + an error message if unsuccessful
+  * caapply()
+  * script to apply a corporate action
+  * params: 1=corporateactionid, 2=exdatems, 3=timestamp, 4=timestampms, 5=mode (1=test,2=apply)
+  * returns: 0, total position quantity, unsettled quantity, number of accounts, number of brokers, total benefits if successful, else 1 + an error message if unsuccessful
   */
-  exports.carightsexdate = getpositionsbysymbolbydate + getsharesdue + getaccount + geteodprice + newpositiontransaction + transactiondividend + '\
-    redis.log(redis.LOG_NOTICE, "carightsexdate") \
-    local brokerid = ARGV[1] \
-    local corporateactionid = ARGV[2] \
-    local exdate = ARGV[3] \
-    local exdatems = ARGV[4] \
-    local timestamp = ARGV[5] \
-    local timestampms = ARGV[6] \
-    local mode = ARGV[7] \
-    local totquantity = 0 \
-    local totrightsquantity = 0 \
-    local totresidue = 0 \
-    --[[ get the corporate action ]] \
-    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
-    if not corporateaction["corporateactionid"] then \
-      return {1, 1027} \
-    end \
-    --[[ there needs to be a shares per share figure for this ca ]] \
-    if not corporateaction["sharespershare"] then \
-      return {1, 1035} \
-    end \
-    --[[ make sure a symbol for the rights exists ]] \
-    if not corporateaction["symbolidnew"] then \
-      return {1, 1030} \
-    end \
-    --[[ get the symbol ]] \
-    local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
-    if not symbol["symbolid"] then \
-      return {1, 1015} \
-    end \
-   --[[ get the symbol for the rights ]] \
-    local symbolnew = gethashvalues("symbol:" .. corporateaction["symbolidnew"]) \
-    if not symbolnew["symbolid"] then \
-      return {1, 1030} \
-    end \
-    --[[ get the closing price for the stock as at the exdate ]] \
-    local eodprice = geteodprice(exdate, corporateaction["symbolid"]) \
-    if not eodprice["bid"] then \
-      return {1, 1029} \
-    end \
-    --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
-    local rate = 1 \
-    --[[ get all positions in the stock of the corporate action as at the ex date ]] \
-    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
-    for i = 1, #positions do \
-      --[[ only interested in long positions ]] \
-      if positions[i]["quantity"] > 0 then \
-        redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"]) \
-        --[[ get shares due & any remainder ]] \
-        local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
-        if sharesdue[1] > 0 then \
-          if mode == 2 then \
-            --[[ create a position in the rights ]] \
-            newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolidnew"], timestamp, timestampms) \
-          end \
-          totrightsquantity = totrightsquantity + sharesdue[1] \
-        end \
-        if sharesdue[2] > 0 then \
-          if mode == 2 then \
-            if tonumber(corporateaction["fractiontypeid"]) == 2 then \
-              --[[ create a fractional position in the rights for the broker principal account ]] \
-              newpositiontransaction(0, brokerid, 0, "", corporateactionid, 2, sharesdue[2], corporateaction["symbolidnew"], timestamp, timestampms) \
-            end \
-          end \
-          totresidue = totresidue + sharesdue[2] \
-        end \
-        totquantity = totquantity + positions[i]["quantity"] \
-      end \
-    end \
-    return {0, tostring(totquantity), tostring(totrightsquantity), tostring(totresidue)} \
-  ';
-
-  /*
-  * carightspaydate()
-  * script to apply the second part of a rights issue, as at pay-date
-  * params: brokerid, corporateactionid, paydatems, timestamp, timestampms, operatortype, operatorid, mode (1=test,2=apply,3=reverse) 
-  * returns: 0, total position quantity, total exercised if ok, else 1 + an error message if unsuccessful
-  */
-  exports.carightspaydate = getpositionsbysymbolbydate + getaccount + getclientfromaccount + getcorporateactionclientdecisionbyclient + newtrade + newpositiontransaction + '\
-    redis.log(redis.LOG_NOTICE, "carightspaydate") \
-    local brokerid = ARGV[1] \
-    local corporateactionid = ARGV[2] \
-    local paydatems = ARGV[3] \
-    local timestamp = ARGV[4] \
-    local timestampms = ARGV[5] \
-    local operatortype = ARGV[6] \
-    local operatorid = ARGV[7] \
-    local mode = ARGV[8] \
-    local currencyratetoorg = 1 \
-    local currencyindtoorg = 1 \
-    local settlcurrfxrate = 1 \
-    local settlcurrfxratecalc = 1 \
-    local side = 1 \
-    local totquantity = 0 \
-    local totexercised = 0 \
-    --[[ get the corporate action ]] \
-    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
-    if not corporateaction["corporateactionid"] then \
-      return {1, 1027} \
-    end \
-    --[[ get the symbol ]] \
-    local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
-    if not symbol["symbolid"] then \
-      return {1, 1015} \
-    end \
-    --[[ make sure a symbol for the rights exists ]] \
-    if not corporateaction["symbolidnew"] then \
-      return {1, 1030} \
-    end \
-    --[[ get all positions in the rights symbol as at the pay date ]] \
-    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolidnew"], paydatems) \
-    for i = 1, #positions do \
-      --[[ only interested in long positions ]] \
-      if positions[i]["quantity"] > 0 then \
-        --[[ get the account for the currency ]] \
-        local account = getaccount(positions[i]["accountid"], brokerid) \
-        --[[ get the client decision ]] \
-        local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
-        if not clientid then \
-          return {1, 1017} \
-        end \
-        local corporateactiondecision = getcorporateactionclientdecisionbyclient(brokerid, clientid, corporateactionid) \
-        if not corporateactiondecision["corporateactionid"] then \
-          if corporateaction["decisiondefault"] == "EXERCISE" then \
-            if mode == 2 then \
-              --[[ create a trade in the original symbol at the rights price for the full quantity ]] \
-              newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, positions[i]["quantity"], corporateaction["price"], account["currencyid"], currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, "", "", 0, "", "", timestamp, "", "", account["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms, "") \
-            elseif mode == 3 then \
-              --[[ create the reverse trade in the original symbol at the rights price ]] \
-              newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, -positions[i]["quantity"], corporateaction["price"], account["currencyid"], currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, "", "", 0, "", "", timestamp, "", "", account["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms, "") \
-            end \
-            totexercised = totexercised + positions[i]["quantity"] \
-          end \
-        elseif corporateactiondecision["decision"] == "EXERCISE" then \
-          --[[ use the client elected quantity, if there is one ]] \
-          local quantity \
-          if tonumber(corporateactiondecision["electedquantityasshares"]) > 0 then \
-            quantity = corporateactiondecision["electedquantityasshares"] \
-          else \
-            quantity = positions[i]["quantity"] \
-          end \
-          if mode == 2 then \
-            --[[ create a trade in the original symbol at the rights price ]] \
-            newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, quantity, corporateaction["price"], account["currencyid"], currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, "", "", 0, "", "", timestamp, "", "", account["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms, "") \
-          elseif mode == 3 then \
-            --[[ create the reverse trade in the original symbol at the rights price ]] \
-            newtrade(positions[i]["accountid"], brokerid, clientid, "", corporateaction["symbolid"], side, -tonumber(quantity), corporateaction["price"], account["currencyid"], currencyratetoorg, currencyindtoorg, 0, 0, 0, 0, "", "", 0, "", "", timestamp, "", "", account["currencyid"], 0, settlcurrfxrate, settlcurrfxratecalc, 0, operatortype, operatorid, 0, timestampms, "") \
-          end \
-          totexercised = totexercised + tonumber(quantity) \
-        end \
-        if mode == 2 then \
-          --[[ zero the position in the rights ]] \
-          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -positions[i]["quantity"], corporateaction["symbolidnew"], timestamp, timestampms) \
-        elseif mode == 3 then \
-          --[[ recreate a position in the rights ]] \
-          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, positions[i]["quantity"], corporateaction["symbolidnew"], timestamp, timestampms) \
-        end \
-        totquantity = totquantity + positions[i]["quantity"] \
-      end \
-    end \
-    return {0, tostring(totquantity), tostring(totexercised)} \
-  ';
-
-  /*
-  * castocksplit
-  * script to apply a stock split
-  * params: corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: 0, total shares due, total residue if ok, else 1 + an error message if unsuccessful
-  * note: this corporate action is applied across all brokers
-  */
-  exports.castocksplit = getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + convertsharesascash + '\
-    redis.log(redis.LOG_NOTICE, "castocksplit") \
+  exports.caapply = cavalidate + getpositionquantitiesbysymbolbydate + applybenefits + utils.updatecastatus + '\
+    redis.log(redis.LOG_NOTICE, "caapply") \
+    redis.call("RPUSH", "cadebug", "caapply") \
     local corporateactionid = ARGV[1] \
-    local exdate = ARGV[2] \
-    local exdatems = ARGV[3] \
-    local timestamp = ARGV[4] \
-    local timestampms = ARGV[5] \
-    local mode = ARGV[6] \
-    local totsharesdue = 0 \
-    local totresidue = 0 \
+    local exdatems = ARGV[2] \
+    local timestamp = ARGV[3] \
+    local timestampms = ARGV[4] \
+    local mode = tonumber(ARGV[5]) \
+    local totquantity = 0 \
+    local totunsettledquantity = 0 \
+    local numaccounts = 0 \
+    local totalbenefits = {} \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
-    if not corporateaction["corporateactionid"] then \
-      return {1, 1027} \
+    if not corporateaction.corporateactionid then \
+      return {1, "Corporate action not found"} \
     end \
-    --[[ there needs to be a shares per share figure for this ca ]] \
-    if not corporateaction["sharespershare"] then \
-      return {1, 1035} \
+    --[[ validate it ]] \
+    local ret = cavalidate(corporateaction) \
+    if ret[1] == 1 then \
+      return ret \
     end \
-    --[[ get the symbol ]] \
-    local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
-    if not symbol["symbolid"] then \
-      return {1, 1015} \
-    end \
-    --[[ we are assuming GBP dividend - todo: get fx rate if necessary ]] \
-    local rate = 1 \
-    --[[ we are applying the split across all positions, so need to interate through all brokers ]] \
+    --[[ we are applying across all positions, so need to interate through all brokers ]] \
     local brokers = redis.call("smembers", "brokers") \
     for j = 1, #brokers do \
-      --[[ get all positions in the stock of the corporate action as at the ex date for this broker ]] \
-      local positions = getpositionsbysymbolbydate(brokers[j], corporateaction["symbolid"], exdatems) \
+      --[[ get all positions in the symbol of the corporate action as at the ex-date for this broker ]] \
+      local positions = getpositionquantitiesbysymbolbydate(brokers[j], corporateaction.symbolid, exdatems) \
       for i = 1, #positions do \
-        --[[ only interested in long positions ]] \
-        if positions[i]["quantity"] > 0 then \
-          redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"]) \
-          --[[ get shares due & any remainder ]] \
-          local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
-          if sharesdue[1] > 0 then \
-            if mode == 2 then \
-              --[[ update the position ]] \
-              newpositiontransaction(positions[i]["accountid"], brokers[j], 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
-            elseif mode == 3 then \
-              --[[ reverse the effect on the position ]] \
-              newpositiontransaction(positions[i]["accountid"], brokers[j], 0, "", corporateactionid, 2, -sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
-            end \
-            totsharesdue = totsharesdue + sharesdue[1] \
+        --[[ may have a position with no quantity ]] \
+        if tonumber(positions[i].quantity) ~= 0 then \
+          --[[ apply the benefits ]] \
+          local benefits = applybenefits(brokers[j], positions[i], corporateaction, timestamp, timestampms, mode) \
+          if benefits[1] == 1 then \
+            return benefits \
           end \
-          if sharesdue[2] > 0 then \
-            if tonumber(corporateaction["fractiontypeid"]) == 1 then \
-              local ret = convertsharesascash(position["accountid"], brokerid, corporateaction, sharesdue[2], timestamp, timestampms, mode) \
-              if ret[1] == 1 then \
-                return ret \
-              end \
-              totresidue = totresidue + ret[2] \
-            elseif tonumber(corporateaction["fractiontypeid"]) == 2 then \
-              if mode == 2 then \
-                --[[ add the shares to the broker client account ]] \
-                newpositiontransaction(0, brokerid, 0, "", corporateaction["corporateactionid"], 2, sharesdue[2], corporateaction["symbolid"], timestamp, timestampms) \
+          for k = 1, #benefits[2] do \
+            local isbenefitintotal = 0 \
+            --[[ add the benefit to the total ]] \
+            for l = 1, #totalbenefits do \
+              if tonumber(totalbenefits[l].benefitid) == tonumber(benefits[2][k].benefitid) then \
+                if totalbenefits[l].benefittypeid == "CASH" then \
+                  totalbenefits[l].cash = round(totalbenefits[l].cash + benefits[2][k].cash, 2) \
+                elseif totalbenefits[l].benefittypeid == "SECU" then \
+                  totalbenefits[l].shares = totalbenefits[l].shares + benefits[2][k].shares \
+                  totalbenefits[l].residuecash = round(totalbenefits[l].residuecash + benefits[2][k].residuecash, 2) \
+                end \
+                isbenefitintotal = 1 \
+                break \
               end \
             end \
+            if isbenefitintotal == 0 then \
+              table.insert(totalbenefits, benefits[2][k]) \
+            end \
           end \
+          totquantity = totquantity + tonumber(positions[i].quantity) \
+          totunsettledquantity = totunsettledquantity + tonumber(positions[i].unsettledquantity) \
+          numaccounts = numaccounts + 1 \
         end \
       end \
     end \
-    return {0, tostring(totsharesdue), tostring(totresidue)} \
+    if totquantity == 0 then \
+      return {1, "No position found to apply corporateaction"} \
+    end \
+    if mode == 2 then \
+      updatecastatus(corporateactionid, 1) \
+    end \
+    --[[ delete old account level index and create new index, this will update the postion which is created after corporate action created  ]] \
+    redis.call("RPUSH", "cadebug", "end caapply") \
+    return {0, tostring(totquantity), tostring(totunsettledquantity), tostring(numaccounts), #brokers - 1, cjson.encode(totalbenefits)} \
   ';
 
-  /*
-  * cascripissue()
-  * script to apply a scrip issue
-  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * note: exdate is actually exdate - 1 in "YYYYMMDD" format, exdatems is millisecond representation of time at the end of exdate - 1
-  * returns: 0, total sharesdue, total residue if ok, else 1 + an error message if unsuccessful
+ /*
+  * cavalidateclients()
+  * script is used to validate list of all clients from the list
+  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse), localtimestamp
+  * returns: 0, total position quantity, total shares due, total residue cash if ok, else 1 + an error message if unsuccessful
   */
-  exports.cascripissue = getpositionsbysymbolbydate + getsharesdue + newpositiontransaction + convertsharesascash + '\
-    redis.log(redis.LOG_NOTICE, "cascripissue") \
-    local brokerid = ARGV[1] \
-    local corporateactionid = ARGV[2] \
-    local exdate = ARGV[3] \
-    local exdatems = ARGV[4] \
-    local timestamp = ARGV[5] \
-    local timestampms = ARGV[6] \
-    local mode = ARGV[7] \
-    local totsharesdue = 0 \
-    local totresidue = 0 \
-    --[[ get the corporate action ]] \
-    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
-    if not corporateaction["corporateactionid"] then \
-      return {1, 1027} \
-    end \
-    --[[ there needs to be a shares per share figure for this ca ]] \
-    if not corporateaction["sharespershare"] then \
-      return {1, 1035} \
-    end \
-    --[[ get the symbol ]] \
-    local symbol = gethashvalues("symbol:" .. corporateaction["symbolid"]) \
-    if not symbol["symbolid"] then \
-      return {1, 1015} \
-    end \
-    --[[ get all positions in the stock of the corporate action as at the ex date ]] \
-    local positions = getpositionsbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
-    for i = 1, #positions do \
-      --[[ only interested in long positions ]] \
-      if positions[i]["quantity"] > 0 then \
-        redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"]) \
-        --[[ get shares due & any remainder ]] \
-        local sharesdue = getsharesdue(positions[i]["quantity"], corporateaction["sharespershare"]) \
-        if sharesdue[1] > 0 then \
-          if mode == 2 then \
-            --[[ update the position ]] \
-            newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
-          elseif mode == 3 then \
-            --[[ reverse the effect on the position ]] \
-            newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -sharesdue[1], corporateaction["symbolid"], timestamp, timestampms) \
-          end \
-          totsharesdue = totsharesdue + sharesdue[1] \
-        end \
-        if sharesdue[2] > 0 then \
-          if tonumber(corporateaction["fractiontypeid"]) == 1 then \
-            stubcash = convertsharesascash(positions[i]["accountid"], brokerid, corporateaction, positions[i]["quantity"], timestamp, timestampms, mode) \
-            if stubcash[1] == 1 then \
-              return stubcash \
-            end \
-            totresidue = totresidue + stubcash[2] \
-          elseif tonumber(corporateaction["fractiontypeid"]) == 2 then \
-            if mode == 2 then \
-              --[[ update position for broker own client account ]] \
-              newpositiontransaction(0, brokerid, 0, "", corporateactionid, 2, sharesdue[2], corporateaction["symbolid"], timestamp, timestampms) \
+  cavalidateclients = getclientidfromaccount + '\
+    local cavalidateclients = function(symbolid) \
+      redis.log(redis.LOG_NOTICE, "cavalidateclients") \
+      local brokers = redis.call("smembers", "brokers") \
+      for j = 1, #brokers do \
+        local positionids = redis.call("smembers", "broker:" .. brokers[j] .. ":symbol:" .. symbolid .. ":positions") \
+        for i = 1, #positionids do \
+          local position = redis.call("hmget", "broker:" .. brokers[j] .. ":position:" .. positionids[i], "quantity", "accountid") \
+          if tonumber(position[1]) > 0 then \
+            local clientid = getclientidfromaccount(position[2], brokers[j]) \
+            if not clientid then \
+              return {1, 1017} \
             end \
           end \
         end \
       end \
+      return {0} \
     end \
-    return {0, tostring(totsharesdue), tostring(totresidue)} \
   ';
-
-  /*
-  * catakeover()
-  * script to test/apply/reverse a takeover
-  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, operatortype, operatorid, mode (1=test,2=apply,3=reverse)
-  * returns: 0, total position quantity, total shares due, total residue cash, total cash, number of accounts updated if successful, else 1 + an error message if unsuccessful
-  */
-  exports.catakeover = getpositionquantitiesbysymbolbydate + getaccount + getclientfromaccount + dividendasshares + dividendascash + '\
-    redis.log(redis.LOG_NOTICE, "catakeover") \
-    local brokerid = ARGV[1] \
-    local corporateactionid = ARGV[2] \
-    local exdate = ARGV[3] \
-    local exdatems = ARGV[4] \
-    local timestamp = ARGV[5] \
-    local timestampms = ARGV[6] \
-    local operatortype = ARGV[7] \
-    local operatorid = ARGV[8] \
-    local mode = tonumber(ARGV[9]) \
-    local totquantity = 0 \
-    local numaccounts = 0 \
-    local totsharesdue = 0 \
-    local totresiduecash = 0 \
-    local totcash = 0 \
-    --[[ get the corporate action ]] \
-    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
-    if not corporateaction["corporateactionid"] then \
-      return {1, 1027} \
-    end \
-    --[[ we are assuming GBP - todo: get fx rate if necessary ]] \
-    local rate = 1 \
-    --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
-    local positions = getpositionquantitiesbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
-    for i = 1, #positions do \
-      redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"]) \
-      --[[ may have a position with no quantity ]] \
-      if positions[i]["quantity"] ~= 0 then \
-        local account = getaccount(positions[i]["accountid"], brokerid) \
-        local clientid = getclientfromaccount(positions[i]["accountid"], brokerid) \
-        if mode == 2 then \
-          --[[ flatten the position in the stock being taken over ]] \
-          newpositiontransaction(positions[i]["accountid"], brokerid, 0, "", corporateactionid, 2, -positions[i]["quantity"], corporateaction["symbolid"], timestamp, timestampms) \
-        end \
-        --[[ share element ]] \
-        if tonumber(corporateaction["sharespershare"]) > 0 then \
-          local shares = dividendasshares(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-          if shares[1] == 1 then \
-            return shares \
-          end \
-          totsharesdue = totsharesdue + shares[2] \
-          totresiduecash = totresiduecash + shares[3] \
-        end \
-        --[[ cash element ]] \
-        if tonumber(corporateaction["cashpershare"]) > 0 then \
-          local cash = dividendascash(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-          if cash[1] == 1 then \
-            return cash \
-          end \
-          totcash = totcash + cash[2] \
-        end \
-        totquantity = totquantity + positions[i]["quantity"] \
-        numaccounts = numaccounts + 1 \
-      end \
-    end \
-    return {0, tostring(totquantity), tostring(totsharesdue), tostring(totresiduecash), tostring(totcash), numaccounts} \
-  ';
-
-  /*
-  * caconversion()
-  * script to apply a conversion of one share to another
-  * params: brokerid, corporateactionid, exdate, exdatems, timestamp, timestampms, mode (1=test,2=apply,3=reverse)
-  * returns: 0, total position quantity, total shares due, total residue cash, total cash, number of accounts updated if successful, else 1 + an error message if unsuccessful
-  */
-  exports.caconversion = getpositionquantitiesbysymbolbydate + convertsharesasshares + '\
-    redis.log(redis.LOG_NOTICE, "caconversion") \
-    local brokerid = ARGV[1] \
-    local corporateactionid = ARGV[2] \
-    local exdate = ARGV[3] \
-    local exdatems = ARGV[4] \
-    local timestamp = ARGV[5] \
-    local timestampms = ARGV[6] \
-    local mode = tonumber(ARGV[7]) \
-    local totquantity = 0 \
-    local numaccounts = 0 \
-    local totsharesdue = 0 \
-    local totresiduecash = 0 \
-    --[[ get the corporate action ]] \
-    local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
-    if not corporateaction["corporateactionid"] then \
-      return {1, 1027} \
-    end \
-    --[[ we need a symbol for the new stock ]] \
-    if not corporateaction["symbolidnew"] then \
-      return {1, 1030} \
-    end \
-    --[[ there needs to be a cash per share figure for this ca ]] \
-    if not corporateaction["cashpershare"] then \
-      return {1, 1036} \
-    end \
-    --[[ there needs to be a shares per share figure for this ca ]] \
-    if not corporateaction["sharespershare"] then \
-      return {1, 1035} \
-    end \
-    --[[ we are assuming GBP - todo: get fx rate if necessary ]] \
-    local rate = 1 \
-    --[[ get all positions in the symbol of the corporate action as at the ex-date ]] \
-    local positions = getpositionquantitiesbysymbolbydate(brokerid, corporateaction["symbolid"], exdatems) \
-    for i = 1, #positions do \
-      redis.log(redis.LOG_NOTICE, "accountid: " .. positions[i]["accountid"] .. ", quantity: " .. positions[i]["quantity"]) \
-      --[[ may have a position with no quantity ]] \
-      if positions[i]["quantity"] ~= 0 then \
-        local shares = convertsharesasshares(brokerid, positions[i], corporateaction, timestamp, timestampms, mode) \
-        if shares[1] == 1 then \
-          return shares \
-        end \
-        totsharesdue = totsharesdue + shares[2] \
-        totresiduecash = totresiduecash + shares[3] \
-        numaccounts = numaccounts + 1 \
-      end \
-    end \
-    return {0, tostring(totquantity), tostring(totsharesdue), tostring(totresiduecash), numaccounts} \
-  ';
-
-  /*
+ /*
   * scriptgettradesbysettlementstatus
   * script to get trades sorted by settlement status
   * params: minimum trade settlement status, maximum trade settlement status
@@ -3547,7 +3716,32 @@ exports.registerScripts = function () {
     local postings = getrecordsbyfieldindex(ARGV[1], "posting", "amount", min, max) \
     return cjson.encode(postings) \
   ';
-
+  /*
+  * scriptcheckschemebalance
+  * script to check available scheme balance
+  * params: brokerid, schemebalance, schemeclients, cashisfixed, cashamount
+  * returns: 0 if ok, else 1 + an error message if unsuccessful
+  */
+  scriptcheckschemebalance = getclientaccountid + '\
+    local scriptcheckschemebalance = function(brokerid, schemebalance, schemeclients, cashisfixed, cashamount) \
+      redis.log(redis.LOG_NOTICE, "scriptcheckschemebalance") \
+      local amount = 0 \
+      if cashisfixed == 1 then \
+        amount = cashamount * #schemeclients \
+      else \
+        for i = 1, #schemeclients do \
+          local accountid = getclientaccountid(brokerid, schemeclients[i], 1) \
+          local accountbalance = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid, "balance") \
+          amount = amount + math.floor(tonumber(accountbalance) * cashamount / 100) \
+        end \
+      end \
+      if schemebalance >= amount then \
+        return {0} \
+      else \
+        return {1, 1042} \
+      end \
+    end \
+  ';
   /*
   * newcollectaggregateinvest
   * script to collect client funds into a scheme & invest aggregate & pro-rata amounts
@@ -3555,14 +3749,16 @@ exports.registerScripts = function () {
   *         schemeid
   *         cash amount - amount of cash, fixed or %
   *         cashisfixed - 1=fixed amount, 0=%
-  *         fundallocations - comma delimitted string i.e. "fundid1, %1, fundid2, %2, ..." 
+  *         fundallocations - comma delimitted string i.e. "fundid1, %1, fundid2, %2, ..."
   *         timestamp
   *         timestamp in milliseconds
   *         operatorid
   *         mode - 1=test, 2=apply, 3=reverse
+  *         futsettdate
+  *         localtimestamp
   * returns: 0, scheme cash available, scheme cash invested, number of clients, array of scheme trades {fund id, price, quantity, consideration} if ok, else 1, errorcode
   */
-  exports.newcollectaggregateinvest = split + getclientaccountid + getaccount + newtransaction + newposting + newtrade + '\
+  exports.newcollectaggregateinvest = split + getclientaccountid + getaccount + newtrade + scriptcheckschemebalance + '\
     redis.log(redis.LOG_NOTICE, "newcollectaggregateinvest") \
     local brokerid = ARGV[1] \
     local schemeid = ARGV[2] \
@@ -3574,6 +3770,8 @@ exports.registerScripts = function () {
     local timestampms = ARGV[7] \
     local operatorid = ARGV[8] \
     local mode = tonumber(ARGV[9]) \
+    local futsettdate = ARGV[10] \
+    local localtimestamp = ARGV[11] \
     local rate = 1 \
      --[[ we need a table to return any trades for the scheme ]] \
     local schemetrades = {} \
@@ -3598,6 +3796,10 @@ exports.registerScripts = function () {
     local schemeclientid = redis.call("get", "broker:" .. brokerid .. ":account:" .. scheme["accountid"] .. ":client") \
     --[[ process clients in the scheme ]] \
     local schemeclients = redis.call("smembers", "broker:" .. brokerid .. ":scheme:" .. schemeid .. ":clients") \
+    local checkschemecash = scriptcheckschemebalance(brokerid, tonumber(schemeaccount["balance"]), schemeclients, cashisfixed, cashamount) \
+    if checkschemecash[1] == 1 then \
+      return checkschemecash \
+    end \
     for i = 1, #schemeclients do \
       redis.log(redis.LOG_NOTICE, "client: " .. schemeclients[i]) \
       --[[ get the default account for this client ]] \
@@ -3606,12 +3808,16 @@ exports.registerScripts = function () {
       --[[ calculate how much cash is available ]] \
       local amount \
       if cashisfixed == 1 then \
-        amount = cashamount \
+        amount = 0 \
+        if tonumber(account["balance"]) >= cashamount then \
+          amount = cashamount \
+        end \
       else \
         amount = math.floor(tonumber(account["balance"]) * cashamount / 100) \
       end \
       redis.log(redis.LOG_NOTICE, "cash available: " .. amount) \
       --[[ loop through the fundallocations & determine how much to invest in each ]] \
+      if amount > 0 then \
       local k = 1 \
       for j = 1, #fundallocations, 2 do \
         redis.log(redis.LOG_NOTICE, "fund:" .. fundallocations[j] .. " % " .. fundallocations[j+1]) \
@@ -3631,7 +3837,7 @@ exports.registerScripts = function () {
         if quantity > 0 then \
           if mode == 2 then \
             --[[ create client trades ]] \
-            newtrade(accountid, brokerid, schemeclients[i], "", fundallocations[j], 1, quantity, symbol["ask"], account["currencyid"], 1, 1, 0, 0, 0, 0, 0, 3, 0, "", "", timestamp, "", "", account["currencyid"], settlcurramt, 1, 0, 0, 2, operatorid, 0, timestampms, "") \
+            newtrade(accountid, brokerid, schemeclients[i], "", fundallocations[j], 1, quantity, symbol["ask"], account["currencyid"], 1, 1, 0, 0, 0, 0, 0, 0, 3, 0, "", futsettdate, timestamp, "", "", account["currencyid"], settlcurramt, 1, 0, 0, 2, operatorid, 0, timestampms, "000", "", "", "", "000", timestamp) \
           end \
           schemetrades[k]["quantity"] = schemetrades[k]["quantity"] + quantity \
           schemetrades[k]["settlcurramt"] = schemetrades[k]["settlcurramt"] + settlcurramt \
@@ -3641,10 +3847,11 @@ exports.registerScripts = function () {
       ret["schemecashavailable"] = ret["schemecashavailable"] + amount \
       ret["numclients"] = ret["numclients"] + 1 \
     end \
+    end \
     for i = 1, #schemetrades do \
       if schemetrades[i]["quantity"] > 0 and mode == 2 then \
         --[[ create a trade for the scheme for this fund ]] \
-        newtrade(scheme["accountid"], brokerid, schemeclientid, "", schemetrades[i]["symbolid"], 1, schemetrades[i]["quantity"], schemetrades[i]["price"], schemeaccount["currencyid"], 1, 1, 0, 0, 0, 0, 0, 3, 0, "", "", timestamp, "", "", schemeaccount["currencyid"], schemetrades[i]["settlcurramt"], 1, 0, 0, 2, operatorid, 0, timestampms, "") \
+        newtrade(scheme["accountid"], brokerid, schemeclientid, "", schemetrades[i]["symbolid"], 1, schemetrades[i]["quantity"], schemetrades[i]["price"], schemeaccount["currencyid"], 1, 1, 0, 0, 0, 0, 0, 0, 3, 0, "", futsettdate, timestamp, "", "", schemeaccount["currencyid"], schemetrades[i]["settlcurramt"], 1, 0, 0, 2, operatorid, 0, timestampms, "000", "", "", "", "000", timestamp) \
         ret["schemecashinvested"] = ret["schemecashinvested"] + schemetrades[i]["settlcurramt"] \
       end \
     end \
@@ -3656,100 +3863,276 @@ exports.registerScripts = function () {
   * scriptdeletetrade()
   * processing to delete a trade
   * params: brokerid, tradeid, timestamp, timestamp in milliseconds
-  * returns: 0, CREST message type to send or empty string if successful else 1, error message 
+  * returns: 0, CREST message type to send or empty string if successful else 1, error message
   */
-  scriptdeletetrade = deletetrade + '\
-  redis.log(redis.LOG_NOTICE, "scriptdeletetrade") \
-  local brokerid = ARGV[1] \
-  local tradeid = ARGV[2] \
-  local timestamp = ARGV[3] \
-  local timestampms = ARGV[4] \
-  --[[ get the original trade ]] \
-  local trade = gethashvalues("broker:" .. brokerid .. ":trade:" .. tradeid) \
-  if tonumber(trade["status"]) == 3 then \
-    return {1, "Trade already deleted"} \
-  end \
-  if tonumber(trade.tradesettlestatusid) == 0 then \
-    deletetrade(trade, timestamp, timestampms) \
-  elseif tonumber(trade.tradesettlestatusid) == 1 or tonumber(trade.tradesettlestatusid) == 2 or tonumber(trade.tradesettlestatusid) == 3 then \
-    deletetrade(trade, timestamp, timestampms) \
-    return {0, "AXTD"} \
-  elseif tonumber(trade.tradesettlestatusid) == 4 then \
-    return {1, "Trade already settled. Unable to delete."} \
-  end \
-  return {0, ""} \
+  exports.scriptdeletetrade = deletetrade + '\
+    redis.log(redis.LOG_NOTICE, "scriptdeletetrade") \
+    local fields = {} \
+    fields.brokerid = ARGV[1] \
+    fields.tradeid = ARGV[2] \
+    fields.timestamp = ARGV[3] \
+    fields.timestampms = ARGV[4] \
+    --[[ get the original trade ]] \
+    local trade = gethashvalues("broker:" .. fields.brokerid .. ":trade:" .. fields.tradeid) \
+    deletetrade(trade, fields.timestamp, fields.timestampms) \
+    return {0, "success"} \
+  ';
+  /*
+  * updatetradeindexes()
+  * processing to update the trade indexes
+  * params: 1=brokerid, 2=tradeid, 3=oldclientid, 4=clientid, 5=oldaccountid, 6=accountid, 7=oldsymbolid, 8=symbolid, 9=oldfutsettdate, 10=futsettdate,  11=oldtimestamp, 12=timestamp, 13=timestampms, 14=newside, 15=existingside
+  * returns: 0, CREST message type to send or empty string if successful else 1, error message
+  */
+  updatetradeindexes =  utils.getparentlinkdetails + utils.lowercase + utils.trim + utils.getdateindex + utils.gettimestampindex + utils.updateaddtionaltimeindex + utils.deleteaddtionaltimeindex + '\
+    local updatetradeindexes = function(brokerid, tradeid, oldclientid, clientid, oldaccountid, accountid, oldsymbolid, symbolid, oldfutsettdate, futsettdate,  oldtimestamp, timestamp, timestampms, newside, existingside) \
+      redis.log(redis.LOG_NOTICE, "updatetradeindexes") \
+      if oldclientid ~= clientid or oldaccountid ~= accountid or oldsymbolid ~= symbolid or oldfutsettdate ~= futsettdate or oldtimestamp ~= timestamp then \
+        local brokerkey = "broker:" .. brokerid \
+        local tradekey = tradeid \
+        local oldlinkdetails = {} \
+        local newlinkdetails = getparentlinkdetails(brokerid, accountid) \
+        if #tradeid > 8 then \
+          tradekey = substring(tradeid, 3) \
+        end \
+        local oldsearhkey = oldclientid .. ":" .. oldaccountid .. ":" .. lowercase(tradeid) .. ":" .. lowercase(trim(oldsymbolid)) .. ":" .. lowercase(getdateindex(oldfutsettdate)) .. ":" .. lowercase(gettimestampindex(oldtimestamp)) \
+        local searchkey = clientid .. ":" .. accountid .. ":" .. lowercase(tradeid) .. ":" .. lowercase(trim(symbolid)) .. ":" .. lowercase(getdateindex(futsettdate)) .. ":" .. lowercase(gettimestampindex(timestamp)) \
+        redis.call("zrem", brokerkey .. ":trade:search_index", tradekey, oldsearhkey) \
+        redis.call("zadd", brokerkey .. ":trade:search_index", tradekey, searchkey) \
+        if oldaccountid ~= accountid then \
+          oldlinkdetails = getparentlinkdetails(brokerid, oldaccountid) \
+          deleteaddtionaltimeindex(brokerid, "trade:search_index", "", oldsearhkey, oldlinkdetails[1], oldlinkdetails[2]) \
+        else \
+          deleteaddtionaltimeindex(brokerid, "trade:search_index", "", oldsearhkey, newlinkdetails[1], newlinkdetails[2]) \
+        end \
+        updateaddtionaltimeindex(brokerid, "trade:search_index", searchkey, newlinkdetails[1], newlinkdetails[2], tradekey) \
+        if oldaccountid ~= accountid or oldtimestamp ~= timestamp or oldfutsettdate ~= futsettdate then \
+          --[[ when accountid changed, trade index removed from old account and get parentdetails of the old account ]] \
+          if oldaccountid ~= accountid then \
+            redis.call("zrem", brokerkey .. ":account:" .. oldaccountid .. ":tradesbydate", tradeid) \
+          end \
+          --[[ when accountid or timestamp changed, tradesbydate index will be updated ]] \
+          if oldaccountid ~= accountid or oldtimestamp ~= timestamp then \
+            redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":tradesbydate", timestampms, tradeid) \
+          end \
+          --[[ when timestamp changed, timestamp index will be updated ]] \
+          if oldtimestamp ~= timestamp then \
+            redis.call("zadd", brokerkey .. ":trade:timestamp", timestampms, tradeid) \
+            if oldaccountid ~= accountid then \
+              deleteaddtionaltimeindex(brokerid, "trade:timestamp", "", tradeid, oldlinkdetails[1], oldlinkdetails[2]) \
+            end \
+            updateaddtionaltimeindex(brokerid, "trade:timestamp", tradeid, newlinkdetails[1], newlinkdetails[2], timestampms) \
+          end \
+          --[[ when settlementdate changed, settlementdate index will be updated ]] \
+          if oldfutsettdate ~= futsettdate then \
+            redis.call("zadd", brokerkey .. ":trade:settlementdate", futsettdate, tradeid) \
+            if oldaccountid ~= accountid then \
+              deleteaddtionaltimeindex(brokerid, "trade:settlementdate", "", tradeid, oldlinkdetails[1], oldlinkdetails[2]) \
+            end \
+            updateaddtionaltimeindex(brokerid, "trade:settlementdate", tradeid, newlinkdetails[1], newlinkdetails[2], futsettdate) \
+          end \
+          if tonumber(newside) ~= tonumber(existingside) then \
+            if tonumber(newside) == 2 then \
+              redis.call("zadd", brokerkey .. ":account:" .. accountid .. ":unclearedcashbreakdown", timestampms, "trade:" .. tradeid) \
+            else \
+              redis.call("zrem", brokerkey .. ":account:" .. accountid .. ":unclearedcashbreakdown", "trade:" .. tradeid) \
+            end \
+          end \
+        end \
+      end \
+      return {0} \
+    end \
+  ';
+  exports.updatetradeindexes = updatetradeindexes + '\
+    return updatetradeindexes(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15]) \
+  ';
+  /*
+  * scriptedittrade()
+  * processing to edit a trade
+  * params: 1=accountid, 2=brokerid, 3=clientid, 4=orderid, 5=symbolid, 6=side, 7=quantity, 8=price, 9=currencyid, 10=currencyratetoorg, 11=currencyindtoorg, 12=commission, 13=ptmlevy, 14=stampduty, 15=contractcharge, 16=stampduty, 17=counterpartyid, 18=counterpartytype, 19=markettype, 20=externaltradeid, 21=futsettdate, 22=timestamp, 23=lastmkt, 24=externalorderid, 25=settlcurrencyid, 26=settlcurramt, 27=settlcurrfxrate, 28=settlcurrfxratecalc, 29=margin, 30=operatortype, 31=operatorid, 32=finance, 33=timestampms, 34=tradeid, 35=tradesettlestatusid, 36=linkedfromtrade, 37=linkedtotrade, 38=now, 39=nowms, 40=flag, 41=markettimestamp)
+  * returns: 0, CREST message type to send or empty string if successful, else 1, error message
+  */
+  scriptedittrade = round + trim + lowercase + updatetrade + updatetradenote + deletetradetransaction + newpositiontransaction + newtradetransaction + utils.settradestatus + '\
+    local scriptedittrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, stampdutyid, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms, tradeid, tradesettlestatusid, linkedfromtrade, linkedtotrade, now, nowms, flag, markettimestamp) \
+      redis.log(redis.LOG_NOTICE, "scriptedittrade") \
+      local rate = 1 \
+      --[[ get the original trade ]] \
+      local trade = gethashvalues("broker:" .. brokerid .. ":trade:" .. tradeid) \
+      if trade.status == 3 then \
+        return {1, "Cannot edit a deleted trade"} \
+      end \
+      if flag == "newtrade" then \
+        --[[ we can edit but need to reverse the postings of the original trade, so update the trade and related values ]] \
+        local oldtrade = {} \
+        local newtrade = {} \
+        --[[ existing trade going to reverse ]] \
+        if tonumber(trade.side) == 2 then \
+          oldtrade.quantity = trade.quantity \
+          oldtrade.cost = trade.settlcurramt \
+        else \
+          oldtrade.quantity = -tonumber(trade.quantity) \
+          oldtrade.cost = -tonumber(trade.settlcurramt) \
+        end \
+        if tonumber(side) == 1 then \
+          newtrade.quantity = quantity \
+          newtrade.cost = settlcurramt \
+        else \
+          newtrade.quantity = -tonumber(quantity) \
+          newtrade.cost = -tonumber(settlcurramt) \
+        end \
+        local linkdetails = getparentlinkdetails(brokerid, accountid) \
+        deletetradetransaction(trade.settlcurramt, trade.commission, trade.ptmlevy, trade.stampduty, brokerid, trade.accountid, trade.settlcurrencyid, rate, now, tradeid, trade.side, nowms) \
+        newpositiontransaction(trade.accountid, trade.brokerid, oldtrade.cost, trade.futsettdate, tradeid, 5, oldtrade.quantity, trade.symbolid, now, nowms) \
+        newtradetransaction(settlcurramt, commission, ptmlevy, stampduty, contractcharge, brokerid, accountid, settlcurrencyid, rate, now, tradeid, side, nowms, linkdetails[1], linkdetails[2]) \
+        newpositiontransaction(accountid, brokerid, newtrade.cost, futsettdate, tradeid, 1, newtrade.quantity, symbolid, now, nowms) \
+        updatetrade(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, nowms, tradeid, tradesettlestatusid, markettimestamp) \
+        settradestatus(brokerid, tradeid, 2) \
+        return {0, tradeid} \
+      else \
+        --[[ only minor changes, so can just update existing trade values ]] \
+        if orderid and orderid ~= "" then \
+          local order = redis.call("hget", "broker:" .. brokerid .. ":order:" .. orderid, "orderid") \
+          if not order then \
+            return {1, "Invalid orderid"} \
+          end \
+        end \
+        updatetrade(accountid, trade.brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, trade.operatortype, trade.operatorid, finance, timestampms, trade.tradeid, tradesettlestatusid, markettimestamp) \
+        if trade.futsettdate ~= futsettdate then \
+          updatetradenote(brokerid, tradeid) \
+        end \
+        return {0, "success"} \
+      end \
+    end \
+  ';
+  /*
+  * scriptedittrade()
+  * params: 1=accountid, 2=brokerid, 3=clientid, 4=orderid, 5=symbolid, 6=side, 7=quantity, 8=price, 9=currencyid, 10=currencyratetoorg, 11=currencyindtoorg, 12=commission, 13=ptmlevy, 14=stampduty, 15=contractcharge, 16=stampduty, 17=counterpartyid, 18=counterpartytype, 19=markettype, 20=externaltradeid, 21=futsettdate, 22=timestamp, 23=lastmkt, 24=externalorderid, 25=settlcurrencyid, 26=settlcurramt, 27=settlcurrfxrate, 28=settlcurrfxratecalc, 29=margin, 30=operatortype, 31=operatorid, 32=finance, 33=timestampms, 34=tradeid, 35=tradesettlestatusid, 36=linkedfromtrade, 37=linkedtotrade, 38=now, 39=nowms, 40=flag, 41=markettimestamp
+  */
+  exports.scriptedittrade = scriptedittrade  + '\
+    return scriptedittrade(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19], ARGV[20], ARGV[21], ARGV[22], ARGV[23], ARGV[24], ARGV[25], ARGV[26], ARGV[27], ARGV[28], ARGV[29], ARGV[30], ARGV[31], ARGV[32], ARGV[33], ARGV[34], ARGV[35], ARGV[36], ARGV[37], ARGV[38], ARGV[39], ARGV[40], ARGV[41]) \
   ';
 
-  scriptedittrade = deletetrade + newtrade + updatetrade + '\
-  redis.log(redis.LOG_NOTICE, "scriptedittrade") \
-  --[[ these are the updated values ]] \
-  local accountid = ARGV[1] \
-  local brokerid = ARGV[2] \
-  local clientid = ARGV[3] \
-  local orderid = ARGV[4] \
-  local symbolid = ARGV[5] \
-  local side = ARGV[6] \
-  local quantity = ARGV[7] \
-  local price = ARGV[8] \
-  local currencyid = ARGV[9] \
-  local currencyratetoorg = ARGV[10] \
-  local currencyindtoorg = ARGV[11] \
-  local commission = ARGV[12] \
-  local ptmlevy = ARGV[13] \
-  local stampduty = ARGV[14] \
-  local contractcharge = ARGV[15] \
-  local counterpartyid = ARGV[16] \
-  local counterpartytype = ARGV[17] \
-  local markettype = ARGV[18] \
-  local externaltradeid = ARGV[19] \
-  local futsettdate = ARGV[20] \
-  local timestamp = ARGV[21] \
-  local lastmkt = ARGV[22] \
-  local externalorderid = ARGV[23] \
-  local settlcurrencyid = ARGV[24] \
-  local settlcurramt = ARGV[25] \
-  local settlcurrfxrate = ARGV[26] \
-  local settlcurrfxratecalc = ARGV[27] \
-  local margin = ARGV[28] \
-  local operatortype = ARGV[29] \
-  local operatorid = ARGV[30] \
-  local finance = ARGV[31] \
-  local timestampms = ARGV[32] \
-  local tradeid = ARGV[33] \
-  --[[ get the original trade ]] \
-  local trade = gethashvalues("broker:" .. brokerid .. ":trade:" .. tradeid) \
-  if trade.status == 3 then \
-    return {1, "Cannot edit a deleted trade"} \
-  end \
-  --[[ see if one or more of the values relevant to CREST have changed ]] \
-  if tonumber(accountid) ~= tonumber(trade.accountid) or tonumber(clientid) ~= tonumber(trade.clientid) or tonumber(commission) ~= tonumber(trade.commission) or currencyid ~= trade.currencyid or tonumber(quantity) ~= tonumber(trade.quantity) or tonumber(price) ~= tonumber(trade.price) or tonumber(ptmlevy) ~= tonumber(trade.ptmlevy) or tonumber(currencyratetoorg) ~= tonumber(trade.currencyratetoorg) or tonumber(currencyindtoorg) ~= tonumber(trade.currencyindtoorg) or tonumber(settlcurramt) ~= tonumber(trade.settlcurramt) or settlcurrencyid ~= trade.settlcurrencyid or tonumber(settlcurrfxrate) ~= tonumber(trade.settlcurrfxrate) or tonumber(side) ~= tonumber(trade.side) or tonumber(stampduty) ~= tonumber(trade.stampduty) or timestamp ~= trade.timestamp or symbolid ~= trade.symbolid then \
-    --[[ they have, so what we do depends on CREST status ]] \
-    if tonumber(trade.tradesettlestatusid) == 0 then \
-      --[[ we can edit but need to reverse the postings of the original trade, so delete & enter a new one ]] \
-      deletetrade(trade, timestamp, timestampms) \
-      --[[ create a new trade with a combination of the existing & updated values ]] \
-      newtrade(accountid, brokerid, clientid, trade.orderid, trade.symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, 0, trade.counterpartyid, trade.counterpartytype, trade.markettype, trade.externaltradeid, trade.futsettdate, timestamp, trade.lastmkt, trade.externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, trade.margin, operatortype, operatorid, trade.finance, timestampms, "") \
-    elseif tonumber(trade.tradesettlestatusid) == 1 then \
-      --[[ we can only edit if only stamp duty related values have changed ]] \
-      if tonumber(accountid) == tonumber(trade.accountid) and tonumber(clientid) == tonumber(trade.clientid) and tonumber(commission) == tonumber(trade.commission) and currencyid == trade.currencyid and tonumber(quantity) == tonumber(trade.quantity) and tonumber(price) == tonumber(trade.price) and tonumber(ptmlevy) == tonumber(trade.ptmlevy) and tonumber(currencyratetoorg) == tonumber(trade.currencyratetoorg) and tonumber(currencyindtoorg) == tonumber(trade.currencyindtoorg) and tonumber(settlcurrfxrate) == tonumber(trade.settlcurrfxrate) and tonumber(side) == tonumber(trade.side) and timestamp == trade.timestamp and symbolid == trade.symbolid then \
-        --[[ remove the original trade ]] \
-        deletetrade(trade, timestamp, timestampms) \
-        --[[ create a new trade with a combination of the existing & updated values ]] \
-        newtrade(accountid, brokerid, clientid, trade.orderid, trade.symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, 0, trade.counterpartyid, trade.counterpartytype, trade.markettype, trade.externaltradeid, trade.futsettdate, timestamp, trade.lastmkt, trade.externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, trade.margin, operatortype, operatorid, trade.finance, timestampms, "") \
-        --[[ need to send a message to CREST ]] \
-        return {0, "ATXA"} \
-      else \
-        return {1, "Changes other than Stamp Duty related cannot be accepted. Delete this trade and enter a new one."} \
-      end \
-    elseif tonumber(trade.tradesettlestatusid) == 2 or tonumber(trade.tradesettlestatusid) == 3 then \
-      return {1, "Matching has already taken place. Changes cannot now be accepted."} \
-    elseif tonumber(trade.tradesettlestatusid) == 4 then \
-      return {1, "Settlement has already taken place. Changes cannot now be accepted."} \
+  /*
+  * publishsystemmonitorlog()
+  * publish system monitor log
+  * here 15 refers to systemmonitorchannel
+  * params: systemmonitorid
+  */
+  exports.publishsystemmonitorlog = '\
+    redis.call("publish", 15, ARGV[1]) \
+  ';
+
+  /*
+  * sendtomonitor()
+  * store details of system monitor log
+  * params: 1=timestamp, 2=timestampms, 3=message
+  * returns: 0 + success message if logged successfully
+  */
+  sendtomonitor = '\
+    local sendtomonitor = function(timestamp, timestampms, message) \
+      redis.log(redis.LOG_NOTICE, "sendtomonitor") \
+      local systemmonitorid = redis.call("incr", "systemmonitor:lastindex") \
+      redis.call("hmset", "systemmonitor:" .. systemmonitorid, "id", systemmonitorid, "message", message, "timestamp", timestamp) \
+      redis.call("sadd", "systemmonitor:systemmonitors", systemmonitorid) \
+      redis.call("zadd", "systemmonitor:systemmonitorbydate", timestampms, systemmonitorid) \
+      return {0, systemmonitorid} \
     end \
-  else \
-    --[[ only minor changes, so can just update existing trade values ]] \
-    updatetrade(trade.accountid, trade.brokerid, trade.clientid, orderid, symbolid, trade.side, trade.quantity, trade.price, trade.currencyid, trade.currencyratetoorg, trade.currencyindtoorg, trade.commission, trade.ptmlevy, trade.stampduty, contractcharge, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, trade.settlcurrencyid, trade.settlcurramt, trade.settlcurrfxrate, trade.settlcurrfxratecalc, margin, trade.operatortype, trade.operatorid, finance, timestampms, trade.tradeid, trade.tradesettlestatusid) \
-  end \
-  return {0, ""} \
+  ';
+
+  exports.sendtomonitor = sendtomonitor + '\
+    return sendtomonitor(ARGV[1], ARGV[2], ARGV[3]) \
+  ';
+
+  /*
+  * getsystemmonitorlogs()
+  * get details of system monitor log
+  * params: 1=page, 2=limit, 3=starttimestamp, 4=endtimestamp
+  * returns: system monitor logs in json format
+  */
+  getsystemmonitorlogs = gethashvalues + '\
+    local getsystemmonitorlogs = function(page, limit, starttimestamp, endtimestamp, sortorder) \
+      redis.log(redis.LOG_NOTICE, "getsystemmonitorlogs") \
+      local tblsystemmonitorlogs = {} \
+      local systemmonitorlogids = {} \
+      local from = (tonumber(page) * tonumber(limit)) - tonumber(limit) \
+      if sortorder and sortorder == "asc" then \
+        systemmonitorlogids = redis.call("zrangebyscore", "systemmonitor:systemmonitorbydate", starttimestamp, endtimestamp, "limit", from, limit) \
+      else \
+        systemmonitorlogids = redis.call("zrevrangebyscore", "systemmonitor:systemmonitorbydate", endtimestamp, starttimestamp, "limit", from, limit) \
+      end \
+      if #systemmonitorlogids > 0 then \
+        for i = 1, #systemmonitorlogids do \
+          local systemmonitorlog = gethashvalues("systemmonitor:" .. systemmonitorlogids[i]) \
+          table.insert(tblsystemmonitorlogs, systemmonitorlog) \
+        end \
+      end \
+      local systemmonitorlogs = {} \
+      systemmonitorlogs.totalrecords = redis.call("scard", "systemmonitor:systemmonitors") \
+      systemmonitorlogs.data = tblsystemmonitorlogs \
+      return cjson.encode(systemmonitorlogs) \
+    end \
+  ';
+
+  exports.getsystemmonitorlogs = getsystemmonitorlogs + '\
+    return getsystemmonitorlogs(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
+  ';
+
+  /*
+  * clearallsystemmonitorlogs()
+  * clearall system logs
+  */
+  clearallsystemmonitorlogs = '\
+    local clearallsystemmonitorlogs = function() \
+      redis.log(redis.LOG_NOTICE, "clearallsystemmonitorlogs") \
+      local systemmonitorlogs = redis.call("smembers", "systemmonitor:systemmonitors") \
+      for i = 1, #systemmonitorlogs do \
+        redis.call("del", "systemmonitor:" .. systemmonitorlogs[i]) \
+      end \
+      redis.call("del", "systemmonitor:systemmonitorbydate") \
+      redis.call("del", "systemmonitor:systemmonitors") \
+      redis.call("del", "systemmonitor:lastindex") \
+    end \
+  ';
+
+  exports.clearallsystemmonitorlogs = clearallsystemmonitorlogs + '\
+    return clearallsystemmonitorlogs() \
+  ';
+  /*
+   * scriptgetcabyaccount
+   * params: brokerid, accountid
+   * returns: corporateaction
+   */
+  scriptgetcabyaccount = '\
+    local scriptgetcabyaccount = function(brokerid, accountid) \
+      redis.log(redis.LOG_NOTICE, "scriptgetcabyaccount") \
+      local corporateactions = {} \
+      local account = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid, "accountid") \
+      if not account then \
+        return {1, "Account not found"} \
+      end \
+      local positionids = redis.call("smembers", "broker:" .. brokerid .. ":account:" .. accountid .. ":positions") \
+      local symbolid \
+      local corporateactionids \
+      local caexdate \
+      if #positionids > 0 then \
+        for index = 1, #positionids do \
+          symbolid = redis.call("hget", "broker:" .. brokerid .. ":position:" .. positionids[index], "symbolid") \
+          if symbolid then \
+            corporateactionids = redis.call("smembers", "symbol:" .. symbolid .. ":corporateactions") \
+            if #corporateactionids > 0 then \
+              for i = 1, #corporateactionids do \
+                caexdate = redis.call("hget", "corporateaction:" .. corporateactionids[i], "exdate") \
+                if caexdate then \
+                  table.insert(corporateactions, {corporateactionid=corporateactionids[i], positionid=positionids[index], exdate=caexdate}) \
+                end \
+              end \
+            end \
+          end \
+        end \
+      end \
+      return {0, cjson.encode(corporateactions)} \
+    end \
+  ';
+  exports.scriptgetcabyaccount = scriptgetcabyaccount + '\
+    return scriptgetcabyaccount(ARGV[1], ARGV[2]) \
   ';
 }
