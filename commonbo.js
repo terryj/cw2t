@@ -88,6 +88,7 @@ exports.registerScripts = function () {
   exports.errorchannel = 13;
   exports.orderbookchannel = 14;
   exports.systemmonitorchannel = 15;
+  exports.commsserverchannel = 16;
 
   exports.holidays = [];
   /*** Functions ***/

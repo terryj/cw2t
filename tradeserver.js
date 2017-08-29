@@ -45,7 +45,7 @@ var utils = require('./utils.js');
 
 //get the database connection configuration based on deployment mode 'development' or 'production'
 //from environment variable
-var redisConfig = require('../config/auth.js').auth.redis[process.env.NODE_ENV];
+/*var redisConfig = require('../config/auth.js').auth.redis[process.env.NODE_ENV];
 
 //redis
 var redishost = redisConfig.host,
@@ -53,26 +53,19 @@ var redishost = redisConfig.host,
   redisport = redisConfig.port,
   redisauth = redisConfig.auth,
   redispassword = redisConfig.password;
-
-//var redislocal = true; // local or external server
+*/
+var redislocal = true; // local or external server
 
 // globals
 var testmode; // comes from database,  0 = off, 1 = on
 var quoteinterval = null;
 //var markettype; // comes from database, 0=normal market, 1=out of hours
 
-/*if (redislocal) {
-  // local
+if (redislocal) {
   redishost = "127.0.0.1";
   redisport = 6379;
   redisauth = false;
-} else {
-  // redistogo
-  redishost = "cod.redistogo.com";
-  redisport = 9282;
-  redisauth = true;
-  redispassword = "4dfeb4b84dbb9ce73f4dd0102cc7707a";
-}*/
+}
 
 // redis scripts
 var scriptneworder;
@@ -82,7 +75,6 @@ var scriptorderack;
 var scriptnewtrade;
 var scriptrejectorder;
 var scriptgetinst;
-//var scriptgetholidays;
 var scriptorderfillrequest;
 
 // set-up a redis client
@@ -224,11 +216,11 @@ nbt.on("initialised", function() {
    connectToTrading();
 });*/
 
-function connectToTrading() {
+/*function connectToTrading() {
   // try to connect
   //winner.connect();
   //nbt.connect();
-}
+}*/
 
 function startQuoteInterval() {
   quoteinterval = setInterval(quoteInterval, 1000);
@@ -270,7 +262,7 @@ function quoteRequest(quoterequest) {
 
   // if there is no settlement type, set to standard
   if (!("settlmnttypid" in quoterequest)) {
-    quoterequest.settlmnttypid = 0;
+    quoterequest.settlmnttypid = "";
   }
 
   if (!("futsettdate" in quoterequest)) {
@@ -298,6 +290,12 @@ function quoteRequest(quoterequest) {
   if (!('settlcurrencyid' in quoterequest)) {
     quoterequest.settlcurrencyid = quoterequest.currencyid;
   }
+console.log("before scriptQuoteRequest");
+
+  if (!('symbolid' in quoterequest)) {
+    quoterequest.symbolid = "";
+  }
+
   // store the quote request & get an id
   db.eval(scriptQuoteRequest, 1, "broker:" + quoterequest.brokerid, quoterequest.accountid, quoterequest.brokerid, quoterequest.cashorderqty, quoterequest.clientid, quoterequest.currencyid, quoterequest.futsettdate, quoterequest.operatorid, quoterequest.operatortype, quoterequest.quantity, quoterequest.settlmnttypid, quoterequest.side, quoterequest.symbolid, quoterequest.timestamp, quoterequest.settlcurrencyid, quoterequest.timestampms, function(err, ret) {
     if (err) {
@@ -305,7 +303,7 @@ function quoteRequest(quoterequest) {
       errorLog(quoterequest.brokerid, "", 5, 4, "", "", "tradeserver.scriptQuoteRequest", "", err);
       return;
     }
-
+console.log("out of script");
     if (ret[0] == 1) {
       console.log("Error in scriptQuoteRequest: " + commonbo.getReasonDesc(ret[1]));
       errorLog(quoterequest.brokerid, "", 5, 4, "", "", "tradeserver.scriptQuoteRequest", "", commonbo.getReasonDesc(ret[1]));
@@ -313,7 +311,6 @@ function quoteRequest(quoterequest) {
     }
 
     // no need to do anything further as quote request will be forwarded to comms server by script
-   }
   });
 }
 
@@ -839,7 +836,7 @@ function orderReject(exereport) {
   console.log(exereport);
 
   // extract brokerid & our orderid
-  var clordid = split(exereport.clordid, ":") \
+  var clordid = split(exereport.clordid, ":");
 
   // execution reports vary as to whether they contain a reject reason &/or text
   if ('ordrejreason' in exereport) {
@@ -861,7 +858,7 @@ function orderReject(exereport) {
 
     // order published to operator by script
   });
-});
+}
 
 /*
  * A Limit order acknowledgement has been received from the market
@@ -872,7 +869,7 @@ function orderAck(exereport) {
   console.log(exereport);
 
   // extract brokerid & our orderid
-  var clordid = split(exereport.clordid, ":") \
+  var clordid = split(exereport.clordid, ":");
 
   if ('text' in exereport) {
     text = exereport.text;
@@ -887,7 +884,7 @@ function orderAck(exereport) {
 
     // script publishes order to operator type
   });
-});
+}
 
 /*
  * An order has been cancelled in the market
@@ -896,7 +893,7 @@ function orderCancel(exereport) {
   console.log("Order cancelled externally, ordercancelrequest id: " + exereport.clordid);
 
   // extract brokerid & our orderid
-  var clordid = split(exereport.clordid, ":") \
+  var clordid = split(exereport.clordid, ":");
 
   db.eval(scriptordercancel, 1, "broker:" + clordid[1], clordid[1], clordid[2], function(err, ret) {
     if (err) {
@@ -914,7 +911,7 @@ function orderCancel(exereport) {
 
     // script will publish the order
   });
-});
+}
 
 /*
  * An order has expired
@@ -924,7 +921,7 @@ function orderExpired(exereport) {
   console.log("Order expired, id: " + exereport.clordid);
 
   // extract brokerid & our orderid
-  var clordid = split(exereport.clordid, ":") \
+  var clordid = split(exereport.clordid, ":");
 
   db.eval(scriptorderexpire, 1, "broker:" + clordid[1], clordid[1], clordid[2], function(err, ret) {
     if (err) {
@@ -940,7 +937,7 @@ function orderExpired(exereport) {
 
     // script will publish the order
   });
-});
+}
 
 /*
  * An execution report has been received from the market
@@ -969,7 +966,7 @@ function processTrade(exereport) {
   var counterpartytype = 1;
 
   // extract brokerid & our orderid
-  var clordid = split(exereport.clordid, ":") \
+  var clordid = split(exereport.clordid, ":");
 
   if (!('accountid' in exereport)) {
     exereport.accountid = "";
@@ -1085,7 +1082,7 @@ function quoteAck(quoteack) {
   console.log(quoteack);
 
   // extract brokerid & our orderid
-  var clordid = split(exereport.clordid, ":") \
+  var clordid = split(exereport.clordid, ":");
 
   var timestamp = commonbo.getUTCTimeStamp(new Date());
 
@@ -1096,7 +1093,7 @@ function quoteAck(quoteack) {
       return;
     }
   });
-});
+}
 
 //
 // session error
@@ -1858,7 +1855,7 @@ function registerScripts() {
   */
   scriptrejectorder = commonbo.rejectorder + publishorder + '\
   rejectorder(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
-  // TODO: add channel or remove
+  --[[ TODO: add channel or remove ]] \
   publishorder(ARGV[1], ARGV[2]) \
   return 0 \
   ';
@@ -2034,8 +2031,49 @@ function registerScripts() {
 
   scriptorderexpire = cancelorder + publishorder + '\
   local ret = cancelorder(ARGV[1], ARGV[2], "C") \
-  publishorder(ARGV[1], ARGV[2]);
+  publishorder(ARGV[1], ARGV[2]) \
   return ret \
+  ';
+
+  scriptQuoteRequest = commonbo.getclientaccountid + commonbo.getaccount + '\
+  redis.log(redis.LOG_NOTICE, "scriptQuoteRequest") \
+  local quoterequestid = redis.call("hincrby", KEYS[1], "lastquoterequestid", 1) \
+  if not quoterequestid then return {1, 1005} end \
+  --[[ get trading accountid if not specified ]] \
+  local accountid \
+  if ARGV[1] == "" then \
+    accountid = getclientaccountid(ARGV[2], ARGV[4], 1, ARGV[14]) \
+  else \
+    accountid = ARGV[1] \
+  end \
+  if not accountid then \
+    return {1, 1025} \
+  end \
+  local account = getaccount(accountid, ARGV[2]) \
+  --[[ store the quote request ]] \
+  redis.log(redis.LOG_NOTICE,KEYS[1]) \
+    redis.log(redis.LOG_NOTICE, ARGV[1]) \
+           redis.log(redis.LOG_NOTICE, ARGV[2]) \
+   redis.log(redis.LOG_NOTICE, ARGV[3]) \
+   redis.log(redis.LOG_NOTICE, ARGV[4]) \
+   redis.log(redis.LOG_NOTICE, ARGV[5]) \
+   redis.log(redis.LOG_NOTICE, ARGV[6]) \
+   redis.log(redis.LOG_NOTICE, ARGV[7]) \
+   redis.log(redis.LOG_NOTICE, ARGV[8]) \
+   redis.log(redis.LOG_NOTICE, ARGV[9]) \
+    redis.log(redis.LOG_NOTICE, ARGV[10]) \
+           redis.log(redis.LOG_NOTICE, ARGV[11]) \
+   redis.log(redis.LOG_NOTICE, ARGV[12]) \
+   redis.log(redis.LOG_NOTICE, ARGV[13]) \
+redis.log(redis.LOG_NOTICE, account["currencyid"]) \
+  redis.call("hmset", KEYS[1] .. ":quoterequest:" .. quoterequestid, "accountid", accountid, "brokerid", ARGV[2], "cashorderqty", ARGV[3], "clientid", ARGV[4], "currencyid", ARGV[5], "futsettdate", ARGV[6], "operatorid", ARGV[7], "operatortype", ARGV[8], "quantity", ARGV[9], "quoterequestid", quoterequestid, "quotestatusid", 0, "settlmnttypid", ARGV[10], "side", ARGV[11], "symbolid", ARGV[12], "timestamp", ARGV[13], "settlcurrencyid", ARGV[14], "quoteackid", "", "fixseqnumid", "") \
+  --[[ add to the set of quoterequests ]] \
+  redis.call("sadd", KEYS[1] .. ":quoterequests", quoterequestid) \
+  redis.call("sadd", KEYS[1] .. ":quoterequestid", "quoterequest:" .. quoterequestid) \
+  --[[ add to set of quoterequests for this account ]] \
+  redis.call("sadd", KEYS[1] .. ":account:" .. accountid .. ":quoterequests", quoterequestid) \
+  redis.call("zadd", KEYS[1] .. ":account:" .. accountid .. ":quoterequestsbydate", ARGV[15], quoterequestid) \
+  return {0} \
   ';
 
   /*
@@ -2044,7 +2082,7 @@ function registerScripts() {
   * params: 1=accountid, 2=brokerid, 3=cashorderqty, 4=clientid, 5=currencyid, 6=futsettdate, 7=operatorid, 8=operatortype, 9=quantity, 10=settlmnttypid, 11=side, 12=symbolid, 13=timestamp, 14=settlcurrencyid, 15=timestampms
   * returns: 1, error message if error, else 0, quote request id, isin, symbol mnemonic, exchange id, account currencyid
   */
-  scriptQuoteRequest = commonbo.gethashvalues + commonbo.getclientaccountid + commonbo.getaccount + quoteack + utils.getparentlinkdetails + utils.updateaddtionalindex + utils.lowercase + utils.trim + utils.gettimestampindex + publishquoterequest + '\
+/*  scriptQuoteRequest = commonbo.gethashvalues + commonbo.getclientaccountid + commonbo.getaccount + utils.getparentlinkdetails + utils.updateaddtionalindex + utils.lowercase + utils.trim + utils.gettimestampindex + '\
   redis.log(redis.LOG_NOTICE, "scriptQuoteRequest") \
   local quoterequestid = redis.call("hincrby", KEYS[1], "lastquoterequestid", 1) \
   if not quoterequestid then return {1, 1005} end \
@@ -2077,7 +2115,7 @@ function registerScripts() {
   updateaddtionalindex(ARGV[2], "quoterequests", quoterequestid, linkdetails[1], linkdetails[2], "", "") \
   --[[ check there is some kind of quantity ]] \
   if ARGV[3] == "" and ARGV[9] == "" then \
-    quoteack(ARGV[2], quoterequestid, 5, 99, "Either quantity or cashorderqty must be present", "", ARGV[13]) \
+//    quoteack(ARGV[2], quoterequestid, 5, 99, "Either quantity or cashorderqty must be present", "", ARGV[13]) \
     return {1, 1034} \
   end \
   --[[ get required instrument values for external feed ]] \
@@ -2089,7 +2127,7 @@ function registerScripts() {
   publishquoterequest(ARGV[2], quoterequestid) \
   return {0} \
   ';
-
+*/
   /*
   * scriptQuote
   * store a quote
