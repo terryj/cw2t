@@ -107,4 +107,3 @@ int redis_async_connect(char *hostname, int port);
 void thread_tidy();
 void redis_disconnect(redisContext *c);
 void redis_async_disconnect();
-void redis_test(redisContext *c);
