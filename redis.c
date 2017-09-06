@@ -27,14 +27,16 @@ jsmntok_t t[100];             // tokens used by parser
 pthread_t thread_id;          // id of async redis thread
 struct event_base* base;      // libevent event
 
-/* data shared between threads */
+/* ata shared between threads */
 struct fix_quoterequest quoterequests[20];
 int numquoterequests = 0;
 struct fix_order orders[20];
 int numorders = 0;
 pthread_mutex_t lock;
 
-/* compare a parsed token with a string literal */
+/*
+ * Compare a parsed token with a string literal
+ */
 static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
   if (tok->type == JSMN_STRING && (int) strlen(s) == tok->end - tok->start &&
     strncmp(json + tok->start, s, tok->end - tok->start) == 0) {
@@ -44,10 +46,10 @@ static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
 }
 
 /*
- * called when any pubsub messages received
- * parses message and builds a shared array of message structures
+ * Called when any pubsub messages received
+ * Parses message and builds a shared array of message structures
  * that is used by the FIX connection thread to send messages
- * */ 
+ */ 
 void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
   int r;
   int i;
@@ -62,7 +64,6 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
   printf("onMessage\n");
   redisReply *rr = reply;
   if (reply == NULL) return;
- printf("type:%d\n",rr->type);
 
   /* we are only interested in the message strings */
   if (rr->type == REDIS_REPLY_ARRAY) {
@@ -86,7 +87,12 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
 
       /* assume top-level element is an object */
       if (r < 1 || t[0].type != JSMN_OBJECT) {
-        printf("Object expected, type found: %d\n" , t[0].type);
+        /* this may be the end */
+        if (t[0].type == 4) {
+          if (strcmp(rr->element[2]->str, "end") == 0) {
+            redisAsyncDisconnect(ac);
+          }
+        }
         return;
       }
 
@@ -296,9 +302,11 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
   }
 }
 
-/* connect to Redis */
+/*
+ * Start a connection to Redis
+ */
 int redis_connect(char *hostname, int port) {
-  printf("redis_connect\n");
+  fprintf(stdout, "Starting Redis connection...\n");
 
   /* data connection */
   c = redisConnect(hostname, port);
@@ -308,17 +316,20 @@ int redis_connect(char *hostname, int port) {
   freeReplyObject(reply);*/
 
   if (c != NULL && c->err) {
-    printf("Error: %s\n", c->errstr);
+    fprintf("stdout, Error: %s\n", c->errstr);
     return 0;
   }
 
-  printf("Connected to Redis\n");
+  printf(stdout, "Connected to Redis\n");
 
   return 1;
 }
 
+/*
+ * Called when async thread starts
+ */
 void *thread_run(void *args) {
-  printf("thread starting\n");
+  fprintf(stdout, "Async thread started\n");
 
   /* start the event loop */
   struct event_base *base = (struct event_base*) args;
@@ -327,19 +338,51 @@ void *thread_run(void *args) {
   return 0;
 }
 
-/* async connection to Redis for pubsub */
-int redis_async_connect(char *hostname, int port) {
-  //signal(SIGPIPE, SIG_IGN);
+/*
+ * Called when async connection connects
+ */
+void connectCallback(const redisAsyncContext *c, int status) {
+  if (status != REDIS_OK) {
+    printf("Error: %s\n", c->errstr);
+    return;
+  }
 
-  printf("redis_async_connect\n");
+  fprintf(stdout, "Redis pubsub connected\n");
+}
+
+/*
+ * Called when async connection disconnects
+ */
+void disconnectCallback(const redisAsyncContext *c, int status) {
+  char *ret = NULL;
+
+  if (status != REDIS_OK) {
+    fprintf(stdout, "Error: %s\n", c->errstr);
+    return;
+  }
+
+  fprintf(stdout, "Redis pubsub disconnected\n");
+
+  /* stop the event loop */
+  event_base_loopexit(base, NULL);
+  event_base_free(base);
+
+  fprintf(stdout, "Exiting...\n");
+
+  pthread_exit(ret);
+}
+
+/*
+ * Async connection to Redis for pubsub
+ */
+int redis_async_connect(char *hostname, int port) {
+  printf("Starting Redis pubsub connection\n");
 
   // create an event loop
-  //struct event_base *base = event_base_new();
   base = event_base_new();
 
   // create an async connection to Redis
   ac = redisAsyncConnect(hostname, port);
-
   if (ac != NULL && ac->err) {
     printf("Error: %s\n", ac->errstr);
     return 0;
@@ -347,38 +390,39 @@ int redis_async_connect(char *hostname, int port) {
 
   /* attach the connection to the event loop */
   redisLibeventAttach(ac, base);
-  redisAsyncCommand(ac, onMessage, NULL, "SUBSCRIBE testtopic");
 
+  /* set-up connect/disconnect callbacks */
+  redisAsyncSetConnectCallback(ac,connectCallback);
+  redisAsyncSetDisconnectCallback(ac,disconnectCallback);
+
+  /* listen for messages on comms server channel */
+  redisAsyncCommand(ac, onMessage, NULL, "SUBSCRIBE 16");
+
+  /* attach event loop to a separate thread */
   pthread_create(&thread_id, NULL, thread_run, base);
 
   return 1;
 }
 
+/*
+ * Stop the redis pubsub connection
+ */
+void redis_async_disconnect() {
+  redisAsyncDisconnect(ac);
+
+  /* wait for disconnect callback */
+}
+
+/*
+ * Wait for async thread to terminate
+ */
 void thread_tidy() {
-printf("thread_tidy\n");
   pthread_join(thread_id, NULL);
 }
 
-/* tidy */
+/*
+ * Tidy the redis connection
+ */
 void redis_disconnect(redisContext *c) {
   redisFree(c);
-}
-
-void redis_async_disconnect() {
-  redisAsyncDisconnect(ac);
-  event_base_loopexit(base, NULL);
-  event_base_free(base);
-}
-
-/* test data connection */
-void redis_test(redisContext *c) {
-  redisReply *reply;
-
-  reply = redisCommand(c,"SET %s %s","foo","bar");
-  freeReplyObject(reply);
-
-  reply = redisCommand(c,"GET %s","foo");
-  printf("%s\n",reply->str);
-
-  freeReplyObject(reply);
 }

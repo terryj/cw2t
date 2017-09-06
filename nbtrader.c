@@ -41,15 +41,18 @@
 static const char *program;
 static sig_atomic_t stop;
 
+/*
+ * Ctrl-c signal handler
+ */
 static void signal_handler(int signum)
 {
 	if (signum == SIGINT)
             stop = 1;
 }
 
-char scriptquoteack_sha[64];
-char scriptquote_sha[64];
-
+/*
+ * Main client session, jsonexecutionreportruns until crtl-c
+ */
 static int fix_client_session(struct fix_session_cfg *cfg)
 {
 	struct fix_session *session = NULL;
@@ -58,7 +61,7 @@ static int fix_client_session(struct fix_session_cfg *cfg)
 	int ret = -1;
 	int diff;
 
-        printf("fix_client_session\n");
+        printf("Client started\n");
 
 	if (signal(SIGINT, signal_handler) == SIG_ERR) {
 		fprintf(stderr, "Unable to register a signal handler\n");
@@ -77,7 +80,7 @@ static int fix_client_session(struct fix_session_cfg *cfg)
 		goto exit;
 	}
 
-	printf("Client Logon OK\n");
+	printf("Logged on OK\n");
 
 	clock_gettime(CLOCK_MONOTONIC, &prev);
 
@@ -141,12 +144,12 @@ static int fix_client_session(struct fix_session_cfg *cfg)
 	if (session->active) {
 		ret = fix_session_logout(session, NULL);
 		if (ret) {
-			fprintf(stderr, "Client Logout FAILED\n");
+			fprintf(stderr, "Client logout FAILED\n");
 			goto exit;
 		}
 	}
 
-	fprintf(stdout, "Client Logout OK\n");
+	fprintf(stdout, "Client logged out OK\n");
 
 exit:
 	fix_session_free(session);
@@ -154,6 +157,9 @@ exit:
 	return ret;
 }
 
+/*
+ * FIX message rejected
+ */
 static int fix_message_reject(struct fix_message *msg) {
     struct fix_field *field;
     char refmsgtype[10] = "";
@@ -189,6 +195,9 @@ static int fix_message_reject(struct fix_message *msg) {
     return 0;
 }
 
+/*
+ * Quote acknowledment received
+ */
 static int fix_quote_ack(struct fix_session *session, struct fix_message *msg) {
     struct fix_field *field;
     struct fix_quoteack quoteack;
@@ -226,6 +235,9 @@ fail:
     return -1;
 }
 
+/*
+ * Send the quote acknowlegment to the trade server channel
+ */
 static int send_quote_ack(struct fix_session *session, struct fix_quoteack *quoteack) {
   char jsonquoteack[256];
 
@@ -240,28 +252,15 @@ static int send_quote_ack(struct fix_session *session, struct fix_quoteack *quot
     , "}}");
 
   printf("%s\n", jsonquoteack);
+  /* publish to trade server channel */
+  redisCommand(c, "publish 3 %s", jsonquoteack);
 
   return 0;
 }
 
-/*static int store_quote_ack(struct fix_session *session, struct fix_quoteack *quoteack) {
-  printf("store_quote_ack\n");
-  redisReply *reply;
-  // TODO...
-  char fixseqnumid[8] = "1";
-
-  // we are using all string parameters as per hiredis api
-  reply = redisCommand(c, "evalsha %s 0 %s %s %s %s %s %s %s %s", scriptquoteack_sha, quoteack->brokerid, quoteack->quoterequestid, quoteack->quotestatusid, quoteack->quoterejectreasonid, quoteack->text, fixseqnumid, session->str_now, quoteack->markettimestamp);
-  if (reply->type == REDIS_REPLY_ERROR) {
-    printf("%s\n", reply->str);
-    return 1;
-  }
-
-  freeReplyObject(reply);
-
-  return 0;
-}*/
-
+/*
+ * Quote received
+ */
 static int fix_quote(struct fix_session *session, struct fix_message *msg) {
     struct fix_field *field;
     struct fix_quote quote;
@@ -383,25 +382,9 @@ fail:
     return 1;
 }
 
-/*static int store_quote(struct fix_session *session, struct fix_quote *quote) {
-  printf("store_quote\n");
-  redisReply *reply;
-  // TODO...
-  char fixseqnumid[8] = "1";
-  char timestampms[16] = "123456";
-
-  // we are using all string parameters as per hiredis api
-  reply = redisCommand(c, "evalsha %s 0 %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s", scriptquote_sha, quote->quoterequestid, quote->symbolid, quote->bidpx, quote->offerpx, quote->bidsize, quote->offersize, quote->validuntiltime, session->str_now, quote->currencyid, quote->settlcurrencyid, quote->quoterid, quote->quotertype, quote->futsettdate, quote->bidquotedepth, quote->offerquotedepth, quote->externalquoteid, quote->cashorderqty, quote->settledays, quote->noseconds, quote->brokerid, quote->settlmnttypid, quote->bidspotrate, quote->offerspotrate, timestampms, fixseqnumid, quote->markettimestamp);
-  if (reply->type == REDIS_REPLY_ERROR) {
-    printf("%s\n", reply->str);
-    return 1;
-  }
-
-  freeReplyObject(reply);
-
-  return 0;
-}*/
-
+/*
+ * Send quote message to trade server channel
+ */
 static int send_quote(struct fix_session *session, struct fix_quote *quote) {
   char jsonquote[512];
 
@@ -452,10 +435,14 @@ static int send_quote(struct fix_session *session, struct fix_quote *quote) {
   }
 
   printf("%s\n", jsonquote);
+  redisCommand(c, "publish 3 %s", jsonquote);
 
   return 0;
 }
 
+/*
+ * See if there is any data in the shared memory area
+ */
 static void check_for_data(struct fix_session *session)
 {
   int i;
@@ -501,6 +488,9 @@ exit:
   pthread_mutex_unlock(&lock);
 }
 
+/*
+ * Create a FIX quote request message
+ */
 static unsigned long fix_quoterequest_fields(struct fix_session *session, struct fix_field *fields, struct fix_quoterequest *quoterequest)
 {
     unsigned long nr = 0;
@@ -526,6 +516,9 @@ static unsigned long fix_quoterequest_fields(struct fix_session *session, struct
     return nr;
 }
 
+/*
+ * Send a FIX quote request
+ */
 static int fix_quote_request(struct fix_session *session, struct fix_field *fields, long nr_fields)
 {
         struct fix_message quote_request_msg;
@@ -539,6 +532,9 @@ static int fix_quote_request(struct fix_session *session, struct fix_field *fiel
         return fix_session_send(session, &quote_request_msg, 0);
 }
 
+/*
+ * Create a FIX order message
+ */
 static unsigned long fix_new_order_single_fields(struct fix_session *session, struct fix_field *fields, struct fix_order *order)
 {
 	unsigned long nr = 0;
@@ -579,6 +575,9 @@ static unsigned long fix_new_order_single_fields(struct fix_session *session, st
 	return nr;
 }
 
+/*
+ * Create a FIX execution report
+ */
 static int fix_execution_report(struct fix_session *session, struct fix_message *msg)
 {
         struct fix_field *field;
@@ -655,6 +654,9 @@ fail:
         return -1;
 }
 
+/*
+ * Send an execution report to the trade server channel
+ */
 static int send_execution_report(struct fix_session *session, struct fix_executionreport *executionreport) {
   char jsonexecutionreport[512];
 
@@ -675,10 +677,16 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
     , ",\"execid\":\"", executionreport->execid, "\""
     , ",\"fixseqnumid\":", session->in_msg_seq_num
     , "}}");
+
   printf("%s\n", jsonexecutionreport);
+  redisCommand(c, "publish 3 %s", jsonexecutionreport);
+
   return 0;
 }
 
+/*
+ * Usage message if required arguments not set on startup
+ */
 static void usage(void)
 {
 	printf("\n usage: %s [-m mode] [-d dialect] [-f filename] [-n orders] [-s sender-comp-id] [-t target-comp-id] [-r password] [-w warmup orders] -h hostname -p port\n\n", program);
@@ -686,11 +694,17 @@ static void usage(void)
 	exit(EXIT_FAILURE);
 }
 
+/*
+ * Set socket options
+ */
 static int socket_setopt(int sockfd, int level, int optname, int optval)
 {
 	return setsockopt(sockfd, level, optname, (void *) &optval, sizeof(optval));
 }
 
+/*
+ * Set the FIX version
+ */
 static enum fix_version strversion(const char *dialect)
 {
 	if (!strcmp(dialect, "fix42"))
@@ -702,103 +716,6 @@ static enum fix_version strversion(const char *dialect)
 
 	return FIX_4_4;
 }
-
-/*void signal_callback_handler(int signum)
-{
-   // cleanup and close up stuff here
-   redis_disconnect();
-
-   fix_session_free(session);
-
-   shutdown(cfg.sockfd, SHUT_RDWR);
-
-   if (close(cfg.sockfd) < 0)
-     die("close");
- 
-   // terminate
-   exit(signum);
-}*/
-
-/*static int test_store_quote_ack() {
-  printf("test_store_quote_ack\n");
-  redisReply *reply;
-  
-  reply = redisCommand(c, "evalsha %s 0 %s %s %s %s %s %s %s", scriptquoteack_sha, "1", "1", "1", "1", "text", "1", "timestamp");
-  if (reply->type == REDIS_REPLY_ERROR) {
-    printf("%s\n", reply->str);
-    return 1;
-  }
-
-  freeReplyObject(reply);
-
-  return 0;
-}*/
-
-/*static int test_store_quote() {
-  printf("test_store_quote\n");
-  redisReply *reply;
-
-  reply = redisCommand(c, "evalsha %s 0 %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s", scriptquote_sha, "1", "BARC.L", "1.23", "0.0", "1000", "0", "vuntiltime", "ttime", "GBP", "GBP", "quoterid", "1", "fdate", "1", "0", "equoteid", "0.0", "2", "20", "1", "0", "1.23", "1.25", "123456", "1", "mtimestamp");
-  if (reply->type == REDIS_REPLY_ERROR) {
-    printf("%s\n", reply->str);
-    return 1;
-  }
-
-  freeReplyObject(reply);
-
-  return 0;
-}*/
-
-/* load lua scripts & store SHA1 digest of each script */
-/*int load_scripts() {
-  FILE *ptr_file;
-  redisReply *reply;
-  char buf[512];
-  char scriptquoteack[4096] = "";
-  char scriptquote[4096] = "";
-
-  // quote ack
-  ptr_file = fopen("scriptquoteack.lua", "r");
-  if (!ptr_file)
-    return 1;
-
-  while (fgets(buf, sizeof(buf), ptr_file) != NULL)
-    strcat(scriptquoteack, buf);
-
-  fclose(ptr_file);
-
-  reply = redisCommand(c, "script load %s", scriptquoteack);
-  if (reply->type == REDIS_REPLY_ERROR) {
-    printf("%s\n", reply->str);
-    return 1;
-  } else if (reply->type == REDIS_REPLY_STRING) {
-    strcpy(scriptquoteack_sha, reply->str);
-  }
-
-  freeReplyObject(reply);
-
-  // quote
-  ptr_file = fopen("scriptquote.lua", "r");
-  if (!ptr_file)
-    return 1;
-
-  while (fgets(buf, sizeof(buf), ptr_file) != NULL)
-    strcat(scriptquote, buf);
-
-  fclose(ptr_file);
-
-  reply = redisCommand(c, "script load %s", scriptquote);
-  if (reply->type == REDIS_REPLY_ERROR) {
-    printf("%s\n", reply->str);
-    return 1;
-  } else if (reply->type == REDIS_REPLY_STRING) {
-    strcpy(scriptquote_sha, reply->str);
-  }
-
-  freeReplyObject(reply);
-
-  return 0;
-}*/
 
 int main(int argc, char *argv[])
 {
@@ -816,9 +733,6 @@ int main(int argc, char *argv[])
 	int ret = 0;
 	char **ap;
 	int opt;
-
-       /* handle ctrl-c signal */
-  //      signal(SIGINT, signal_callback_handler);
 
 	program = basename(argv[0]);
 
@@ -891,23 +805,19 @@ int main(int argc, char *argv[])
 	if (!he)
           error("Unable to look up %s (%s)", host, hstrerror(h_errno));
 
-        printf("trying to connect to redis\n");
+        fprintf(stdout, "Trying to connect to Redis\n");
+
+        /* set-up a regular connection to redis */
         if (!redis_connect("127.0.0.1", 6379)) {
           error("Unable to connect to Redis");
           return 0;
         }
-        printf("Redis started\n");
 
-        //load_scripts();
-
-        //redis_test();
-
+        /* start an async redis connection on a separate thread for pubsub */
         if (!redis_async_connect("127.0.0.1", 6379)) {
           error("Unable to start async connection to Redis");
           return 0;;
         }
-
-        printf("Redis pubsub started\n");
 
         // get a socket connection
 	for (ap = he->h_addr_list; *ap; ap++) {
@@ -944,28 +854,21 @@ int main(int argc, char *argv[])
 
 	cfg.heartbtint = 30;
 
-        printf("about to try a session\n");
-        printf("sender comp id: %s\n", cfg.sender_comp_id);
-         printf("target comp id: %s\n", cfg.target_comp_id);
-         printf("heartbtint: %i\n", cfg.heartbtint);
-           printf("in msg seq: %lu\n", cfg.in_msg_seq_num);
-         printf("out msg seq: %lu\n", cfg.out_msg_seq_num);
-
-        /* start a FIX session, will run until fails or stopped */
+        /* start a FIX session, will run until fails or stopped with ctrl-c */
         ret = fix_client_session(&cfg);
-printf("out of client session\n");
-        //redis_disconnect(c);
-        //redis_async_disconnect();
-        //thread_tidy();
 
 	shutdown(cfg.sockfd, SHUT_RDWR);
 
 	if (close(cfg.sockfd) < 0)
 	  die("close");
 
-        redis_disconnect(c);
-        redis_async_disconnect();
+        /* send a message to the async thread to stop */
+        redisCommand(c, "publish 16 end");
 
+        /* stop our own redis connction */ 
+        redis_disconnect(c);
+
+        /* wait for thread to finish */
         thread_tidy();
 
 	return ret;
