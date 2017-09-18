@@ -54,7 +54,7 @@ struct fix_quote {
   char currencyid[4];
   char settlcurrencyid[4];
   int quotertype;
-  char futsettdate[8];
+  char futsettdate[10];
   int bidquotedepth;
   int offerquotedepth;
   float cashorderqty;
@@ -79,7 +79,7 @@ struct fix_executionreport {
   char clordid[10];
   float orderqty;
   float cumqty;
-  char futsettdate[8];
+  char futsettdate[10];
   char securityid[16];
   char side;
   float lastshares;
@@ -87,6 +87,9 @@ struct fix_executionreport {
   char markettimestamp[20];
   char settlcurrencyid[4];
   char execid[30];
+  char onbehalfofcompid[30];
+  char exchangeid[6];
+  char lastmkt[6];
 };
 
 struct fix_message_list {

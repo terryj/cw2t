@@ -422,7 +422,7 @@ static int send_quote(struct fix_session *session, struct fix_quote *quote) {
       , "}}");
   } else {
     sprintf(jsonquote, "%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%lu%s%s%s%s%s%s%s%d%s%s%s%s%d%s%f%s%d%s%s%s%s%f%s%d%s%s%s%s%s%s%s%s%s%s", "{\"quote\":{"
-      , ",\"quotereqid\":\"", quote->quotereqid, "\""
+      , "\"quotereqid\":\"", quote->quotereqid, "\""
       , ",\"offerpx\":", quote->offerpx
       , ",\"offersize\":", quote->offersize
       , ",\"validuntiltime\":\"", quote->validuntiltime, "\""
@@ -596,6 +596,24 @@ static int fix_execution_report(struct fix_session *session, struct fix_message 
         executionreport.orderstatusid = fix_get_char(msg, OrdStatus, '\0');
         executionreport.exectype = fix_get_char(msg, ExecType, '\0');
 
+        field = fix_get_field(msg, LastMkt);
+        if (field) {
+          fix_get_string(field, executionreport.lastmkt, sizeof(executionreport.lastmkt));
+        } else
+          strcpy(executionreport.lastmkt, "");
+
+        field = fix_get_field(msg, SecurityExchange);
+        if (field) {
+          fix_get_string(field, executionreport.exchangeid, sizeof(executionreport.exchangeid));
+        } else
+          strcpy(executionreport.exchangeid, "");
+
+        field = fix_get_field(msg, OnBehalfOfCompID);
+        if (field) {
+          fix_get_string(field, executionreport.onbehalfofcompid, sizeof(executionreport.onbehalfofcompid));
+        } else
+          strcpy(executionreport.onbehalfofcompid, "");
+
         field = fix_get_field(msg, OrderID);
         if (field) {
           fix_get_string(field, executionreport.orderid, sizeof(executionreport.orderid));
@@ -612,13 +630,13 @@ static int fix_execution_report(struct fix_session *session, struct fix_message 
           goto fail;
         }
 
-       executionreport.orderqty = fix_get_float(msg, OrderQty, 0);
-       executionreport.cumqty = fix_get_float(msg, CumQty, 0);
-       executionreport.side = fix_get_char(msg, Side, '0');
-       executionreport.lastshares = fix_get_float(msg, LastShares, 0);
-       executionreport.lastpx = fix_get_float(msg, LastPx, 0);
+        executionreport.orderqty = fix_get_float(msg, OrderQty, 0);
+        executionreport.cumqty = fix_get_float(msg, CumQty, 0);
+        executionreport.side = fix_get_char(msg, Side, '0');
+        executionreport.lastshares = fix_get_float(msg, LastShares, 0);
+        executionreport.lastpx = fix_get_float(msg, LastPx, 0);
 
-       field = fix_get_field(msg, FutSettDate);
+        field = fix_get_field(msg, FutSettDate);
         if (field) {
           fix_get_string(field, executionreport.futsettdate, sizeof(executionreport.futsettdate));
         } else
@@ -670,9 +688,11 @@ fail:
 static int send_execution_report(struct fix_session *session, struct fix_executionreport *executionreport) {
   char jsonexecutionreport[512];
 
-  sprintf(jsonexecutionreport, "%s%s%c%s%s%c%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%c%s%s%s%s%s%lu%s", "{\"executionreport\":{"
+  sprintf(jsonexecutionreport, "%s%s%c%s%s%c%s%s%s%s%s%s%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%c%s%s%s%s%s%lu%s%s%s%s", "{\"executionreport\":{"
     , "\"orderstatusid\":\"", executionreport->orderstatusid, "\""
     , ",\"exectype\":\"", executionreport->exectype, "\""
+    , ",\"exchangeid\":\"", executionreport->exchangeid, "\""
+    , ",\"lastmkt\":\"", executionreport->lastmkt, "\""
     , ",\"orderid\":\"", executionreport->orderid, "\""
     , ",\"clordid\":\"", executionreport->clordid, "\""
     , ",\"orderqty\":", executionreport->orderqty
@@ -686,6 +706,7 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
     , ",\"side\":\"", executionreport->side, "\""
     , ",\"execid\":\"", executionreport->execid, "\""
     , ",\"fixseqnumid\":", session->in_msg_seq_num
+    , ",\"onbehalfofcompid\":\"", executionreport->onbehalfofcompid, "\""
     , "}}");
 
   printf("%s\n", jsonexecutionreport);

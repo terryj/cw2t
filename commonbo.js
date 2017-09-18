@@ -66,6 +66,7 @@
 * 12 Jun 2017 - tidied caapply()
 * 23 Jun 2017 - operatortimestamp removed - newtrade()
 *             - localtimestamp removed - scriptedittrade(), scriptdeletetrade(), deletetrade(), newtradetransaction(), deletetradetransaction(), newcollectaggregateinvest(), newtransaction() and newposting()
+* 29 Aug 2017 - updated scriptcheckschemebalance() and newcollectaggregateinvest() currencyid passed to getaccountsbyclient()
 **********************/
 var utils = require('./utils.js');
 
@@ -88,7 +89,6 @@ exports.registerScripts = function () {
   exports.errorchannel = 13;
   exports.orderbookchannel = 14;
   exports.systemmonitorchannel = 15;
-  exports.commsserverchannel = 16;
 
   exports.holidays = [];
   /*** Functions ***/
@@ -363,6 +363,9 @@ exports.registerScripts = function () {
       break;
     case 1043:
       desc = "No orders found";
+      break;
+    case 1044:
+      desc = "Commission not found";
       break;
     default:
       desc = "Unknown reason";
@@ -781,6 +784,7 @@ exports.registerScripts = function () {
         ret.unrealisedpandl = round(ret.value + cost, 2) \
       end \
     end \
+    ret.pandlpercentage = round((tonumber(ret.unrealisedpandl) / cost) * 100, 2) \
     return ret \
   end \
   ';
@@ -1246,7 +1250,7 @@ exports.registerScripts = function () {
    * params: brokerid, postingid
    * returns: posting detail
    */
-  getpostingdetails = gethashvalues + gettransaction + getpostingdescription + '\
+  getpostingdetails = gettransaction + getpostingdescription + '\
     local getpostingdetails = function(brokerid, postingid) \
       --[[ get the posting ]] \
       local posting = gethashvalues("broker:" .. brokerid .. ":posting:" .. postingid) \
@@ -1544,6 +1548,7 @@ exports.registerScripts = function () {
       position["price"] = upandl["price"] \
       position["value"] = upandl["value"] \
       position["unrealisedpandl"] = upandl["unrealisedpandl"] \
+      position["pandlpercentage"] = upandl["pandlpercentage"] \
       position["symbolcurrencyid"] = upandl["symbolcurrencyid"] \
       position["symbolcurrencyprice"] = upandl["symbolcurrencyprice"] \
       position["currencyrate"] = upandl["currencyrate"] \
@@ -2207,7 +2212,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
             --[[ closing trade, so ok ]] \
             return {0, temp.initialmargin} \
           end \
-          if side == 2 and (instrumenttypeid == "DE" or instrumenttypeid == "IE") then \
+          if side == 2 then \
               --[[ equity, so cannot sell more than we have ]] \
               rejectorder(brokerid, orderid, 0, "Quantity greater than position quantity") \
               return {1, 1019} \
@@ -2226,33 +2231,32 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
           return {0, temp.initialmargin} \
         end \
       end \
-      if instrumenttypeid == "DE" or instrumenttypeid == "IE" then \
-        if side == 1 then \
-          temp.account = getaccount(accountid, brokerid) \
-          if (tonumber(temp.account["balance"]) + tonumber(temp.account["balanceuncleared"]) + tonumber(temp.account["creditlimit"])) == 0 or (tonumber(temp.account["balance"]) + tonumber(temp.account["balanceuncleared"]) + tonumber(temp.account["creditlimit"])) < settlcurramt + totalcost then \
-            rejectorder(brokerid, orderid, 0, "Insufficient funds") \
-            return {1, 1041} \
-          end \
-        else \
-          --[[ allow ifa certificated equity sells ]] \
-          if instrumenttypeid == "DE" then \
-            if redis.call("hget", "broker:" .. brokerid .. ":client:" .. clientid, "clienttypeid") == "3" then \
-              return {0, temp.initialmargin} \
-            end \
-          end \
-          --[[ check there is a position ]] \
-          if not temp.position then \
-            rejectorder(brokerid, orderid, 0, "No position held in this instrument") \
-            return {1, 1003} \
-          end \
-          --[[ check the position is of sufficient size ]] \
-          temp.posqty = tonumber(temp.position["quantity"]) \
-          if temp.posqty < 0 or quantity > temp.posqty then \
-            rejectorder(brokerid, orderid, 0, "Insufficient position size in this instrument") \
-            return {1, 1004} \
+      if side == 1 then \
+        temp.account = getaccount(accountid, brokerid) \
+        if (tonumber(temp.account["balance"]) + tonumber(temp.account["balanceuncleared"]) + tonumber(temp.account["creditlimit"])) == 0 or (tonumber(temp.account["balance"]) + tonumber(temp.account["balanceuncleared"]) + tonumber(temp.account["creditlimit"])) < settlcurramt + totalcost then \
+          rejectorder(brokerid, orderid, 0, "Insufficient funds") \
+          return {1, 1041} \
+        end \
+      else \
+        --[[ allow ifa certificated equity sells ]] \
+        if instrumenttypeid == "DE" then \
+          if redis.call("hget", "broker:" .. brokerid .. ":client:" .. clientid, "clienttypeid") == "3" then \
+            return {0, temp.initialmargin} \
           end \
         end \
-      elseif instrumenttypeid == "CFD" or instrumenttypeid == "SPB" or instrumenttypeid == "CCFD" then \
+        --[[ check there is a position ]] \
+        if not temp.position then \
+          rejectorder(brokerid, orderid, 0, "No position held in this instrument") \
+          return {1, 1003} \
+        end \
+        --[[ check the position is of sufficient size ]] \
+        temp.posqty = tonumber(temp.position["quantity"]) \
+        if temp.posqty < 0 or quantity > temp.posqty then \
+          rejectorder(brokerid, orderid, 0, "Insufficient position size in this instrument") \
+          return {1, 1004} \
+        end \
+      end \
+      if instrumenttypeid == "CFD" or instrumenttypeid == "SPB" or instrumenttypeid == "CCFD" then \
         --[[ check free margin for all derivative trades ]] \
         temp.freemargin = getfreemargin(accountid, brokerid) \
         if temp.initialmargin + totalcost > temp.freemargin then \
@@ -2568,11 +2572,11 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   ';
   /*
   * newtrade()
-  * args: accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, stampdutyid, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms, tradesettlestatusid, linkedfromtrade, linkedtotrade, fixseqnumid, lastcrestmessagestatus, markettimestamp, tradesettlestatustime
+  * args: accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, stampdutyid, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms, tradesettlestatusid, linkedfromtrade, linkedtotrade, fixseqnumid, lastcrestmessagestatus, markettimestamp, tradesettlestatustime, exchangeid
   * stores a trade & updates cash & position
   */
   newtrade = generatetradeid + newtradetransaction + newpositiontransaction + updatetradesettlestatusindex + updatefieldindexes + publishtrade + utils.getparentlinkdetails + utils.updateaddtionalindex +  utils.updateaddtionaltimeindex + '\
-  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, stampdutyid, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms, tradesettlestatusid, linkedfromtrade, linkedtotrade, fixseqnumid, lastcrestmessagestatus, markettimestamp, tradesettlestatustime) \
+  local newtrade = function(accountid, brokerid, clientid, orderid, symbolid, side, quantity, price, currencyid, currencyratetoorg, currencyindtoorg, commission, ptmlevy, stampduty, contractcharge, stampdutyid, counterpartyid, counterpartytype, markettype, externaltradeid, futsettdate, timestamp, lastmkt, externalorderid, settlcurrencyid, settlcurramt, settlcurrfxrate, settlcurrfxratecalc, margin, operatortype, operatorid, finance, timestampms, tradesettlestatusid, linkedfromtrade, linkedtotrade, fixseqnumid, lastcrestmessagestatus, markettimestamp, tradesettlestatustime, exchangeid) \
     redis.log(redis.LOG_NOTICE, "newtrade") \
     local trade = {} \
     trade.brokerkey = "broker:" .. brokerid \
@@ -2591,7 +2595,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
     if not tradesettlestatustime then \
       tradesettlestatustime = "" \
     end \
-    redis.call("hmset", trade.brokerkey .. ":trade:" .. trade.gentradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", round(commission, 2), "ptmlevy", round(ptmlevy, 2), "stampduty", round(stampduty, 2), "contractcharge", round(contractcharge, 2), "stampdutyid", stampdutyid, "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", trade.gentradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", trade.strsettlcurramt, "settlcurrfxrate", round(settlcurrfxrate, 6), "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "operatortype", operatortype, "operatorid", operatorid, "finance", finance, "tradesettlestatusid", tradesettlestatusid, "linkedfromtrade", linkedfromtrade, "linkedtotrade", linkedtotrade, "status", 1, "fixseqnumid", fixseqnumid, "lastcrestmessagestatus", lastcrestmessagestatus, "markettimestamp", markettimestamp, "tradesettlestatustime", tradesettlestatustime) \
+    redis.call("hmset", trade.brokerkey .. ":trade:" .. trade.gentradeid, "accountid", accountid, "brokerid", brokerid, "clientid", clientid, "orderid", orderid, "symbolid", symbolid, "side", side, "quantity", quantity, "price", price, "currencyid", currencyid, "currencyratetoorg", currencyratetoorg, "currencyindtoorg", currencyindtoorg, "commission", round(commission, 2), "ptmlevy", round(ptmlevy, 2), "stampduty", round(stampduty, 2), "contractcharge", round(contractcharge, 2), "stampdutyid", stampdutyid, "counterpartyid", counterpartyid, "counterpartytype", counterpartytype, "markettype", markettype, "externaltradeid", externaltradeid, "futsettdate", futsettdate, "timestamp", timestamp, "lastmkt", lastmkt, "externalorderid", externalorderid, "tradeid", trade.gentradeid, "settlcurrencyid", settlcurrencyid, "settlcurramt", trade.strsettlcurramt, "settlcurrfxrate", round(settlcurrfxrate, 6), "settlcurrfxratecalc", settlcurrfxratecalc, "margin", margin, "operatortype", operatortype, "operatorid", operatorid, "finance", finance, "tradesettlestatusid", tradesettlestatusid, "linkedfromtrade", linkedfromtrade, "linkedtotrade", linkedtotrade, "status", 1, "fixseqnumid", fixseqnumid, "lastcrestmessagestatus", lastcrestmessagestatus, "markettimestamp", markettimestamp, "tradesettlestatustime", tradesettlestatustime, "exchangeid", exchangeid) \
     redis.call("sadd", trade.brokerkey .. ":tradeid", "trade:" .. trade.gentradeid) \
     redis.call("sadd", trade.brokerkey .. ":trades", trade.gentradeid) \
     redis.call("sadd", trade.brokerkey .. ":account:" .. accountid .. ":trades", trade.gentradeid) \
@@ -3724,15 +3728,20 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   * returns: 0 if ok, else 1 + an error message if unsuccessful
   */
   scriptcheckschemebalance = getclientaccountid + '\
-    local scriptcheckschemebalance = function(brokerid, schemebalance, schemeclients, cashisfixed, cashamount) \
+    local scriptcheckschemebalance = function(brokerid, schemebalance, schemeclients, cashisfixed, cashamount, currencyid) \
       redis.log(redis.LOG_NOTICE, "scriptcheckschemebalance") \
       local amount = 0 \
+      local accountid \
+      local accountbalance \
       if cashisfixed == 1 then \
         amount = cashamount * #schemeclients \
       else \
         for i = 1, #schemeclients do \
-          local accountid = getclientaccountid(brokerid, schemeclients[i], 1) \
-          local accountbalance = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid, "balance") \
+          accountid = getclientaccountid(brokerid, schemeclients[i], 1, currencyid) \
+          if accountid == 0 then \
+            return {1, "Few clients not having account with currency " .. currencyid} \
+          end \
+          accountbalance = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid, "balance") \
           amount = amount + math.floor(tonumber(accountbalance) * cashamount / 100) \
         end \
       end \
@@ -3759,7 +3768,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   *         localtimestamp
   * returns: 0, scheme cash available, scheme cash invested, number of clients, array of scheme trades {fund id, price, quantity, consideration} if ok, else 1, errorcode
   */
-  exports.newcollectaggregateinvest = split + getclientaccountid + getaccount + newtrade + scriptcheckschemebalance + '\
+  exports.newcollectaggregateinvest = round + split + getclientaccountid + getaccount + newtrade + scriptcheckschemebalance + '\
     redis.log(redis.LOG_NOTICE, "newcollectaggregateinvest") \
     local brokerid = ARGV[1] \
     local schemeid = ARGV[2] \
@@ -3797,14 +3806,14 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
     local schemeclientid = redis.call("get", "broker:" .. brokerid .. ":account:" .. scheme["accountid"] .. ":client") \
     --[[ process clients in the scheme ]] \
     local schemeclients = redis.call("smembers", "broker:" .. brokerid .. ":scheme:" .. schemeid .. ":clients") \
-    local checkschemecash = scriptcheckschemebalance(brokerid, tonumber(schemeaccount["balance"]), schemeclients, cashisfixed, cashamount) \
+    local checkschemecash = scriptcheckschemebalance(brokerid, tonumber(schemeaccount["balance"]), schemeclients, cashisfixed, cashamount, schemeaccount["currencyid"]) \
     if checkschemecash[1] == 1 then \
       return checkschemecash \
     end \
     for i = 1, #schemeclients do \
       redis.log(redis.LOG_NOTICE, "client: " .. schemeclients[i]) \
       --[[ get the default account for this client ]] \
-      local accountid = getclientaccountid(brokerid, schemeclients[i], 1) \
+      local accountid = getclientaccountid(brokerid, schemeclients[i], 1, schemeaccount["currencyid"]) \
       local account = getaccount(accountid, brokerid) \
       --[[ calculate how much cash is available ]] \
       local amount \
