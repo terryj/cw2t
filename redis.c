@@ -1,9 +1,13 @@
 /*********************
  * redis.c
- * Redis connections
+ * Redis connections for Comms Server
  * Cantwaittotrade Limited
  * Terry Johnston
  * July 2017
+ * Sets up the Redis connections and handles
+ * the async pubsub message handling in
+ * it's own thread - see nbtrader.c
+ *
  * Modifications
  * *********************/
 
@@ -316,11 +320,11 @@ int redis_connect(char *hostname, int port) {
   freeReplyObject(reply);*/
 
   if (c != NULL && c->err) {
-    fprintf("stdout, Error: %s\n", c->errstr);
+    fprintf(stdout, "Error: %s\n", c->errstr);
     return 0;
   }
 
-  printf(stdout, "Connected to Redis\n");
+  fprintf(stdout, "Connected to Redis\n");
 
   return 1;
 }

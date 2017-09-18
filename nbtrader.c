@@ -4,6 +4,16 @@
  * Cantwaittotrade Limited
  * Terry Johnston
  * July 2017
+ * This is the starting point. A FIX connection
+ * to NBTrader is started on the main thread, together with
+ * a connection to Redis. An async connection to Redis is created
+ * for pubsub, which runs on a separate thread - see redis.c.
+ * This connection listens for messages on the Comms Server channel.
+ * Any messages are received as JSON, parsed and stored in a shared memory area.
+ * This is read by the FIX connection thread, and FIX messages
+ * are created and sent to NBTrader. Any replies are received as FIX, parsed and JSON
+ * messages created and forwarded to the Trade Server channel.
+ *
  * Modifications
  * *********************/
 
@@ -51,7 +61,7 @@ static void signal_handler(int signum)
 }
 
 /*
- * Main client session, jsonexecutionreportruns until crtl-c
+ * Main client session, report runs until crtl-c
  */
 static int fix_client_session(struct fix_session_cfg *cfg)
 {
@@ -242,7 +252,7 @@ static int send_quote_ack(struct fix_session *session, struct fix_quoteack *quot
   char jsonquoteack[256];
 
   sprintf(jsonquoteack, "%s%s%s%s%s%d%s%d%s%s%s%s%lu%s%s%s%s%s%s%s", "{\"quoteack\":{"
-    , ",\"quoterequestid\":\"", quoteack->quotereqid, "\""
+    , "\"quotereqid\":\"", quoteack->quotereqid, "\""
     , ",\"quotestatusid\":", quoteack->quotestatusid
     , ",\"quoterejectreasonid\":", quoteack->quoterejectreasonid
     , ",\"text\":\"", quoteack->text, "\""
@@ -390,7 +400,7 @@ static int send_quote(struct fix_session *session, struct fix_quote *quote) {
 
   if (quote->bidpx != 0.0) {
     sprintf(jsonquote, "%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%lu%s%s%s%s%s%s%s%d%s%s%s%s%d%s%f%s%d%s%s%s%s%f%s%d%s%s%s%s%s%s%s%s%s%s", "{\"quote\":{"
-      , ",\"quoterequestid\":\"", quote->quotereqid, "\""
+      , "\"quotereqid\":\"", quote->quotereqid, "\""
       , ",\"bidpx\":", quote->bidpx
       , ",\"bidsize\":", quote->bidsize
       , ",\"validuntiltime\":\"", quote->validuntiltime, "\""
@@ -412,7 +422,7 @@ static int send_quote(struct fix_session *session, struct fix_quote *quote) {
       , "}}");
   } else {
     sprintf(jsonquote, "%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%lu%s%s%s%s%s%s%s%d%s%s%s%s%d%s%f%s%d%s%s%s%s%f%s%d%s%s%s%s%s%s%s%s%s%s", "{\"quote\":{"
-      , ",\"quoterequestid\":\"", quote->quotereqid, "\""
+      , ",\"quotereqid\":\"", quote->quotereqid, "\""
       , ",\"offerpx\":", quote->offerpx
       , ",\"offersize\":", quote->offersize
       , ",\"validuntiltime\":\"", quote->validuntiltime, "\""
