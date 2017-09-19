@@ -90,8 +90,6 @@ static int fix_client_session(struct fix_session_cfg *cfg)
 		goto exit;
 	}
 
-	printf("Logged on OK\n");
-
 	clock_gettime(CLOCK_MONOTONIC, &prev);
 
 	while (!stop && session->active) {
@@ -115,6 +113,7 @@ static int fix_client_session(struct fix_session_cfg *cfg)
                 check_for_data(session);
 
  		if (fix_session_recv(session, &msg, FIX_RECV_FLAG_MSG_DONTWAIT) > 0) {
+                        fprintf(stdout, "%s - fix message received\n", session->str_now);
 			fprintmsg(stdout, msg);
 
 			if (fix_session_admin(session, msg))
@@ -122,15 +121,12 @@ static int fix_client_session(struct fix_session_cfg *cfg)
 
                         switch (msg->type) {
                         case FIX_MSG_TYPE_EXECUTION_REPORT:
-                                fprintf(stdout, "Execution report\n");
                                 fix_execution_report(session, msg);
                                 break;
                         case FIX_MSG_QUOTE:
-                                fprintf(stdout, "Quote\n");
                                 fix_quote(session, msg);
                                 break;
                         case FIX_MSG_QUOTE_ACKNOWLEDGEMENT:
-                                fprintf(stdout, "Quote Acknowledgement\n");
                                 fix_quote_ack(session, msg);
                                 break;
                         case FIX_MSG_ORDER_CANCEL_REJECT:
@@ -225,14 +221,12 @@ static int fix_quote_ack(struct fix_session *session, struct fix_message *msg) {
     field = fix_get_field(msg, Text);
     if (field) {
       fix_get_string(field, quoteack.text, sizeof(quoteack.text));
-      printf("Text:%s\n", quoteack.text);
     } else
       strcpy(quoteack.text, "");
 
     field = fix_get_field(msg, SendingTime);
     if (field) {
       fix_get_string(field, quoteack.markettimestamp, sizeof(quoteack.markettimestamp));
-      printf("SendingTime:%s\n", quoteack.markettimestamp);
     } else
       strcpy(quoteack.markettimestamp, ""); 
 
@@ -261,7 +255,9 @@ static int send_quote_ack(struct fix_session *session, struct fix_quoteack *quot
     , ",\"markettimestamp\":\"", quoteack->markettimestamp, "\""
     , "}}");
 
-  printf("%s\n", jsonquoteack);
+  fprintf(stdout, "%s - publish to trade server\n", session->str_now);
+  fprintf(stdout, "%s\n", jsonquoteack);
+
   /* publish to trade server channel */
   redisCommand(c, "publish 3 %s", jsonquoteack);
 
@@ -283,9 +279,8 @@ static int fix_quote(struct fix_session *session, struct fix_message *msg) {
     field = fix_get_field(msg, Qbroker);
     if (field) {
       fix_get_string(field, quote.quoterid, sizeof(quote.quoterid));
-      printf("Qbroker:%s\n", quote.quoterid);
     } else {
-      printf("Qbroker not present\n");
+      fprintf(stdout, "Qbroker not present\n");
       goto fail;
     }
 
@@ -300,18 +295,16 @@ static int fix_quote(struct fix_session *session, struct fix_message *msg) {
     field = fix_get_field(msg, QuoteID);
     if (field) {
       fix_get_string(field, quote.externalquoteid, sizeof(quote.externalquoteid));
-      printf("QuoteID:%s\n", quote.externalquoteid);
     } else
       strcpy(quote.externalquoteid, "");
 
     field = fix_get_field(msg, SendingTime);
     if (field) {
       fix_get_string(field, quote.markettimestamp, sizeof(quote.markettimestamp));
-      if (strptime(quote.markettimestamp, "%Y%m%d-%H:%M:%S", &tm_now) == NULL) {
+      /*if (strptime(quote.markettimestamp, "%Y%m%d-%H:%M:%S", &tm_now) == NULL) {
         printf("Unable to parse SendingTime:%s\n", quote.markettimestamp);
         strcpy(quote.markettimestamp, "");
-      }
-      printf("SendingTime:%s\n", quote.markettimestamp);
+      }*/
     } else
       strcpy(quote.markettimestamp, "");
 
@@ -337,29 +330,25 @@ static int fix_quote(struct fix_session *session, struct fix_message *msg) {
     field = fix_get_field(msg, FutSettDate);
     if (field) {
       fix_get_string(field, quote.futsettdate, sizeof(quote.futsettdate));
-      printf("FutSettDate:%s\n", quote.futsettdate);
     } else
       strcpy(quote.futsettdate, "");
 
     field = fix_get_field(msg, Currency);
     if (field) {
       fix_get_string(field, quote.currencyid, sizeof(quote.currencyid));
-      printf("Currency:%s\n", quote.currencyid);
     } else
       strcpy(quote.currencyid, "");
 
     field = fix_get_field(msg, SettlCurrency);
     if (field) {
       fix_get_string(field, quote.settlcurrencyid, sizeof(quote.settlcurrencyid));
-      printf("SettlCurrency:%s\n", quote.settlcurrencyid);
     } else
       strcpy(quote.settlcurrencyid, "");
 
     field = fix_get_field(msg, ValidUntilTime);
     if (field) {
       fix_get_string(field, quote.validuntiltime, sizeof(quote.validuntiltime));
-      printf("ValidUntilTime:%s\n", quote.validuntiltime);
-      if (strptime(quote.validuntiltime, "%Y%m%d-%H:%M:%S", &tm_validuntil) == NULL) {
+      /*if (strptime(quote.validuntiltime, "%Y%m%d-%H:%M:%S", &tm_validuntil) == NULL) {
         printf("Unable to parse ValidUntilTime:%s\n", quote.validuntiltime);
         goto fail;
       }
@@ -367,7 +356,7 @@ static int fix_quote(struct fix_session *session, struct fix_message *msg) {
       // calculate how many seconds the quote is valid for
       time_t validuntil = mktime(&tm_validuntil);
       time_t now = mktime(&tm_now);
-      quote.noseconds = (int) difftime(validuntil, now);
+      quote.noseconds = (int) difftime(validuntil, now);*/
     } else {
       printf("ValidUntilTime not present\n");
       goto fail;
@@ -376,7 +365,6 @@ static int fix_quote(struct fix_session *session, struct fix_message *msg) {
     field = fix_get_field(msg, SecurityID);
     if (field) {
       fix_get_string(field, quote.isin, sizeof(quote.isin));
-      printf("isin:%s\n", quote.isin);
     } else {
       printf("Isin not present\n");
       goto fail; 
@@ -399,7 +387,7 @@ static int send_quote(struct fix_session *session, struct fix_quote *quote) {
   char jsonquote[512];
 
   if (quote->bidpx != 0.0) {
-    sprintf(jsonquote, "%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%lu%s%s%s%s%s%s%s%d%s%s%s%s%d%s%f%s%d%s%s%s%s%f%s%d%s%s%s%s%s%s%s%s%s%s", "{\"quote\":{"
+    sprintf(jsonquote, "%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%lu%s%s%s%s%s%s%s%d%s%s%s%s%d%s%f%s%s%s%s%f%s%d%s%s%s%s%s%s%s%s%s%s", "{\"quote\":{"
       , "\"quotereqid\":\"", quote->quotereqid, "\""
       , ",\"bidpx\":", quote->bidpx
       , ",\"bidsize\":", quote->bidsize
@@ -412,7 +400,7 @@ static int send_quote(struct fix_session *session, struct fix_quote *quote) {
       , ",\"isin\":\"", quote->isin, "\""
       , ",\"bidquotedepth\":", quote->bidquotedepth
       , ",\"bidspotrate\":", quote->bidspotrate
-      , ",\"noseconds\":", quote->noseconds
+//      , ",\"noseconds\":", quote->noseconds
       , ",\"quoterid\":\"", quote->quoterid, "\""
       , ",\"cashorderqty\":", quote->cashorderqty
       , ",\"settledays\":", quote->settledays  
@@ -421,7 +409,7 @@ static int send_quote(struct fix_session *session, struct fix_quote *quote) {
       , ",\"externalquoteid\":\"", quote->externalquoteid, "\""
       , "}}");
   } else {
-    sprintf(jsonquote, "%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%lu%s%s%s%s%s%s%s%d%s%s%s%s%d%s%f%s%d%s%s%s%s%f%s%d%s%s%s%s%s%s%s%s%s%s", "{\"quote\":{"
+    sprintf(jsonquote, "%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%lu%s%s%s%s%s%s%s%d%s%s%s%s%d%s%f%s%s%s%s%f%s%d%s%s%s%s%s%s%s%s%s%s", "{\"quote\":{"
       , "\"quotereqid\":\"", quote->quotereqid, "\""
       , ",\"offerpx\":", quote->offerpx
       , ",\"offersize\":", quote->offersize
@@ -434,7 +422,7 @@ static int send_quote(struct fix_session *session, struct fix_quote *quote) {
       , ",\"isin\":\"", quote->isin, "\""
       , ",\"offerquotedepth\":", quote->offerquotedepth
       , ",\"offerspotrate\":", quote->offerspotrate
-      , ",\"noseconds\":", quote->noseconds
+//      , ",\"noseconds\":", quote->noseconds
       , ",\"quoterid\":\"", quote->quoterid, "\""
       , ",\"cashorderqty\":", quote->cashorderqty
       , ",\"settledays\":", quote->settledays  
@@ -444,7 +432,9 @@ static int send_quote(struct fix_session *session, struct fix_quote *quote) {
       , "}}");
   }
 
-  printf("%s\n", jsonquote);
+  fprintf(stdout, "%s - publish to trade server\n", session->str_now);
+  fprintf(stdout, "%s\n", jsonquote);
+
   redisCommand(c, "publish 3 %s", jsonquote);
 
   return 0;
@@ -651,12 +641,10 @@ static int fix_execution_report(struct fix_session *session, struct fix_message 
         field = fix_get_field(msg, TransactTime);
         if (field) {
           fix_get_string(field, executionreport.markettimestamp, sizeof(executionreport.markettimestamp));
-          printf("TransactTime:%s\n", executionreport.markettimestamp);
         } else {
           field = fix_get_field(msg, SendingTime);
           if (field) {
             fix_get_string(field, executionreport.markettimestamp, sizeof(executionreport.markettimestamp));
-            printf("SendingTime:%s\n", executionreport.markettimestamp);
           } else {
             strcpy(executionreport.markettimestamp, ""); 
           }
@@ -688,7 +676,7 @@ fail:
 static int send_execution_report(struct fix_session *session, struct fix_executionreport *executionreport) {
   char jsonexecutionreport[512];
 
-  sprintf(jsonexecutionreport, "%s%s%c%s%s%c%s%s%s%s%s%s%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%c%s%s%s%s%s%lu%s%s%s%s", "{\"executionreport\":{"
+  sprintf(jsonexecutionreport, "%s%s%c%s%s%c%s%s%s%s%s%s%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%c%s%s%s%s%s%lu%s%s%s%s%s%s%s", "{\"executionreport\":{"
     , "\"orderstatusid\":\"", executionreport->orderstatusid, "\""
     , ",\"exectype\":\"", executionreport->exectype, "\""
     , ",\"exchangeid\":\"", executionreport->exchangeid, "\""
@@ -707,9 +695,10 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
     , ",\"execid\":\"", executionreport->execid, "\""
     , ",\"fixseqnumid\":", session->in_msg_seq_num
     , ",\"onbehalfofcompid\":\"", executionreport->onbehalfofcompid, "\""
+    , ",\"timestamp\":\"", session->str_now, "\""
     , "}}");
 
-  printf("%s\n", jsonexecutionreport);
+  fprintf(stdout, "%s\n", jsonexecutionreport);
   redisCommand(c, "publish 3 %s", jsonexecutionreport);
 
   return 0;

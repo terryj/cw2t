@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <time.h>
 #include <string.h>
 #include <pthread.h>
 #include <hiredis/hiredis.h>
@@ -65,7 +66,6 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
   char price[16];
   char fixmsgtype = ' ';
 
-  printf("onMessage\n");
   redisReply *rr = reply;
   if (reply == NULL) return;
 
@@ -73,6 +73,9 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
   if (rr->type == REDIS_REPLY_ARRAY) {
     if (rr->element[2]->type == REDIS_REPLY_STRING) {
       jsmn_init(&p);
+      
+      fprintf(stdout, "--- pubsub message received\n");
+      fprintf(stdout, "%s\n", rr->element[2]->str);
 
       r = jsmn_parse(&p, rr->element[2]->str, strlen(rr->element[2]->str), t, sizeof(t)/sizeof(t[0]));
       if (r < 0) {
@@ -86,8 +89,6 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
         }
         return;
       }
-
-      printf("Parsed JSON ok\n");
 
       /* assume top-level element is an object */
       if (r < 1 || t[0].type != JSMN_OBJECT) {
@@ -106,7 +107,7 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
       /* loop over all keys of the root object */
       for (i = 1; i < r; i++) {
         if (jsoneq(rr->element[2]->str, &t[i], "quoterequest") == 0) {
-          printf("- quoterequest: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- quoterequest: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
 
           /* initialise a quote request */
           memset(quoterequests[numquoterequests].currencyid, '\0', sizeof(quoterequests[numquoterequests].currencyid));
@@ -119,7 +120,7 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           quoterequests[numquoterequests].norelatedsym = 1;
           fixmsgtype = 'R';
         } else if (jsoneq(rr->element[2]->str, &t[i], "order") == 0) {
-          printf("- order: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- order: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
 
           /* initialise an order */
           memset(orders[numorders].currencyid, '\0', sizeof(orders[numorders].currencyid));
@@ -137,22 +138,22 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           orders[numorders].norelatedsym = 1;
           fixmsgtype = 'D';
         } else if (jsoneq(rr->element[2]->str, &t[i], "brokerid") == 0) {
-          printf("- brokerid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- brokerid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           strncpy(brokerid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
           *(brokerid + t[i+1].end - t[i+1].start) = '\0';
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "quoterequestid") == 0) {
-          printf("- quoterequestid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- quoterequestid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           strncpy(quoterequestid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
           *(quoterequestid + t[i+1].end - t[i+1].start) = '\0';
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "orderid") == 0) {
-          printf("- orderid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- orderid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           strncpy(orderid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
           *(orderid + t[i+1].end - t[i+1].start) = '\0';
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "symbolid") == 0) {
-          printf("- symbolid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- symbolid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           if (fixmsgtype == 'R') {
             strncpy(quoterequests[numquoterequests].symbolid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
             *(quoterequests[numquoterequests].symbolid + t[i+1].end - t[i+1].start) = '\0';
@@ -162,7 +163,7 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           } 
          i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "isin") == 0) {
-          printf("- isin: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- isin: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           if (fixmsgtype == 'R') {
             strncpy(quoterequests[numquoterequests].isin, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
             *(quoterequests[numquoterequests].isin + t[i+1].end - t[i+1].start) = '\0';
@@ -172,14 +173,14 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           }
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "settlmnttypid") == 0) {
-          printf("- settlmnttypid: %c\n", *(rr->element[2]->str + t[i+1].start));
+          //printf("- settlmnttypid: %c\n", *(rr->element[2]->str + t[i+1].start));
           if (fixmsgtype == 'R')
             quoterequests[numquoterequests].settlmnttypid = *(rr->element[2]->str + t[i+1].start);
           else if (fixmsgtype == 'D')
             orders[numorders].settlmnttypid = *(rr->element[2]->str + t[i+1].start);
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "quantity") == 0) {
-          printf("- quantity: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- quantity: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           strncpy(quantity, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
           *(quantity + t[i+1].end - t[i+1].start) = '\0';
           if (fixmsgtype == 'R')
@@ -188,7 +189,7 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
             orders[numorders].quantity = atof(quantity);
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "cashorderquantity") == 0) {
-          printf("- cashorderquantity: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- cashorderquantity: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           strncpy(cashorderquantity, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
           *(cashorderquantity + t[i+1].end - t[i+1].start) = '\0';
           if (fixmsgtype == 'R')
@@ -197,14 +198,14 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
             orders[numorders].cashorderquantity = atof(cashorderquantity);
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "side") == 0) {
-          printf("- side: %c\n", *(rr->element[2]->str + t[i+1].start));
+          //printf("- side: %c\n", *(rr->element[2]->str + t[i+1].start));
           if (fixmsgtype == 'R')
             quoterequests[numquoterequests].side = *(rr->element[2]->str + t[i+1].start);
           else if (fixmsgtype == 'D')
             orders[numorders].side = *(rr->element[2]->str + t[i+1].start);
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "exchangeid") == 0) {
-          printf("- exchangeid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- exchangeid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           if (fixmsgtype == 'R') {
             strncpy(quoterequests[numquoterequests].exchangeid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
             *(quoterequests[numquoterequests].exchangeid + t[i+1].end - t[i+1].start) = '\0';
@@ -214,7 +215,7 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           }
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "currencyid") == 0) {
-          printf("- currencyid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- currencyid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           if (fixmsgtype == 'R') {
             strncpy(quoterequests[numquoterequests].currencyid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
             *(quoterequests[numquoterequests].currencyid + t[i+1].end - t[i+1].start) = '\0';
@@ -224,7 +225,7 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           }
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "settlcurrencyid") == 0) {
-          printf("- settlcurrencyid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- settlcurrencyid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           if (fixmsgtype == 'R') {
             strncpy(quoterequests[numquoterequests].settlcurrencyid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
             *(quoterequests[numquoterequests].settlcurrencyid + t[i+1].end - t[i+1].start) = '\0';
@@ -234,7 +235,7 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           }
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "timestamp") == 0) {
-          printf("- timestamp: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- timestamp: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           if (fixmsgtype == 'R') {
             strncpy(quoterequests[numquoterequests].timestamp, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
             *(quoterequests[numquoterequests].timestamp + t[i+1].end - t[i+1].start) = '\0';
@@ -244,7 +245,7 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           }
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "futsettdate") == 0) {
-          printf("- futsettdate: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- futsettdate: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           if (fixmsgtype == 'R') {
             strncpy(quoterequests[numquoterequests].futsettdate, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
             *(quoterequests[numquoterequests].futsettdate + t[i+1].end - t[i+1].start) = '\0';
@@ -254,33 +255,33 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           }
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "quoterid") == 0) {
-          printf("- quoterid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- quoterid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           strncpy(orders[numorders].quoterid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
           *(orders[numorders].quoterid + t[i+1].end - t[i+1].start) = '\0';
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "externalquoteid") == 0) {
-          printf("- externalquoteid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- externalquoteid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           strncpy(orders[numorders].externalquoteid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
           *(orders[numorders].externalquoteid + t[i+1].end - t[i+1].start) = '\0';
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "ordertypeid") == 0) {
-          printf("- ordertypeid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- ordertypeid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           strncpy(orders[numorders].ordertypeid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
           *(orders[numorders].ordertypeid + t[i+1].end - t[i+1].start) = '\0';
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "delivertocompid") == 0) {
-          printf("- delivertocompid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- delivertocompid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           strncpy(orders[numorders].delivertocompid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
           *(orders[numorders].delivertocompid + t[i+1].end - t[i+1].start) = '\0';
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "price") == 0) {
-          printf("- price: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+          //printf("- price: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           strncpy(price, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
           *(price + t[i+1].end - t[i+1].start) = '\0';
           orders[numorders].price = atof(price);
           i++;
         } else {
-          printf("Unexpected key: %.*s\n", t[i].end-t[i].start, rr->element[2]->str + t[i].start);
+          //printf("Unexpected key: %.*s\n", t[i].end-t[i].start, rr->element[2]->str + t[i].start);
         }
       }
 

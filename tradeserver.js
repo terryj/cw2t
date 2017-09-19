@@ -64,7 +64,6 @@ var scriptorderack;
 var scriptnewtrade;
 var scriptrejectorder;
 var scriptgetinst;
-//var scriptgetholidays;
 var scriptorderfillrequest;
 
 // set-up a redis client
@@ -218,6 +217,9 @@ function quoteInterval() {
 * Receive a quote request
 */
 function quoteRequest(quoterequest) {
+  console.log("quoteRequest");
+  console.log(quoterequest);
+
   // create timestamp
   var today = new Date();
   quoterequest.timestamp = commonbo.getUTCTimeStamp(today);
@@ -618,11 +620,11 @@ function orderFillRequest(ofr) {
     }
     ofr.futsettdate = commonbo.getUTCDateString(settDate);
 
-  db.eval(scriptorderfillrequest, 7, ofr.clientid, ofr.orderid, ofr.timestamp, ofr.operatortype, ofr.operatorid, ofr.price, ofr.futsettdate, function(err, ret) {
-    if (err) {
-      console.log(err);
-      return;
-    }
+    db.eval(scriptorderfillrequest, 7, ofr.clientid, ofr.orderid, ofr.timestamp, ofr.operatortype, ofr.operatorid, ofr.price, ofr.futsettdate, function(err, ret) {
+      if (err) {
+        console.log(err);
+        return;
+      }
 
       // error, so send an orderfillreject message
       if (ret[0] != 0) {
@@ -666,6 +668,9 @@ function getTestmode() {
  * A quote has been received
  */
 function newQuote(quote) {
+  console.log("newQuote");
+  console.log(quote);
+
   // extract brokerid & quoterequestid
   var quotereqid = quote.quotereqid.split(':');
 
@@ -691,73 +696,19 @@ function newQuote(quote) {
     quote.externalquoteid = "";
   }
 
-  if (!('timestampms' in quote)) {
-    var today = new Date();
-    quote.timestampms = today.getTime();
-  }
+  var today = new Date();
+  quote.timestampms = today.getTime();
 
-  /*if (!('transacttime' in quote)) {
-    var today = new Date();
-    quote.transacttime = commonbo.getUTCTimeStamp(today);
-
-    if (!('validuntiltime' in quote)) {
-      var validuntiltime = today;
-      validuntiltime.setSeconds(today.getSeconds() + quote.noseconds);
-      quote.validuntiltime = commonbo.getUTCTimeStamp(validuntiltime);
-    }
-  } else {
-    quote.noseconds = commonbo.getSeconds(quote.transacttime, quote.validuntiltime);
-  }
-  // set transacttime as markettimestamp in create quote
-  quote.markettimestamp = quote.transacttime;*/
+  quote.noseconds = commonbo.getSeconds(quote.markettimestamp, quote.validuntiltime);
 
   if (!('settlmnttypid' in quote)) {
     quote.settlmnttypid = 0;
   }
 
-  /*if (!('futsettdate' in quote)) {
-    quote.futsettdate = "";
-  }*/
-
-  // do we need?
-  /*if (!('settledays' in quote)) {
-    quote.settledays = "";
-  }*/
-
-  /*if ('quoterid' in quote) {
-    quote.quotertype = 1;
-  }*/
-
   // mnemonic is specified, so no symbolid
   if (!('symbolid' in  quote)) {
     quote.symbolid = "";
   }
-console.log(quote.symbolid);
-console.log(quote.bidpx);
-console.log(quote.offerpx);
-console.log(quote.bidsize);
-console.log(quote.offersize);
-console.log(quote.validuntiltime);
-console.log(quote.timestamp);
-console.log(quote.currencyid);
-console.log(quote.settlcurrencyid);
-console.log(quote.quoterid);
-console.log(quote.quotertype);
-console.log(quote.futsettdate);
-console.log(quote.bidquotedepth);
-console.log(quote.offerquotedepth);
-console.log(quote.externalquoteid);
-console.log(quote.cashorderqty);
-console.log(quote.settledays);
-console.log(quote.noseconds);
-console.log(quotereqid[0]);
-console.log(quote.settlmnttypid);
-console.log(quote.bidspotrate);
-console.log(quote.offerspotrate);
-console.log(quote.timestampms);
-console.log(quote.fixseqnumid);
-console.log(quote.markettimestamp);
-console.log(quote.isin);
 
   db.eval(scriptQuote, 1, "broker:" + quotereqid[0], quotereqid[1], quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.timestamp, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quotereqid[0], quote.settlmnttypid, quote.bidspotrate, quote.offerspotrate, quote.timestampms, quote.fixseqnumid, quote.markettimestamp, quote.isin, function(err, ret) {
     if (err) {
@@ -900,9 +851,6 @@ function orderExpired(exereport) {
  * An execution report has been received from the market
  */
 function newExecutionReport(exereport) {
-  console.log("newExecutionReport");
-  console.log(exereport);
-
   if (exereport.orderstatusid == '1' || exereport.orderstatusid == '2') {
     processTrade(exereport);
   } else if (exereport.orderstatusid == '8') {
@@ -921,6 +869,7 @@ function newExecutionReport(exereport) {
  */
 function processTrade(exereport) {
   console.log("processTrade");
+  console.log(exereport);
 
   var currencyratetoorg = 1; // product currency rate back to org
   var currencyindtoorg = 1;
@@ -978,36 +927,7 @@ function processTrade(exereport) {
   // milliseconds since epoch, used for scoring datetime indexes
   var tradedate = new Date();
   var milliseconds = tradedate.getTime();
-  var systemtimestamp = commonbo.getUTCTimeStamp(tradedate);
-/*console.log(exereport.accountid);
-console.log(exereport.clientid);
-console.log(exereport.symbolid);
-console.log(exereport.side);
-console.log(exereport.lastshares);
-console.log(exereport.lastpx);
-console.log(exereport.currencyid);
-console.log(currencyratetoorg);
-console.log(currencyindtoorg);
-console.log(exereport.onbehalfofcompid);
-console.log(counterpartytype);
-console.log(markettype);
-console.log(exereport.execid);
-console.log(exereport.futsettdate);
-console.log(systemtimestamp);
-console.log(exereport.lastmkt);
-console.log(exereport.orderid);
-console.log(exereport.settlcurrencyid);
-console.log(exereport.settlcurramt);
-console.log(exereport.settlcurrfxrate);
-console.log(exereport.settlcurrfxratecalc);
-console.log(milliseconds);
-console.log(exereport.operatortype);
-console.log(exereport.operatorid);
-console.log(exereport.leavesqty);
-console.log(exereport.fixseqnumid);
-console.log(exereport.markettimestamp);
-console.log(exereport.tradesettlestatustime);
-*/
+
   var promise = new Promise(function(resolve, reject) {
     // if no settlement date present, use the default
     if (!('futsettdate' in exereport)) {
@@ -1025,7 +945,7 @@ console.log(exereport.tradesettlestatustime);
     }
   });
   promise.then(function() {
-    db.eval(scriptnewtrade, 1, "broker:" + clordid[0], exereport.accountid, clordid[0], exereport.clientid, clordid[1], exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.onbehalfofcompid, counterpartytype, markettype, exereport.execid, exereport.futsettdate, systemtimestamp, exereport.lastmkt, exereport.orderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, exereport.operatortype, exereport.operatorid, exereport.leavesqty, exereport.fixseqnumid, exereport.markettimestamp, exereport.tradesettlestatustime, exereport.exchangeid, exereport.scriptnewtrade, function(err, ret) {
+    db.eval(scriptnewtrade, 1, "broker:" + clordid[0], exereport.accountid, clordid[0], exereport.clientid, clordid[1], exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.onbehalfofcompid, counterpartytype, markettype, exereport.execid, exereport.futsettdate, exereport.timestamp, exereport.lastmkt, exereport.orderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, exereport.operatortype, exereport.operatorid, exereport.leavesqty, exereport.fixseqnumid, exereport.markettimestamp, exereport.tradesettlestatustime, exereport.exchangeid, exereport.securityid, function(err, ret) {
       if (err) {
         console.log(err);
         errorLog(clordid[0], clordid[1], 4, 4, exereport.fixseqnumid, "8", "tradeserver.scriptnewtrade", "", err);
@@ -1052,6 +972,7 @@ console.log(exereport.tradesettlestatustime);
  */
 function quoteAck(quoteack) {
   console.log("Quote ack received");
+  console.log(quoteack);
 
   // extract brokerid & our quoterequestid
   var quotereqid = quoteack.quotereqid.split(':');
@@ -1766,7 +1687,6 @@ function registerScripts() {
   */
   scriptrejectorder = commonbo.rejectorder + publishorder + '\
   rejectorder(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
-  --[[ TODO: add channel or remove ]] \
   publishorder(ARGV[1], ARGV[2]) \
   return 0 \
   ';
@@ -1791,7 +1711,11 @@ function registerScripts() {
   trade.settlcurramt = round(tonumber(ARGV[21]), 2) \
   --[[ default value of lastcrestmessagestatus is "000" ]] \
   trade.lastcrestmessagestatus = "000" \
+  --[[ get the symbol ]] \
   trade.symbolid = redis.call("get", "isin:" .. ARGV[32]) \
+  if not trade.symbolid then \
+    return {1016} \
+  end \
   --[[ if there is an orderid, get the order & update unknown values for the fill ]] \
   if trade.orderid ~= "" then \
     local order = gethashvalues(KEYS[1] .. ":order:" .. trade.orderid) \
