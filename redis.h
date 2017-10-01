@@ -103,10 +103,12 @@ extern struct fix_order orders[];
 extern int numorders;
 extern pthread_mutex_t lock;
 extern redisContext *c;       // data connection
+extern const char *auth;
 
 void onMessage(redisAsyncContext *c, void *reply, void *privdata);
-int redis_connect(char *hostname, int port);
-int redis_async_connect(char *hostname, int port);
+int redis_connect(const char *hostname, int port);
+int redis_async_connect(const char *hostname, int port);
 void thread_tidy();
 void redis_disconnect(redisContext *c);
+void disconnectCallback(const redisAsyncContext *c, int status);
 void redis_async_disconnect();

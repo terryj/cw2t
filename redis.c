@@ -51,6 +51,27 @@ static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
 }
 
 /*
+ * Called when attempting connection authorisation
+ */
+void onAuth(redisAsyncContext *c, void *reply, void *privdata) {
+  redisReply *rr = reply;
+  if (reply == NULL) {
+    fprintf(stdout, "Error authorising pubsub connection\n");
+    return;
+  }
+
+  if (rr->type != REDIS_REPLY_STATUS || strcmp(rr->str, "OK") != 0) {
+    fprintf(stdout, "Unable to authorise pubsub connection\n");
+    return;
+  }
+
+  fprintf(stdout, "Connection authorised ok\n");
+
+  // we are authorised, so can subscribe
+  redisAsyncCommand(ac, onMessage, NULL, "SUBSCRIBE 16");
+}
+
+/*
  * Called when any pubsub messages received
  * Parses message and builds a shared array of message structures
  * that is used by the FIX connection thread to send messages
@@ -310,19 +331,32 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
 /*
  * Start a connection to Redis
  */
-int redis_connect(char *hostname, int port) {
-  fprintf(stdout, "Starting Redis connection...\n");
+int redis_connect(const char *hostname, int port) {
+  char cmd[30];
+
+  fprintf(stdout, "Starting Redis connection to %s, port:%d\n", hostname, port);
 
   /* data connection */
   c = redisConnect(hostname, port);
-
-  /*redisReply *reply;
-  reply = redisCommand(c, "AUTH password");
-  freeReplyObject(reply);*/
-
   if (c != NULL && c->err) {
     fprintf(stdout, "Error: %s\n", c->errstr);
     return 0;
+  }
+
+  // may need authorisation
+  if (auth != NULL) {
+    strcpy(cmd, "auth ");
+    strcat(cmd, auth);
+
+    redisReply *rr;
+    rr = redisCommand(c, cmd);
+    if (rr->type != REDIS_REPLY_STATUS || strcmp(rr->str, "OK") != 0) {
+      fprintf(stdout, "Unable to authorise Redis connection\n");
+      freeReplyObject(rr);
+      return 0;
+    }
+
+    freeReplyObject(rr);
   }
 
   fprintf(stdout, "Connected to Redis\n");
@@ -347,12 +381,21 @@ void *thread_run(void *args) {
  * Called when async connection connects
  */
 void connectCallback(const redisAsyncContext *c, int status) {
+  char cmd[30];
+
   if (status != REDIS_OK) {
     printf("Error: %s\n", c->errstr);
     return;
   }
 
   fprintf(stdout, "Redis pubsub connected\n");
+
+  if (auth != NULL) {
+    strcpy(cmd, "auth ");
+    strcat(cmd, auth);
+
+    redisAsyncCommand(ac, onAuth, NULL, cmd);
+  }
 }
 
 /*
@@ -380,7 +423,7 @@ void disconnectCallback(const redisAsyncContext *c, int status) {
 /*
  * Async connection to Redis for pubsub
  */
-int redis_async_connect(char *hostname, int port) {
+int redis_async_connect(const char *hostname, int port) {
   printf("Starting Redis pubsub connection\n");
 
   // create an event loop
@@ -397,11 +440,15 @@ int redis_async_connect(char *hostname, int port) {
   redisLibeventAttach(ac, base);
 
   /* set-up connect/disconnect callbacks */
-  redisAsyncSetConnectCallback(ac,connectCallback);
-  redisAsyncSetDisconnectCallback(ac,disconnectCallback);
+  redisAsyncSetConnectCallback(ac, connectCallback);
+  redisAsyncSetDisconnectCallback(ac, disconnectCallback);
+
+  /*if (auth != NULL) {
+    redisAsyncCommand(ac, onAuth, NULL, "auth I$e@s2It");
+  }*/
 
   /* listen for messages on comms server channel */
-  redisAsyncCommand(ac, onMessage, NULL, "SUBSCRIBE 16");
+  //redisAsyncCommand(ac, onMessage, NULL, "SUBSCRIBE 16");
 
   /* attach event loop to a separate thread */
   pthread_create(&thread_id, NULL, thread_run, base);

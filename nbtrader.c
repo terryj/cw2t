@@ -50,6 +50,7 @@
 
 static const char *program;
 static sig_atomic_t stop;
+const char *auth = NULL;
 
 /*
  * Ctrl-c signal handler
@@ -709,7 +710,7 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
  */
 static void usage(void)
 {
-	printf("\n usage: %s [-m mode] [-d dialect] [-f filename] [-n orders] [-s sender-comp-id] [-t target-comp-id] [-r password] [-w warmup orders] -h hostname -p port\n\n", program);
+	printf("\n usage: %s [-d dialect] [-s sender-comp-id] [-t target-comp-id] [-h hostname] [-p port] [-h redis host] [-o redis port] [-a redis auth]\n\n", program);
 
 	exit(EXIT_FAILURE);
 }
@@ -742,8 +743,6 @@ int main(int argc, char *argv[])
 	enum fix_version version = FIX_4_2;
 	const char *target_comp_id = NULL;
 	const char *sender_comp_id = NULL;
-	//struct fix_client_arg arg = {0};
-	const char *password = NULL;
 	struct fix_session_cfg cfg;
 	const char *host = NULL;
 	struct sockaddr_in sa;
@@ -753,61 +752,48 @@ int main(int argc, char *argv[])
 	int ret = 0;
 	char **ap;
 	int opt;
+        const char *redis_host = NULL;
+        int redis_port = 6379;
 
 	program = basename(argv[0]);
 
-	while ((opt = getopt(argc, argv, "f:h:p:d:s:t:m:n:o:r:w:")) != -1) {
+	while ((opt = getopt(argc, argv, "d:s:t:r:p:o:h:a:")) != -1) {
 		switch (opt) {
 		case 'd':
 			version = strversion(optarg);
 			break;
-		/*case 'n':
-			arg.orders = atoi(optarg);
-			break;*/
-		case 's':
+	        case 's':
 			sender_comp_id = optarg;
 			break;
 		case 't':
 			target_comp_id = optarg;
 			break;
 		case 'r':
-			password = optarg;
+			redis_host = optarg;
 			break;
-		/*case 'm':
-			mode = strclientmode(optarg);
-			break;*/
-		case 'p':
+	        case 'p':
 			port = atoi(optarg);
 			break;
-		/*case 'f':
-			arg.script = optarg;
+	        case 'o':
+			redis_port = atoi(optarg);
 			break;
-		case 'o':
-			arg.output = optarg;
-			break;*/
 		case 'h':
 			host = optarg;
 			break;
-		/*case 'w':
-			arg.warmup_orders = atoi(optarg);
-			break;*/
+                case 'a':
+                        auth = optarg;
+                        break;
 		default: /* '?' */
 			usage();
 		}
 	}
 
-	if (!port || !host)
+	if (!port || !host || !sender_comp_id || !target_comp_id || !redis_host)
 		usage();
 
 	fix_session_cfg_init(&cfg);
 
 	cfg.dialect	= &fix_dialects[version];
-
-	if (!password) {
-		memset(cfg.password, 0, ARRAY_SIZE(cfg.password));
-	} else {
-		strncpy(cfg.password, password, ARRAY_SIZE(cfg.password));
-	}
 
 	if (!sender_comp_id) {
 		strncpy(cfg.sender_comp_id, "BUYSIDE", ARRAY_SIZE(cfg.sender_comp_id));
@@ -825,16 +811,14 @@ int main(int argc, char *argv[])
 	if (!he)
           error("Unable to look up %s (%s)", host, hstrerror(h_errno));
 
-        fprintf(stdout, "Trying to connect to Redis\n");
-
         /* set-up a regular connection to redis */
-        if (!redis_connect("127.0.0.1", 6379)) {
+        if (!redis_connect(redis_host, redis_port)) {
           error("Unable to connect to Redis");
           return 0;
         }
 
         /* start an async redis connection on a separate thread for pubsub */
-        if (!redis_async_connect("127.0.0.1", 6379)) {
+        if (!redis_async_connect(redis_host, redis_port)) {
           error("Unable to start async connection to Redis");
           return 0;;
         }
@@ -853,7 +837,7 @@ int main(int argc, char *argv[])
 	  };
 	  memcpy(&sa.sin_addr, *ap, he->h_length);
 
-          printf("trying to connect to %s\n", host);
+          fprintf(stdout, "Trying connection to %s, port:%d\n", host, port);
 
 	  if (connect(cfg.sockfd, (const struct sockaddr *)&sa, sizeof(struct sockaddr_in)) < 0) {
 	    saved_errno = errno;
@@ -868,9 +852,9 @@ int main(int argc, char *argv[])
 	  error("Unable to connect to a socket (%s)", strerror(saved_errno));
 
 	if (socket_setopt(cfg.sockfd, IPPROTO_TCP, TCP_NODELAY, 1) < 0)
-	  die("cannot set socket option TCP_NODELAY");
+	  die("Cannot set socket option TCP_NODELAY");
 
-        printf("Connected to %s\n", host);
+        fprintf(stdout, "Connected ok\n");
 
 	cfg.heartbtint = 30;
 
