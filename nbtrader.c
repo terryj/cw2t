@@ -15,6 +15,7 @@
  * messages created and forwarded to the Trade Server channel.
  *
  * Modifications
+ * 1 Oct 2017 - changes to support authorisation of a Redis connection
  * *********************/
 
 #include "fix/fix_common.h"
@@ -49,8 +50,8 @@
 #include "test.h"
 
 static const char *program;
-static sig_atomic_t stop;
-const char *auth = NULL;
+static sig_atomic_t stop;   // set by ctrl-c to exit
+const char *auth = NULL;    // authorisation string for redis connections
 
 /*
  * Ctrl-c signal handler
@@ -752,8 +753,9 @@ int main(int argc, char *argv[])
 	int ret = 0;
 	char **ap;
 	int opt;
-        const char *redis_host = NULL;
-        int redis_port = 6379;
+        const char *r = NULL;
+        char redis_host[80];
+        int redis_port = 6379;  // default redis port
 
 	program = basename(argv[0]);
 
@@ -769,7 +771,7 @@ int main(int argc, char *argv[])
 			target_comp_id = optarg;
 			break;
 		case 'r':
-			redis_host = optarg;
+			r = optarg;
 			break;
 	        case 'p':
 			port = atoi(optarg);
@@ -788,24 +790,21 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (!port || !host || !sender_comp_id || !target_comp_id || !redis_host)
+	if (!port || !host || !sender_comp_id || !target_comp_id)
 		usage();
 
 	fix_session_cfg_init(&cfg);
 
-	cfg.dialect	= &fix_dialects[version];
+	cfg.dialect = &fix_dialects[version];
 
-	if (!sender_comp_id) {
-		strncpy(cfg.sender_comp_id, "BUYSIDE", ARRAY_SIZE(cfg.sender_comp_id));
-	} else {
-		strncpy(cfg.sender_comp_id, sender_comp_id, ARRAY_SIZE(cfg.sender_comp_id));
-	}
+        strncpy(cfg.sender_comp_id, sender_comp_id, ARRAY_SIZE(cfg.sender_comp_id));
+        strncpy(cfg.target_comp_id, target_comp_id, ARRAY_SIZE(cfg.target_comp_id));
 
-	if (!target_comp_id) {
-		strncpy(cfg.target_comp_id, "SELLSIDE", ARRAY_SIZE(cfg.target_comp_id));
-	} else {
-		strncpy(cfg.target_comp_id, target_comp_id, ARRAY_SIZE(cfg.target_comp_id));
-	}
+        if (!r) {
+          strcpy(redis_host, "127.0.0.1");
+        } else {
+          strncpy(redis_host, r, ARRAY_SIZE(redis_host));
+        }
 
         he = gethostbyname(host);
 	if (!he)
@@ -837,7 +836,7 @@ int main(int argc, char *argv[])
 	  };
 	  memcpy(&sa.sin_addr, *ap, he->h_length);
 
-          fprintf(stdout, "Trying connection to %s, port:%d\n", host, port);
+          fprintf(stdout, "Trying to connect to %s, port:%d\n", host, port);
 
 	  if (connect(cfg.sockfd, (const struct sockaddr *)&sa, sizeof(struct sockaddr_in)) < 0) {
 	    saved_errno = errno;

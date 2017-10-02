@@ -9,6 +9,7 @@
  * it's own thread - see nbtrader.c
  *
  * Modifications
+ * 1 Oct 2017 - changes to support authorisation of a Redis connection
  * *********************/
 
 #include "fix/fix_common.h"
@@ -66,9 +67,6 @@ void onAuth(redisAsyncContext *c, void *reply, void *privdata) {
   }
 
   fprintf(stdout, "Connection authorised ok\n");
-
-  // we are authorised, so can subscribe
-  redisAsyncCommand(ac, onMessage, NULL, "SUBSCRIBE 16");
 }
 
 /*
@@ -381,21 +379,12 @@ void *thread_run(void *args) {
  * Called when async connection connects
  */
 void connectCallback(const redisAsyncContext *c, int status) {
-  char cmd[30];
-
   if (status != REDIS_OK) {
     printf("Error: %s\n", c->errstr);
     return;
   }
 
   fprintf(stdout, "Redis pubsub connected\n");
-
-  if (auth != NULL) {
-    strcpy(cmd, "auth ");
-    strcat(cmd, auth);
-
-    redisAsyncCommand(ac, onAuth, NULL, cmd);
-  }
 }
 
 /*
@@ -424,6 +413,8 @@ void disconnectCallback(const redisAsyncContext *c, int status) {
  * Async connection to Redis for pubsub
  */
 int redis_async_connect(const char *hostname, int port) {
+  char cmd[30];
+
   printf("Starting Redis pubsub connection\n");
 
   // create an event loop
@@ -443,12 +434,15 @@ int redis_async_connect(const char *hostname, int port) {
   redisAsyncSetConnectCallback(ac, connectCallback);
   redisAsyncSetDisconnectCallback(ac, disconnectCallback);
 
-  /*if (auth != NULL) {
-    redisAsyncCommand(ac, onAuth, NULL, "auth I$e@s2It");
-  }*/
+  /* may need to authorise connection */
+  if (auth != NULL) {
+    strcpy(cmd, "auth ");
+    strcat(cmd, auth);
+    redisAsyncCommand(ac, onAuth, NULL, cmd);
+  }
 
   /* listen for messages on comms server channel */
-  //redisAsyncCommand(ac, onMessage, NULL, "SUBSCRIBE 16");
+  redisAsyncCommand(ac, onMessage, NULL, "SUBSCRIBE 16");
 
   /* attach event loop to a separate thread */
   pthread_create(&thread_id, NULL, thread_run, base);
