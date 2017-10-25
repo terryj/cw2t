@@ -9,7 +9,8 @@
  * it's own thread - see nbtrader.c
  *
  * Modifications
- * 1 Oct 2017 - changes to support authorisation of a Redis connection
+ *  1 Oct 2017 - changes to support authorisation of a Redis connection
+ * 13 Oct 2017 - added support for ordercancelrequest messages
  * *********************/
 
 #include "fix/fix_common.h"
@@ -33,11 +34,13 @@ jsmntok_t t[100];             // tokens used by parser
 pthread_t thread_id;          // id of async redis thread
 struct event_base* base;      // libevent event
 
-/* ata shared between threads */
+/* data shared between threads */
 struct fix_quoterequest quoterequests[20];
 int numquoterequests = 0;
 struct fix_order orders[20];
 int numorders = 0;
+struct fix_ordercancelrequest ordercancelrequests[20];
+int numordercancelrequests = 0;
 pthread_mutex_t lock;
 
 /*
@@ -80,6 +83,7 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
   char brokerid[8];
   char quoterequestid[8];
   char orderid[8];
+  char ordercancelrequestid[8];
   char quantity[16];
   char cashorderquantity[16];
   char price[16];
@@ -156,6 +160,16 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           strcpy(orders[numorders].idsource, "4");
           orders[numorders].norelatedsym = 1;
           fixmsgtype = 'D';
+        } else if (jsoneq(rr->element[2]->str, &t[i], "ordercancelrequest") == 0) {
+          //printf("- order: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
+
+          /* initialise an order cancel request */
+          memset(ordercancelrequests[numordercancelrequests].delivertocompid, '\0', sizeof(ordercancelrequests[numordercancelrequests].delivertocompid));
+          memset(ordercancelrequests[numordercancelrequests].origorderid, '\0', sizeof(ordercancelrequests[numordercancelrequests].origorderid));
+          memset(ordercancelrequests[numordercancelrequests].isin, '\0', sizeof(ordercancelrequests[numordercancelrequests].isin));
+          memset(ordercancelrequests[numordercancelrequests].symbolid, '\0', sizeof(ordercancelrequests[numordercancelrequests].symbolid));
+          strcpy(ordercancelrequests[numordercancelrequests].idsource, "4");
+          fixmsgtype = 'F';
         } else if (jsoneq(rr->element[2]->str, &t[i], "brokerid") == 0) {
           //printf("- brokerid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           strncpy(brokerid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
@@ -171,6 +185,10 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           strncpy(orderid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
           *(orderid + t[i+1].end - t[i+1].start) = '\0';
           i++;
+        } else if (jsoneq(rr->element[2]->str, &t[i], "ordercancelrequestid") == 0) {
+          strncpy(ordercancelrequestid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
+          *(ordercancelrequestid + t[i+1].end - t[i+1].start) = '\0';
+          i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "symbolid") == 0) {
           //printf("- symbolid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           if (fixmsgtype == 'R') {
@@ -179,8 +197,11 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           } else if (fixmsgtype == 'D') {
             strncpy(orders[numorders].symbolid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
             *(orders[numorders].symbolid + t[i+1].end - t[i+1].start) = '\0';
+          } else if (fixmsgtype == 'F') {
+            strncpy(ordercancelrequests[numordercancelrequests].symbolid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
+            *(ordercancelrequests[numordercancelrequests].symbolid + t[i+1].end - t[i+1].start) = '\0';
           } 
-         i++;
+          i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "isin") == 0) {
           //printf("- isin: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           if (fixmsgtype == 'R') {
@@ -189,6 +210,9 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           } else if (fixmsgtype == 'D') {
             strncpy(orders[numorders].isin, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
             *(orders[numorders].isin + t[i+1].end - t[i+1].start) = '\0';
+          } else if (fixmsgtype == 'F') {
+            strncpy(ordercancelrequests[numordercancelrequests].isin, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
+            *(ordercancelrequests[numordercancelrequests].isin + t[i+1].end - t[i+1].start) = '\0';
           }
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "settlmnttypid") == 0) {
@@ -261,6 +285,9 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           } else if (fixmsgtype == 'D') {
             strncpy(orders[numorders].timestamp, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
             *(orders[numorders].timestamp + t[i+1].end - t[i+1].start) = '\0';
+          } else if (fixmsgtype == 'F') {
+            strncpy(ordercancelrequests[numordercancelrequests].timestamp, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
+            *(ordercancelrequests[numordercancelrequests].timestamp + t[i+1].end - t[i+1].start) = '\0';
           }
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "futsettdate") == 0) {
@@ -290,8 +317,13 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "delivertocompid") == 0) {
           //printf("- delivertocompid: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
-          strncpy(orders[numorders].delivertocompid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
-          *(orders[numorders].delivertocompid + t[i+1].end - t[i+1].start) = '\0';
+          if (fixmsgtype == 'D') {
+            strncpy(orders[numorders].delivertocompid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
+            *(orders[numorders].delivertocompid + t[i+1].end - t[i+1].start) = '\0';
+          } else if (fixmsgtype == 'F') {
+            strncpy(ordercancelrequests[numordercancelrequests].delivertocompid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
+            *(ordercancelrequests[numordercancelrequests].delivertocompid + t[i+1].end - t[i+1].start) = '\0';
+          }
           i++;
         } else if (jsoneq(rr->element[2]->str, &t[i], "price") == 0) {
           //printf("- price: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
@@ -299,12 +331,15 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           *(price + t[i+1].end - t[i+1].start) = '\0';
           orders[numorders].price = atof(price);
           i++;
+        } else if (jsoneq(rr->element[2]->str, &t[i], "origorderid") == 0) {
+          strncpy(ordercancelrequests[numordercancelrequests].origorderid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
+          *(ordercancelrequests[numordercancelrequests].origorderid + t[i+1].end - t[i+1].start) = '\0';
         } else {
           //printf("Unexpected key: %.*s\n", t[i].end-t[i].start, rr->element[2]->str + t[i].start);
         }
       }
 
-      /* combine brokerid & quote request id */
+      /* combine brokerid & message id */
       if (fixmsgtype == 'R') {
         strcpy(quoterequests[numquoterequests].quoterequestid, brokerid);
         strcat(quoterequests[numquoterequests].quoterequestid, ":");
@@ -319,6 +354,13 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
 
         /* increment the number of orders, will be reset by the processing thread */
         numorders++;
+      } else if (fixmsgtype == 'F') {
+        strcpy(ordercancelrequests[numordercancelrequests].orderid, brokerid);
+        strcat(ordercancelrequests[numordercancelrequests].orderid, ":");
+        strcat(ordercancelrequests[numordercancelrequests].orderid, ordercancelrequestid);
+
+        /* increment the number of order cancel requests, will be reset by the processing thread */
+        numordercancelrequests++;
       }
 
       pthread_mutex_unlock(&lock);

@@ -38,6 +38,16 @@ struct fix_order {
   char externalquoteid[32];
 };
 
+struct fix_ordercancelrequest {
+  char orderid[8];
+  char origorderid[8];
+  char symbolid[16];
+  char isin[16];
+  char timestamp[20];
+  char idsource[8];
+  char delivertocompid[16];
+};
+
 struct fix_quote {
   char quotereqid[16];
   char quoterid[16];
@@ -101,6 +111,8 @@ extern struct fix_quoterequest quoterequests[];
 extern int numquoterequests;
 extern struct fix_order orders[];
 extern int numorders;
+extern struct fix_ordercancelrequest ordercancelrequests[];
+extern int numordercancelrequests;
 extern pthread_mutex_t lock;
 extern redisContext *c;       // data connection
 extern const char *auth;

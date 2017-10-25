@@ -52,6 +52,7 @@
 static const char *program;
 static sig_atomic_t stop;   // set by ctrl-c to exit
 const char *auth = NULL;    // authorisation string for redis connections
+int server_id = 0;          // id for system monitoring
 
 /*
  * Ctrl-c signal handler
@@ -71,7 +72,8 @@ static int fix_client_session(struct fix_session_cfg *cfg)
 	struct timespec cur, prev;
 	struct fix_message *msg;
 	int ret = -1;
-	int diff;
+	int diff, diff_monitor;
+        struct ping png;
 
         printf("Client started\n");
 
@@ -100,12 +102,22 @@ static int fix_client_session(struct fix_session_cfg *cfg)
 
 		if (diff > 0.1 * session->heartbtint) {
 			prev = cur;
+                        diff_monitor = cur.tv_sec - session->tx_timestamp.tv_sec;
 
+ 	                // system monitor
+                        if (diff_monitor > session->heartbtint) {
+                          strcpy(png.text, "");
+                          png.status = 0;
+                          send_ping(session, &png);
+                        }
+
+	                // keep alive & hearbeat
 			if (!fix_session_keepalive(session, &cur)) {
 				stop = 1;
 				break;
 			}
-		}
+
+                }
 
 		if (fix_session_time_update(session)) {
 			stop = 1;
@@ -462,7 +474,7 @@ static void check_for_data(struct fix_session *session)
         goto exit;
       }
 
-      nr = fix_quoterequest_fields(session, fields, &quoterequests[i]);
+      nr = fix_quote_request_fields(session, fields, &quoterequests[i]);
 
       fix_quote_request(session, fields, nr);
 
@@ -484,16 +496,32 @@ static void check_for_data(struct fix_session *session)
       free(fields);
   }
 
+  /* handle any ordercancelrequests */
+  for (i = 0; i < numordercancelrequests; i++) {
+      fields = calloc(FIX_MAX_FIELD_NUMBER, sizeof(struct fix_field));
+      if (!fields) {
+        fprintf(stderr, "Cannot allocate memory\n");
+        goto exit;
+      }
+
+      nr = fix_order_cancel_request_fields(session, fields, &ordercancelrequests[i]);
+      
+      fix_session_order_cancel_request(session, fields, nr);
+
+      free(fields);
+  }
+ 
 exit:
   numquoterequests = 0;
   numorders = 0;
+  numordercancelrequests = 0;
   pthread_mutex_unlock(&lock);
 }
 
 /*
  * Create a FIX quote request message
  */
-static unsigned long fix_quoterequest_fields(struct fix_session *session, struct fix_field *fields, struct fix_quoterequest *quoterequest)
+static unsigned long fix_quote_request_fields(struct fix_session *session, struct fix_field *fields, struct fix_quoterequest *quoterequest)
 {
     unsigned long nr = 0;
 
@@ -573,6 +601,30 @@ static unsigned long fix_new_order_single_fields(struct fix_session *session, st
 
         fields[nr++] = FIX_STRING_FIELD(IDSource, "4");
 	fields[nr++] = FIX_CHAR_FIELD(TimeInForce, '4');
+
+	return nr;
+}
+
+/*
+ * Create a FIX order cancel request message
+ */
+static unsigned long fix_order_cancel_request_fields(struct fix_session *session, struct fix_field *fields, struct fix_ordercancelrequest *ordercancelrequest)
+{
+	unsigned long nr = 0;
+
+        fields[nr++] = FIX_STRING_FIELD(OnBehalfOfCompID, "TGRANT");
+	fields[nr++] = FIX_STRING_FIELD(TransactTime, session->str_now);
+	fields[nr++] = FIX_STRING_FIELD(ClOrdID, ordercancelrequest->orderid);
+ 	fields[nr++] = FIX_STRING_FIELD(OrigClOrdID, ordercancelrequest->origorderid);
+        fields[nr++] = FIX_STRING_FIELD(SecurityID, ordercancelrequest->isin);
+
+        if (ordercancelrequest->symbolid[0] != '\0')
+	  fields[nr++] = FIX_STRING_FIELD(Symbol, ordercancelrequest->symbolid);
+
+        if (ordercancelrequest->delivertocompid[0] != '\0')
+          fields[nr++] = FIX_STRING_FIELD(DeliverToCompID, ordercancelrequest->delivertocompid);
+
+        fields[nr++] = FIX_STRING_FIELD(IDSource, "4");
 
 	return nr;
 }
@@ -700,8 +752,30 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
     , ",\"timestamp\":\"", session->str_now, "\""
     , "}}");
 
+  fprintf(stdout, "%s - publish to trade server\n", session->str_now);
   fprintf(stdout, "%s\n", jsonexecutionreport);
+
   redisCommand(c, "publish 3 %s", jsonexecutionreport);
+
+  return 0;
+}
+
+/*
+ * Send a ping to system monitor
+ */
+static int send_ping(struct fix_session *session, struct ping *png) {
+  char jsonping[128];
+
+  sprintf(jsonping, "%s%s%d%s%d%s%s%s%s%s%s%s", "{\"ping\":{"
+    , "\"serverid\":", server_id
+    , ",\"status\":", png->status
+    , ",\"text\":\"", png->text, "\""
+    , ",\"timestamp\":\"", session->str_now, "\""
+    , "}}");
+
+  fprintf(stdout, "%s\n", jsonping);
+
+  redisCommand(c, "publish 15 %s", jsonping);
 
   return 0;
 }
@@ -711,7 +785,7 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
  */
 static void usage(void)
 {
-	printf("\n usage: %s [-d dialect] [-s sender-comp-id] [-t target-comp-id] [-h hostname] [-p port] [-h redis host] [-o redis port] [-a redis auth]\n\n", program);
+	printf("\n usage: %s [-d dialect] [-s sender-comp-id] [-t target-comp-id] [-h hostname] [-p port] [-h redis host] [-o redis port] [-a redis auth] [-i server id]\n\n", program);
 
 	exit(EXIT_FAILURE);
 }
@@ -759,7 +833,7 @@ int main(int argc, char *argv[])
 
 	program = basename(argv[0]);
 
-	while ((opt = getopt(argc, argv, "d:s:t:r:p:o:h:a:")) != -1) {
+	while ((opt = getopt(argc, argv, "d:s:t:r:p:o:h:a:i:")) != -1) {
 		switch (opt) {
 		case 'd':
 			version = strversion(optarg);
@@ -785,12 +859,15 @@ int main(int argc, char *argv[])
                 case 'a':
                         auth = optarg;
                         break;
+                case 'i':
+                        server_id = atoi(optarg);
+                        break;
 		default: /* '?' */
 			usage();
 		}
 	}
 
-	if (!port || !host || !sender_comp_id || !target_comp_id)
+	if (!port || !host || !sender_comp_id || !target_comp_id || server_id == 0)
 		usage();
 
 	fix_session_cfg_init(&cfg);
