@@ -89,6 +89,8 @@
 *             - added getprice()
 *             - updated valueposition(), getmargin() & getpositioncollateral() to use getprice()
 * 24 Oct 2017 - fixed errors as a result of changing return value of getprice()
+* 25 Oct 2017 - replaced getclientidfromaccount() with getclientfromaccount() & fixed commissionid error in getaccountforcurrency()
+*             - added check for valid elected quantity in valuebenefitasshares()
 ***********************/
 var utils = require('./utils.js');
 
@@ -3029,19 +3031,17 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   * params: account, brokerid, currencyid
   * returns: an accountid for this client and currency
   */
-  getaccountforcurrency = getclientidfromaccount + utils.getclientname + getclientaccountid + utils.newaccount + '\
+  getaccountforcurrency = getclientfromaccount + getclientaccountid + utils.newaccount + '\
     local getaccountforcurrency = function(account, brokerid, currencyid) \
+      redis.log(redis.LOG_NOTICE, "getaccountforcurrency") \
       --[[ get the client ]] \
-      local clientid = getclientidfromaccount(account.accountid, brokerid) \
-      local clientname = getclientname(brokerid, clientid) \
+      local client = getclientfromaccount(account.accountid, brokerid) \
       --[[ see if an account already exists for this client in this currency, if not create one ]] \
-      local newaccountid = getclientaccountid(brokerid, clientid, account.accounttypeid, currencyid) \
+      local newaccountid = getclientaccountid(brokerid, client.clientid, account.accounttypeid, currencyid) \
       if newaccountid == 0 then \
         local name = client.clientid .. " " .. client.name .. " " .. currencyid \
-        --[[ todo: sort ]] \
-        local exdiffdate = "05-May-2015" \
         --[[ set default(0) value for following fields balance, balanceuncleared, creditlimit, debitlimit, exdiff, exdiffuncleared, localbalance, localbalanceuncleared ]] \
-        newaccountid = newaccount(account.accountgroupid, account.accounttaxtypeid, account.accounttypeid, 0, 0, brokerid, 0, currencyid, 0, 0, 0, exdiffdate, 0, 0, name, account.active, clientid) \
+        newaccountid = newaccount(account.accountgroupid, account.accounttaxtypeid, account.accounttypeid, 0, 0, brokerid, 0, currencyid, 0, 0, 0, account.exdiffdate, 0, 0, name, account.active, client.clientid, client.commissionid) \
         if newaccountid[1] == 1 then \
           newaccountid = "" \
         else \
@@ -3060,7 +3060,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   */
   valuebenefitascash = round + '\
   local valuebenefitascash = function(benefit, position, decision) \
-    redis.call("RPUSH", "cadebug", "valuebenefitascash") \
+    redis.log(redis.LOG_NOTICE, "valuebenefitascash") \
     local cash = {} \
     --[[ we are assuming rate = 1 - todo: get fx rate if necessary ]] \
     cash.rate = 1 \
@@ -3075,7 +3075,6 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       cash.dividend = tonumber(round(tonumber(benefit.benefitratio) * tonumber(position.quantity), 2)) \
     end \
     cash.dividendlocal = cash.dividend * cash.rate \
-    redis.call("RPUSH", "cadebug", "end valuebenefitascash") \
     return cash \
   end \
   ';
@@ -3088,8 +3087,12 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   */
   valuebenefitasshares = getsharesdue + convertsharesascash + '\
   local valuebenefitasshares = function(benefit, corporateaction, position, decision) \
-    redis.call("RPUSH", "cadebug", "valuebenefitasshares") \
-    local sharesdue = getsharesdue(position.quantity, benefit.benefitratio, benefit.benefitpercentage, decision.electedquantityasshares) \
+    redis.log(redis.LOG_NOTICE, "valuebenefitasshares") \
+    local electedquantityasshares = 0 \
+    if decision.electedquantityasshares and tonumber(decision.electedquantityasshares) ~= 0 then \
+      electedquantityasshares = tonumber(decision.electedquantityasshares) \
+    end \
+    local sharesdue = getsharesdue(position.quantity, benefit.benefitratio, benefit.benefitpercentage, electedquantityasshares) \
     --[[ amount of shares due may be a debit or credit ]] \
     if benefit.debitorcredit == "D" then \
       sharesdue.wholenumber = -sharesdue.wholenumber \
@@ -3107,7 +3110,6 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       sharesdue.rate = stubcash[2].rate \
       sharesdue.residuecashlocal = stubcash[2].amountlocal \
     end \
-    redis.call("RPUSH", "cadebug", "end valuebenefitasshares") \
     return {0, sharesdue} \
   end \
   ';
@@ -3120,7 +3122,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   */
   valuebenefit = valuebenefitascash + valuebenefitasshares + '\
   local valuebenefit = function(benefit, corporateaction, position, decision) \
-    redis.call("RPUSH", "cadebug", "valuebenefit") \
+    redis.log(redis.LOG_NOTICE, "valuebenefit") \
     local benefitvalue = {} \
     if benefit.benefittypeid == "CASH" then \
       local cash = valuebenefitascash(benefit, position, decision) \
@@ -3142,7 +3144,6 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       benefitvalue.cash = 0 \
       benefitvalue.cashlocal = 0 \
     end \
-    redis.call("RPUSH", "cadebug", "end valuebenefit") \
     return {0, benefitvalue} \
   end \
   ';
@@ -3156,7 +3157,6 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   updatebenefitascash = transactiondividend + getclientfromaccount + getaccount + getaccountforcurrency + '\
   local updatebenefitascash = function(brokerid, position, corporateaction, benefit, timestamp, timestampms) \
     redis.log(redis.LOG_NOTICE, "updatebenefitascash") \
-    redis.call("RPUSH", "cadebug", "updatebenefitascash") \
     if benefit.cash ~= 0 then \
       --[[ get account currency ]] \
       local account = getaccount(position.accountid, brokerid) \
@@ -3164,7 +3164,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       local currencyid \
       --[[ if the benefit currency does not match the position currency, we need to get an account in the benefit currency ]] \
       if benefit.currencyid and benefit.currencyid ~= account.currencyid then \
-      accountid = getaccountforcurrency(account, brokerid, benefit.currencyid) \
+        accountid = getaccountforcurrency(account, brokerid, benefit.currencyid) \
         currencyid = benefit.currencyid \
       else \
         accountid = position.accountid \
@@ -3176,7 +3176,6 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
         return retval \
       end \
     end \
-    redis.call("RPUSH", "cadebug", "end updatebenefitascash") \
     return {0} \
   end \
   ';
@@ -3190,9 +3189,8 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   updatebenefitasshares = newpositiontransaction + getaccount + getclientfromaccount + transactiondividend + getaccountforcurrency + '\
   local updatebenefitasshares = function(brokerid, position, corporateaction, benefit, timestamp, timestampms) \
     redis.log(redis.LOG_NOTICE, "updatebenefitasshares") \
-    redis.call("RPUSH", "cadebug", "updatebenefitasshares") \
     --[[ add any shares to the position ]] \
-    if benefit.shares ~= 0 then \
+    if benefit.shares and benefit.shares ~= 0 then \
       --[[ calculate cost of shares ]] \
       local costofshares = 0 \
       if benefit.price and tonumber(benefit.price) ~= 0 then \
@@ -3202,7 +3200,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
     end \
     --[[ add any residual cash ]] \
     if benefit.residuecash ~= 0 then \
-    --[[ get account currency ]] \
+      --[[ get account currency ]] \
       local account = getaccount(position.accountid, brokerid) \
       local accountid \
       local currencyid \
@@ -3222,7 +3220,6 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
         return retval \
       end \
     end \
-    redis.call("RPUSH", "cadebug", "end updatebenefitasshares") \
     return {0} \
   end \
   ';
@@ -3235,6 +3232,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   */
   updatebenefit = updatebenefitascash + updatebenefitasshares + '\
   local updatebenefit = function(brokerid, position, corporateaction, benefit, timestamp, timestampms) \
+    redis.log(redis.LOG_NOTICE, "updatebenefit") \
     local ret \
     if benefit.benefittypeid == "CASH" then \
       ret = updatebenefitascash(brokerid, position, corporateaction, benefit, timestamp, timestampms) \
@@ -3253,7 +3251,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   */
   applybenefits = getcaclientdecision + gethashvalues + valuebenefit + updatebenefit + '\
   local applybenefits = function(brokerid, position, corporateaction, timestamp, timestampms, mode) \
-    redis.call("RPUSH", "cadebug", "applybenefits") \
+    redis.log(redis.LOG_NOTICE, "applybenefits") \
     local benefits = {} \
     local decision = {} \
     --[[ get the client option for a voluntary ca, default as per ca, usually 1 ]] \
@@ -3288,7 +3286,6 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
         end \
       end \
     end \
-    redis.call("RPUSH", "cadebug", "end applybenefits") \
     return {0, benefits} \
   end \
   ';
@@ -3729,7 +3726,6 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   */
   exports.caapply = cavalidate + getpositionquantitiesbysymbolbydate + applybenefits + utils.updatecastatus + '\
     redis.log(redis.LOG_NOTICE, "caapply") \
-    redis.call("RPUSH", "cadebug", "caapply") \
     local corporateactionid = ARGV[1] \
     local exdatems = ARGV[2] \
     local timestamp = ARGV[3] \
@@ -3794,7 +3790,6 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       updatecastatus(corporateactionid, 1) \
     end \
     --[[ delete old account level index and create new index, this will update the postion which is created after corporate action created  ]] \
-    redis.call("RPUSH", "cadebug", "end caapply") \
     return {0, tostring(totquantity), tostring(totunsettledquantity), tostring(numaccounts), #brokers - 1, cjson.encode(totalbenefits)} \
   ';
 
@@ -4021,7 +4016,6 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       return checkschemecash \
     end \
     for i = 1, #schemeclients do \
-      redis.log(redis.LOG_NOTICE, "client: " .. schemeclients[i]) \
       --[[ get the default account for this client ]] \
       local accountid = getclientaccountid(brokerid, schemeclients[i], 1, schemeaccount["currencyid"]) \
       local account = getaccount(accountid, brokerid) \
@@ -4035,20 +4029,16 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       else \
         amount = math.floor(tonumber(account["balance"]) * cashamount / 100) \
       end \
-      redis.log(redis.LOG_NOTICE, "cash available: " .. amount) \
       --[[ loop through the fundallocations & determine how much to invest in each ]] \
       if amount > 0 then \
       local k = 1 \
       for j = 1, #fundallocations, 2 do \
-        redis.log(redis.LOG_NOTICE, "fund:" .. fundallocations[j] .. " % " .. fundallocations[j+1]) \
         local symbol = gethashvalues("symbol:" .. fundallocations[j]) \
         if not symbol["symbolid"] then \
-          redis.log(redis.LOG_NOTICE, "symbol not found:" .. fundallocations[j]) \
           return {1, 1015} \
         end \
         schemetrades[k]["price"] = tonumber(symbol["ask"]) \
         if schemetrades[k]["price"] == 0 then \
-          redis.log(redis.LOG_NOTICE, "symbol: " .. fundallocations[j] .. " does not have a price") \
           return {1, 1040} \
         end \
         --[[ calculate investment for this client & fund ]] \
