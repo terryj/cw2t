@@ -52,7 +52,11 @@
 * 22 Oct 2017 - added check for limit order type in order matching
 *             - added validmatchorder() 
 *             - removed credit check from and added costs parameter to matchordersingle()
-* *****************/
+* 27 Oct 2017 - added ordercancelreject() and publishordercancelreject() and updated scriptordercancelreject() and scriptordercancelrequest()
+*             - added orderCancelReject() to handle order cancel reject messages
+*             - added operatorid to publishquoteack()
+* 28 Oct 2017 - fixed error in cancelorder()
+*******************/
 
 // external libraries
 var redis = require('redis');
@@ -198,6 +202,8 @@ function pubsub() {
         orderFillRequest(obj.orderfillrequest);
       } else if ("quoteack" in obj) {
         quoteAck(obj.quoteack);
+      } else if ("ordercancelreject" in obj) {
+        orderCancelReject(obj.ordercancelreject);
       } else {
         console.log("Unknown message received");
         console.log(message);
@@ -609,6 +615,14 @@ function orderCancelRequest(ocr) {
 
   ocr.timestamp = commonbo.getUTCTimeStamp(new Date());
 
+  if (!('clientid' in ocr)) {
+    ocr.clientid = "";
+  }
+
+  if (!('accountid' in ocr)) {
+    ocr.accountid = "";
+  }
+
   db.eval(scriptordercancelrequest, 1, "broker:" + ocr.brokerid, ocr.brokerid, ocr.clientid, ocr.accountid, ocr.orderid, ocr.timestamp, ocr.operatortype, ocr.operatorid, function(err, ret) {
     if (err) {
       console.log(err);
@@ -616,14 +630,40 @@ function orderCancelRequest(ocr) {
       return;
     }
 
-    // error, so send an ordercancelreject message
     if (ret[0] != 0) {
       console.log("Error in scriptordercancelrequest, order #" + ocr.orderid + " - " + commonbo.getReasonDesc(ret[1]));
       errorLog(ocr.brokerid, "", 6, 4, "", "", "tradeserver.scriptordercancelrequest", "", commonbo.getReasonDesc(ret[1]));
       return;
     }
 
-    console.log("Order cancel request id: " + ret[1]);
+    console.log("Order cancel request id: " + ret[1] + " processed ok");
+
+    // processing and publishing taken care of by the script
+  });
+}
+
+/*
+ * Order cancel reject message received from Comms Server
+ */
+function orderCancelReject(ocr) {
+  console.log("Order cancel reject received for order#" + ocr.orderid);
+
+  ocr.timestamp = commonbo.getUTCTimeStamp(new Date());
+
+  db.eval(scriptordercancelreject, 1, "broker:" + ocr.brokerid, ocr.brokerid, ocr.ordercancelrequestid, ocr.orderid, ocr.externalorderid, ocr.orderstatusid, ocr.ordercancelrejectreasonid, ocr.text, ocr.timestamp, ocr.markettimestamp, function(err, ret) {
+    if (err) {
+      console.log(err);
+      errorLog(ocr.brokerid, "", 6, 4, "", "", "tradeserver.scriptordercancelreject", "", err);
+      return;
+    }
+
+    if (ret[0] != 0) {
+      console.log("Error in scriptordercancelreject, ordercancelrequestid:" + ocr.ordercancelrequestid + " - " + commonbo.getReasonDesc(ret[1]));
+      errorLog(ocr.brokerid, "", 6, 4, "", "", "tradeserver.scriptordercancelreject", "", commonbo.getReasonDesc(ret[1]));
+      return;
+    }
+
+    console.log("Order cancel request id: " + ret[1] + " processed ok");
 
     // processing and publishing taken care of by the script
   });
@@ -1084,6 +1124,7 @@ function registerScripts() {
     quoteack.clientid = quoterequest.clientid \
     quoteack.symbolid = quoterequest.symbolid \
     quoteack.accountid = quoterequest.accountid \
+    quoteack.operatorid = quoterequest.operatorid \
     local channel = getchannel(brokerid, "quoteack", quoteackid) \
     if channel[1] ~= 0 then \
       return channel \
@@ -1157,6 +1198,32 @@ function registerScripts() {
       return channel \
     end \
     redis.call("publish", channel[2], "{" .. cjson.encode("ordercancelrequest") .. ":" .. cjson.encode(ordercancelrequest) .. "}") \
+    return {0, channel[2]} \
+  end \
+  ';
+
+  /*
+  * publishordercancelreject()
+  * publish an order cancel reject
+  * params: brokerid, ordercancelrejectid
+  * returns: 0, channelid if ok, else 1, error code
+  */  
+  publishordercancelreject = commonbo.gethashvalues + commonbo.getchannel + '\
+  local publishordercancelreject = function(brokerid, ordercancelrejectid) \
+    redis.log(redis.LOG_NOTICE, "publishordercancelreject") \
+    local ordercancelreject = gethashvalues("broker:" .. brokerid .. ":ordercancelreject:" .. ordercancelrejectid) \
+    local ordercancelrequest = gethashvalues("broker:" .. brokerid .. ":ordercancelrequest:" .. ordercancelreject.ordercancelrequestid) \
+    if not ordercancelrequest.ordercancelrequestid then \
+      return {1, 1053} \
+    end \
+    --[[ add operatorid to assist with forwarding ]] \
+    ordercancelreject.operatorid = ordercancelrequest.operatorid \
+    --[[ get the channel to forward to ]] \
+    local channel = getchannel(brokerid, "ordercancelreject", ordercancelrejectid) \
+    if channel[1] ~= 0 then \
+      return channel \
+    end \
+    redis.call("publish", channel[2], "{" .. cjson.encode("ordercancelreject") .. ":" .. cjson.encode(ordercancelreject) .. "}") \
     return {0, channel[2]} \
   end \
   ';
@@ -1324,7 +1391,7 @@ function registerScripts() {
 
   cancelorder = adjustmarginreserve + '\
   local cancelorder = function(brokerid, orderid, orderstatusid) \
-    local orderkey = "broker:" .. brokerid .. "order:" .. orderid \
+    local orderkey = "broker:" .. brokerid .. ":order:" .. orderid \
     redis.call("hset", orderkey, "orderstatusid", orderstatusid) \
     local fields = {"clientid", "symbolid", "side", "price", "settlcurrencyid", "margin", "leavesqty", "futsettdate", "nosettdays"} \
     local vals = redis.call("hmget", orderkey, unpack(fields)) \
@@ -1878,14 +1945,42 @@ function registerScripts() {
   return retval \
   ';
 
+  /*
+  * ordercancelreject()
+  * store and forward an order cancel reject
+  * params: brokerid, ordercancelrequestid, orderid, externalorderid, orderstatusid, ordercancelrejectreasonid, text, timestamp, markettimestamp
+  * returns: 0, ordercancelrejectid if ok, else 1, error code
+  */
+  ordercancelreject = publishordercancelreject + '\
+  local ordercancelreject = function(brokerid, ordercancelrequestid, orderid, externalorderid, orderstatusid, ordercancelrejectreasonid, text, timestamp, markettimestamp) \
+    --[[ get the operator type from the request for forwarding ]] \
+    local operatortype = redis.call("hget", "broker:" .. brokerid .. ":ordercancelrequest:" .. ordercancelrequestid, "operatortype") \
+    if not operatortype then \
+      return {1, 1053} \
+    end \
+    --[[ store the order cancel reject ]] \
+    local ordercancelrejectid = redis.call("hincrby", "broker:" .. brokerid, "lastordercancelrejectid", 1) \
+    redis.call("hmset", "broker:" .. brokerid .. ":ordercancelreject:" .. ordercancelrejectid, "brokerid", brokerid, "ordercancelrequestid", ordercancelrequestid, "orderid", orderid, "externalorderid", externalorderid, "orderstatusid", orderstatusid, "ordercancelrejectreasonid", ordercancelrejectreasonid, "text", text, "timestamp", timestamp, "markettimestamp", markettimestamp, "operatortype", operatortype) \
+    redis.call("sadd", "broker:" .. brokerid .. ":ordercancelrejects", ordercancelrejectid) \
+    redis.call("hmset", "broker:" .. brokerid .. ":ordercancelrequest:" .. ordercancelrequestid, "ordercancelrejectid", ordercancelrejectid) \
+    local ret = publishordercancelreject(brokerid, ordercancelrejectid) \
+    if ret[1] ~= 0 then \
+      return ret \
+    end \
+    return {0, ordercancelrejectid} \
+  end \
+  ';
+
  /*
   * scriptordercancelrequest
   * request to cancel an order
   * params: 1=brokerid, 2=clientid, 3=accountid, 4=orderid, 5=timestamp, 6=operatortype, 7=operatorid
   * returns: 0, ordercancelreqest id if ok, else 1, error code
   */
-  scriptordercancelrequest = removefromorderbook + cancelorder + commonbo.gethashvalues + publishorder + publishordercancelrequest + '\
+  scriptordercancelrequest = removefromorderbook + cancelorder + commonbo.gethashvalues + publishorder + publishordercancelrequest + ordercancelreject + '\
+  redis.log(redis.LOG_NOTICE, "scriptordercancelrequest") \
   local errorcode = 0 \
+  local desc = "" \
   local brokerid = ARGV[1] \
   local orderid = ARGV[4] \
   local order = gethashvalues("broker:" .. brokerid .. ":order:" .. orderid) \
@@ -1893,34 +1988,43 @@ function registerScripts() {
     --[[ order not found ]] \
     return {1, 1009} \
   end \
-  local ordercancelreqid = redis.call("incr", "broker:" .. brokerid .. ":ordercancelreqid") \
+  local ordercancelrequestid = redis.call("incr", "broker:" .. brokerid .. ":lastordercancelrequestid") \
   --[[ store the order cancel request ]] \
-  redis.call("hmset", "broker:" .. brokerid .. ":ordercancelrequest:" .. ordercancelreqid, "brokerid", brokerid, "clientid", ARGV[2], "accountid", ARGV[3], "orderid", orderid, "timestamp", ARGV[5], "operatortype", ARGV[6], "operatorid", ARGV[7], "symbolid", order.symbolid, "ordercancelrequestid", ordercancelreqid) \
-  redis.call("sadd", "broker:" .. brokerid .. ":ordercancelrequests", ordercancelreqid) \
-  if order["orderstatusid"] == "2" then \
+  redis.call("hmset", "broker:" .. brokerid .. ":ordercancelrequest:" .. ordercancelrequestid, "brokerid", brokerid, "clientid", order.clientid, "accountid", order.accountid, "orderid", orderid, "timestamp", ARGV[5], "operatortype", ARGV[6], "operatorid", ARGV[7], "symbolid", order.symbolid, "ordercancelrequestid", ordercancelrequestid, "markettype", order.markettype) \
+  redis.call("sadd", "broker:" .. brokerid .. ":ordercancelrequests", ordercancelrequestid) \
+  if order.orderstatusid == "2" then \
     --[[ already filled ]] \
+    desc = "Order already filled" \
     errorcode = 1010 \
-  elseif order["orderstatusid"] == "4" then \
+  elseif order.orderstatusid == "4" then \
     --[[ already cancelled ]] \
+    desc = "Order already cancelled" \
     errorcode = 1008 \
-  elseif order["orderstatusid"] == "8" then \
+  elseif order.orderstatusid == "8" then \
     --[[ already rejected ]] \
+    desc = "Order already rejected" \
     errorcode = 1012 \
   end \
   if errorcode ~= 0 then \
-    redis.call("hset", "broker:" .. brokerid .. ":ordercancelrequest:" .. ordercancelreqid, "orderrejectreasonid", errorcode) \
+    local ocr = ordercancelreject(brokerid, ordercancelrequestid, orderid, "", order.orderstatusid, 2, desc, ARGV[5], ARGV[5]) \
+    if ocr[1] ~= 0 then \
+      return ocr \
+    end \
+    redis.call("hset", "broker:" .. brokerid .. ":ordercancelrequest:" .. ordercancelrequestid, "ordercancelrejectid", ocr[2]) \
     return {1, errorcode} \
   end \
-  --[[ process according to market type ]] \
-  if order["markettype"] == "1" then \
+  --[[ forward the request ]] \
+  local pubsub = publishordercancelrequest(brokerid, ordercancelrequestid) \
+  if pubsub[1] ~= 0 then \
+    return pubsub \
+  end \
+  --[[ handle channel 17 locally ]] \
+  if tonumber(pubsub[2]) == 17 then \
     removefromorderbook(order) \
     cancelorder(brokerid, orderid, "4") \
-    publishorder(ARGV[1], ARGV[2]) \
-  else \
-    --[[ if the order is with the market, it will be forwarded ]] \
-    publishordercancelrequest(brokerid, ordercancelreqid) \
+    publishorder(brokerid, orderid) \
   end \
-  return {0, ordercancelreqid} \
+  return {0, ordercancelrequestid} \
   ';
 
 /*
@@ -2076,7 +2180,6 @@ function registerScripts() {
   end \
   return {0, quoterequestid, pubsub[2]} \
   ';
-//  * params: brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text, fixseqnumid, timestamp, markettimestamp
 
   /*
   * scriptQuote
@@ -2193,11 +2296,14 @@ function registerScripts() {
   return ret \
   ';
 
-  scriptordercancelreject = '\
-  --[[ update the order cancel request ]] \
-  redis.call("hmset", "ordercancelrequest:" .. KEYS[1], "orderrejectreasonid", KEYS[2], "text", KEYS[3]) \
-  local operatortype = redis.call("hget", "ordercancelrequest:" .. KEYS[1], "operatortype") \
-  return operatortype \
+  /*
+   * scriptordercancelreject()
+   * script to handle an order cancel reject
+   * params: brokerid, ordercancelrequestid, orderid, externalorderid, orderstatusid, ordercancelrejectreasonid, text, timestamp, markettimestamp
+   * returns: 0, ordercancelrejectid, else 1, error code
+   */
+  scriptordercancelreject = ordercancelreject + '\
+  return ordercancelreject(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9]) \
   ';
 
   //

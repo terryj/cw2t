@@ -91,7 +91,10 @@
 * 24 Oct 2017 - fixed errors as a result of changing return value of getprice()
 * 25 Oct 2017 - replaced getclientidfromaccount() with getclientfromaccount() & fixed commissionid error in getaccountforcurrency()
 *             - added check for valid elected quantity in valuebenefitasshares()
-***********************/
+* 27 Oct 2017 - added item to getReasonDesc()
+* 28 Oct 2017 - removed symbol shortname lookup from getorderbook() and getorderbooktop())
+*             - added split() to getorderfromorderbook()
+************************/
 var utils = require('./utils.js');
 
 utils.utils();
@@ -416,6 +419,9 @@ exports.registerScripts = function () {
       break;
     case 1052:
       desc = "Order matching only supports limit orders";
+      break;
+    case 1053:
+      desc = "Order cancel request not found";
       break;
     default:
       desc = "Unknown reason";
@@ -2202,7 +2208,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   * params: orderbook key (i.e. 1:1)
   * returns 0, errorcode, orderid if error else order
   */
-  getorderfromorderbook = gethashvalues + '\
+  getorderfromorderbook = split + gethashvalues + '\
   local getorderfromorderbook = function(orderbookkey) \
     local brokerorderid = split(orderbookkey, ":") \
     local order = gethashvalues("broker:" .. brokerorderid[1] .. ":order:" .. brokerorderid[2]) \
@@ -2234,14 +2240,12 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       upperbound = "inf" \
     end \
     --[[ get the orders ]] \
-    local symbolshortname = redis.call("hget", "symbol:" .. symbolid, "shortname") \
     local ordersbyside = redis.call("zrangebyscore", "orderbook:" .. symbolid, lowerbound, upperbound) \
     for i = 1, #ordersbyside do \
       local order = getorderfromorderbook(ordersbyside[i]) \
       if order[1] == 0 then \
         return order \
       end \
-      order[2].symbolshortname = symbolshortname \
       table.insert(orders, order[2]) \
     end \
     return {1, orders, symbolid, side} \
@@ -2274,7 +2278,6 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       return {0, 1043, symbolid, side} \
     end \
     local order = getorderfromorderbook(orderid[1]) \
-    order[2].symbolshortname = redis.call("hget", "symbol:" .. symbolid, "shortname") \
     return {order[1], order[2], symbolid, side} \
   end \
   ';
