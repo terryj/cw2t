@@ -56,7 +56,10 @@
 *             - added orderCancelReject() to handle order cancel reject messages
 *             - added operatorid to publishquoteack()
 * 28 Oct 2017 - fixed error in cancelorder()
-*******************/
+* 29 Oct 2017 - simplified cancelorder()
+*             - added key for account orderbook orders to addtoorderbook() & removefromorderbook()
+*             - added clearorderbooks() & clearorderbook()
+********************/
 
 // external libraries
 var redis = require('redis');
@@ -457,8 +460,22 @@ function newOrder(order) {
   if (order.ordertypeid == "D") {
     dealAtQuote(order);
   } else {
-    newOrderSingle(order);
+    if (order.markettype == 1)
+newOrderSingle(order);
+else
+cob();
   }
+}
+function cob() {
+console.log("cob");
+    db.eval(scriptclearorderbooks, 0, function(err, ret) {
+      if (err) {
+        console.log(err);
+        errorLog(order.brokerid, "", 2, 4, "", "", "tradeserver.scriptdealatquote", "", err);
+        return;
+      }
+console.log("out");
+    });
 }
 
 /*
@@ -1389,7 +1406,7 @@ function registerScripts() {
   end \
   ';
 
-  cancelorder = adjustmarginreserve + '\
+  /*cancelorder = adjustmarginreserve + '\
   local cancelorder = function(brokerid, orderid, orderstatusid) \
     local orderkey = "broker:" .. brokerid .. ":order:" .. orderid \
     redis.call("hset", orderkey, "orderstatusid", orderstatusid) \
@@ -1401,6 +1418,24 @@ function registerScripts() {
     adjustmarginreserve(orderid, vals[1], vals[2], vals[3], vals[4], vals[6], vals[5], vals[7], 0, vals[8], vals[9]) \
     return 0 \
   end \
+  ';*/
+
+  /*
+  * set the staus of an order to cancelled
+  */
+  cancelorder = '\
+  local cancelorder = function(brokerid, orderid) \
+    redis.call("hset", "broker:" .. brokerid .. ":order:" .. orderid, "orderstatusid", "4") \
+  end \
+  ';
+
+  /*
+  * set the staus of an order to expired
+  */
+  expireorder = '\
+  local expireorder = function(brokerid, orderid) \
+    redis.call("hset", "broker:" .. brokerid .. ":order:" .. orderid, "orderstatusid", "C") \
+  end \
   ';
 
   /*
@@ -1408,22 +1443,23 @@ function registerScripts() {
   * params: order
   */
   addtoorderbook =  '\
-    local addtoorderbook = function(order) \
-      local price \
-      --[[ buy orders need a negative price ]] \
-      if tonumber(order.side) == 1 then \
-        price = "-" .. order.price \
-      else \
-        price = order.price \
-      end \
-      --[[ add order to order book ]] \
-      redis.call("zadd", "orderbook:" .. order.symbolid, price, order.brokerid .. ":" .. order.orderid) \
-      redis.call("sadd", "orderbooks", order.symbolid) \
-      publishorderbook(order.symbolid, order.side) \
-      publishorderbooktop(order.symbolid, order.side) \
-      --[[ open limits for credit checking ]] \
-      redis.call("sadd", "broker:" .. order.brokerid .. ":account:" .. order.accountid .. ":openlimits", order.orderid) \
+  local addtoorderbook = function(order) \
+    local price \
+    --[[ buy orders need a negative price ]] \
+    if tonumber(order.side) == 1 then \
+      price = "-" .. order.price \
+    else \
+      price = order.price \
     end \
+    --[[ add order to order book ]] \
+    redis.call("zadd", "orderbook:" .. order.symbolid, price, order.brokerid .. ":" .. order.orderid) \
+    redis.call("sadd", "orderbooks", order.symbolid) \
+    publishorderbook(order.symbolid, order.side) \
+    publishorderbooktop(order.symbolid, order.side) \
+    --[[ open limits for credit checking ]] \
+    redis.call("sadd", "broker:" .. order.brokerid .. ":account:" .. order.accountid .. ":openlimits", order.orderid) \
+    redis.call("sadd", "broker:" .. order.brokerid .. ":account:" .. order.accountid .. ":orderbook", order.orderid) \
+  end \
   ';
 
   /*
@@ -1431,18 +1467,62 @@ function registerScripts() {
   * params: order
   */
   removefromorderbook = publishorderbook + publishorderbooktop + '\
-    local removefromorderbook = function(order) \
-      redis.call("zrem", "orderbook:" .. order.symbolid, order.brokerid .. ":" .. order.orderid) \
-      if (redis.call("zcount", "orderbook:" .. order.symbolid, "-inf", "+inf") == 0) then \
-        redis.call("srem", "orderbooks", order.symbolid) \
-      end \
-      publishorderbook(order.symbolid, order.side) \
-      publishorderbooktop(order.symbolid, order.side) \
-      redis.call("srem", "broker:" .. order.brokerid .. ":account:" .. order.accountid .. ":openlimits", order.orderid) \
+  local removefromorderbook = function(order) \
+    redis.call("zrem", "orderbook:" .. order.symbolid, order.brokerid .. ":" .. order.orderid) \
+    if (redis.call("zcount", "orderbook:" .. order.symbolid, "-inf", "+inf") == 0) then \
+      redis.call("srem", "orderbooks", order.symbolid) \
     end \
+    publishorderbook(order.symbolid, order.side) \
+    publishorderbooktop(order.symbolid, order.side) \
+    redis.call("srem", "broker:" .. order.brokerid .. ":account:" .. order.accountid .. ":openlimits", order.orderid) \
+    redis.call("srem", "broker:" .. order.brokerid .. ":account:" .. order.accountid .. ":orderbook", order.orderid) \
+  end \
   ';
 
   /*
+  * clearorderbook()
+  * clear the orderbook for a symbol & expire orders
+  * params: symbolid
+  * returns: none
+  */
+  clearorderbook = commonbo.split + commonbo.gethashvalues + removefromorderbook + expireorder + '\
+  local clearorderbook = function(symbolid) \
+    local orders = redis.call("zrangebyscore", "orderbook:" .. symbolid, "-inf", "+inf") \
+    for i = 1, #orders do \
+      local brokerorderid = split(orders[i], ":") \
+      local order = gethashvalues("broker:" .. brokerorderid[1] .. ":order:" .. brokerorderid[2]) \
+      removefromorderbook(order) \
+      expireorder(brokerorderid[1], brokerorderid[2]) \
+    end \
+  end \
+  ';
+
+  /*
+  * clearorderbooks()
+  * clears all orderbooks
+  * params: none
+  * returns: none
+  */
+  clearorderbooks = clearorderbook + '\
+  local clearorderbooks = function() \
+    redis.log(redis.LOG_NOTICE, "clearorderbooks") \
+    local orderbooks = redis.call("smembers", "orderbooks") \
+    for i = 1, #orderbooks do \
+      clearorderbook(orderbooks[i]) \
+    end \
+  end \
+  ';
+
+  /*
+  * scriptclearorderbooks()
+  * script to clear all orderbooks
+  */
+  scriptclearorderbooks = clearorderbooks + '\
+    redis.log(redis.LOG_NOTICE, "scriptneworder") \
+    clearorderbooks() \
+  ';
+
+ /*
    * quoteack()
    * process a quote acknowledgement
    * params: brokerid, quoterequestid, quotestatusid, quoterejectreasonid, text, fixseqnumid, timestamp, markettimestamp
@@ -1992,6 +2072,7 @@ function registerScripts() {
   --[[ store the order cancel request ]] \
   redis.call("hmset", "broker:" .. brokerid .. ":ordercancelrequest:" .. ordercancelrequestid, "brokerid", brokerid, "clientid", order.clientid, "accountid", order.accountid, "orderid", orderid, "timestamp", ARGV[5], "operatortype", ARGV[6], "operatorid", ARGV[7], "symbolid", order.symbolid, "ordercancelrequestid", ordercancelrequestid, "markettype", order.markettype) \
   redis.call("sadd", "broker:" .. brokerid .. ":ordercancelrequests", ordercancelrequestid) \
+  redis.call("sadd", "broker:" .. brokerid .. ":order:" .. orderid .. ":ordercancelrequests", ordercancelrequestid) \
   if order.orderstatusid == "2" then \
     --[[ already filled ]] \
     desc = "Order already filled" \
@@ -2021,7 +2102,7 @@ function registerScripts() {
   --[[ handle channel 17 locally ]] \
   if tonumber(pubsub[2]) == 17 then \
     removefromorderbook(order) \
-    cancelorder(brokerid, orderid, "4") \
+    cancelorder(brokerid, orderid) \
     publishorder(brokerid, orderid) \
   end \
   return {0, ordercancelrequestid} \
@@ -2038,7 +2119,7 @@ function registerScripts() {
   if not orderid then \
     return {1, 1013} \
   end \
-  cancelorder(ARGV[1], orderid, "4") \
+  cancelorder(ARGV[1], orderid) \
   publishorder(ARGV[1], orderid) \
   return {0} \
   ';
@@ -2110,8 +2191,8 @@ function registerScripts() {
   * params: brokerid, orderid
   * returns: 1, error code if error, else 0 
   */
-  scriptorderexpire = cancelorder + publishorder + '\
-  local ret = cancelorder(ARGV[1], ARGV[2], "C") \
+  scriptorderexpire = expireorder + publishorder + '\
+  local ret = expireorder(ARGV[1], ARGV[2], "C") \
   publishorder(ARGV[1], ARGV[2]) \
   return ret \
   ';

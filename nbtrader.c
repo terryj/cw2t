@@ -63,6 +63,12 @@ static void signal_handler(int signum)
             stop = 1;
 }
 
+static void signal_handler_term(int signum)
+{       
+        if (signum == SIGTERM)
+            stop = 1;
+}
+
 /*
  * Main client session, report runs until crtl-c
  */
@@ -81,6 +87,11 @@ static int fix_client_session(struct fix_session_cfg *cfg)
 		fprintf(stderr, "Unable to register a signal handler\n");
 		goto exit;
 	}
+
+        if (signal(SIGTERM, signal_handler_term) == SIG_ERR) {
+                fprintf(stderr, "Unable to register a signal handler\n");
+                goto exit;
+        }
 
 	session	= fix_session_new(cfg);
 	if (!session) {
@@ -144,7 +155,7 @@ static int fix_client_session(struct fix_session_cfg *cfg)
                                 fix_quote_ack(session, msg);
                                 break;
                         case FIX_MSG_ORDER_CANCEL_REJECT:
-                                fprintf(stdout, "Cancel reject\n");
+                                fix_order_cancel_reject(session, msg);
                                 break;
                         case FIX_MSG_TYPE_LOGOUT:
                                 fprintf(stdout, "Logout\n");
@@ -455,6 +466,95 @@ static int send_quote(struct fix_session *session, struct fix_quote *quote) {
 }
 
 /*
+ * Order cancel reject received
+ */
+static int fix_order_cancel_reject(struct fix_session *session, struct fix_message *msg) {
+    struct fix_field *field;
+    struct fix_ordercancelreject ordercancelreject;
+
+    field = fix_get_field(msg, ClOrdID);
+    if (field) {
+      fix_get_string(field, ordercancelreject.ordercancelrequestid, sizeof(ordercancelreject.ordercancelrequestid));
+    } else {
+      printf("ClOrdID not present\n");
+      goto fail;
+    }
+
+    field = fix_get_field(msg, OrigClOrdID);
+    if (field) {
+      fix_get_string(field, ordercancelreject.orderid, sizeof(ordercancelreject.orderid));
+    } else {
+      printf("OrigClOrdID not present\n");
+      goto fail;
+    }
+
+    field = fix_get_field(msg, OrderID);
+    if (field) {
+      fix_get_string(field, ordercancelreject.externalorderid, sizeof(ordercancelreject.externalorderid));
+    } else {
+      strcpy(ordercancelreject.externalorderid, "");
+    }
+
+    field = fix_get_field(msg, SecurityID);
+    if (field) {
+      fix_get_string(field, ordercancelreject.isin, sizeof(ordercancelreject.isin));
+    } else {
+      strcpy(ordercancelreject.isin, "");
+    }
+
+    ordercancelreject.orderstatusid = fix_get_int(msg, OrdStatus, 5);
+    ordercancelreject.ordercancelrejectreasonid = fix_get_int(msg, CxlRejReason, 0);
+
+    field = fix_get_field(msg, Text);
+    if (field) {
+      fix_get_string(field, ordercancelreject.text, sizeof(ordercancelreject.text));
+    } else
+      strcpy(ordercancelreject.text, "");
+
+    field = fix_get_field(msg, TransactTime);
+    if (field) {
+      fix_get_string(field, ordercancelreject.markettimestamp, sizeof(ordercancelreject.markettimestamp));
+    } else
+      strcpy(ordercancelreject.markettimestamp, ""); 
+
+    // publish it
+    send_order_cancel_reject(session, &ordercancelreject);
+
+    return 0;
+
+fail:
+    return -1;
+}
+
+/*
+ * Send an order cancel reject to the trade server channel
+ */
+static int send_order_cancel_reject(struct fix_session *session, struct fix_ordercancelreject *ordercancelreject) {
+  char jsonordercancelreject[256];
+
+  sprintf(jsonordercancelreject, "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%d%s%d%s%s%s%s%s%s%s%s%s%s", "{\"ordercancelreject\":{"
+    , "\"ordercancelrequestid\":\"", ordercancelreject->ordercancelrequestid, "\""
+    , ",\"orderid\":\"", ordercancelreject->orderid, "\""
+    , ",\"externalorderid\":\"", ordercancelreject->externalorderid, "\""
+    , ",\"isin\":\"", ordercancelreject->isin, "\""
+    , ",\"orderstatusid\":", ordercancelreject->orderstatusid
+    , ",\"ordercancelrejectreasonid\":", ordercancelreject->ordercancelrejectreasonid
+    , ",\"text\":\"", ordercancelreject->text, "\""
+    , ",\"timestamp\":\"", session->str_now, "\""
+    , ",\"markettimestamp\":\"", ordercancelreject->markettimestamp, "\""
+    , "}}");
+
+  fprintf(stdout, "%s - publish to trade server\n", session->str_now);
+  fprintf(stdout, "%s\n", jsonordercancelreject);
+
+  /* publish to trade server channel */
+  redisCommand(c, "publish 3 %s", jsonordercancelreject);
+
+  return 0;
+}
+
+/*
+ * 
  * See if there is any data in the shared memory area
  */
 static void check_for_data(struct fix_session *session)

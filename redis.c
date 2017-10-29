@@ -331,9 +331,6 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           *(price + t[i+1].end - t[i+1].start) = '\0';
           orders[numorders].price = atof(price);
           i++;
-        } else if (jsoneq(rr->element[2]->str, &t[i], "origorderid") == 0) {
-          strncpy(ordercancelrequests[numordercancelrequests].origorderid, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
-          *(ordercancelrequests[numordercancelrequests].origorderid + t[i+1].end - t[i+1].start) = '\0';
         } else {
           //printf("Unexpected key: %.*s\n", t[i].end-t[i].start, rr->element[2]->str + t[i].start);
         }
@@ -358,6 +355,10 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
         strcpy(ordercancelrequests[numordercancelrequests].orderid, brokerid);
         strcat(ordercancelrequests[numordercancelrequests].orderid, ":");
         strcat(ordercancelrequests[numordercancelrequests].orderid, ordercancelrequestid);
+
+        strcpy(ordercancelrequests[numordercancelrequests].origorderid, brokerid);
+        strcat(ordercancelrequests[numordercancelrequests].origorderid, ":");
+        strcat(ordercancelrequests[numordercancelrequests].origorderid, orderid);
 
         /* increment the number of order cancel requests, will be reset by the processing thread */
         numordercancelrequests++;

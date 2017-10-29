@@ -17,7 +17,7 @@ struct fix_quoterequest {
 };
 
 struct fix_order {
-  char orderid[8];
+  char orderid[16];
   char ordertypeid[3];
   char symbolid[16];
   char isin[16];
@@ -39,8 +39,8 @@ struct fix_order {
 };
 
 struct fix_ordercancelrequest {
-  char orderid[8];
-  char origorderid[8];
+  char orderid[16];
+  char origorderid[16];
   char symbolid[16];
   char isin[16];
   char timestamp[20];
@@ -86,7 +86,7 @@ struct fix_executionreport {
   char orderstatusid;
   char exectype;
   char orderid[30];
-  char clordid[10];
+  char clordid[16];
   float orderqty;
   float cumqty;
   char futsettdate[10];
@@ -100,6 +100,18 @@ struct fix_executionreport {
   char onbehalfofcompid[30];
   char exchangeid[6];
   char lastmkt[6];
+};
+
+struct fix_ordercancelreject {
+  char ordercancelrequestid[16];
+  char orderid[16];
+  char externalorderid[16];
+  char symbolid[16];
+  char isin[16];
+  int  orderstatusid;
+  int  ordercancelrejectreasonid;
+  char text[128];
+  char markettimestamp[20];
 };
 
 struct fix_message_list {
