@@ -56,7 +56,7 @@
 *             - added orderCancelReject() to handle order cancel reject messages
 *             - added operatorid to publishquoteack()
 * 28 Oct 2017 - fixed error in cancelorder()
-* 29 Oct 2017 - simplified cancelorder()
+* 29 Oct 2017 - simplified cancelorder() & added expireorder()
 *             - added key for account orderbook orders to addtoorderbook() & removefromorderbook()
 *             - added clearorderbooks() & clearorderbook()
 ********************/
@@ -460,22 +460,8 @@ function newOrder(order) {
   if (order.ordertypeid == "D") {
     dealAtQuote(order);
   } else {
-    if (order.markettype == 1)
-newOrderSingle(order);
-else
-cob();
+    newOrderSingle(order);
   }
-}
-function cob() {
-console.log("cob");
-    db.eval(scriptclearorderbooks, 0, function(err, ret) {
-      if (err) {
-        console.log(err);
-        errorLog(order.brokerid, "", 2, 4, "", "", "tradeserver.scriptdealatquote", "", err);
-        return;
-      }
-console.log("out");
-    });
 }
 
 /*
@@ -756,9 +742,6 @@ function newQuote(quote) {
   console.log("newQuote");
   console.log(quote);
 
-  // extract brokerid & quoterequestid
-  var quotereqid = quote.quotereqid.split(':');
-
   if (!('bidpx' in quote)) {
     quote.bidpx = "";
     quote.bidsize = "";
@@ -795,17 +778,17 @@ function newQuote(quote) {
     quote.symbolid = "";
   }
 
-  db.eval(scriptQuote, 1, "broker:" + quotereqid[0], quotereqid[1], quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.timestamp, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quotereqid[0], quote.settlmnttypid, quote.bidspotrate, quote.offerspotrate, quote.timestampms, quote.fixseqnumid, quote.markettimestamp, quote.isin, function(err, ret) {
+  db.eval(scriptQuote, 1, "broker:" + quote.brokerid, quote.quoterequestid, quote.symbolid, quote.bidpx, quote.offerpx, quote.bidsize, quote.offersize, quote.validuntiltime, quote.timestamp, quote.currencyid, quote.settlcurrencyid, quote.quoterid, quote.quotertype, quote.futsettdate, quote.bidquotedepth, quote.offerquotedepth, quote.externalquoteid, quote.cashorderqty, quote.settledays, quote.noseconds, quote.brokerid, quote.settlmnttypid, quote.bidspotrate, quote.offerspotrate, quote.timestampms, quote.fixseqnumid, quote.markettimestamp, quote.isin, function(err, ret) {
     if (err) {
       console.log(err);
-      errorLog(quotereqid[0], quotereqid[1], 3, 4, quote.fixseqnumid, "S", "tradeserver.scriptQuote", "", err);
+      errorLog(quote.brokerid, quote.quoterequestid, 3, 4, quote.fixseqnumid, "S", "tradeserver.scriptQuote", "", err);
       return;
     }
 
     if (ret[0] != 0) {
       // can't find quote request, so don't know which client to inform
       console.log("Error in scriptquote: " + commonbo.getReasonDesc(ret[1]));
-      errorLog(quotereqid[0], quotereqid[1], 3, 4, quote.fixseqnumid, "S", "tradeserver.scriptQuote", "", commonbo.getReasonDesc(ret[1]));
+      errorLog(quote.brokerid, quote.quoterequestid, 3, 4, quote.fixseqnumid, "S", "tradeserver.scriptQuote", "", commonbo.getReasonDesc(ret[1]));
       return;
     }
 
@@ -814,7 +797,7 @@ function newQuote(quote) {
       startQuoteInterval();
     }
 
-    console.log("Quote id: " + ret[1] + " forwarded ok");
+    console.log("Quote id:" + ret[1] + " forwarded ok");
 
     // script publishes quote to the operator type that made the request
   });
@@ -827,11 +810,8 @@ function orderReject(exereport) {
   var text = "";
   var orderrejectreasonid = "";
 
-  console.log("Order rejected, id: " + exereport.clordid);
+  console.log("Order rejected");
   console.log(exereport);
-
-  // extract brokerid & our orderid
-  var clordid = exereport.clordid.split(':');
 
   // execution reports vary as to whether they contain a reject reason &/or text
   if ('ordrejreason' in exereport) {
@@ -841,15 +821,15 @@ function orderReject(exereport) {
     text = exereport.text;
   }
 
-  db.eval(scriptrejectorder, 1, "broker:" + clordid[0], clordid[0], clordid[1], orderrejectreasonid, text, function(err, ret) {
+  db.eval(scriptrejectorder, 1, "broker:" + exereport.brokerid, exereport.brokerid, exereport.orderid, orderrejectreasonid, text, function(err, ret) {
     if (err) {
       console.log(err);
-      errorLog(clordid[0], clordid[1], 2, 4, exereport.fixseqnumid, "8", "tradeserver.scriptrejectorder", "", err);
+      errorLog(exereport.brokerid, exereport.orderid, 2, 4, exereport.fixseqnumid, "8", "tradeserver.scriptrejectorder", "", err);
       return;
     }
 
     // raise an error
-    errorLog(clordid[0], clordid[1], 2, 4, exereport.fixseqnumid, "8", "tradeserver.scriptrejectorder", orderrejectreasonid, text);
+    errorLog(exereport.brokerid, exereport.orderid, 2, 4, exereport.fixseqnumid, "8", "tradeserver.scriptrejectorder", orderrejectreasonid, text);
 
     // order published to operator by script
   });
@@ -860,20 +840,17 @@ function orderReject(exereport) {
  */
 function orderAck(exereport) {
   var text = "";
-  console.log("Order acknowledged, id: " + exereport.clordid);
+  console.log("Order acknowledged");
   console.log(exereport);
-
-  // extract brokerid & our orderid
-  var clordid = exereport.clordid.split(':');
 
   if ('text' in exereport) {
     text = exereport.text;
   }
 
-  db.eval(scriptorderack, 1, "broker:" + clordid[0], clordid[0], clordid[1], exereport.orderid, exereport.orderstatusid, exereport.execid, text, exereport.fixseqnumid, function(err, ret) {
+  db.eval(scriptorderack, 1, "broker:" + exereport.brokerid, exereport.brokerid, exereport.orderid, exereport.externalorderid, exereport.orderstatusid, exereport.execid, text, exereport.fixseqnumid, function(err, ret) {
     if (err) {
       console.log(err);
-      errorLog(clordid[0], clordid[1], 8, 4, exereport.fixseqnumid, "b", "tradeserver.scriptorderack", "", err);
+      errorLog(exereport.brokerid, exereport.orderid, 8, 4, exereport.fixseqnumid, "b", "tradeserver.scriptorderack", "", err);
       return;
     }
 
@@ -885,22 +862,19 @@ function orderAck(exereport) {
  * An order has been cancelled in the market
  */
 function orderCancel(exereport) {
-  console.log("Order cancelled externally, ordercancelrequest id: " + exereport.clordid);
+  console.log("Order cancelled externally");
 
-  // extract brokerid & our orderid
-  var clordid = exereport.clordid.split(':');
-
-  db.eval(scriptordercancel, 1, "broker:" + clordid[0], clordid[0], clordid[1], function(err, ret) {
+  db.eval(scriptordercancel, 1, "broker:" + exereport.brokerid, exereport.brokerid, exereport.orderid, function(err, ret) {
     if (err) {
       console.log(err);
-      errorLog(clordid[0], "", 9, 4, exereport.fixseqnumid, "9", "tradeserver.orderCancel", "", err);
+      errorLog(exereport.brokerid, "", 9, 4, exereport.fixseqnumid, "9", "tradeserver.orderCancel", "", err);
       return;
     }
 
     if (ret[0] != 0) {
       // todo: send to client & sort out error
       console.log("Error in scriptordercancel, reason: " + commonbo.getReasonDesc(ret[1]));
-      errorLog(clordid[0], clordid[1], 9, 4, exereport.fixseqnumid, "9", "tradeserver.orderCancel", "", commonbo.getReasonDesc(ret[1]));
+      errorLog(exereport.brokerid, exereport.orderid, 9, 4, exereport.fixseqnumid, "9", "tradeserver.orderCancel", "", commonbo.getReasonDesc(ret[1]));
       return;
     }
 
@@ -913,12 +887,9 @@ function orderCancel(exereport) {
  */
 function orderExpired(exereport) {
   console.log(exereport);
-  console.log("Order expired, id: " + exereport.clordid);
+  console.log("Order expired");
 
-  // extract brokerid & our orderid
-  var clordid = exereport.clordid.split(':');
-
-  db.eval(scriptorderexpire, 1, "broker:" + clordid[0], clordid[0], clordid[1], function(err, ret) {
+  db.eval(scriptorderexpire, 1, "broker:" + exereport.brokerid, exereport.brokerid, exereport.orderid, function(err, ret) {
     if (err) {
       console.log(err);
       return;
@@ -962,9 +933,6 @@ function processTrade(exereport) {
   var currencyindtoorg = 1;
   var markettype = 0;
   var counterpartytype = 1;
-
-  // extract brokerid & our orderid
-  var clordid = exereport.clordid.split(':');
 
   exereport.accountid = "";
   exereport.clientid = "";
@@ -1040,16 +1008,16 @@ function processTrade(exereport) {
     }
   });
   promise.then(function() {
-    db.eval(scriptnewtrade, 1, "broker:" + clordid[0], exereport.accountid, clordid[0], exereport.clientid, clordid[1], exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.onbehalfofcompid, counterpartytype, markettype, exereport.execid, exereport.futsettdate, exereport.timestamp, exereport.lastmkt, exereport.orderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, exereport.operatortype, exereport.operatorid, exereport.leavesqty, exereport.fixseqnumid, exereport.markettimestamp, exereport.tradesettlestatustime, exereport.exchangeid, exereport.securityid, function(err, ret) {
+    db.eval(scriptnewtrade, 1, "broker:" + exereport.brokerid, exereport.accountid, exereport.brokerid, exereport.clientid, exereport.orderid, exereport.symbolid, exereport.side, exereport.lastshares, exereport.lastpx, exereport.currencyid, currencyratetoorg, currencyindtoorg, exereport.onbehalfofcompid, counterpartytype, markettype, exereport.execid, exereport.futsettdate, exereport.timestamp, exereport.lastmkt, exereport.externalorderid, exereport.settlcurrencyid, exereport.settlcurramt, exereport.settlcurrfxrate, exereport.settlcurrfxratecalc, milliseconds, exereport.operatortype, exereport.operatorid, exereport.leavesqty, exereport.fixseqnumid, exereport.markettimestamp, exereport.tradesettlestatustime, exereport.exchangeid, exereport.securityid, function(err, ret) {
       if (err) {
         console.log(err);
-        errorLog(clordid[0], clordid[1], 4, 4, exereport.fixseqnumid, "8", "tradeserver.scriptnewtrade", "", err);
+        errorLog(exereport.brokerid, exereport.orderid, 4, 4, exereport.fixseqnumid, "8", "tradeserver.scriptnewtrade", "", err);
         return;
       }
 
       if (ret[0] != 0) {
         console.log("Error in scriptnewtrade: " + commonbo.getReasonDesc(ret[1]));
-        errorLog(clordid[0], clordid[1], 4, 4, exereport.fixseqnumid, "8", "tradeserver.scriptnewtrade", "", commonbo.getReasonDesc(ret[1]));
+        errorLog(exereport.brokerid, exereport.orderid, 4, 4, exereport.fixseqnumid, "8", "tradeserver.scriptnewtrade", "", commonbo.getReasonDesc(ret[1]));
         return;
       }
     
@@ -1059,7 +1027,7 @@ function processTrade(exereport) {
     });
   }).catch(function(err) {
     console.log('Trade rejected');
-    errorLog(clordid[0], clordid[1], 4, 4, exereport.fixseqnumid, "8", "tradeserver.scriptnewtrade", "", err);
+    errorLog(exereport.brokerid, exereport.orderid, 4, 4, exereport.fixseqnumid, "8", "tradeserver.scriptnewtrade", "", err);
     return;
   });
 }
@@ -1071,15 +1039,12 @@ function quoteAck(quoteack) {
   console.log("Quote ack received");
   console.log(quoteack);
 
-  // extract brokerid & our quoterequestid
-  var quotereqid = quoteack.quotereqid.split(':');
-
   //var timestamp = commonbo.getUTCTimeStamp(new Date());
 
-  db.eval(scriptQuoteAck, 1, "broker:" + quotereqid[0], quotereqid[0], quotereqid[1], quoteack.quotestatusid, quoteack.quoterejectreasonid, quoteack.text, quoteack.fixseqnumid, quoteack.timestamp, quoteack.markettimestamp, function(err, ret) {
+  db.eval(scriptQuoteAck, 1, "broker:" + quoteack.brokerid, quoteack.brokerid, quoteack.quoterequestid, quoteack.quotestatusid, quoteack.quoterejectreasonid, quoteack.text, quoteack.fixseqnumid, quoteack.timestamp, quoteack.markettimestamp, function(err, ret) {
     if (err) {
       console.log(err);
-      errorLog(quotereqid[0], quotereqid[1], 7, 4, quoteack.fixseqnumid, "b", "tradeserver.scriptQuoteAck", "", err);
+      errorLog(quoteack.brokerid, quoteack.quoterequestid, 7, 4, quoteack.fixseqnumid, "b", "tradeserver.scriptQuoteAck", "", err);
       return;
     }
 
@@ -1971,7 +1936,7 @@ function registerScripts() {
  /*
   * scriptnewtrade()
   * process a fill from the market
-  * params: 1=accountid, 2=brokerid, 3=clientid, 4=clordid, 5=symbolid, 6=side, 7=lastshares, 8=lastpx, 9=currencyid, 10=currencyratetoorg, 11=currencyindtoorg, 12=execbroker, 13=counterpartytype, 14=markettype, 15=execid, 16=futsettdate, 17=transacttime, 18=lastmkt, 19=orderid, 20=settlcurrencyid, 21=settlcurramt, 22=settlcurrfxrate, 23=settlcurrfxratecalc, 24=milliseconds, 25=operatortype, 26=operatorid, 27=leavesqty, 28=fixseqnumid, 29=markettimestamp, 30=tradesettlestatustime, 31=exchangeid, 32=securityid
+  * params: 1=accountid, 2=brokerid, 3=clientid, 4=orderid, 5=symbolid, 6=side, 7=lastshares, 8=lastpx, 9=currencyid, 10=currencyratetoorg, 11=currencyindtoorg, 12=execbroker, 13=counterpartytype, 14=markettype, 15=execid, 16=futsettdate, 17=transacttime, 18=lastmkt, 19=externalorderid, 20=settlcurrencyid, 21=settlcurramt, 22=settlcurrfxrate, 23=settlcurrfxratecalc, 24=milliseconds, 25=operatortype, 26=operatorid, 27=leavesqty, 28=fixseqnumid, 29=markettimestamp, 30=tradesettlestatustime, 31=exchangeid, 32=securityid
   */
   scriptnewtrade = getcosts + commonbo.newtrade + '\
   redis.log(redis.LOG_NOTICE, "scriptnewtrade") \

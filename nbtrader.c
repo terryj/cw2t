@@ -269,9 +269,17 @@ fail:
  */
 static int send_quote_ack(struct fix_session *session, struct fix_quoteack *quoteack) {
   char jsonquoteack[256];
+  char *brokerid;
+  char *quoterequestid;
+  char *str = quoteack->quotereqid;
 
-  sprintf(jsonquoteack, "%s%s%s%s%s%d%s%d%s%s%s%s%lu%s%s%s%s%s%s%s", "{\"quoteack\":{"
-    , "\"quotereqid\":\"", quoteack->quotereqid, "\""
+  // extract brokerid & quoterequestid
+  brokerid = strtok_r(str, ":", &str);
+  quoterequestid = strtok_r(str, ":", &str);
+ 
+  sprintf(jsonquoteack, "%s%s%s%s%s%s%s%s%d%s%d%s%s%s%s%lu%s%s%s%s%s%s%s", "{\"quoteack\":{"
+    , "\"brokerid\":\"", brokerid, "\""
+    , ",\"quoterequestid\":\"", quoterequestid, "\""
     , ",\"quotestatusid\":", quoteack->quotestatusid
     , ",\"quoterejectreasonid\":", quoteack->quoterejectreasonid
     , ",\"text\":\"", quoteack->text, "\""
@@ -410,10 +418,18 @@ fail:
  */
 static int send_quote(struct fix_session *session, struct fix_quote *quote) {
   char jsonquote[512];
+  char *brokerid;
+  char *quoterequestid;
+  char *str = quote->quotereqid;
+
+  // extract brokerid & quoterequestid
+  brokerid = strtok_r(str, ":", &str);
+  quoterequestid = strtok_r(str, ":", &str);
 
   if (quote->bidpx != 0.0) {
-    sprintf(jsonquote, "%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%lu%s%s%s%s%s%s%s%d%s%s%s%s%d%s%f%s%s%s%s%f%s%d%s%s%s%s%s%s%s%s%s%s", "{\"quote\":{"
-      , "\"quotereqid\":\"", quote->quotereqid, "\""
+    sprintf(jsonquote, "%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%lu%s%s%s%s%s%s%s%d%s%s%s%s%d%s%f%s%s%s%s%f%s%d%s%s%s%s%s%s%s%s%s%s", "{\"quote\":{"
+      , "\"brokerid\":\"", brokerid, "\""
+      , ",\"quoterequestid\":\"", quoterequestid, "\""
       , ",\"bidpx\":", quote->bidpx
       , ",\"bidsize\":", quote->bidsize
       , ",\"validuntiltime\":\"", quote->validuntiltime, "\""
@@ -434,8 +450,9 @@ static int send_quote(struct fix_session *session, struct fix_quote *quote) {
       , ",\"externalquoteid\":\"", quote->externalquoteid, "\""
       , "}}");
   } else {
-    sprintf(jsonquote, "%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%lu%s%s%s%s%s%s%s%d%s%s%s%s%d%s%f%s%s%s%s%f%s%d%s%s%s%s%s%s%s%s%s%s", "{\"quote\":{"
-      , "\"quotereqid\":\"", quote->quotereqid, "\""
+    sprintf(jsonquote, "%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%lu%s%s%s%s%s%s%s%d%s%s%s%s%d%s%f%s%s%s%s%f%s%d%s%s%s%s%s%s%s%s%s%s", "{\"quote\":{"
+      , "\"brokerid\":\"", brokerid, "\""
+      , ",\"quoterequestid\":\"", quoterequestid, "\""
       , ",\"offerpx\":", quote->offerpx
       , ",\"offersize\":", quote->offersize
       , ",\"validuntiltime\":\"", quote->validuntiltime, "\""
@@ -531,10 +548,24 @@ fail:
  */
 static int send_order_cancel_reject(struct fix_session *session, struct fix_ordercancelreject *ordercancelreject) {
   char jsonordercancelreject[256];
+  char *brokerid;
+  char *ordercancelrequestid;
+  char *orderid;
+  char *str = ordercancelreject->ordercancelrequestid;
 
-  sprintf(jsonordercancelreject, "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%d%s%d%s%s%s%s%s%s%s%s%s%s", "{\"ordercancelreject\":{"
-    , "\"ordercancelrequestid\":\"", ordercancelreject->ordercancelrequestid, "\""
-    , ",\"orderid\":\"", ordercancelreject->orderid, "\""
+  // extract brokerid & ordercancelrequestid
+  brokerid = strtok_r(str, ":", &str);
+  ordercancelrequestid = strtok_r(str, ":", &str);
+
+  // extract brokerid & orderid
+  str = ordercancelreject->orderid;
+  brokerid = strtok_r(str, ":", &str);
+  orderid = strtok_r(str, ":", &str);
+
+  sprintf(jsonordercancelreject, "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%d%s%d%s%s%s%s%s%s%s%s%s%s", "{\"ordercancelreject\":{"
+    , "\"brokerid\":\"", brokerid, "\""
+    , ",\"ordercancelrequestid\":\"", ordercancelrequestid, "\""
+    , ",\"orderid\":\"", orderid, "\""
     , ",\"externalorderid\":\"", ordercancelreject->externalorderid, "\""
     , ",\"isin\":\"", ordercancelreject->isin, "\""
     , ",\"orderstatusid\":", ordercancelreject->orderstatusid
@@ -826,17 +857,26 @@ fail:
 
 /*
  * Send an execution report to the trade server channel
+ * Note: market orderid -> cwtt externalorderid & market clordid -> cwtt brokerid:orderid
  */
 static int send_execution_report(struct fix_session *session, struct fix_executionreport *executionreport) {
   char jsonexecutionreport[512];
+  char *brokerid;
+  char *orderid;
+  char *str = executionreport->clordid;
 
-  sprintf(jsonexecutionreport, "%s%s%c%s%s%c%s%s%s%s%s%s%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%c%s%s%s%s%s%lu%s%s%s%s%s%s%s", "{\"executionreport\":{"
-    , "\"orderstatusid\":\"", executionreport->orderstatusid, "\""
+  // extract brokerid & ordercancelrequestid
+  brokerid = strtok_r(str, ":", &str);
+  orderid = strtok_r(str, ":", &str);
+
+  sprintf(jsonexecutionreport, "%s%s%s%s%s%c%s%s%c%s%s%s%s%s%s%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%c%s%s%s%s%s%lu%s%s%s%s%s%s%s", "{\"executionreport\":{"
+    , "\"brokerid\":\"", brokerid, "\""
+    , ",\"orderstatusid\":\"", executionreport->orderstatusid, "\""
     , ",\"exectype\":\"", executionreport->exectype, "\""
     , ",\"exchangeid\":\"", executionreport->exchangeid, "\""
     , ",\"lastmkt\":\"", executionreport->lastmkt, "\""
-    , ",\"orderid\":\"", executionreport->orderid, "\""
-    , ",\"clordid\":\"", executionreport->clordid, "\""
+    , ",\"externalorderid\":\"", executionreport->orderid, "\""
+    , ",\"orderid\":\"", orderid, "\""
     , ",\"orderqty\":", executionreport->orderqty
     , ",\"cumqty\":", executionreport->cumqty
     , ",\"futsettdate\":\"", executionreport->futsettdate, "\""
