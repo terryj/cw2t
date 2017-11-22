@@ -296,6 +296,7 @@ static enum fix_type fix_tag_type(int tag)
         case DeliverToCompID:           return FIX_TYPE_STRING;
         case TimeInForce:               return FIX_TYPE_CHAR;
         case LastMkt:                   return FIX_TYPE_STRING;
+        case CxlRejReason:              return FIX_TYPE_INT;
 	default:			return FIX_TYPE_STRING;	/* unrecognized tag */
 	}
 }
@@ -730,17 +731,11 @@ int fix_message_send(struct fix_message *self, int sockfd, int flags)
 	buffer_to_iovec(self->head_buf, &self->iov[0]);
 	buffer_to_iovec(self->body_buf, &self->iov[1]);
 
-int headlen = self->head_buf->end - self->head_buf->start;
-int bodylen = self->body_buf->end - self->body_buf->start;
-int i;
-fprintf(stdout, "%s - sending fix message\n", self->str_now);
-for(i=self->head_buf->start;i<headlen;i++)
-      fprintf(stdout, "%c",self->head_buf->data[i]); 
-for(i=self->body_buf->start;i<bodylen;i++)
-      fprintf(stdout, "%c",self->body_buf->data[i]);
-fprintf(stdout, "\n");
-
 	ret = io_sendmsg(sockfd, self->iov, 2, 0);
+
+        // added
+        printf("Sent...%.*s", (int) self->iov[0].iov_len, (char*) self->iov[0].iov_base);
+        printf("%.*s\n", (int) self->iov[1].iov_len, (char*) self->iov[1].iov_base);
 
 	msg_size = fix_message_size(self);
 

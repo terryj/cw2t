@@ -15,7 +15,11 @@
  * messages created and forwarded to the Trade Server channel.
  *
  * Modifications
- * 1 Oct 2017 - changes to support authorisation of a Redis connection
+ *  1 Oct 2017 - changes to support authorisation of a Redis connection
+ * 22 Nov 2017 - added getIpAddress() to determine ip address for ping message
+ *             - modified ping message to include servertype id & ip address
+ *             - changed flag for recv call so return value of -1 represents error
+ *             - tidied receive logging here & send logging in /libtrading/proto/fix_message.c
  * *********************/
 
 #include "fix/fix_common.h"
@@ -42,6 +46,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <pthread.h>
+#include <ifaddrs.h>
 
 #include <hiredis/async.h>
 
@@ -52,8 +57,9 @@
 static const char *program;
 static sig_atomic_t stop;   // set by ctrl-c to exit
 const char *auth = NULL;    // authorisation string for redis connections
-int server_id = 0;          // id for system monitoring
-
+int servertype_id = 0;      // id for system monitoring
+char ipaddress[16];         // my ip address for server identification
+ 
 /*
  * Ctrl-c signal handler
  */
@@ -70,7 +76,7 @@ static void signal_handler_term(int signum)
 }
 
 /*
- * Main client session, report runs until crtl-c
+ * Main client session, runs until crtl-c or SIGTERM signal received
  */
 static int fix_client_session(struct fix_session_cfg *cfg)
 {
@@ -137,9 +143,12 @@ static int fix_client_session(struct fix_session_cfg *cfg)
 
                 check_for_data(session);
 
- 		if (fix_session_recv(session, &msg, FIX_RECV_FLAG_MSG_DONTWAIT) > 0) {
-                        fprintf(stdout, "%s - fix message received\n", session->str_now);
-			fprintmsg(stdout, msg);
+                // modified so as to force return value of -1 to represent error
+                // if (fix_session_recv(session, &msg, FIX_RECV_FLAG_MSG_DONTWAIT) > 0) {
+
+                ret = fix_session_recv(session, &msg, 0);
+                if (ret > 0) {
+                        printf("Recd...%.*s\n", (int) msg->iov[0].iov_len, (char*) msg->iov[0].iov_base);
 
 			if (fix_session_admin(session, msg))
 				continue;
@@ -169,7 +178,9 @@ static int fix_client_session(struct fix_session_cfg *cfg)
                                 stop = 1;
                                 break;
                         }
-		}
+                } else if (ret < 0) {
+                        fprintf(stdout, "ret < 0\n");
+                }
 	}
 
 	if (session->active) {
@@ -906,14 +917,13 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
 static int send_ping(struct fix_session *session, struct ping *png) {
   char jsonping[128];
 
-  sprintf(jsonping, "%s%s%d%s%d%s%s%s%s%s%s%s", "{\"ping\":{"
-    , "\"serverid\":", server_id
+  sprintf(jsonping, "%s%s%d%s%s%s%s%d%s%s%s%s%s%s%s", "{\"ping\":{"
+    , "\"servertypeid\":", servertype_id
+    , ",\"ipaddress\":\"", ipaddress, "\""
     , ",\"status\":", png->status
     , ",\"text\":\"", png->text, "\""
     , ",\"timestamp\":\"", session->str_now, "\""
     , "}}");
-
-  fprintf(stdout, "%s\n", jsonping);
 
   redisCommand(c, "publish 15 %s", jsonping);
 
@@ -951,6 +961,56 @@ static enum fix_version strversion(const char *dialect)
 		return FIX_4_4;
 
 	return FIX_4_4;
+}
+
+int getIpAddress() {
+           struct ifaddrs *ifaddr, *ifa;
+           int family, s, n;
+           char host[NI_MAXHOST];
+
+           if (getifaddrs(&ifaddr) == -1) {
+               printf("getifaddrs error\n");
+               return -1;
+           }
+
+           for (ifa = ifaddr, n = 0; ifa != NULL; ifa = ifa->ifa_next, n++) {
+               if (ifa->ifa_addr == NULL)
+                   continue;
+
+               family = ifa->ifa_addr->sa_family;
+
+               /* Display interface name and family (including symbolic
+                  form of the latter for the common families) */
+
+               /*printf("%-8s %s (%d)\n",
+                      ifa->ifa_name,
+                      (family == AF_PACKET) ? "AF_PACKET" :
+                      (family == AF_INET) ? "AF_INET" :
+                      (family == AF_INET6) ? "AF_INET6" : "???",
+                      family);*/
+
+               /* For an AF_INET* interface address, display the address */
+
+               if (family == AF_INET || family == AF_INET6) {
+                   s = getnameinfo(ifa->ifa_addr,
+                           (family == AF_INET) ? sizeof(struct sockaddr_in) :
+                                                 sizeof(struct sockaddr_in6),
+                           host, NI_MAXHOST,
+                           NULL, 0, NI_NUMERICHOST);
+                   if (s != 0) {
+                       printf("getnameinfo() failed: %s\n", gai_strerror(s));
+                       return -1;
+                   }
+
+                   if (family == AF_INET && strcmp(ifa->ifa_name, "eth0") == 0) {
+                     printf("IP address: <%s>\n", host);
+                     strcpy(ipaddress, host);
+                   }
+              }
+           }
+
+           freeifaddrs(ifaddr);
+           return 0;
 }
 
 int main(int argc, char *argv[])
@@ -1000,15 +1060,19 @@ int main(int argc, char *argv[])
                         auth = optarg;
                         break;
                 case 'i':
-                        server_id = atoi(optarg);
+                        servertype_id = atoi(optarg);
                         break;
 		default: /* '?' */
 			usage();
 		}
 	}
 
-	if (!port || !host || !sender_comp_id || !target_comp_id || server_id == 0)
+	if (!port || !host || !sender_comp_id || !target_comp_id || servertype_id == 0)
 		usage();
+
+        if (getIpAddress() != 0) {
+          return 0;
+        }
 
 	fix_session_cfg_init(&cfg);
 
