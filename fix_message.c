@@ -734,7 +734,7 @@ int fix_message_send(struct fix_message *self, int sockfd, int flags)
 	ret = io_sendmsg(sockfd, self->iov, 2, 0);
 
         // added
-        printf("Sent...%.*s", (int) self->iov[0].iov_len, (char*) self->iov[0].iov_base);
+        printf("Sent %s %.*s", self->str_now, (int) self->iov[0].iov_len, (char*) self->iov[0].iov_base);
         printf("%.*s\n", (int) self->iov[1].iov_len, (char*) self->iov[1].iov_base);
 
 	msg_size = fix_message_size(self);

@@ -148,7 +148,7 @@ static int fix_client_session(struct fix_session_cfg *cfg)
 
                 ret = fix_session_recv(session, &msg, 0);
                 if (ret > 0) {
-                        printf("Recd...%.*s\n", (int) msg->iov[0].iov_len, (char*) msg->iov[0].iov_base);
+                        printf("Recd %s %.*s\n", session->str_now, (int) msg->iov[0].iov_len, (char*) msg->iov[0].iov_base);
 
 			if (fix_session_admin(session, msg))
 				continue;
