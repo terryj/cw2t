@@ -18,8 +18,10 @@
  *  1 Oct 2017 - changes to support authorisation of a Redis connection
  * 22 Nov 2017 - added getIpAddress() to determine ip address for ping message
  *             - modified ping message to include servertype id & ip address
- *             - changed flag for recv call so return value of -1 represents error
+ *             - changed flag for recv call to 0 so return value of -1 represents error
  *             - tidied receive logging here & send logging in /libtrading/proto/fix_message.c
+ * 24 Nov 2017 - reverted recv call flag as otherwise call waits for socket data & ignores pubsub data
+ *             - added errno check to handle lost connection
  * *********************/
 
 #include "fix/fix_common.h"
@@ -142,12 +144,8 @@ static int fix_client_session(struct fix_session_cfg *cfg)
 		}
 
                 check_for_data(session);
-
-                // modified so as to force return value of -1 to represent error
-                // if (fix_session_recv(session, &msg, FIX_RECV_FLAG_MSG_DONTWAIT) > 0) {
-
-                ret = fix_session_recv(session, &msg, 0);
-                if (ret > 0) {
+ 
+                if (fix_session_recv(session, &msg, FIX_RECV_FLAG_MSG_DONTWAIT) > 0) {
                         printf("Recd %s %.*s\n", session->str_now, (int) msg->iov[0].iov_len, (char*) msg->iov[0].iov_base);
 
 			if (fix_session_admin(session, msg))
@@ -178,8 +176,13 @@ static int fix_client_session(struct fix_session_cfg *cfg)
                                 stop = 1;
                                 break;
                         }
-                } else if (ret < 0) {
-                        fprintf(stdout, "ret < 0\n");
+                } else if (!(errno == EAGAIN) || (errno == EINTR)) {
+                        fprintf(stdout, "Connection error\n");
+                        strcpy(png.text, "Connection error");
+                        png.status = 1;
+                        send_ping(session, &png);
+                        stop = 1;
+                        break;
                 }
 	}
 
