@@ -48,9 +48,9 @@
 *             - updated getsettlcurramt() to return error codes
 *             - updated scriptordercancelrequest() & added publishordercancelrequest()
 *             - updated scriptordercancel()
-* 20 Oct 2017 - added check for settlement currency matching account currency to validorder() 
+* 20 Oct 2017 - added check for settlement currency matching account currency to validorder()
 * 22 Oct 2017 - added check for limit order type in order matching
-*             - added validmatchorder() 
+*             - added validmatchorder()
 *             - removed credit check from and added costs parameter to matchordersingle()
 * 27 Oct 2017 - added ordercancelreject() and publishordercancelreject() and updated scriptordercancelreject() and scriptordercancelrequest()
 *             - added orderCancelReject() to handle order cancel reject messages
@@ -59,10 +59,13 @@
 * 29 Oct 2017 - simplified cancelorder() & added expireorder()
 *             - added key for account orderbook orders to addtoorderbook() & removefromorderbook()
 *             - added clearorderbooks() & clearorderbook()
+* 24 Nov 2017 - added ping() for sending ping message every 30 seconds
+* 30 Nov 2017 - added externalorderid to orderReject() & scriptrejectorder() & calls to commonbo.rejectorder() 
 ********************/
 
 // external libraries
 var redis = require('redis');
+var ip = require('ip');
 
 // cw2t libraries
 var commonbo = require('./commonbo.js');
@@ -83,6 +86,7 @@ var redishost = redisConfig.host,
 // globals
 var testmode; // comes from database,  0 = off, 1 = on
 var quoteinterval = null;
+var systemmonitortimer = null;
 
 // redis scripts
 var scriptneworder;
@@ -126,6 +130,24 @@ db.on("error", function(err) {
 
 function isEmpty(data) {
   return (data === null || data === undefined || data === '' || typeof data === 'undefined');
+}
+
+if (!systemmonitortimer) {
+  systemmonitortimer = setInterval(ping, 30000);
+}
+// servertypeid `4` indicates tradeserver
+// status `0` indicates that server is active else `1`
+function ping() {
+  var message = {
+    ping: {
+      ipaddress: ip.address(),
+      servertypeid: 4,
+      status: 0,
+      text: '',
+      timestamp: commonbo.getUTCTimeStamp(new Date())
+    }
+  };
+  db.publish(commonbo.systemmonitorchannel, JSON.stringify(message));
 }
 
 function sendToMonitor(brokerid, clientid, accountid, message) {
@@ -538,6 +560,10 @@ function newOrderSingle(order) {
     order.settlcurrfxratecalc = 0;
   }
 
+  if (!('settlcurrfxratecalc' in order)) {
+    order.settlcurrfxratecalc = 0;
+  }
+
   if (!('symbolid' in order)) {
     order.symbolid = "";
   }
@@ -563,7 +589,7 @@ function newOrderSingle(order) {
       // script will publish the order back to the operator type if an order was created
       return;
     }
-    
+
     console.log("Order id: " + ret[1] + " forwarded to channel: " + ret[2]);
 
     // script will publish the order based on routing rules
@@ -809,6 +835,7 @@ function newQuote(quote) {
 function orderReject(exereport) {
   var text = "";
   var orderrejectreasonid = "";
+  var externalorderid = "";
 
   console.log("Order rejected");
   console.log(exereport);
@@ -817,11 +844,16 @@ function orderReject(exereport) {
   if ('ordrejreason' in exereport) {
     orderrejectreasonid = exereport.ordrejreason;
   }
+
   if ('text' in exereport) {
     text = exereport.text;
   }
 
-  db.eval(scriptrejectorder, 1, "broker:" + exereport.brokerid, exereport.brokerid, exereport.orderid, orderrejectreasonid, text, function(err, ret) {
+  if ('externalorderid' in exereport) {
+    externalorderid = exereport.externalorderid;
+  }
+
+  db.eval(scriptrejectorder, 1, "broker:" + exereport.brokerid, exereport.brokerid, exereport.orderid, orderrejectreasonid, text, externalorderid, function(err, ret) {
     if (err) {
       console.log(err);
       errorLog(exereport.brokerid, exereport.orderid, 2, 4, exereport.fixseqnumid, "8", "tradeserver.scriptrejectorder", "", err);
@@ -952,6 +984,10 @@ function processTrade(exereport) {
     exereport.settlcurrfxratecalc = 0;
   }
 
+  if (!('externalorderid' in exereport)) {
+    exereport.externalorderid = "";
+  }
+
   if (!('leavesqty' in exereport)) {
     exereport.leavesqty = 0;
   }
@@ -1020,7 +1056,7 @@ function processTrade(exereport) {
         errorLog(exereport.brokerid, exereport.orderid, 4, 4, exereport.fixseqnumid, "8", "tradeserver.scriptnewtrade", "", commonbo.getReasonDesc(ret[1]));
         return;
       }
-    
+
       console.log("Trade id: " + ret[1] + " forwarded ok");
 
       // trade published as part of script
@@ -1065,7 +1101,6 @@ function registerScripts() {
   var removefromorderbook;
   var cancelorder;
   var getcosts;
-  //var rejectorder;
   var adjustmarginreserve;
   //var getinitialmargin;
   //var updatetrademargin;
@@ -1189,7 +1224,7 @@ function registerScripts() {
   * publish an order cancel reject
   * params: brokerid, ordercancelrejectid
   * returns: 0, channelid if ok, else 1, error code
-  */  
+  */
   publishordercancelreject = commonbo.gethashvalues + commonbo.getchannel + '\
   local publishordercancelreject = function(brokerid, ordercancelrejectid) \
     redis.log(redis.LOG_NOTICE, "publishordercancelreject") \
@@ -1505,6 +1540,8 @@ function registerScripts() {
     --[[ add indices for quoteack ]] \
     local accountid = redis.call("hget", "broker:" .. brokerid .. ":quoterequest:" .. quoterequestid, "accountid") \
     redis.call("sadd", "broker:" .. brokerid .. ":quoteacks", quoteackid) \
+    --[[ add indices for quoteacks within the respective account ]] \
+    redis.call("sadd", "broker:" .. brokerid .. ":account:" .. accountid .. ":quoteacks", quoteackid) \
     redis.call("sadd", "broker:" .. brokerid .. ":quoteackid", "quoteack:" .. quoteackid) \
     --[[ add parent link details using client account ]] \
     local linkdetails = getparentlinkdetails(brokerid, accountid) \
@@ -1579,7 +1616,7 @@ function registerScripts() {
     local getsettlcurramt = function(brokerid, orderid, quantity, cashorderqty, price, ordertypeid) \
       if quantity == "" then \
         if cashorderqty == "" then \
-          rejectorder(brokerid, orderid, 0, "Either quantity or cashorderqty must be specified") \
+          rejectorder(brokerid, orderid, 0, "Either quantity or cashorderqty must be specified", "") \
           return {1, 1034} \
         else \
           return {0, tonumber(cashorderqty)} \
@@ -1590,12 +1627,12 @@ function registerScripts() {
             --[[ no price is correct for a market order ]] \
             return {0, ""} \
           else \
-            rejectorder(brokerid, orderid, 0, "Price must be specified for this type of order") \
+            rejectorder(brokerid, orderid, 0, "Price must be specified for this type of order", "") \
             return {1, 1049} \
           end \
         else \
           if tonumber(ordertypeid) == 1 then \
-            rejectorder(brokerid, orderid, 0, "Price should not be specified in a market order") \
+            rejectorder(brokerid, orderid, 0, "Price should not be specified in a market order", "") \
             return {1, 1050} \
           else \
             return {0, round(tonumber(quantity) * tonumber(price), 2)} \
@@ -1617,22 +1654,22 @@ function registerScripts() {
       --[[ see if symbol exists ]] \
       local symbol = gethashvalues("symbol:" .. symbolid) \
       if not symbol["symbolid"] then \
-        rejectorder(brokerid, orderid, 0, "Symbol not found") \
+        rejectorder(brokerid, orderid, 0, "Symbol not found", "") \
         return {1, 1015} \
       end \
       --[[ see if client is allowed to trade this type of product ]] \
       if redis.call("sismember", "broker:" .. brokerid .. ":client:" .. clientid .. ":instrumenttypes", symbol["instrumenttypeid"]) == 0 then \
-        rejectorder(brokerid, orderid, 0, "Client not authorised to trade this type of product") \
+        rejectorder(brokerid, orderid, 0, "Client not authorised to trade this type of product", "") \
         return {1, 1018} \
       end \
       --[[ see if valid order type ]] \
       if ordertypeid ~= "D" and tonumber(ordertypeid) ~= 1 and tonumber(ordertypeid) ~= 2 then \
-        rejectorder(brokerid, orderid, 0, "Order type not supported") \
+        rejectorder(brokerid, orderid, 0, "Order type not supported", "") \
         return {1, 1048} \
       end \
       local accountcurrencyid = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid, "currencyid") \
       if settlcurrencyid ~= accountcurrencyid then \
-        rejectorder(brokerid, orderid, 0, "Settlement currency does not match account currency") \
+        rejectorder(brokerid, orderid, 0, "Settlement currency does not match account currency", "") \
         return {1, 1051} \
       end \
       return {0, symbol} \
@@ -1649,11 +1686,11 @@ function registerScripts() {
   validmatchorder = commonbo.rejectorder + '\
     local validmatchorder = function(order) \
       if tonumber(order.ordertypeid) ~= 2 then \
-        rejectorder(order.brokerid, order.orderid, 0, "Order matching only supports limit orders") \
+        rejectorder(order.brokerid, order.orderid, 0, "Order matching only supports limit orders", "") \
         return {1, 1052} \
       end \
       if tonumber(order.leavesqty) <= 0 then \
-        rejectorder(order.brokerid, order.orderid, 0, "Order already filled") \
+        rejectorder(order.brokerid, order.orderid, 0, "Order already filled", "") \
         return {1, 1010} \
       end \
       return {0} \
@@ -1797,7 +1834,7 @@ function registerScripts() {
     local pubsub = publishorder(brokerid, orderid) \
     if pubsub[1] ~= 0 then \
       --[[ change the order status & try to publish again ]] \
-      rejectorder(brokerid, orderid, 0, "Channel not found") \
+      rejectorder(brokerid, orderid, 0, "Channel not found", "") \
       publishorder(brokerid, orderid) \
       return {pubsub[1], pubsub[2], orderid} \
     end \
@@ -1900,7 +1937,7 @@ function registerScripts() {
   --[[ get trading accountid if not specified ]] \
   local accountid \
   if ARGV[1] == "" then \
-    accountid = getclientaccountid(ARGV[2], ARGV[3], 1) \
+    accountid = getclientaccountid(ARGV[2], ARGV[3], 1, ARGV[12]) \
   else \
     accountid = ARGV[1] \
   end \
@@ -1925,10 +1962,10 @@ function registerScripts() {
  /*
   * scriptrejectorder
   * order rejected externally
-  * params: brokerid, orderid, orderrejectreasonid, text
+  * params: brokerid, orderid, orderrejectreasonid, text, externalorderid
   */
   scriptrejectorder = commonbo.rejectorder + publishorder + '\
-  rejectorder(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
+  rejectorder(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5]) \
   publishorder(ARGV[1], ARGV[2]) \
   return 0 \
   ';
@@ -2005,9 +2042,15 @@ function registerScripts() {
     end \
     --[[ store the order cancel reject ]] \
     local ordercancelrejectid = redis.call("hincrby", "broker:" .. brokerid, "lastordercancelrejectid", 1) \
-    redis.call("hmset", "broker:" .. brokerid .. ":ordercancelreject:" .. ordercancelrejectid, "brokerid", brokerid, "ordercancelrequestid", ordercancelrequestid, "orderid", orderid, "externalorderid", externalorderid, "orderstatusid", orderstatusid, "ordercancelrejectreasonid", ordercancelrejectreasonid, "text", text, "timestamp", timestamp, "markettimestamp", markettimestamp, "operatortype", operatortype) \
+    redis.call("hmset", "broker:" .. brokerid .. ":ordercancelreject:" .. ordercancelrejectid, "brokerid", brokerid, "ordercancelrequestid", ordercancelrequestid, "orderid", orderid, "externalorderid", externalorderid, "orderstatusid", orderstatusid, "ordercancelrejectreasonid", ordercancelrejectreasonid, "text", text, "timestamp", timestamp, "markettimestamp", markettimestamp, "operatortype", operatortype, "ordercancelrejectid", ordercancelrejectid) \
     redis.call("sadd", "broker:" .. brokerid .. ":ordercancelrejects", ordercancelrejectid) \
     redis.call("hmset", "broker:" .. brokerid .. ":ordercancelrequest:" .. ordercancelrequestid, "ordercancelrejectid", ordercancelrejectid) \
+    if orderid then \
+      local accountid = redis.call("hget", "broker:" .. brokerid .. ":order:" .. orderid, "accountid") \
+      if accountid then \
+        redis.call("sadd", "broker:" .. brokerid .. ":account:" .. accountid .. ":ordercancelrejects", ordercancelrejectid) \
+      end \
+    end \
     local ret = publishordercancelreject(brokerid, ordercancelrejectid) \
     if ret[1] ~= 0 then \
       return ret \
@@ -2033,11 +2076,12 @@ function registerScripts() {
     --[[ order not found ]] \
     return {1, 1009} \
   end \
-  local ordercancelrequestid = redis.call("incr", "broker:" .. brokerid .. ":lastordercancelrequestid") \
+  local ordercancelrequestid = redis.call("hincrby", "broker:" .. brokerid, "lastordercancelrequestid", 1) \
   --[[ store the order cancel request ]] \
   redis.call("hmset", "broker:" .. brokerid .. ":ordercancelrequest:" .. ordercancelrequestid, "brokerid", brokerid, "clientid", order.clientid, "accountid", order.accountid, "orderid", orderid, "timestamp", ARGV[5], "operatortype", ARGV[6], "operatorid", ARGV[7], "symbolid", order.symbolid, "ordercancelrequestid", ordercancelrequestid, "markettype", order.markettype) \
   redis.call("sadd", "broker:" .. brokerid .. ":ordercancelrequests", ordercancelrequestid) \
   redis.call("sadd", "broker:" .. brokerid .. ":order:" .. orderid .. ":ordercancelrequests", ordercancelrequestid) \
+  redis.call("sadd", "broker:" .. brokerid .. ":account:" .. order.accountid .. ":ordercancelrequests", ordercancelrequestid) \
   if order.orderstatusid == "2" then \
     --[[ already filled ]] \
     desc = "Order already filled" \
@@ -2154,7 +2198,7 @@ function registerScripts() {
  /*
   * called if an order has expired
   * params: brokerid, orderid
-  * returns: 1, error code if error, else 0 
+  * returns: 1, error code if error, else 0
   */
   scriptorderexpire = expireorder + publishorder + '\
   local ret = expireorder(ARGV[1], ARGV[2], "C") \

@@ -11,6 +11,7 @@
  * Modifications
  *  1 Oct 2017 - changes to support authorisation of a Redis connection
  * 13 Oct 2017 - added support for ordercancelrequest messages
+ * 30 Nov 2017 - changed 'cashorderquantity' to 'cashorderqty' in parse routine
  * *********************/
 
 #include "fix/fix_common.h"
@@ -231,7 +232,7 @@ void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
           else if (fixmsgtype == 'D')
             orders[numorders].quantity = atof(quantity);
           i++;
-        } else if (jsoneq(rr->element[2]->str, &t[i], "cashorderquantity") == 0) {
+        } else if (jsoneq(rr->element[2]->str, &t[i], "cashorderqty") == 0) {
           //printf("- cashorderquantity: %.*s\n", t[i+1].end-t[i+1].start, rr->element[2]->str + t[i+1].start);
           strncpy(cashorderquantity, rr->element[2]->str + t[i+1].start, t[i+1].end - t[i+1].start);
           *(cashorderquantity + t[i+1].end - t[i+1].start) = '\0';

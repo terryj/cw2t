@@ -94,6 +94,7 @@
 * 27 Oct 2017 - added item to getReasonDesc()
 * 28 Oct 2017 - removed symbol shortname lookup from getorderbook() and getorderbooktop())
 *             - added split() to getorderfromorderbook()
+* 30 Nov 2017 - added externalorderid to rejectorder()
 ************************/
 var utils = require('./utils.js');
 
@@ -690,10 +691,10 @@ exports.registerScripts = function () {
   * rejects an order with a reason & any additional text
   */
   rejectorder = '\
-  local rejectorder = function(brokerid, orderid, orderrejectreasonid, text) \
+  local rejectorder = function(brokerid, orderid, orderrejectreasonid, text, externalorderid) \
     redis.log(redis.LOG_NOTICE, "order rejected: " .. text) \
     if orderid ~= "" then \
-      redis.call("hmset", "broker:" .. brokerid .. ":order:" .. orderid, "orderstatusid", "8", "orderrejectreasonid", orderrejectreasonid, "text", text) \
+      redis.call("hmset", "broker:" .. brokerid .. ":order:" .. orderid, "orderstatusid", "8", "orderrejectreasonid", orderrejectreasonid, "text", text, "externalorderid", externalorderid) \
     end \
   end \
   ';
@@ -758,7 +759,7 @@ exports.registerScripts = function () {
   * get a symbol price
   * params: symbolid, side, valuecurrencyid
   * return: price, symbol currency price, symbol currency id, currency rate
-  */ 
+  */
   getprice = getcurrencyrate + '\
   local getprice = function(symbolid, side, valuecurrencyid) \
     local ret = {} \
@@ -2326,7 +2327,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
     return openlimittotal \
   end \
   ';
- 
+
   /*
   * creditcheck()
   * credit checks an order or trade
@@ -2353,7 +2354,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
           end \
           if side == 2 then \
               --[[ equity, so cannot sell more than we have ]] \
-              rejectorder(brokerid, orderid, 0, "Quantity greater than position quantity") \
+              rejectorder(brokerid, orderid, 0, "Quantity greater than position quantity", "") \
               return {1, 1019} \
           end \
           --[[ we are trying to close a quantity greater than current position, so need to check we can open a new position ]] \
@@ -2363,7 +2364,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
           --[[ get initial margin for remaining quantity after closing position ]] \
           temp.initialmargin = getinitialmargin(brokerid, symbolid, (quantity - math.abs(temp.posqty)) * price, totalcost) \
           if temp.initialmargin + totalcost > temp.freemargin + temp.margin then \
-            rejectorder(brokerid, orderid, 0, "Insufficient free margin") \
+            rejectorder(brokerid, orderid, 0, "Insufficient free margin", "") \
             return {1, 1020} \
           end \
           --[[ closing trade or enough margin to close & open a new position, so ok ]] \
@@ -2374,7 +2375,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
         local openlimitvalue = getopenlimitvalue(accountid, brokerid) \
         temp.account = getaccount(accountid, brokerid) \
         if (tonumber(temp.account["balance"]) + tonumber(temp.account["balanceuncleared"]) + tonumber(temp.account["creditlimit"])) == 0 or (tonumber(temp.account["balance"]) + tonumber(temp.account["balanceuncleared"]) + tonumber(temp.account["creditlimit"])) < settlcurramt + totalcost + openlimitvalue then \
-          rejectorder(brokerid, orderid, 0, "Insufficient funds") \
+          rejectorder(brokerid, orderid, 0, "Insufficient funds", "") \
           return {1, 1041} \
         end \
       else \
@@ -2386,13 +2387,13 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
         end \
         --[[ check there is a position ]] \
         if not temp.position then \
-          rejectorder(brokerid, orderid, 0, "No position held in this instrument") \
+          rejectorder(brokerid, orderid, 0, "No position held in this instrument", "") \
           return {1, 1003} \
         end \
         --[[ check the position is of sufficient size ]] \
         temp.posqty = tonumber(temp.position["quantity"]) \
         if temp.posqty < 0 or quantity > temp.posqty then \
-          rejectorder(brokerid, orderid, 0, "Insufficient position size in this instrument") \
+          rejectorder(brokerid, orderid, 0, "Insufficient position size in this instrument", "") \
           return {1, 1004} \
         end \
       end \
@@ -2400,7 +2401,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
         --[[ check free margin for all derivative trades ]] \
         temp.freemargin = getfreemargin(accountid, brokerid) \
         if temp.initialmargin + totalcost > temp.freemargin then \
-          rejectorder(brokerid, orderid, 0, "Insufficient free margin") \
+          rejectorder(brokerid, orderid, 0, "Insufficient free margin", "") \
           return {1, 1020} \
         end \
       end \
@@ -3038,6 +3039,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
     local getaccountforcurrency = function(account, brokerid, currencyid) \
       redis.log(redis.LOG_NOTICE, "getaccountforcurrency") \
       --[[ get the client ]] \
+      local isnewaccount = false \
       local client = getclientfromaccount(account.accountid, brokerid) \
       --[[ see if an account already exists for this client in this currency, if not create one ]] \
       local newaccountid = getclientaccountid(brokerid, client.clientid, account.accounttypeid, currencyid) \
@@ -3045,13 +3047,14 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
         local name = client.clientid .. " " .. client.name .. " " .. currencyid \
         --[[ set default(0) value for following fields balance, balanceuncleared, creditlimit, debitlimit, exdiff, exdiffuncleared, localbalance, localbalanceuncleared ]] \
         newaccountid = newaccount(account.accountgroupid, account.accounttaxtypeid, account.accounttypeid, 0, 0, brokerid, 0, currencyid, 0, 0, 0, account.exdiffdate, 0, 0, name, account.active, client.clientid, client.commissionid) \
+        isnewaccount = true \
         if newaccountid[1] == 1 then \
           newaccountid = "" \
         else \
           newaccountid = newaccountid[2] \
         end \
       end \
-      return newaccountid \
+      return { newaccountid, isnewaccount } \
     end \
   ';
 
@@ -3160,6 +3163,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   updatebenefitascash = transactiondividend + getclientfromaccount + getaccount + getaccountforcurrency + '\
   local updatebenefitascash = function(brokerid, position, corporateaction, benefit, timestamp, timestampms) \
     redis.log(redis.LOG_NOTICE, "updatebenefitascash") \
+    local newaccount = {} \
     if benefit.cash ~= 0 then \
       --[[ get account currency ]] \
       local account = getaccount(position.accountid, brokerid) \
@@ -3167,7 +3171,8 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       local currencyid \
       --[[ if the benefit currency does not match the position currency, we need to get an account in the benefit currency ]] \
       if benefit.currencyid and benefit.currencyid ~= account.currencyid then \
-        accountid = getaccountforcurrency(account, brokerid, benefit.currencyid) \
+        newaccount = getaccountforcurrency(account, brokerid, benefit.currencyid) \
+        accountid = newaccount[1] \
         currencyid = benefit.currencyid \
       else \
         accountid = position.accountid \
@@ -3179,7 +3184,11 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
         return retval \
       end \
     end \
-    return {0} \
+    if newaccount[2] then\
+      return {0, newaccount[1]} \
+    else \
+      return {0} \
+    end \
   end \
   ';
 
@@ -3192,6 +3201,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   updatebenefitasshares = newpositiontransaction + getaccount + getclientfromaccount + transactiondividend + getaccountforcurrency + '\
   local updatebenefitasshares = function(brokerid, position, corporateaction, benefit, timestamp, timestampms) \
     redis.log(redis.LOG_NOTICE, "updatebenefitasshares") \
+    local newaccount = {} \
     --[[ add any shares to the position ]] \
     if benefit.shares and benefit.shares ~= 0 then \
       --[[ calculate cost of shares ]] \
@@ -3209,7 +3219,8 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       local currencyid \
       --[[ if the benefit currency does not match the position currency, we need to get an account in the benefit currency ]] \
       if benefit.currencyid and benefit.currencyid ~= account.currencyid then \
-        accountid = getaccountforcurrency(account, brokerid, benefit.currencyid) \
+        newaccount = getaccountforcurrency(account, brokerid, benefit.currencyid) \
+        accountid = newaccount[1] \
         currencyid = benefit.currencyid \
       else \
         accountid = position.accountid \
@@ -3223,7 +3234,11 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
         return retval \
       end \
     end \
-    return {0} \
+    if newaccount[2] then\
+      return {0, newaccount[1]} \
+    else \
+      return {0} \
+    end \
   end \
   ';
 
@@ -3257,6 +3272,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
     redis.log(redis.LOG_NOTICE, "applybenefits") \
     local benefits = {} \
     local decision = {} \
+    local newaccount = {} \
     --[[ get the client option for a voluntary ca, default as per ca, usually 1 ]] \
     local optionid = corporateaction.defaultoptionid \
     if corporateaction.mandatoryorvoluntaryind ~= "M" then \
@@ -3286,10 +3302,16 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
           if ret[1] == 1 then \
             return ret \
           end \
+          if ret[2] then \
+            local account = {} \
+            account.id = ret[2] \
+            account.brokerid = brokerid \
+            table.insert(newaccount, account) \
+          end \
         end \
       end \
     end \
-    return {0, benefits} \
+    return {0, benefits, newaccount} \
   end \
   ';
 
@@ -3738,6 +3760,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
     local totunsettledquantity = 0 \
     local numaccounts = 0 \
     local totalbenefits = {} \
+    local newaccount = {} \
     --[[ get the corporate action ]] \
     local corporateaction = gethashvalues("corporateaction:" .. corporateactionid) \
     if not corporateaction.corporateactionid then \
@@ -3760,6 +3783,9 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
           local benefits = applybenefits(brokers[j], positions[i], corporateaction, timestamp, timestampms, mode) \
           if benefits[1] == 1 then \
             return benefits \
+          end \
+          for a = 0, #benefits[3] do \
+            table.insert(newaccount, benefits[3][a]) \
           end \
           for k = 1, #benefits[2] do \
             local isbenefitintotal = 0 \
@@ -3793,7 +3819,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       updatecastatus(corporateactionid, 1) \
     end \
     --[[ delete old account level index and create new index, this will update the postion which is created after corporate action created  ]] \
-    return {0, tostring(totquantity), tostring(totunsettledquantity), tostring(numaccounts), #brokers - 1, cjson.encode(totalbenefits)} \
+    return {0, tostring(totquantity), tostring(totunsettledquantity), tostring(numaccounts), #brokers - 1, cjson.encode(totalbenefits), cjson.encode(newaccount)} \
   ';
 
  /*
@@ -4256,37 +4282,119 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   ';
 
   /*
+  * sendtomonitorlogs()
+  * store details of system monitor log
+  * params: 1=timestamp, 2=ipaddress, 3=servertypeid, 4=status, 5=text
+  * returns: 0 + systemmonitorid  if log created successfully
+  */
+  sendtomonitorlogs = '\
+    local sendtomonitorlogs = function(timestamp, ipaddress, servertypeid, status, text) \
+      redis.log(redis.LOG_NOTICE, "sendtomonitorlogs") \
+      local systemmonitorid = {} \
+      if ipaddress ~= "" then \
+        redis.call("sadd", "servers", ipaddress .. ":" .. servertypeid) \
+      end \
+      redis.call("hmset", "server:" .. ipaddress .. ":" .. servertypeid, "ipaddress", ipaddress, "servertypeid", servertypeid, "status", status, "text", text, "timestamp", timestamp) \
+      if status and tonumber(status) == 1 then \
+        systemmonitorid = redis.call("hincrby", "config", "lastsystemmonitorid", 1) \
+        redis.call("hmset", "systemmonitor:" .. systemmonitorid, "systemmonitorid", systemmonitorid, "ipaddress", ipaddress, "servertypeid", servertypeid, "status", status, "text", text, "timestamp", timestamp) \
+        redis.call("sadd", "systemmonitor" ..  ":_indicies:" .. "systemmonitorid", systemmonitorid) \
+        redis.call("sadd", "systemmonitor" ..  ":systemmonitorbyservertype:" .. servertypeid, systemmonitorid) \
+      end \
+      return {0, systemmonitorid} \
+    end \
+  ';
+
+  exports.sendtomonitorlogs = sendtomonitorlogs + '\
+    return sendtomonitorlogs(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5]) \
+  ';
+
+  /*
+  * getsystemmonitorlogsbyserver()
+  * get details of system monitor log by server
+  * params: 1=severtypeid, 2=page, 3=limit, 4=sortorder
+  * returns: system monitor logs in json format
+  */
+  getsystemmonitorlogsbyserver = gethashvalues + '\
+    local getsystemmonitorlogsbyserver = function(severtypeid, page, limit, sortorder) \
+    redis.log(redis.LOG_NOTICE, "getsystemmonitorlogsbyserver") \
+    local temp = {} \
+    temp.tblresults = {} \
+    temp.systemmonitors = {} \
+    temp.from = (tonumber(page) * tonumber(limit)) - tonumber(limit) \
+    temp.systemmonitorids = redis.call("sort", "systemmonitor" .. ":systemmonitorbyservertype:" .. severtypeid, "limit", temp.from, limit, sortorder) \
+    if #temp.systemmonitorids >= 1 then \
+      for index = 1, #temp.systemmonitorids do \
+        local systemmonitor = gethashvalues("systemmonitor:" .. temp.systemmonitorids[index]) \
+        table.insert(temp.systemmonitors, systemmonitor) \
+      end \
+    end \
+    temp.tblresults.data = temp.systemmonitors \
+    temp.tblresults.totalrecords = redis.call("scard", "systemmonitor" .. ":systemmonitorbyservertype:" .. severtypeid) \
+    return cjson.encode(temp.tblresults) \
+  end \
+  ';
+
+  exports.getsystemmonitorlogsbyserver = getsystemmonitorlogsbyserver + '\
+    return getsystemmonitorlogsbyserver(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
+  ';
+
+  /*
   * getsystemmonitorlogs()
   * get details of system monitor log
-  * params: 1=page, 2=limit, 3=starttimestamp, 4=endtimestamp
+  * params: 1=page, 2=limit, 3=sortorder
   * returns: system monitor logs in json format
   */
   getsystemmonitorlogs = gethashvalues + '\
-    local getsystemmonitorlogs = function(page, limit, starttimestamp, endtimestamp, sortorder) \
+    local getsystemmonitorlogs = function(page, limit, sortorder) \
       redis.log(redis.LOG_NOTICE, "getsystemmonitorlogs") \
-      local tblsystemmonitorlogs = {} \
-      local systemmonitorlogids = {} \
-      local from = (tonumber(page) * tonumber(limit)) - tonumber(limit) \
-      if sortorder and sortorder == "asc" then \
-        systemmonitorlogids = redis.call("zrangebyscore", "systemmonitor:systemmonitorbydate", starttimestamp, endtimestamp, "limit", from, limit) \
-      else \
-        systemmonitorlogids = redis.call("zrevrangebyscore", "systemmonitor:systemmonitorbydate", endtimestamp, starttimestamp, "limit", from, limit) \
-      end \
-      if #systemmonitorlogids > 0 then \
-        for i = 1, #systemmonitorlogids do \
-          local systemmonitorlog = gethashvalues("systemmonitor:" .. systemmonitorlogids[i]) \
-          table.insert(tblsystemmonitorlogs, systemmonitorlog) \
+      local temp = {} \
+      temp.tblresults = {} \
+      temp.systemmonitors = {} \
+      temp.from = (tonumber(page) * tonumber(limit)) - tonumber(limit) \
+      temp.systemmonitorids = redis.call("sort", "systemmonitor" .. ":_indicies:" .. "systemmonitorid", "limit", temp.from, limit, sortorder) \
+      if #temp.systemmonitorids >= 1 then \
+        for index = 1, #temp.systemmonitorids do \
+          local systemmonitor = gethashvalues("systemmonitor:" .. temp.systemmonitorids[index]) \
+          table.insert(temp.systemmonitors, systemmonitor) \
         end \
       end \
-      local systemmonitorlogs = {} \
-      systemmonitorlogs.totalrecords = redis.call("scard", "systemmonitor:systemmonitors") \
-      systemmonitorlogs.data = tblsystemmonitorlogs \
-      return cjson.encode(systemmonitorlogs) \
+      temp.tblresults.data = temp.systemmonitors \
+      temp.tblresults.totalrecords = redis.call("scard", "systemmonitor" .. ":_indicies:" .. "systemmonitorid") \
+      return cjson.encode(temp.tblresults) \
     end \
   ';
 
   exports.getsystemmonitorlogs = getsystemmonitorlogs + '\
-    return getsystemmonitorlogs(ARGV[1], ARGV[2], ARGV[3], ARGV[4]) \
+    return getsystemmonitorlogs(ARGV[1], ARGV[2], ARGV[3]) \
+  ';
+
+  /*
+  * deletesystemmonitorlogs()
+  * deletet system monitor log of particular server
+  * params: 1=severid
+  * returns: 0 else error message returned
+  */
+  deletesystemmonitorlogs = '\
+    local deletesystemmonitorlogs = function(severtypeid) \
+    redis.log(redis.LOG_NOTICE, "deletesystemmonitorlogs") \
+    local temp = {} \
+    temp.systemmonitorids = redis.call("sort", "systemmonitor" .. ":systemmonitorbyservertype:" .. severtypeid) \
+    if #temp.systemmonitorids >= 1 then \
+      for index = 1, #temp.systemmonitorids do \
+        redis.call("del", "systemmonitor:" .. temp.systemmonitorids[index]) \
+        redis.call("del", "systemmonitor" .. ":systemmonitorbyservertype:" .. severtypeid, temp.systemmonitorids[index]) \
+        redis.call("srem", "systemmonitor:_indicies:systemmonitorid", temp.systemmonitorids[index]) \
+      end \
+      return {0} \
+    else \
+      return {1, "No records found"} \
+    end \
+  end \
+  ';
+
+  exports.deletesystemmonitorlogs = deletesystemmonitorlogs + '\
+    return deletesystemmonitorlogs(ARGV[1]) \
   ';
 
   /*
@@ -4347,5 +4455,16 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   ';
   exports.scriptgetcabyaccount = scriptgetcabyaccount + '\
     return scriptgetcabyaccount(ARGV[1], ARGV[2]) \
+  ';
+
+  getserverips = '\
+    local getserverips = function() \
+      local serverips = {} \
+      serverips = redis.call("smembers", "servers") \
+      return cjson.encode(serverips) \
+    end \
+  ';
+  exports.getserverips = getserverips + '\
+    return getserverips() \
   ';
 }

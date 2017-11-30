@@ -100,6 +100,7 @@ struct fix_executionreport {
   char onbehalfofcompid[30];
   char exchangeid[6];
   char lastmkt[6];
+  char text[128];
 };
 
 struct fix_ordercancelreject {

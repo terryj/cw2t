@@ -22,6 +22,7 @@
  *             - tidied receive logging here & send logging in /libtrading/proto/fix_message.c
  * 24 Nov 2017 - reverted recv call flag as otherwise call waits for socket data & ignores pubsub data
  *             - added errno check to handle lost connection
+ * 30 Nov 2017 - added Text field to fix_execution_report() & send_execution_report()
  * *********************/
 
 #include "fix/fix_common.h"
@@ -146,7 +147,6 @@ static int fix_client_session(struct fix_session_cfg *cfg)
                 check_for_data(session);
  
                 if (fix_session_recv(session, &msg, FIX_RECV_FLAG_MSG_DONTWAIT) > 0) {
-                        printf("Recd %s %.*s\n", session->str_now, (int) msg->iov[0].iov_len, (char*) msg->iov[0].iov_base);
 
 			if (fix_session_admin(session, msg))
 				continue;
@@ -861,6 +861,12 @@ static int fix_execution_report(struct fix_session *session, struct fix_message 
         } else
           strcpy(executionreport.execid, "");
 
+        field = fix_get_field(msg, Text);
+        if (field) {
+          fix_get_string(field, executionreport.text, sizeof(executionreport.text));
+        } else
+          strcpy(executionreport.text, "");
+
         send_execution_report(session, &executionreport);
 
         return 0;
@@ -883,7 +889,7 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
   brokerid = strtok_r(str, ":", &str);
   orderid = strtok_r(str, ":", &str);
 
-  sprintf(jsonexecutionreport, "%s%s%s%s%s%c%s%s%c%s%s%s%s%s%s%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%c%s%s%s%s%s%lu%s%s%s%s%s%s%s", "{\"executionreport\":{"
+  sprintf(jsonexecutionreport, "%s%s%s%s%s%c%s%s%c%s%s%s%s%s%s%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%c%s%s%s%s%s%lu%s%s%s%s%s%s%s%s%s%s", "{\"executionreport\":{"
     , "\"brokerid\":\"", brokerid, "\""
     , ",\"orderstatusid\":\"", executionreport->orderstatusid, "\""
     , ",\"exectype\":\"", executionreport->exectype, "\""
@@ -904,6 +910,7 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
     , ",\"fixseqnumid\":", session->in_msg_seq_num
     , ",\"onbehalfofcompid\":\"", executionreport->onbehalfofcompid, "\""
     , ",\"timestamp\":\"", session->str_now, "\""
+    , ",\"text\":\"", executionreport->text, "\""
     , "}}");
 
   fprintf(stdout, "%s - publish to trade server\n", session->str_now);
