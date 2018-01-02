@@ -14,16 +14,17 @@
 * Real-time partial record i.e. "publish 7 rp:BARC.L"
 * Real-time full record i.e. "publish 7 rf:BARC.L"
 * Snap full record i.e. "publish 7 snap:L.B***"
-*
 * Changes:
 * 3 September 2016 - modified getExchangeId() to split instrument code in a more flexible way to get exchange id
 * 6 November 2016 - added default mnemonic in case of no value returned
 * 14 December 2016 - added midprice to default symbol record
+* 24 Nov 2017 - added ping() for sending ping message every 30 seconds
 *****************/
 
 // node libraries
 var net = require('net');
 var fs = require('fs');
+var ip = require('ip');
 
 // external libraries
 var redis = require('redis');
@@ -32,12 +33,24 @@ var redis = require('redis');
 var commonfo = require('./commonfo.js');
 var commonbo = require('./commonbo.js');
 
-// redis
-var redishost;
-var redisport;
-var redisauth;
-var redispassword;
+var redisConfig = require('../config/auth.js').auth.redis[process.env.NODE_ENV];
+
+if (process.argv[2]) {
+  console.log('Price server running for "' + process.argv[2] + '" stocks.');
+} else {
+  console.log('Please specify the price server either "UK" or "INT"');
+  return;
+}
+//redis
+var redishost = redisConfig.host,
+  redisport = redisConfig.port,
+  redisauth = redisConfig.auth,
+  redispassword = redisConfig.password;
+
 var redislocal = true; // local or external server
+var isConnected = false; // to check connection status with NBTrader
+var timer = null;
+var systemmonitortimer = null;
 
 // globals
 var host; // ip address, get from database
@@ -45,8 +58,11 @@ var messageport; // port, get from database
 var buf = new Buffer(1024 * 2048); // incoming data buffer
 var bufbytesread = 0;
 var bytestoread = 0;
+var priceserverchannel = 0;
+var pricingipaddress;
+var pricingport;
 
-// regular or authenticated connection to redis
+/*// regular or authenticated connection to redis
 if (redislocal) {
   // local
   redishost = "127.0.0.1";
@@ -59,29 +75,43 @@ if (redislocal) {
   redisauth = true;
   redispassword = "4dfeb4b84dbb9ce73f4dd0102cc7707a";
 }
-
+*/
 // set-up a redis client
-db = redis.createClient(redisport, redishost);
+if (process.env.NODE_ENV == 'test')
+  db = redis.createClient('redis://' + redisConfig.host + ':' + redisConfig.port + '/' + redisConfig.database);
+else
+  db = redis.createClient(redisport, redishost, {no_ready_check: true});
+
+if (redisConfig.database) {
+  db.select(redisConfig.database, function(err) {
+    if (err) {
+      console.log('Priceserver: Error in switching DB index. Error: ', err);
+      return;
+    }
+  });
+}
+
 if (redisauth) {
   db.auth(redispassword, function(err) {
     if (err) {
       console.log(err);
       return;
     }
-    console.log("Redis authenticated at " + redishost + " port " + redisport);
+    console.log('Redis authenticated at ' + redishost + ' port ' + redisport);
     start();
   });
 } else {
-  db.on("connect", function(err) {
+  db.on('connect', function(err) {
     if (err) {
       console.log(err);
       return;
     }
-    console.log("connected to Redis at " + redishost + " port " + redisport);
+    console.log('connected to Redis at ' + redishost + ' port ' + redisport);
     start();
   });
 }
-db.on("error", function(err) {
+db.on('error', function(err) {
+  console.log('Error while connecting to redishost: ' + redishost);
   console.log(err);
 });
 
@@ -104,23 +134,43 @@ function initialise() {
 
 // pubsub connections
 function pubsub() {
-  dbsub = redis.createClient(redisport, redishost);
+  if (process.env.NODE_ENV == 'test')
+    dbsub = redis.createClient('redis://' + redisConfig.host + ':' + redisConfig.port + '/' + redisConfig.database);
+  else
+    dbsub = redis.createClient(redisport, redishost, {no_ready_check: true});
 
-  dbsub.on("subscribe", function(channel, count) {
-    console.log("subscribed to:" + channel + ", num. channels:" + count);
+  if (redisConfig.database) {
+    dbsub.select(redisConfig.database, function(err) {
+      if (err) {
+        console.log('Priceserver: Error in switching DB index. Error: ', err);
+        return;
+      }
+    });
+  }
+
+  if (redisauth) {
+    dbsub.auth(redispassword, function(err) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+    });
+  }
+  dbsub.on('subscribe', function(channel, count) {
+    console.log('subscribed to: ' + channel + ', num. channels: ' + count);
   });
 
-  dbsub.on("unsubscribe", function(channel, count) {
-    console.log("unsubscribed from:" + channel + ", num. channels:" + count);
+  dbsub.on('unsubscribe', function(channel, count) {
+    console.log('unsubscribed from: ' + channel + ', num. channels:' + count);
   });
 
-  dbsub.on("message", function(channel, message) {
-    console.log("received: " + message);
+  dbsub.on('message', function(channel, message) {
+    console.log('received: ' + message);
 
     try {
       var obj = JSON.parse(message);
 
-      if ("pricerequest" in obj) {
+      if ('pricerequest' in obj) {
         priceRequest(obj.pricerequest);
       }
     } catch (e) {
@@ -130,9 +180,19 @@ function pubsub() {
     }
   });
 
-  // listen for anything specifically for a price server
-  dbsub.subscribe(commonbo.priceserverchannel);
+  if (process.argv[2] == 'UK') {
+    priceserverchannel = commonbo.priceserverchannel;
+    pricingipaddress =  'pricingipaddressuk';
+    pricingport = 'pricingportuk';
+  } else if (process.argv[2] == 'INT') {
+    priceserverchannel = commonbo.priceserverchannel_int;
+    pricingipaddress =  'pricingipaddressint';
+    pricingport = 'pricingportint';
+  }
 
+  // listen for anything specifically for a price server
+  dbsub.subscribe(priceserverchannel);
+  console.log('Price server subscribed for channel: ' + priceserverchannel);
   // listen for position messages
   dbsub.subscribe(commonbo.positionchannel);
 }
@@ -141,30 +201,30 @@ function pubsub() {
 * get connection ip address & port & try to connect
 */
 function startToConnect() {
-  db.get("pricing:ipaddress", function(err, ipaddress) {
+  db.hget('config', pricingipaddress, function(err, ipaddress) {
     if (err) {
       console.log(err);
       return;
     }
 
-    if (ipaddress == null) {
-      console.log("Error: no ip address found - add key 'pricing:ipaddress'");
+    if (ipaddress == null || ipaddress == 0) {
+      console.log("Error: no ip address found - add key 'config', 'pricingip'");
       return;
     }
-
+    console.log(' Price server Ip address', ipaddress);
     host = ipaddress;
 
-    db.get("pricing:port", function(err, port) {
+    db.hget('config', pricingport, function(err, port) {
       if (err) {
         console.log(err);
         return;
       }
 
-      if (port == null) {
-        console.log("Error: no port found - add key 'pricing:port'");
+      if (port == null || port == 0) {
+        console.log("Error: no port found - add key 'config', 'pricingport'");
         return;
       }
-
+      console.log(' Price server port', port);
       messageport = port;
 
       // we have connection details, so we can try to connect
@@ -177,13 +237,16 @@ function startToConnect() {
 * try to connect to external feed
 */
 function tryToConnect() {
-  console.log("trying to connect to host: " + host + ", port:" + messageport);
+  console.log('trying to connect to host: ' + host + ', port: ' + messageport);
 
   conn = net.connect(messageport, host, function() {
-    console.log('connected to: ' + host);
-
     // we are connected, so can request subscriptions();
     getSubscriptions();
+  });
+
+  conn.on('connect', function() {
+    console.log('Connected to: ' + host + ' at: ' +  new Date());
+    isConnected = true;
   });
 
   conn.on('data', function(data) {
@@ -191,13 +254,48 @@ function tryToConnect() {
   });
 
   conn.on('end', function() {
-    console.log('disconnected from: ' + host);
-    tryToConnect();
+    console.log('Disconnected from: ' + host + ' at: ' + new Date());
+    isConnected = false;
+    if (!timer) {
+      timer = setInterval(retryConnection, 5000);
+    }
   });
 
   conn.on('error', function(error) {
-    console.log(error);
+    console.log('Error while connecting to ' + host + '. at: ' + new Date());
+    console.log('Error: ', error);
+    if (!timer) {
+      timer = setInterval(retryConnection, 5000);
+    }
   });
+}
+
+// retrying connection
+function retryConnection() {
+  if (!isConnected) {
+    tryToConnect();
+  } else {
+    clearInterval(timer);
+    timer = null;
+  }
+}
+
+if (!systemmonitortimer) {
+  systemmonitortimer = setInterval(ping, 30000);
+}
+// servertypeid `2` for UK price server and `3` for INT price server
+// status `0` indicates that server is active else `1`
+function ping() {
+  var message = {
+    ping: {
+      ipaddress: ip.address(),
+      servertypeid: (process.argv[2] == 'UK') ? 2 : 3,
+      status: 0,
+      text: '',
+      timestamp: commonbo.getUTCTimeStamp(new Date())
+    }
+  };
+  db.publish(commonbo.systemmonitorchannel, JSON.stringify(message));
 }
 
 /*
@@ -207,7 +305,7 @@ function getSubscriptions() {
 }
 
 function priceRequest(pricerequest) {
-  console.log("pricerequest");
+  console.log('pricerequest');
 
   console.log(pricerequest);
 
@@ -234,7 +332,7 @@ function parse(data) {
   //console.log('data recd');
   //console.log(data);
 
-  // need something in these fields for script 
+  // need something in these fields for script
   instrec.bid = "";
   instrec.ask = "";
   instrec.midprice = "";
@@ -431,7 +529,7 @@ function subscribe(symbolid) {
     buf[25+nbtsymbollen] = 30;
     buf.write("-375", 26+nbtsymbollen); // midpercentchange
     buf[30+nbtsymbollen] = 28;
-  
+
     conn.write(buf);
   });
 }
@@ -492,8 +590,7 @@ function updateDb(functioncode, instrumentcode, instrec) {
       }
 
       console.log("creating..." + instrumentcode);
-
-      // filtering and deleting empty fields from object
+      // filtering empty fields from object
       var fields = Object.keys(dbinstrec);
       if (fields.length > 0) {
         fields.forEach(function(field) {
@@ -501,6 +598,11 @@ function updateDb(functioncode, instrumentcode, instrec) {
             delete dbinstrec[field];
           }
         });
+      }
+      dbinstrec.hedgesymbolid = "";
+      // If shortname is same as symbolid, then ignore the shortname value
+      if (dbinstrec.shortname && dbinstrec.shortname == instrumentcode) {
+        delete dbinstrec.shortname;
       }
       // create/update the symbol & related sets
       db.hmset("symbol:" + instrumentcode, dbinstrec);
@@ -514,7 +616,6 @@ function updateDb(functioncode, instrumentcode, instrec) {
           db.set("isin:" + dbinstrec.isin, dbinstrec.symbolid);
           // checking the shortname
           if (dbinstrec.shortname && dbinstrec.shortname !== instrumentcode) {
-            // adding/updating symbol information in symbol search index
             db.zadd("symbol:id_shortname", 0, (dbinstrec.symbolid).toUpperCase() + ":" + (dbinstrec.shortname).toUpperCase() + ":" + (dbinstrec.isin).toUpperCase());
           }
         }
@@ -545,7 +646,6 @@ function updateDb(functioncode, instrumentcode, instrec) {
       });*/
     }
   }
-  // setting empty values if fields value undefined or null
   instrec.bid = instrec.bid || '';
   instrec.ask = instrec.ask || '';
   instrec.midnetchange = instrec.midnetchange || '';
@@ -579,6 +679,7 @@ function getDbInstrec(instrumentcode, instrec) {
   dbinstrec.timestamp = instrec.timestamp;
   dbinstrec.timezoneid = instrec.timezoneid;
   dbinstrec.countrycodeid = instrec.countryofissue;
+
   // we need a mnemonic as this is used in the trade feed
   if (instrec.mnemonic == "") {
     dbinstrec.mnemonic = instrumentcode.split(".")[0];
@@ -1388,6 +1489,4 @@ function getError(errorcode) {
   }
 
   return desc;
-  instrec.midprice = "";
 }
-

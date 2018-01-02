@@ -7,6 +7,7 @@
 * Mods:
 * Jan 11 2017 - changed fixsequence number handling, ouch!
 * Jan 27 2017 - updated in & out message scripts to not store heartbeats
+* Apr 6  2017 - fixed error updating next incoming fix sequence number in scriptfixmessagein
 * * ****************/
 
 // avoids DEPTH_ZERO_SELF_SIGNED_CERT error for self-signed certs
@@ -38,7 +39,7 @@ var heartbtint = 30; // heart beat interval in seconds
 var transmissiontime = 3; // transmission time in seconds
 var matchtestreqid;
 var messagerecoveryinrequested = false; // flag to show we have requested resend of some incoming messages
-var messagerecoveryinstarted = false;	// flag to show we are in the process of recovering incoming messages
+var messagerecoveryinstarted = false; // flag to show we are in the process of recovering incoming messages
 var nextseqnumin; // store the next sequence number in when resetting stored value for resend request
 var nextseqnumout; // next sequence number out
 var messagerecoveryout = false; // flag to indicate we are in a resend process for outgoing messages
@@ -46,7 +47,6 @@ var sequencegapnum = 0; // sequence gap starting message number
 var resendrequestrequired = false; // indicates we need to do our own resend request once we have serviced a resend request
 var resendrequired = false; // indicates we need to service a resend request when we have finished our own resend request
 var resendbody = ""; // stores resend request message
-//var settlmnttyp = '6'; // indicates a settlement date is being used, rather than a number of days
 var norelatedsym = '1'; // number of related symbols in a request, always 1
 var idsource = '4'; // indicates ISIN is to be used to identify a security
 //var securitytype = 'CS'; // common stock
@@ -647,9 +647,7 @@ function completeMessage(tagvalarr, self, endtag) {
     if (header.possdupflag == 'Y') {
       if (messagerecoveryinrequested) {
         // this is the start of the recovery process
-        // set the stored value to the first value requested & set started flag
         console.log('message recovery started');
-        db.hset("config", "lastfixseqnumin", nextseqnumin - 1);
         messagerecoveryinrequested = false;
         messagerecoveryinstarted = true;
       }
@@ -658,7 +656,7 @@ function completeMessage(tagvalarr, self, endtag) {
         // we are waiting for the first resend message, so just ignore
         if (header.msgtype == '2') {
           resendbody = body;
-          resendrequired = true; 
+          resendrequired = true;
         }
         return;
       }
@@ -688,24 +686,24 @@ function completeMessage(tagvalarr, self, endtag) {
         return;
       } else {
         if (header.msgtype == 'A') {
-    if ('resetseqnumflag' in body) {
-      // resetting sequence numbers, allow to pass through - todo: check & test this
-    } else {
-      // normal logon reply & we haven't missed anything, so just set the stored sequence number to that received
-      console.log("Resetting incoming sequence number to: " + header.msgseqnum);
-      db.hset("config", "nextfixseqnumin", header.msgseqnum);
-    }
+          if ('resetseqnumflag' in body) {
+            // resetting sequence numbers, allow to pass through - todo: check & test this
+          } else {
+            // normal logon reply & we haven't missed anything, so just set the stored sequence number to that received
+            console.log("Resetting incoming sequence number to: " + header.msgseqnum);
+            db.hset("config", "nextfixseqnumin", header.msgseqnum);
+          }
         } else if (header.msgtype == '5') {
           if ('text' in body) {
-      console.log("logout text received: " + body.text);
+            console.log("logout text received: " + body.text);
           }
 
-    // we have been logged out & will be disconnected by the other side, just exit & try again
+          // we have been logged out & will be disconnected by the other side, just exit & try again
           return;
         } else {
           // serious error, abort
           disconnect(self);
-    return;
+          return;
         }
       }
     } else if (parseInt(header.msgseqnum) > parseInt(nextseqnumin)) {
@@ -713,8 +711,8 @@ function completeMessage(tagvalarr, self, endtag) {
 
       // check for sequence reset as this overrides any sequence number processing
       if (header.msgtype == '4') {
-        sequenceReset(body, fixseqnumin);
-  return;
+        sequenceReset(body, self);
+        return;
       }
 
       if (header.msgtype == '5') {
@@ -737,7 +735,7 @@ function completeMessage(tagvalarr, self, endtag) {
         // so, just ignore, it should be handled as part of the resend
         if (header.msgtype == '2') {
           resendbody = body;
-          resendrequired = true; 
+          resendrequired = true;
         }
         return;
       } else {
@@ -1421,7 +1419,7 @@ function testRequestReply(reqid) {
 
 function resendRequestReceived(resendrequest, self) {
   console.log("resendRequestReceived, begin:" + resendrequest.beginseqno + ", end: " + resendrequest.endseqno);
-  
+
   // check we have a valid begin & end sequence number
   // end number may be '0' to indicate infinity
   if (resendrequest.beginseqno < 1 || (resendrequest.endseqno < resendrequest.beginseqno && resendrequest.endseqno != 0)) {
@@ -1460,7 +1458,7 @@ function resendMessage(msgno, endseqno, self) {
     if (ret[0] == 1) {
       console.log("unable to find message:" + msgno);
       sequencegaptimestamp = commonbo.getUTCTimeStamp(new Date());
-      
+
       if (sequencegapnum != 0) {
         sequenceGap(sequencegapnum, endseqno, sequencegaptimestamp);
       } else {
@@ -1500,13 +1498,13 @@ function resendMessage(msgno, endseqno, self) {
       // have we reached the last stored message?
       if (msgno == parseInt(nextseqnumout) - 1) {
         // send any sequence gap message
-  if (sequencegapnum != 0) {
+        if (sequencegapnum != 0) {
           sequenceGap(sequencegapnum, msgno, sequencegaptimestamp);
         }
 
         // we are done
-  doneResending();
-  return;
+        doneResending();
+        return;
       }
 
       // keep on going
@@ -1562,31 +1560,31 @@ function sequenceGap(beginnum, endnum, timestamp) {
   msg = '123=' + 'Y' + SOH
     + '36=' + newseqnum + SOH;
 
-  // send as a resend so message gets sent as message number beginnum 
+  // send as a resend so message gets sent as message number beginnum
   sendMessage('4', "", "", msg, true, beginnum, timestamp, "", "", "");
 
   sequencegapnum = 0;
 }
 
 function checksum(msg) {
-    var chksm = 0;
-    var checksumstr = '';
+  var chksm = 0;
+  var checksumstr = '';
 
-    for (var i = 0; i < msg.length; ++i) {
-        chksm += msg.charCodeAt(i);
-    }
+  for (var i = 0; i < msg.length; ++i) {
+    chksm += msg.charCodeAt(i);
+  }
 
-    chksm = chksm % 256;
+  chksm = chksm % 256;
 
-    if (chksm < 10) {
-        checksumstr = '00' + (chksm + '');
-    } else if (chksm >= 10 && chksm < 100) {
-        checksumstr = '0' + (chksm + '');
-    } else {
-        checksumstr = '' + (chksm + '');
-    }
+  if (chksm < 10) {
+    checksumstr = '00' + (chksm + '');
+  } else if (chksm >= 10 && chksm < 100) {
+    checksumstr = '0' + (chksm + '');
+  } else {
+    checksumstr = '' + (chksm + '');
+  }
 
-    return checksumstr;
+  return checksumstr;
 }
 
 Nbt.prototype.getSessionRejectReason = function(reason) {
@@ -1675,6 +1673,7 @@ function registerScripts() {
     local fixseqnumout = ARGV[9] \
     local fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
     redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", msgtype, "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumout", fixseqnumout, "fixseqnumid", fixseqnumid) \
+    redis.call("sadd", "fixmessage:fixmessages", fixseqnumid) \
     --[[ set a key so we can get to the stored message from the outgoing fix sequence number ]] \
     redis.call("set", "fixseqnumout:" .. fixseqnumout .. ":fixseqnumid", fixseqnumid) \
     --[[ where possible, link the fix message back to the originating message ]] \
@@ -1701,10 +1700,11 @@ function registerScripts() {
   if msgtype ~= "0" then \
     fixseqnumid = redis.call("hincrby", "config", "lastfixseqnumid", 1) \
     redis.call("hmset", "fixmessage:" .. fixseqnumid, "msgtype", msgtype, "onbehalfofcompid", ARGV[2], "delivertocompid", ARGV[3], "message", ARGV[4], "timestamp", ARGV[5], "brokerid", ARGV[6], "businessobjectid", ARGV[7], "businessobjecttypeid", ARGV[8], "fixseqnumid", fixseqnumid, "fixseqnumin", fixseqnumin) \
+    redis.call("sadd", "fixmessage:fixmessages", fixseqnumid) \
   end \
-  local nextfixseqnumin = redis.call("hget", "get", "nextfixseqnumin") \
+  local nextfixseqnumin = redis.call("hget", "config", "nextfixseqnumin") \
   if tonumber(fixseqnumin) == tonumber(nextfixseqnumin) then \
-    nextfixseqnumin = redis.call("hincrby", "config", "nextfixseqnumin", 1) \
+    redis.call("hincrby", "config", "nextfixseqnumin", 1) \
   end \
   return {nextfixseqnumin, fixseqnumid} \
   ';

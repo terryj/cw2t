@@ -335,15 +335,23 @@ exports.utils = function () {
     end \
     return {0, cjson.encode(gethashvalues("timezones:" .. temp.timezoneid))} \
   ';
-
+ /*
+  * getbrokeridlist()
+  * get all brokers id
+  */
+  getbrokeridlist = '\
+    local getbrokeridlist = function() \
+      return redis.call("smembers", "brokers") \
+    end \
+  ';
   /*
-  * isvalid()
+  * isuservalid()
   * This script is used to validate userid
   * params: brokerid, userid
   * returns: true if success else false
   */
-  isvalid = '\
-    local isvalid = function(brokerid, userid) \
+  isuservalid = '\
+    local isuservalid = function(brokerid, userid) \
       local value = redis.call("hget", "broker:" .. brokerid .. ":user:" .. userid, "userid") \
       redis.log(redis.LOG_NOTICE, value) \
       if value then \
@@ -354,8 +362,8 @@ exports.utils = function () {
     end \
   ';
 
-  exports.isvalid = isvalid + '\
-    return isvalid(ARGV[1], ARGV[2]) \
+  exports.isuservalid = isuservalid + '\
+    return isuservalid(ARGV[1], ARGV[2]) \
   ';
   /*
    * count()
@@ -425,6 +433,22 @@ exports.utils = function () {
     end \
   ';
   exports.replace = replace;
+  /*
+   * sortclients()
+   * This script used to sort client array
+   * params: unsortedarray
+   * returns: sorted array
+   */
+  sortclients = '\
+    local sortclients = function(a, b) \
+      if tonumber(a.brokerid) == tonumber(b.brokerid) then \
+        return tonumber(a.clientid) < tonumber(b.clientid) \
+      else \
+        return tonumber(a.brokerid) < tonumber(b.brokerid) \
+      end \
+    end \
+  ';
+  exports.sortclients = sortclients;
   /*
    * sorttransaction()
    * This script used to sort transaction array
@@ -801,7 +825,7 @@ exports.utils = function () {
    */
   removeaddtionlaindex = '\
     local removeaddtionlaindex = function(brokerid, primarykey, primaryid, linktype, linkid) \
-      redis.log(redis.LOG_NOTICE, "createaddtionalindex") \
+      redis.log(redis.LOG_NOTICE, "removeaddtionlaindex") \
       if tonumber(linktype) == 2 or tonumber(linktype) == 3 then \
         if tonumber(linktype) == 2 then \
           local parentdetails = redis.call("hmget", getindexkey(brokerid, linktype, linkid, ""), "linktype", "linkid") \
@@ -965,19 +989,19 @@ exports.utils = function () {
   /*
   * updateaddtionaltimeindex()
   * This script used to add ids to trade addtional indexes
-  * params: brokerid, primarykey, primaryid, linktype, linkid, time
+  * params: brokerid, indexkey, value, linktype, linkid, score
   */
   updateaddtionaltimeindex = getindexkey + '\
-    local updateaddtionaltimeindex = function(brokerid, indexkey, primaryid, linktype, linkid, time) \
+    local updateaddtionaltimeindex = function(brokerid, indexkey, value, linktype, linkid, score) \
       redis.log(redis.LOG_NOTICE, "updateaddtionaltimeindex") \
       if tonumber(linktype) == 2 or tonumber(linktype) == 3 then \
         if tonumber(linktype) == 2 then \
           local parentdetails = redis.call("hmget", getindexkey(brokerid, linktype, linkid, ""), "linktype", "linkid") \
           if tonumber(parentdetails[1]) == 3 then \
-            redis.call("zadd", getindexkey(brokerid, parentdetails[1], parentdetails[2], indexkey), time, primaryid) \
+            redis.call("zadd", getindexkey(brokerid, parentdetails[1], parentdetails[2], indexkey), score, value) \
           end \
         end \
-        redis.call("zadd", getindexkey(brokerid, linktype, linkid, indexkey), time, primaryid) \
+        redis.call("zadd", getindexkey(brokerid, linktype, linkid, indexkey), score, value) \
       end \
     end \
   ';
@@ -1036,7 +1060,7 @@ exports.utils = function () {
         end \
       end \
       temp.commission.commissionrange = temp.tblresults \
-      return {0, cjson.encode(temp.commission)} \
+      return {0, temp.commission} \
     end \
   ';
   exports.getcommissionstructure = getcommissionstructure;
@@ -1053,7 +1077,10 @@ exports.utils = function () {
       commission.brokerkey = "broker:" .. brokerid \
       commission.commissionid = redis.call("hget", commission.brokerkey .. ":account:" .. accountid, "commissionid") \
       commission.result = getcommissionstructure(brokerid, commission.commissionid) \
-      commission.structure = cjson.decode(commission.result[2]) \
+      if commission.result[1] == 1 then \
+        return commission.result \
+      end \
+      commission.structure = commission.result[2] \
       commission.range = commission.structure["commissionrange"] \
       commission.min = tonumber(commission.structure["commissionmin"]) \
       commission.max = tonumber(commission.structure["commissionmax"]) \
@@ -1075,7 +1102,7 @@ exports.utils = function () {
       elseif tonumber(commission.amount) > commission.max then \
         commission.amount = commission.max \
       end \
-      return tostring(commission.amount) \
+      return {0, tostring(commission.amount)} \
     end \
   ';
   exports.getcommission = getcommission;
@@ -1499,12 +1526,17 @@ exports.utils = function () {
   * validate client for trading process
   * params: brokerid, clientid
   */
-  validatecommission = '\
+  validatecommission = getclientidbyaccount + '\
     local validatecommission = function(brokerid, accountid) \
       redis.log(redis.LOG_NOTICE, "validatecommission") \
+      local clientid = getclientidbyaccount(brokerid, accountid) \
+      local isactive = redis.call("hget", "broker:" .. brokerid .. ":client:" .. clientid, "statusid") \
+      if not isactive or isactive == "" or tonumber(isactive) == 1 then \
+        return {1, "Given client is not active, please update the selected client detail"} \
+      end \
       local commission = redis.call("hget", "broker:" .. brokerid .. ":account:" .. accountid, "commissionid") \
       if not commission or commission == "" or tonumber(commission) == 0 then \
-        return {1, "Please assign a valid commission to the selected client account to perform trades"} \
+        return {1, "Please assign a commission to the selected client account to perform trades"} \
       end \
       return {0} \
     end \
@@ -1734,12 +1766,33 @@ exports.utils = function () {
     end \
   ';
   /*
+   * getclientbalance()
+   * script to get client total case balance by clientid.
+   * params : brokerid, clientid
+   * returns: total cash balance
+   */
+  getclientbalance = round + '\
+    local getclientbalance = function(brokerid, clientid) \
+      local clientaccounts = redis.call("sort", "broker:" .. brokerid .. ":client:" .. clientid .. ":clientaccounts") \
+      local totalbalance = 0 \
+      local balance = 0 \
+      for i = 1, #clientaccounts do \
+        balance = redis.call("hmget", "broker:" .. brokerid .. ":account:" .. clientaccounts[i], "balance", "balanceuncleared") \
+        totalbalance = totalbalance + tonumber(balance[1]) + tonumber(balance[2]) \
+      end \
+      return round(totalbalance, 2) \
+    end \
+  ';
+  exports.getclientbalance = getclientbalance + '\
+    return getclientbalance(ARGV[1], ARGV[2]) \
+  ';
+  /*
    * getclient()
    * This script used to get client details.
    * params: brokerid, clientid
    * returns: 0 + client object if ok, else 1 + an error message if unsuccessful
    */
-  getclient = gethashvalues + '\
+  getclient = gethashvalues + getclientbalance + '\
     local getclient = function (brokerid, clientid) \
       redis.log(redis.LOG_NOTICE, "getclient") \
       local temp = {} \
@@ -1755,8 +1808,22 @@ exports.utils = function () {
         temp.client.isaccountactive = 1 \
       end \
       temp.client.password = nil \
+      temp.client.balance = getclientbalance(brokerid, clientid) \
       return temp.client \
     end \
   ';
   exports.getclient = getclient;
+  /**
+   * isemailenabled
+   * params ARGV[1] = brokerid
+   * returns true or flase
+   */
+  exports.isemailenabled = '\
+    redis.log(redis.LOG_NOTICE, "isemailenabled") \
+    local isemailenabled = redis.call("get", "broker:0:emailenabled") \
+    if tonumber(isemailenabled) == 1 then \
+      return redis.call("get", "broker:" .. ARGV[1] .. ":emailenabled") \
+    end \
+    return 0 \
+  ';
 }

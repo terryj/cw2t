@@ -4,6 +4,8 @@
 * Cantwaittotrade Limited
 * Terry Johnston
 * December 2013
+* Changes:
+* 24 Mar 2017 - modified round
 ****************/
 
 exports.registerScripts = function () {
@@ -11,8 +13,7 @@ exports.registerScripts = function () {
 
   round = '\
   local round = function(num, dp) \
-    local mult = 10 ^ (dp or 0) \
-    return math.floor(num * mult + 0.5) / mult \
+    return string.format("%0." .. dp .. "f", num) \
   end \
   ';
 
@@ -22,25 +23,12 @@ exports.registerScripts = function () {
   // params: brokerid, clientid
   // returns: watchlistid
   //
-  watchlistnew = '\
+  watchlistnew = round + '\
   local watchlistnew = function(brokerid, clientid) \
     local watchlistid = redis.call("hincrby", "config", "lastwatchlistid", 1) \
     redis.call("hset", "broker:" .. brokerid .. ":client:" .. clientid, "watchlistid", watchlistid) \
     redis.call("set", "watchlist:" .. watchlistid .. ":client", brokerid .. ":" .. clientid) \
     return watchlistid \
-  end \
-  ';
-  //
-  // addsymboltowatchlist
-  // params: watchlistid, symbolid
-  // This method will add the given symbol to given watch list
-  //
-  addsymboltowatchlist = '\
-  local addsymboltowatchlist = function(watchlistid, symbolid) \
-    --[[ add the symbol to the watchlist ]] \
-    redis.call("sadd", "watchlist:" .. watchlistid, symbolid) \
-    --[[ add this watchlist to the set watching this symbol ]] \
-    redis.call("sadd", "symbol:" .. symbolid .. ":watchlists", watchlistid) \
   end \
   ';
 
@@ -50,13 +38,18 @@ exports.registerScripts = function () {
   //
   subscribesymbol = '\
   local subscribesymbol = function(symbolid, watchlistid) \
-    local symbol = redis.call("hmget", "symbol:" .. symbolid, "nbtsymbol", "exchangeid") \
+    local nbtsymbol = redis.call("hget", "symbol:" .. symbolid, "nbtsymbol") \
+    local exchangeid = redis.call("hget", "symbol:" .. symbolid, "exchangeid") \
     --[[ subscribe to this symbol, either UK or international price feed ]] \
-    if symbol[2] == "L" then \
-      redis.call("publish", 7, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. symbol[1]) .. "}") \
+    if exchangeid == "L" then \
+      redis.call("publish", 7, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. nbtsymbol) .. "}") \
     else \
-      redis.call("publish", 12, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. symbol[1]) .. "}") \
+      redis.call("publish", 12, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("rp:" .. nbtsymbol) .. "}") \
     end \
+    --[[ add the symbol to the watchlist ]] \
+    redis.call("sadd", "watchlist:" .. watchlistid, symbolid) \
+    --[[ add this watchlist to the set watching this symbol ]] \
+    redis.call("sadd", "symbol:" .. symbolid .. ":watchlists", watchlistid) \
   end \
   ';
 
@@ -72,12 +65,13 @@ exports.registerScripts = function () {
     redis.call("srem", "symbol:" .. symbolid .. ":watchlists", watchlistid) \
     --[[ if there are no watchlists subscribed to this symbol, unsubscribe from this symbol ]] \
     if redis.call("scard", "symbol:" .. symbolid .. ":watchlists") == 0 then \
-      local symbol = redis.call("hmget", "symbol:" .. symbolid, "nbtsymbol", "exchangeid") \
+      local nbtsymbol = redis.call("hget", "symbol:" .. symbolid, "nbtsymbol") \
+      local exchangeid = redis.call("hget", "symbol:" .. symbolid, "exchangeid") \
       --[[ unsubscribe this symbol from either the UK or international price feed ]] \
-      if symbol[2] == "L" then \
-        redis.call("publish", 7, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. symbol[1]) .. "}") \
+      if exchangeid == "L" then \
+        redis.call("publish", 7, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. nbtsymbol) .. "}") \
       else \
-        redis.call("publish", 12, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. symbol[1]) .. "}") \
+        redis.call("publish", 12, "{" .. cjson.encode("pricerequest") .. ":" .. cjson.encode("halt:" .. nbtsymbol) .. "}") \
       end \
     end \
   end \
@@ -87,7 +81,7 @@ exports.registerScripts = function () {
   // script to subscribe a client to a symbol
   // params: brokerid, clientid, symbolid
   //
-  exports.scriptsubscribesymbol = watchlistnew + subscribesymbol + addsymboltowatchlist + '\
+  exports.scriptsubscribesymbol = watchlistnew + subscribesymbol + '\
   local brokerid = ARGV[1] \
   local clientid = ARGV[2] \
   local symbolid = ARGV[3] \
@@ -98,7 +92,6 @@ exports.registerScripts = function () {
     watchlistid = watchlistnew(brokerid, clientid) \
   end \
   subscribesymbol(symbolid, watchlistid) \
-  addsymboltowatchlist(watchlistid, symbolid) \
   return \
   ';
 
@@ -175,11 +168,12 @@ exports.registerScripts = function () {
   local symbolid = ARGV[1] \
   local subscriptions = {} \
   --[[ get the watchlists with this symbol ]] \
-  local watchlists = redis.call("smembers", "symbol:" .. symbolid .. ":watchlists") \
+  local watchlists = redis.call("sadd", "symbol:" .. symbolid .. ":watchlists") \
   for i = 1, #watchlists do \
     --[[ get the broker:client who owns this watchlist ]] \
     local brokerclient = redis.call("get", "watchlist:" .. watchlists[i] .. ":client") \
     table.insert(subscriptions, brokerclient) \
+    end \
   end \
   return cjson.encode(subscriptions) \
   ';

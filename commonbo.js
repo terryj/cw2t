@@ -120,7 +120,6 @@ exports.registerScripts = function () {
   exports.commsserverchannel = 16;
   exports.matchorderchannel = 17;
 
-  exports.holidays = [];
   /*** Functions ***/
 
   round = '\
@@ -2801,6 +2800,8 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
     redis.call("rpush", "contractnotes", brokerid .. ":" .. trade.gentradeid) \
     --[[ add to a system wide index of trades by settlementstatus for CREST ]] \
     updatetradesettlestatusindex(brokerid, trade.gentradeid, "", "000") \
+    --[[ add to a system broker for fetching all trades of all clients ]] \
+    redis.call("sadd", "broker:0:trades", brokerid .. ":" .. trade.gentradeid) \
     updateaddtionalindex(brokerid, "trades", trade.gentradeid, trade.linktype, trade.linkid, "", "") \
     if orderid ~= "" then \
       redis.call("sadd", trade.brokerkey .. ":order:" .. orderid .. ":trades", trade.gentradeid) \
@@ -2808,6 +2809,8 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
     redis.call("zadd", trade.brokerkey .. ":account:" .. accountid .. ":tradesbydate", timestampms, trade.gentradeid) \
     trade.searchKey = clientid .. ":" .. accountid .. ":" .. lowercase(trade.gentradeid) .. ":" .. lowercase(trim(symbolid)) .. ":" .. lowercase(getdateindex(futsettdate)) .. ":" .. lowercase(gettimestampindex(timestamp)) \
     redis.call("zadd", "broker:" .. brokerid .. ":trade:search_index", trade.tradeindexid, trade.searchKey) \
+    --[[ add to a system broker for searching all trades of all clients ]] \
+    redis.call("zadd", "broker:0:trade:search_index", trade.tradeid, brokerid .. ":" .. clientid .. ":" .. lowercase(trade.gentradeid) .. ":" .. lowercase(trim(symbolid)) .. ":" .. lowercase(getdateindex(futsettdate))) \
     updateaddtionaltimeindex(brokerid, "trade:search_index", trade.searchKey, trade.linktype, trade.linkid, trade.tradeindexid) \
     --[[ add sorted sets for columns that require sorting capability ]] \
     trade.indexsettlcurramt = tonumber(trade.strsettlcurramt) * 100 \
@@ -3044,7 +3047,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       --[[ see if an account already exists for this client in this currency, if not create one ]] \
       local newaccountid = getclientaccountid(brokerid, client.clientid, account.accounttypeid, currencyid) \
       if newaccountid == 0 then \
-        local name = client.clientid .. " " .. client.name .. " " .. currencyid \
+        local name = client.clientid .. " - " .. currencyid .. " Trading" \
         --[[ set default(0) value for following fields balance, balanceuncleared, creditlimit, debitlimit, exdiff, exdiffuncleared, localbalance, localbalanceuncleared ]] \
         newaccountid = newaccount(account.accountgroupid, account.accounttaxtypeid, account.accounttypeid, 0, 0, brokerid, 0, currencyid, 0, 0, 0, account.exdiffdate, 0, 0, name, account.active, client.clientid, client.commissionid) \
         isnewaccount = true \
@@ -4137,6 +4140,9 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
         local searchkey = clientid .. ":" .. accountid .. ":" .. lowercase(tradeid) .. ":" .. lowercase(trim(symbolid)) .. ":" .. lowercase(getdateindex(futsettdate)) .. ":" .. lowercase(gettimestampindex(timestamp)) \
         redis.call("zrem", brokerkey .. ":trade:search_index", tradekey, oldsearhkey) \
         redis.call("zadd", brokerkey .. ":trade:search_index", tradekey, searchkey) \
+        --[[ remove trade index from system broker and update new ]] \
+        redis.call("zrem", "broker:0:trade:search_index", brokerid, brokerid .. ":" .. clientid .. ":" .. lowercase(tradeid) .. ":" .. lowercase(trim(oldsymbolid)) .. ":" .. lowercase(getdateindex(oldfutsettdate))) \
+        redis.call("zadd", "broker:0:trade:search_index", brokerid, brokerid .. ":" .. clientid .. ":" .. lowercase(tradeid) .. ":" .. lowercase(trim(symbolid)) .. ":" .. lowercase(getdateindex(futsettdate))) \
         if oldaccountid ~= accountid then \
           oldlinkdetails = getparentlinkdetails(brokerid, oldaccountid) \
           deleteaddtionaltimeindex(brokerid, "trade:search_index", "", oldsearhkey, oldlinkdetails[1], oldlinkdetails[2]) \
@@ -4261,24 +4267,30 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   ';
 
   /*
-  * sendtomonitor()
+  * sendtomonitorserver()
+  * store server current status
   * store details of system monitor log
-  * params: 1=timestamp, 2=timestampms, 3=message
-  * returns: 0 + success message if logged successfully
+  * params: 1=timestamp, 2=ipaddress, 3=servertypeid, 4=status, 5=text
+  * returns: 0 + systemmonitorid  if log created successfully
   */
-  sendtomonitor = '\
-    local sendtomonitor = function(timestamp, timestampms, message) \
-      redis.log(redis.LOG_NOTICE, "sendtomonitor") \
-      local systemmonitorid = redis.call("incr", "systemmonitor:lastindex") \
-      redis.call("hmset", "systemmonitor:" .. systemmonitorid, "id", systemmonitorid, "message", message, "timestamp", timestamp) \
-      redis.call("sadd", "systemmonitor:systemmonitors", systemmonitorid) \
-      redis.call("zadd", "systemmonitor:systemmonitorbydate", timestampms, systemmonitorid) \
+  sendtomonitorserver = '\
+    local sendtomonitorserver = function(timestamp, ipaddress, servertypeid, status, text) \
+      redis.log(redis.LOG_NOTICE, "sendtomonitorserver") \
+      local systemmonitorid = {} \
+      redis.call("sadd", "servers", ipaddress .. ":" .. servertypeid) \
+      redis.call("hmset", "server:" .. ipaddress .. ":" .. servertypeid, "ipaddress", ipaddress, "servertypeid", servertypeid, "status", status, "text", text, "timestamp", timestamp) \
+      if status and tonumber(status) == 1 then \
+        systemmonitorid = redis.call("hincrby", "config", "lastsystemmonitorid", 1) \
+        redis.call("hmset", "systemmonitor:" .. systemmonitorid, "systemmonitorid", systemmonitorid, "ipaddress", ipaddress, "servertypeid", servertypeid, "status", status, "text", text, "timestamp", timestamp) \
+        redis.call("sadd", "systemmonitor" ..  ":_indicies:" .. "systemmonitorid", systemmonitorid) \
+        redis.call("sadd", "systemmonitor" ..  ":systemmonitorbyservertype:" .. servertypeid, systemmonitorid) \
+      end \
       return {0, systemmonitorid} \
     end \
   ';
 
-  exports.sendtomonitor = sendtomonitor + '\
-    return sendtomonitor(ARGV[1], ARGV[2], ARGV[3]) \
+  exports.sendtomonitorserver = sendtomonitorserver + '\
+    return sendtomonitorserver(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5]) \
   ';
 
   /*
@@ -4291,16 +4303,10 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
     local sendtomonitorlogs = function(timestamp, ipaddress, servertypeid, status, text) \
       redis.log(redis.LOG_NOTICE, "sendtomonitorlogs") \
       local systemmonitorid = {} \
-      if ipaddress ~= "" then \
-        redis.call("sadd", "servers", ipaddress .. ":" .. servertypeid) \
-      end \
-      redis.call("hmset", "server:" .. ipaddress .. ":" .. servertypeid, "ipaddress", ipaddress, "servertypeid", servertypeid, "status", status, "text", text, "timestamp", timestamp) \
-      if status and tonumber(status) == 1 then \
-        systemmonitorid = redis.call("hincrby", "config", "lastsystemmonitorid", 1) \
-        redis.call("hmset", "systemmonitor:" .. systemmonitorid, "systemmonitorid", systemmonitorid, "ipaddress", ipaddress, "servertypeid", servertypeid, "status", status, "text", text, "timestamp", timestamp) \
-        redis.call("sadd", "systemmonitor" ..  ":_indicies:" .. "systemmonitorid", systemmonitorid) \
-        redis.call("sadd", "systemmonitor" ..  ":systemmonitorbyservertype:" .. servertypeid, systemmonitorid) \
-      end \
+      systemmonitorid = redis.call("hincrby", "config", "lastsystemmonitorid", 1) \
+      redis.call("hmset", "systemmonitor:" .. systemmonitorid, "systemmonitorid", systemmonitorid, "ipaddress", ipaddress, "servertypeid", servertypeid, "status", status, "text", text, "timestamp", timestamp) \
+      redis.call("sadd", "systemmonitor" ..  ":_indicies:" .. "systemmonitorid", systemmonitorid) \
+      redis.call("sadd", "systemmonitor" ..  ":systemmonitorbyservertype:" .. servertypeid, systemmonitorid) \
       return {0, systemmonitorid} \
     end \
   ';
@@ -4310,19 +4316,48 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   ';
 
   /*
+  * getinitialservers()
+  * get details of initial system monitor servers
+  * returns: system monitor servers in json format
+  */
+  getinitialservers = split + gethashvalues + '\
+    local getinitialservers = function() \
+      redis.log(redis.LOG_NOTICE, "getinitialservers") \
+      local temp = {} \
+      temp.tblresults = {} \
+      temp.servers = {} \
+      temp.serverids = redis.call("smembers", "servers") \
+      for index = 1, #temp.serverids do \
+        temp.serverid = split(temp.serverids[index], ":") \
+        if #temp.serverid < 2 then \
+          temp.server = gethashvalues("server::" .. temp.serverid[1]) \
+        else \
+          temp.server = gethashvalues("server:".. temp.serverid[1] .. ":" .. temp.serverid[2]) \
+        end \
+        table.insert(temp.servers, temp.server) \
+      end \
+      return cjson.encode(temp.servers) \
+    end \
+  ';
+
+  exports.getinitialservers = getinitialservers + '\
+    return getinitialservers() \
+  ';
+
+  /*
   * getsystemmonitorlogsbyserver()
   * get details of system monitor log by server
-  * params: 1=severtypeid, 2=page, 3=limit, 4=sortorder
+  * params: 1=servertypeid, 2=page, 3=limit, 4=sortorder
   * returns: system monitor logs in json format
   */
   getsystemmonitorlogsbyserver = gethashvalues + '\
-    local getsystemmonitorlogsbyserver = function(severtypeid, page, limit, sortorder) \
+    local getsystemmonitorlogsbyserver = function(servertypeid, page, limit, sortorder) \
     redis.log(redis.LOG_NOTICE, "getsystemmonitorlogsbyserver") \
     local temp = {} \
     temp.tblresults = {} \
     temp.systemmonitors = {} \
     temp.from = (tonumber(page) * tonumber(limit)) - tonumber(limit) \
-    temp.systemmonitorids = redis.call("sort", "systemmonitor" .. ":systemmonitorbyservertype:" .. severtypeid, "limit", temp.from, limit, sortorder) \
+    temp.systemmonitorids = redis.call("sort", "systemmonitor" .. ":systemmonitorbyservertype:" .. servertypeid, "limit", temp.from, limit, sortorder) \
     if #temp.systemmonitorids >= 1 then \
       for index = 1, #temp.systemmonitorids do \
         local systemmonitor = gethashvalues("systemmonitor:" .. temp.systemmonitorids[index]) \
@@ -4330,7 +4365,7 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
       end \
     end \
     temp.tblresults.data = temp.systemmonitors \
-    temp.tblresults.totalrecords = redis.call("scard", "systemmonitor" .. ":systemmonitorbyservertype:" .. severtypeid) \
+    temp.tblresults.totalrecords = redis.call("scard", "systemmonitor" .. ":systemmonitorbyservertype:" .. servertypeid) \
     return cjson.encode(temp.tblresults) \
   end \
   ';
@@ -4376,25 +4411,31 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
   * returns: 0 else error message returned
   */
   deletesystemmonitorlogs = '\
-    local deletesystemmonitorlogs = function(severtypeid) \
+    local deletesystemmonitorlogs = function(servertypeid, ipaddress) \
     redis.log(redis.LOG_NOTICE, "deletesystemmonitorlogs") \
     local temp = {} \
-    temp.systemmonitorids = redis.call("sort", "systemmonitor" .. ":systemmonitorbyservertype:" .. severtypeid) \
+    redis.call("srem", "servers", ipaddress .. ":" .. servertypeid) \
+    redis.call("del", "server:" .. ipaddress .. ":" .. servertypeid) \
+    if ipaddress ~= "" then \
+      redis.call("srem", "servers", "" .. ":" .. servertypeid) \
+      redis.call("del", "server:" .. "" .. ":" .. servertypeid) \
+    end \
+    temp.systemmonitorids = redis.call("sort", "systemmonitor" .. ":systemmonitorbyservertype:" .. servertypeid) \
     if #temp.systemmonitorids >= 1 then \
       for index = 1, #temp.systemmonitorids do \
         redis.call("del", "systemmonitor:" .. temp.systemmonitorids[index]) \
-        redis.call("del", "systemmonitor" .. ":systemmonitorbyservertype:" .. severtypeid, temp.systemmonitorids[index]) \
+        redis.call("del", "systemmonitor" .. ":systemmonitorbyservertype:" .. servertypeid, temp.systemmonitorids[index]) \
         redis.call("srem", "systemmonitor:_indicies:systemmonitorid", temp.systemmonitorids[index]) \
       end \
       return {0} \
     else \
-      return {1, "No records found"} \
+      return {1, "No log records found"} \
     end \
   end \
   ';
 
   exports.deletesystemmonitorlogs = deletesystemmonitorlogs + '\
-    return deletesystemmonitorlogs(ARGV[1]) \
+    return deletesystemmonitorlogs(ARGV[1], ARGV[2]) \
   ';
 
   /*
@@ -4461,10 +4502,49 @@ exports.gettotalpositionvaluedate = gettotalpositionvaluedate;
     local getserverips = function() \
       local serverips = {} \
       serverips = redis.call("smembers", "servers") \
-      return cjson.encode(serverips) \
+      return serverips \
     end \
   ';
   exports.getserverips = getserverips + '\
-    return getserverips() \
+    return cjson.encode(getserverips()) \
+  ';
+
+  getservertypes = '\
+    local getservertypes = function() \
+      redis.log(redis.LOG_NOTICE, "getservertypes") \
+      local records = {} \
+      local recordids = redis.call("sort", "servertypes:_indicies:servertypeid", "limit", "0", "-1", "asc") \
+      if #recordids >= 1 then \
+        for index = 1, #recordids do \
+          local name = redis.call("hget", "servertypes:" .. recordids[index], "name") \
+          records[recordids[index]] = name \
+        end \
+      end \
+      return cjson.encode(records) \
+    end \
+  ';
+  exports.getservertypes = getservertypes + '\
+    return getservertypes() \
+  ';
+
+  deletesystemmonitorservers = getserverips + split + '\
+    local deletesystemmonitorservers = function() \
+      local serverips = getserverips() \
+      if #serverips > 0 then \
+        for index = 1, #serverips do \
+          local serverid = split(serverips[index], ":") \
+          if #serverid < 2 then \
+            redis.call("srem", "servers", ":" .. serverid[1]) \
+            redis.call("del", "server::" .. serverid[1]) \
+          else \
+            redis.call("srem", "servers", serverid[1] .. ":" .. serverid[2]) \
+            redis.call("del", "server:" .. serverid[1] .. ":" .. serverid[2]) \
+          end \
+        end \
+      end \
+    end \
+  ';
+  exports.deletesystemmonitorservers = deletesystemmonitorservers + '\
+    return deletesystemmonitorservers() \
   ';
 }

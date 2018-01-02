@@ -60,7 +60,9 @@
 *             - added key for account orderbook orders to addtoorderbook() & removefromorderbook()
 *             - added clearorderbooks() & clearorderbook()
 * 24 Nov 2017 - added ping() for sending ping message every 30 seconds
-* 30 Nov 2017 - added externalorderid to orderReject() & scriptrejectorder() & calls to commonbo.rejectorder() 
+* 30 Nov 2017 - added externalorderid to orderReject() & scriptrejectorder() & calls to commonbo.rejectorder()
+* 07 Dec 2017 - updated scriptQuoteRequest() to validate settlement currency matches account currency
+* 20 Dec 2017 - updated scriptQuoteRequest() to maintain number of quoterequest made in a minute by an account
 ********************/
 
 // external libraries
@@ -844,7 +846,6 @@ function orderReject(exereport) {
   if ('ordrejreason' in exereport) {
     orderrejectreasonid = exereport.ordrejreason;
   }
-
   if ('text' in exereport) {
     text = exereport.text;
   }
@@ -1616,6 +1617,7 @@ function registerScripts() {
     local getsettlcurramt = function(brokerid, orderid, quantity, cashorderqty, price, ordertypeid) \
       if quantity == "" then \
         if cashorderqty == "" then \
+          --[[ ` ` empty variable refers the externalorderid ]] \
           rejectorder(brokerid, orderid, 0, "Either quantity or cashorderqty must be specified", "") \
           return {1, 1034} \
         else \
@@ -1627,11 +1629,13 @@ function registerScripts() {
             --[[ no price is correct for a market order ]] \
             return {0, ""} \
           else \
+            --[[ ` ` empty variable refers the externalorderid ]] \
             rejectorder(brokerid, orderid, 0, "Price must be specified for this type of order", "") \
             return {1, 1049} \
           end \
         else \
           if tonumber(ordertypeid) == 1 then \
+            --[[ ` ` empty variable refers the externalorderid ]] \
             rejectorder(brokerid, orderid, 0, "Price should not be specified in a market order", "") \
             return {1, 1050} \
           else \
@@ -2226,7 +2230,7 @@ function registerScripts() {
   if not accountid or accountid == 0 then \
     return {1, 1025} \
   end \
-  --[[ get the account & use the account currency as the request currency ]] \
+  --[[ get the account ]] \
   local account = getaccount(accountid, ARGV[2]) \
   --[[ check there is a symbolid or isin ]] \
   if ARGV[12] == "" and ARGV[16] == "" then \
@@ -2240,8 +2244,20 @@ function registerScripts() {
       return {1, 1016} \
     end \
   end \
+  --[[ condition to keep in account total no.of quoterequest carried out in a minute by the client account ]] \
+  local quoterequestcount = redis.call("get", KEYS[1] .. ":account:" .. accountid .. ":quoterequestcount") \
+  local limit = redis.call("hmget", "config", "quoterequestinterval", "quoterequestlimit") \
+  if not quoterequestcount then \
+    --[[ If count is not present set it to `1` ]] \
+    redis.call("set", KEYS[1] .. ":account:" .. accountid .. ":quoterequestcount", 1) \
+    --[[ Set expire time for that key in seconds `limit[1]` interval time in minutes ]] \
+    redis.call("expire", KEYS[1] .. ":account:" .. accountid .. ":quoterequestcount", tonumber(limit[1]) * 60) \
+  elseif tonumber(quoterequestcount) < tonumber(limit[2]) then \
+    --[[ If count less than limit increment it by `1` ]] \
+    redis.call("incr", KEYS[1] .. ":account:" .. accountid .. ":quoterequestcount") \
+  end \
   --[[ store the quote request ]] \
-  redis.call("hmset", KEYS[1] .. ":quoterequest:" .. quoterequestid, "accountid", accountid, "brokerid", ARGV[2], "cashorderqty", ARGV[3], "clientid", ARGV[4], "currencyid", account["currencyid"], "futsettdate", ARGV[6], "operatorid", ARGV[7], "operatortype", ARGV[8], "quantity", ARGV[9], "quoterequestid", quoterequestid, "quotestatusid", 0, "settlmnttypid", ARGV[10], "side", ARGV[11], "symbolid", symbolid, "timestamp", ARGV[13], "settlcurrencyid", account["currencyid"], "quoteackid", "", "fixseqnumid", "") \
+  redis.call("hmset", KEYS[1] .. ":quoterequest:" .. quoterequestid, "accountid", accountid, "brokerid", ARGV[2], "cashorderqty", ARGV[3], "clientid", ARGV[4], "currencyid", account["currencyid"], "futsettdate", ARGV[6], "operatorid", ARGV[7], "operatortype", ARGV[8], "quantity", ARGV[9], "quoterequestid", quoterequestid, "quotestatusid", 0, "settlmnttypid", ARGV[10], "side", ARGV[11], "symbolid", symbolid, "timestamp", ARGV[13], "settlcurrencyid", ARGV[14], "quoteackid", "", "fixseqnumid", "") \
   --[[ add to the set of quoterequests ]] \
   redis.call("sadd", KEYS[1] .. ":quoterequests", quoterequestid) \
   redis.call("sadd", KEYS[1] .. ":quoterequestid", "quoterequest:" .. quoterequestid) \
@@ -2262,6 +2278,14 @@ function registerScripts() {
       return ret \
     end \
     return {1, 1034} \
+  end \
+  --[[ validate account & settlement currency match ]] \
+  if ARGV[14] ~= account.currencyid then \
+    local ret = quoteack(ARGV[2], quoterequestid, 5, 99, "Settlement currency must match account currency", "", ARGV[13], ARGV[13]) \
+    if ret[1] ~= 0 then \
+      return ret \
+    end \
+    return {1, 1051} \
   end \
   local pubsub = publishquoterequest(ARGV[2], quoterequestid) \
   if pubsub[1] ~= 0 then \
