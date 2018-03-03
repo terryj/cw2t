@@ -23,6 +23,9 @@
  * 24 Nov 2017 - reverted recv call flag as otherwise call waits for socket data & ignores pubsub data
  *             - added errno check to handle lost connection
  * 30 Nov 2017 - added Text field to fix_execution_report() & send_execution_report()
+ *  3 Mar 2018 - added version number
+ *             - added optional OrdRejReason to execution report
+ *             - made text field in execution report optional
  * *********************/
 
 #include "fix/fix_common.h"
@@ -31,6 +34,7 @@
 #include "libtrading/array.h"
 #include "libtrading/time.h"
 #include "libtrading/die.h"
+#include "libtrading/itoa.h"
 
 #include <netinet/tcp.h>
 #include <netinet/in.h>
@@ -867,6 +871,13 @@ static int fix_execution_report(struct fix_session *session, struct fix_message 
         } else
           strcpy(executionreport.text, "");
 
+        field = fix_get_field(msg, OrdRejReason);
+        if (field) {
+          executionreport.orderrejectreasonid = fix_get_int(msg, OrdRejReason, -1);
+        } else {
+          executionreport.orderrejectreasonid = -1;
+        }
+ 
         send_execution_report(session, &executionreport);
 
         return 0;
@@ -889,7 +900,7 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
   brokerid = strtok_r(str, ":", &str);
   orderid = strtok_r(str, ":", &str);
 
-  sprintf(jsonexecutionreport, "%s%s%s%s%s%c%s%s%c%s%s%s%s%s%s%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%c%s%s%s%s%s%lu%s%s%s%s%s%s%s%s%s%s", "{\"executionreport\":{"
+  sprintf(jsonexecutionreport, "%s%s%s%s%s%c%s%s%c%s%s%s%s%s%s%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%c%s%s%s%s%s%lu%s%s%s%s%s%s", "{\"executionreport\":{"
     , "\"brokerid\":\"", brokerid, "\""
     , ",\"orderstatusid\":\"", executionreport->orderstatusid, "\""
     , ",\"exectype\":\"", executionreport->exectype, "\""
@@ -909,9 +920,23 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
     , ",\"execid\":\"", executionreport->execid, "\""
     , ",\"fixseqnumid\":", session->in_msg_seq_num
     , ",\"onbehalfofcompid\":\"", executionreport->onbehalfofcompid, "\""
-    , ",\"timestamp\":\"", session->str_now, "\""
-    , ",\"text\":\"", executionreport->text, "\""
-    , "}}");
+    , ",\"timestamp\":\"", session->str_now, "\"");
+
+  // add optional fields
+  if (executionreport->text[0] != '\0') {
+    strcat(jsonexecutionreport, ",\"text\":\"\0");
+    strcat(jsonexecutionreport, executionreport->text);
+    strcat(jsonexecutionreport, "\"\0");
+  }
+
+  if (executionreport->orderrejectreasonid != -1) {
+    char buf[8];
+    itoa(executionreport->orderrejectreasonid, buf);
+    strcat(jsonexecutionreport, ",\"orderrejectreasonid\":\0");
+    strcat(jsonexecutionreport, buf);
+  }
+
+  strcat(jsonexecutionreport, "}}\0");
 
   fprintf(stdout, "%s - publish to trade server\n", session->str_now);
   fprintf(stdout, "%s\n", jsonexecutionreport);
@@ -1013,7 +1038,7 @@ int getIpAddress() {
                    }
 
                    if (family == AF_INET && strcmp(ifa->ifa_name, "eth0") == 0) {
-                     printf("IP address: <%s>\n", host);
+                     printf("My IP address: <%s>\n", host);
                      strcpy(ipaddress, host);
                    }
               }
@@ -1040,6 +1065,9 @@ int main(int argc, char *argv[])
         const char *r = NULL;
         char redis_host[80];
         int redis_port = 6379;  // default redis port
+        const char server_version[] = "0.9";
+
+        printf("Comms server version: %s\n", server_version);
 
 	program = basename(argv[0]);
 

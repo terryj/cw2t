@@ -101,6 +101,7 @@ struct fix_executionreport {
   char exchangeid[6];
   char lastmkt[6];
   char text[128];
+  int orderrejectreasonid;
 };
 
 struct fix_ordercancelreject {
