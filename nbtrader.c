@@ -23,9 +23,16 @@
  * 24 Nov 2017 - reverted recv call flag as otherwise call waits for socket data & ignores pubsub data
  *             - added errno check to handle lost connection
  * 30 Nov 2017 - added Text field to fix_execution_report() & send_execution_report()
- *  3 Mar 2018 - added version number
+ *  3 Mar 2018 - added version number v0.9
  *             - added optional OrdRejReason to execution report
  *             - made text field in execution report optional
+ * 25 May 2018 - changed floats to doubles for number to string conversions
+ * 26 May 2018 - added get_rsp_error_message() for rsp error messages
+ * 26 May 2018 - version v0.9.1
+ *  6 Jun 2018 - added settlcurramt to fix_execution_report()
+ *             - version v0.9.2 
+ * 25 Jun 2018 - changed markettimestamp to use transacttime intead of sendingtime field in fix_quote_ack() & fix_quote()
+ *             - version v0.9.3
  * *********************/
 
 #include "fix/fix_common.h"
@@ -245,7 +252,7 @@ static int fix_message_reject(struct fix_message *msg) {
 }
 
 /*
- * Quote acknowledment received
+ * Quote acknowledgement received
  */
 static int fix_quote_ack(struct fix_session *session, struct fix_message *msg) {
     struct fix_field *field;
@@ -267,11 +274,17 @@ static int fix_quote_ack(struct fix_session *session, struct fix_message *msg) {
     } else
       strcpy(quoteack.text, "");
 
-    field = fix_get_field(msg, SendingTime);
+    field = fix_get_field(msg, TransactTime);
     if (field) {
       fix_get_string(field, quoteack.markettimestamp, sizeof(quoteack.markettimestamp));
-    } else
-      strcpy(quoteack.markettimestamp, ""); 
+    } else {
+      field = fix_get_field(msg, SendingTime);
+      if (field) {
+        fix_get_string(field, quoteack.markettimestamp, sizeof(quoteack.markettimestamp));
+      } else {
+        strcpy(quoteack.markettimestamp, ""); 
+      }
+    }
 
     // publish it
     send_quote_ack(session, &quoteack);
@@ -349,15 +362,27 @@ static int fix_quote(struct fix_session *session, struct fix_message *msg) {
     } else
       strcpy(quote.externalquoteid, "");
 
-    field = fix_get_field(msg, SendingTime);
+    field = fix_get_field(msg, TransactTime);
     if (field) {
       fix_get_string(field, quote.markettimestamp, sizeof(quote.markettimestamp));
-      /*if (strptime(quote.markettimestamp, "%Y%m%d-%H:%M:%S", &tm_now) == NULL) {
+    } else {
+      field = fix_get_field(msg, SendingTime);
+      if (field) {
+        fix_get_string(field, quote.markettimestamp, sizeof(quote.markettimestamp));
+      } else {
+        strcpy(quote.markettimestamp, ""); 
+      }
+    }
+
+    /*field = fix_get_field(msg, SendingTime);
+    if (field) {
+      fix_get_string(field, quote.markettimestamp, sizeof(quote.markettimestamp));
+      if (strptime(quote.markettimestamp, "%Y%m%d-%H:%M:%S", &tm_now) == NULL) {
         printf("Unable to parse SendingTime:%s\n", quote.markettimestamp);
         strcpy(quote.markettimestamp, "");
-      }*/
+      }
     } else
-      strcpy(quote.markettimestamp, "");
+      strcpy(quote.markettimestamp, "");*/
 
 /* 
     field = fix_get_field(msg, Symbol);
@@ -375,7 +400,7 @@ static int fix_quote(struct fix_session *session, struct fix_message *msg) {
     quote.bidspotrate = fix_get_float(msg, BidSpotRate, 0);
     quote.bidquotedepth = fix_get_float(msg, BidQuoteDepth, 0);
     quote.offerquotedepth = fix_get_float(msg, OfferQuoteDepth, 0);
-    quote.cashorderqty= fix_get_float(msg, CashOrderQty, 0);
+    quote.cashorderqty = fix_get_float(msg, CashOrderQty, 0);
     quote.settledays = fix_get_int(msg, SettleDays, 0);
 
     field = fix_get_field(msg, FutSettDate);
@@ -825,6 +850,7 @@ static int fix_execution_report(struct fix_session *session, struct fix_message 
 
         executionreport.orderqty = fix_get_float(msg, OrderQty, 0);
         executionreport.cumqty = fix_get_float(msg, CumQty, 0);
+        executionreport.settlcurramt = fix_get_float(msg, SettlCurrAmt, 0);
         executionreport.side = fix_get_char(msg, Side, '0');
         executionreport.lastshares = fix_get_float(msg, LastShares, 0);
         executionreport.lastpx = fix_get_float(msg, LastPx, 0);
@@ -900,7 +926,7 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
   brokerid = strtok_r(str, ":", &str);
   orderid = strtok_r(str, ":", &str);
 
-  sprintf(jsonexecutionreport, "%s%s%s%s%s%c%s%s%c%s%s%s%s%s%s%s%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%c%s%s%s%s%s%lu%s%s%s%s%s%s", "{\"executionreport\":{"
+  sprintf(jsonexecutionreport, "%s%s%s%s%s%c%s%s%c%s%s%s%s%s%s%s%s%s%s%s%s%s%s%f%s%f%s%f%s%s%s%s%s%s%s%f%s%f%s%s%s%s%s%s%s%c%s%s%s%s%s%lu%s%s%s%s%s%s", "{\"executionreport\":{"
     , "\"brokerid\":\"", brokerid, "\""
     , ",\"orderstatusid\":\"", executionreport->orderstatusid, "\""
     , ",\"exectype\":\"", executionreport->exectype, "\""
@@ -910,6 +936,7 @@ static int send_execution_report(struct fix_session *session, struct fix_executi
     , ",\"orderid\":\"", orderid, "\""
     , ",\"orderqty\":", executionreport->orderqty
     , ",\"cumqty\":", executionreport->cumqty
+    , ",\"settlcurramt\":", executionreport->settlcurramt
     , ",\"futsettdate\":\"", executionreport->futsettdate, "\""
     , ",\"securityid\":\"", executionreport->securityid, "\""
     , ",\"lastshares\":", executionreport->lastshares
@@ -1065,7 +1092,7 @@ int main(int argc, char *argv[])
         const char *r = NULL;
         char redis_host[80];
         int redis_port = 6379;  // default redis port
-        const char server_version[] = "0.9";
+        const char server_version[] = "0.9.3";
 
         printf("Comms server version: %s\n", server_version);
 
@@ -1194,4 +1221,208 @@ int main(int argc, char *argv[])
         thread_tidy();
 
 	return ret;
+}
+
+/*static void check_rsp_code(char *rsptext) {
+    char errorcode[20] = "";
+    int i = 0;
+
+    while (isdigit(*rsptext++)) {
+      errorcode[i++] = *rsptext;
+    }
+
+    if (i > 0) {
+      int errornum = atoi(errorcode);
+      rsptext = get_rsp_error_message(errornum); 
+    }
+}*/
+
+const char *get_rsp_error_message(int errornum) {
+    switch (errornum) {
+    case 0:
+      return "Trade report failed - network empty";
+      break;
+    case 1:
+      return "Verification not performed yet";
+      break;
+    case 2:
+      return "Verification proves successful";
+      break;
+    case 3:
+      return "Time value not in current time";
+      break;
+    case 4:
+      return "Too early for the Mkt Sector";
+      break;
+    case 5:
+      return "Too late for the Mkt Sector";
+      break;
+    case 6: 
+      return "ISIN/country of reg can't be found";
+      break;
+    case 7:
+      return "Market segment is not known";
+      break;
+    case 8:
+      return "No Market Sector rules";
+      break;
+    case 9:
+      return "Wrong currency for ISIN/SEGMENT";
+      break;
+    case 10:
+      return "No Market Period rules";
+      break;
+    case  11:
+      return "No FEPs declared themselves able to send";
+      break;
+    case 12:
+      return "No FEPs detected in MRS cluster";
+      break;
+    case 13:
+      return "Participant is not known";
+      break;
+    case 14:
+      return "House participant is not known";
+      break;
+    case 15:
+      return "Message is not allowed at this time";
+      break;
+    case 16:
+      return "Participant is suspended";
+      break;
+    case 17:
+      return "Participant not in rules";
+      break;
+    case 18:
+      return "Mechanism Type is not allowed";
+      break;
+    case 19:
+      return "Equity is suspended";
+      break;
+    case 20:
+      return "Expiry Date missing";
+      break;
+    case 22:
+      return "Expiry Date exceeds permissable limit";
+      break;
+    case 23:
+      return "Single Fill Indicator as wrong value";
+      break;
+    case 24:
+      return "No counterparty allowed";
+      break;
+    case 25:
+      return "Invalid Order Price";
+      break;
+    case 26:
+      return "Invalid Order Size";
+      break;
+    case 40:
+      return "Execution not performed yet";
+      break;
+    case 41:
+      return "Execution successful";
+      break;
+    case 42:
+      return "Line Connection to exchange is down";
+      break;
+    case 43:
+      return "Request timed out";
+      break;
+    case 44:
+      return "Request rejected";
+      break;
+    case 80:
+      return "Entire transaction was not successful";
+      break;
+    case 81:
+      return "Trade report may have already been submitted";
+      break;
+    case 13208:
+      return "System unavailable";
+      break;
+    case 13222:
+      return "Request would exceed client consideration limit";
+      break;
+    case 13223:
+      return "Client is disabled";
+      break;
+    case 13251:
+      return "Invalid instrument";
+      break;
+    case 13256:
+      return "Request would exceed long limit for instrument";
+      break;
+    case 13257:
+      return "Request would exceed short limit for instrument";
+      break;
+    case 13279:
+      return "No matching quote band";
+      break;
+    case 13280:
+      return "No quote band";
+      break;
+    case 13281:
+      return "No valid quote band";
+      break;
+    case 13283:
+      return "No quote band defined for instrument";
+      break;
+    case 13287:
+      return "Instrument is currently under suspension";
+      break;
+    case 13311:
+      return "Invalid Quote";
+      break;
+    case 13312:
+      return "Trade does no match original quote on field";
+      break;
+    case 13314:
+      return "Invalid volume";
+      break;
+    case 13315:
+      return "Invalid settlement date";
+      break;
+    case 13316:
+      return "Settlement period and date do not match";
+      break;
+    case 13317:
+      return "Invalid settlement period";
+      break;
+    case 13321:
+      return "Quote expired";
+      break;
+    case 13323:
+      return "Quote has already been traded against";
+      break;
+    case 13324:
+      return "Quote is no longer valid";
+      break;
+    case 13325:
+      return "Could not match or better the limit price";
+      break;
+    case 13326:
+      return "Invalid currency";
+      break;
+    case 13327:
+      return "Invalid quote price";
+      break;
+    case 13328:
+      return "Invalid limit price";
+      break;
+    case 13332:
+      return "Volume exceeds maximum given in quote";
+      break;
+    case 13333:
+      return "Quote ID not unique";
+      break;
+    case 13355:
+      return "The volume is not a multiple of the dealing unit, and dealing units are enforced for the instrument";
+      break;
+    case 13421:
+      return "Rejected by external quoting engine. Contact RSP for further details";
+    default:
+      return "Error code not found";
+      break;
+    }
 }

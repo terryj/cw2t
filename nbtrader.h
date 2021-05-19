@@ -20,3 +20,5 @@ static unsigned long fix_new_order_single_fields(struct fix_session *session, st
 static unsigned long fix_order_cancel_request_fields(struct fix_session *session, struct fix_field *fields, struct fix_ordercancelrequest *ordercancelrequest);
 static int send_ping(struct fix_session *session, struct ping *png);
 static void check_for_data();
+//static void check_rsp_code(char *rsptext);
+

@@ -4,6 +4,9 @@
 * - getTimezone(), getOffset(), convertTimeUTCtoLocal() and convertToLocalTime()
 * Changes:
 * 24 Mar 2017 - modified round
+* 10 Aug 2018 - changed round() to use math functions and return a numeric value
+*             - added formattostring() to format a number
+* 17 Aug 2018 - added brokerid parameter to updatecastatus()
 ****************/
 var Moment = require('moment');
 var async = require('async');
@@ -248,28 +251,55 @@ exports.utils = function () {
   ';
 
   /*
-  * round()
-  * function is used to round to fixed decimal value
-  */
-  round = '\
-  local round = function(num, dp) \
+   * formatotstring()
+   * converts a number to a string format
+   * params: number, number of decimal places
+   * returns: string value
+   */
+  formattostring = '\
+  local formattostring = function(num, dp) \
     return string.format("%0." .. dp .. "f", num) \
   end \
   ';
+
+  exports.formattostring = formattostring;
+
+  /*
+   * round()
+   * round a number
+   * params: number, number of decimal points
+   * returns: rounded number
+   */
+  round = '\
+  local round = function(val, n) \
+    if (n) then \
+      return math.floor((val * 10^n) + 0.5) / (10^n) \
+    else \
+      return math.floor(val + 0.5) \
+    end \
+  end \
+  ';
+
+  exports.round = round;
+
   /*
   * gethashvalues()
   * function to read all field values from a table for a given key
   */
   gethashvalues = '\
   local gethashvalues = function(key) \
-    local vals = {} \
-    local rawvals = redis.call("hgetall", key) \
-    for index = 1, #rawvals, 2 do \
-      vals[rawvals[index]] = rawvals[index + 1] \
+    local temp = {} \
+    temp.vals = {} \
+    temp.rawvals = redis.call("hgetall", key) \
+    for index = 1, #temp.rawvals, 2 do \
+      temp.vals[temp.rawvals[index]] = temp.rawvals[index + 1] \
     end \
-    return vals \
+    return temp.vals \
   end \
   ';
+
+  exports.gethashvalues = gethashvalues;
+
   /*
    * gettimezone()
    * This script used to get of timezone by order
@@ -1097,12 +1127,12 @@ exports.utils = function () {
         end \
       end \
       commission.amount = round(consideration * commission.percent / 100, 2) \
-      if tonumber(commission.amount) < commission.min then \
+      if commission.amount < commission.min then \
         commission.amount = commission.min \
-      elseif tonumber(commission.amount) > commission.max then \
+      elseif ommission.amount > commission.max then \
         commission.amount = commission.max \
       end \
-      return {0, tostring(commission.amount)} \
+      return {0, commission.amount} \
     end \
   ';
   exports.getcommission = getcommission;
@@ -1124,7 +1154,7 @@ exports.utils = function () {
    * params: symbolid, consideration, side, issymbol
    * returns: stampduty & stampdutyid if ok, else 1 + an error message if unsuccessful
    */
-  getstampduty = gettransactionstampstatus + '\
+  getstampduty = gettransactionstampstatus + round + '\
     local getstampduty = function(symbolid, consideration, side, issymbol) \
       local stampduty = {} \
       stampduty.id = 0 \
@@ -1144,7 +1174,7 @@ exports.utils = function () {
           stampduty.amount = round(consideration * stampduty.rate, 2) \
         end \
       end \
-      return {tostring(stampduty.amount), stampduty.id} \
+      return {stampduty.amount, stampduty.id} \
     end \
   ';
   exports.getstampduty = getstampduty;
@@ -1300,13 +1330,12 @@ exports.utils = function () {
  /*
   * updatecastatus()
   * script to update status(apply/reverse) of corporate action
-  * params: corporateactionid, status (1=applied,0=reverse)
-  * returns: 0 if successful, else 1 + an error message if unsuccessful
+  * params: brokerid, corporateactionid, status (1=applied,0=reverse)
   */
   updatecastatus = '\
-    local updatecastatus = function(corporateactionid, status) \
+    local updatecastatus = function(brokerid, corporateactionid, status) \
       redis.log(redis.LOG_NOTICE, "updatecastatus") \
-      redis.call("hset", "corporateaction:" .. corporateactionid, "processed", status) \
+      redis.call("hset", "broker:" .. brokerid .. ":corporateaction:" .. corporateactionid, "processed", status) \
     end \
   ';
   exports.updatecastatus = updatecastatus;
@@ -1608,11 +1637,11 @@ exports.utils = function () {
    * returns: accountid if ok, else 1 + an error message if unsuccessful
    */
   createaccount = '\
-    local createaccount = function(accountgroupid, accounttaxtypeid, accounttypeid, balance, balanceuncleared, brokerid, creditlimit, currencyid, debitlimit, exdiff, exdiffuncleared, exdiffdate, localbalance, localbalanceuncleared, name, active, commissionid) \
+    local createaccount = function(accountgroupid, accounttaxtypeid, accounttypeid, balance, balanceuncleared, brokerid, creditlimit, currencyid, debitlimit, exdiff, exdiffuncleared, exdiffdate, localbalance, localbalanceuncleared, name, active, commissionid, defaultbankaccountid) \
       redis.log(redis.LOG_NOTICE, "createaccount") \
       local brokerkey = "broker:" .. brokerid \
       local accountid = redis.call("hincrby", brokerkey, "lastaccountid", 1) \
-      redis.call("hmset", brokerkey .. ":account:" .. accountid, "accountid", accountid, "brokerid" , brokerid, "currencyid", currencyid, "name", name, "accountgroupid", accountgroupid, "accounttypeid", accounttypeid, "balance", balance, "balanceuncleared", balanceuncleared, "creditlimit", creditlimit, "debitlimit", debitlimit, "exdiff", exdiff, "exdiffuncleared", exdiffuncleared, "exdiffdate", exdiffdate, "localbalance", localbalance, "localbalanceuncleared", localbalanceuncleared, "active", active, "accounttaxtypeid", accounttaxtypeid, "commissionid", commissionid) \
+      redis.call("hmset", brokerkey .. ":account:" .. accountid, "accountid", accountid, "brokerid" , brokerid, "currencyid", currencyid, "name", name, "accountgroupid", accountgroupid, "accounttypeid", accounttypeid, "balance", balance, "balanceuncleared", balanceuncleared, "creditlimit", creditlimit, "debitlimit", debitlimit, "exdiff", exdiff, "exdiffuncleared", exdiffuncleared, "exdiffdate", exdiffdate, "localbalance", localbalance, "localbalanceuncleared", localbalanceuncleared, "active", active, "accounttaxtypeid", accounttaxtypeid, "commissionid", commissionid, "defaultbankaccountid", defaultbankaccountid) \
       redis.call("sadd", brokerkey .. ":accounts", accountid) \
       redis.call("sadd", brokerkey.. ":accountid", "account:" .. accountid) \
       if accountgroupid == "3" then \
@@ -1647,17 +1676,17 @@ exports.utils = function () {
   /*
    * newaccount()
    * This script used for create new account
-   * params : accountgroupid, accounttaxtypeid, accounttypeid, balance, balanceuncleared, brokerid, creditlimit, currencyid, debitlimit, exdiff, exdiffuncleared, exdiffdate, localbalance, localbalanceuncleared, name, active, clientid, commissionid
+   * params : accountgroupid, accounttaxtypeid, accounttypeid, balance, balanceuncleared, brokerid, creditlimit, currencyid, debitlimit, exdiff, exdiffuncleared, exdiffdate, localbalance, localbalanceuncleared, name, active, clientid, commissionid, defaultbankaccountid
    * returns: 0 if ok, else 1 + an error message if unsuccessful
    */
   newaccount = validateaccount + updateclientdetails + createaccount + createaddtionalindex + getclientlinkdetails + '\
-    local newaccount = function(accountgroupid, accounttaxtypeid, accounttypeid, balance, balanceuncleared, brokerid, creditlimit, currencyid, debitlimit, exdiff, exdiffuncleared, exdiffdate, localbalance, localbalanceuncleared, name, active, clientid, commissionid) \
+    local newaccount = function(accountgroupid, accounttaxtypeid, accounttypeid, balance, balanceuncleared, brokerid, creditlimit, currencyid, debitlimit, exdiff, exdiffuncleared, exdiffdate, localbalance, localbalanceuncleared, name, active, clientid, commissionid, defaultbankaccountid) \
       redis.call("RPUSH", "newaccount", currencyid) \
       local result = validateaccount(brokerid, clientid, accountgroupid, accounttaxtypeid, accounttypeid, currencyid) \
       if result[1] == 1 then \
         return result \
       end \
-      local accountid = createaccount(accountgroupid, accounttaxtypeid, accounttypeid, balance, balanceuncleared, brokerid, creditlimit, currencyid, debitlimit, exdiff, exdiffuncleared, exdiffdate, localbalance, localbalanceuncleared, name, active, commissionid) \
+      local accountid = createaccount(accountgroupid, accounttaxtypeid, accounttypeid, balance, balanceuncleared, brokerid, creditlimit, currencyid, debitlimit, exdiff, exdiffuncleared, exdiffdate, localbalance, localbalanceuncleared, name, active, commissionid, defaultbankaccountid) \
       if tonumber(accountgroupid) == 3 then \
         updateclientdetails(brokerid, accountid, clientid) \
         local link = getclientlinkdetails(brokerid, clientid) \
@@ -1695,7 +1724,7 @@ exports.utils = function () {
    * This script used to add postingid to hideindex
    * params: brokerid, accountid, positionid
    */
-  hideposting = validateposting + round + '\
+  hideposting = validateposting + formattostring + '\
     local hideposting = function(brokerid, accountid, postingid) \
       local result = validateposting(brokerid, accountid, postingid) \
       if result[1] == 1 then \
@@ -1705,7 +1734,7 @@ exports.utils = function () {
       redis.call("sadd", "broker:" .. brokerid .. ":account:" .. accountid .. ":hidepostings", postingid) \
       local totalbalance = redis.call("get", "broker:" .. brokerid .. ":account:" .. accountid .. ":hidepostings:balance") \
       if totalbalance then \
-        total = round(tonumber(total) + tonumber(totalbalance), 2) \
+        total = formattostring(tonumber(total) + tonumber(totalbalance), 2) \
       end \
       redis.call("set", "broker:" .. brokerid .. ":account:" .. accountid .. ":hidepostings:balance", total) \
       if tonumber(total) ~= 0 then \
@@ -1719,7 +1748,7 @@ exports.utils = function () {
    * This script used to remove postingid to hideindex
    * params: brokerid, accountid, positionid
    */
-  unhideposting = validateposting + round + '\
+  unhideposting = validateposting + formattostring + '\
     local unhideposting = function(brokerid, accountid, postingid) \
       local result = validateposting(brokerid, accountid, postingid) \
       if result[1] == 1 then \
@@ -1731,7 +1760,7 @@ exports.utils = function () {
         totalbalance = 0 \
       end \
       redis.call("srem", "broker:" .. brokerid .. ":account:" .. accountid .. ":hidepostings", postingid) \
-      totalbalance = round(tonumber(totalbalance) - tonumber(result[2]), 2) \
+      totalbalance = formattostring(tonumber(totalbalance) - tonumber(result[2]), 2) \
       if tonumber(totalbalance) == 0 then \
         redis.call("del", balancekey) \
       else \
@@ -1771,7 +1800,7 @@ exports.utils = function () {
    * params : brokerid, clientid
    * returns: total cash balance
    */
-  getclientbalance = round + '\
+  getclientbalance = formattostring + '\
     local getclientbalance = function(brokerid, clientid) \
       local clientaccounts = redis.call("sort", "broker:" .. brokerid .. ":client:" .. clientid .. ":clientaccounts") \
       local totalbalance = 0 \
@@ -1780,7 +1809,7 @@ exports.utils = function () {
         balance = redis.call("hmget", "broker:" .. brokerid .. ":account:" .. clientaccounts[i], "balance", "balanceuncleared") \
         totalbalance = totalbalance + tonumber(balance[1]) + tonumber(balance[2]) \
       end \
-      return round(totalbalance, 2) \
+      return formattostring(totalbalance, 2) \
     end \
   ';
   exports.getclientbalance = getclientbalance + '\
