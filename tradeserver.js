@@ -74,6 +74,8 @@
 * 08 Jun 2018 - added orderCancelReplaceRequest(), scriptordercancelreplacerequest()
 * 11 Jun 2018 - updated processTrade() & scriptnewtrade() to use the settlement amount from the execution report or calculate the rounded amount from number of shares & price in the script
 * 22 Jul 2018 - added channelid to publishorder() to allow publishing to a specific channel
+* 21 Nov 2020 - reinstated & modified matchorder() for level 2 orderbook handling
+*             - matchordersingle() no longer used, was required for original outofhours
 ********************/
 
 // external libraries
@@ -228,13 +230,17 @@ function pubsub() {
 
   dbsub.on("message", function(channel, message) {
     try {
+//////////
+//remove
+//      testCA();
+//      return;
+//////////
       var obj = JSON.parse(message);
       if ("quoterequest" in obj) {
-        //quoteRequest(obj.quoterequest);
-        testCA();
+        quoteRequest(obj.quoterequest);
       } else if ("order" in obj) {
         newOrder(obj.order);
-     } else if ("quote" in obj) {
+      } else if ("quote" in obj) {
         newQuote(obj.quote);
       } else if ("executionreport" in obj) {
         newExecutionReport(obj.executionreport);
@@ -515,7 +521,7 @@ console.log("testCA");
   var timestampms = today.getTime();
   var mode = 1;
   var brokerid = 1;
-  var caid = 5;
+  var caid = 1;
 
    db.eval(commonbo.caapply, 1, "broker:1", brokerid, caid, exdatems, timestamp, timestampms, mode, function(err, ret) {
       if (err) {
@@ -539,7 +545,9 @@ console.log("testCA");
  * Process an order based on a quote
  */
 function dealAtQuote(order) {
-    db.evalsha(cachedScripts.scriptdealatquote_sha, 1, "broker:" + order.brokerid, order.brokerid, order.ordertypeid, order.markettype, order.quoteid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforceid, order.operatortype, order.operatorid, order.timestampms, order.futsettdate, function(err, ret) {
+console.log("daq");
+//cachedScripts.scriptdealatquote_sha,
+    db.eval(scriptdealatquote, 1, "broker:" + order.brokerid, order.brokerid, order.ordertypeid, order.markettype, order.quoteid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforceid, order.operatortype, order.operatorid, order.timestampms, order.futsettdate, function(err, ret) {
       if (err) {
         console.log(err);
         errorLog(order.brokerid, "", 2, 4, "", "", "tradeserver.scriptdealatquote", "", err);
@@ -568,6 +576,7 @@ function dealAtQuote(order) {
  * Process a regular order
  */
 function newOrderSingle(order) {
+console.log("newOrderSingle");
   if (!("accountid" in order)) {
     order.accountid = "";
   }
@@ -624,8 +633,8 @@ function newOrderSingle(order) {
   if (!('matchorderid' in order)) {
     order.matchorderid = "";
   }
-
-  db.evalsha(cachedScripts.scriptneworder_sha, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertypeid, order.markettype, order.futsettdate, order.quoteid, order.currencyid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforceid, order.expiredate, order.expiretime, order.settlcurrencyid, order.settlcurrfxrate, order.settlcurrfxratecalc, order.operatortype, order.operatorid, order.cashorderqty, order.settlmnttypid, order.timestampms, order.isin, order.matchorderid, function(err, ret) {
+//evalsha...cachedScripts.scriptneworder_sha
+  db.eval(scriptneworder, 1, "broker:" + order.brokerid, order.accountid, order.brokerid, order.clientid, order.symbolid, order.side, order.quantity, order.price, order.ordertypeid, order.markettype, order.futsettdate, order.quoteid, order.currencyid, order.currencyratetoorg, order.currencyindtoorg, order.timestamp, order.timeinforceid, order.expiredate, order.expiretime, order.settlcurrencyid, order.settlcurrfxrate, order.settlcurrfxratecalc, order.operatortype, order.operatorid, order.cashorderqty, order.settlmnttypid, order.timestampms, order.isin, order.matchorderid, function(err, ret) {
     if (err) {
       console.log(err);
       errorLog(order.brokerid, "", 2, 4, "", "", "tradeserver.scriptneworder", "", err);
@@ -1151,7 +1160,7 @@ function processTrade(exereport) {
 
   var promise = new Promise(function(resolve, reject) {
     // if no settlement date present, use the default
-    if (!('futsettdate' in exereport)) {
+    if (!('futsettdate' in exereport ) || exereport.futsettdate == "") {
       commonbo.getSettDate(tradedate, exereport.symbolid, function(err, settDate) {
         if (err) {
           console.log('processTrade/getSettDate: ', err);
@@ -1298,6 +1307,11 @@ function registerScripts() {
   * params: brokerid, orderid, channelid
   * returns: 0, channelid if ok, else 1, error code
   */
+/*publishorder = utils.gethashvalues + commonbo.getchannel + '\
+   local publishorder = function(brokerid, orderid, channelid) \
+   end \
+  ';
+*/
   publishorder = utils.gethashvalues + commonbo.getchannel + '\
   local publishorder = function(brokerid, orderid, channelid) \
     redis.log(redis.LOG_NOTICE, "publishorder") \
@@ -1421,7 +1435,7 @@ function registerScripts() {
       end \
       costs.commission = costs.commission[2] \
       --[[ ptm levy will calculated in buy ]] \
-      costs.ptmlevy = tonumber(getptmlevy(symbolid, tonumber(consid))) \
+      costs.ptmlevy = getptmlevy(symbolid, tonumber(consid)) \
       --[[ stamp duty ]] \
       costs.stampresult = getstampduty(symbolid, tonumber(consid), tonumber(side), "1") \
       costs.stampduty = costs.stampresult[1] \
@@ -1430,6 +1444,7 @@ function registerScripts() {
       --[[ if costs["contractcharge"] and costs["contractcharge"] ~= "" then ]] \
         --[[ contractcharge = tonumber(costs["contractcharge"]) ]] \
       --[[ end ]] \
+       redis.log(redis.LOG_NOTICE, "endgetcosts") \
       return {0, costs.commission, costs.ptmlevy, costs.stampduty, costs.contractcharge, costs.stampdutyid} \
     end \
   ';
@@ -1598,7 +1613,7 @@ function registerScripts() {
   * add an order to the orderbook
   * params: order
   */
-  addtoorderbook =  '\
+  addtoorderbook =  publishorderbook + publishorderbooktop + '\
   local addtoorderbook = function(order) \
     redis.log(redis.LOG_NOTICE, "addtoorderbook") \
     local price \
@@ -2089,12 +2104,108 @@ function registerScripts() {
   ';
 
  /*
+  * matchorder()
+  * tries to match an order to existing orders in the orderbook
+  * params: brokerid, orderid, timestampms
+  * returns: 0, errorcode, orderid if error, else 1, text if ok
+  */
+  matchorder = utils.gethashvalues + addtoorderbook + removefromorderbook + commonbo.split + commonbo.newtrade + '\
+  local matchorder = function(brokerid, orderid, timestampms) \
+    redis.log(redis.LOG_NOTICE, "matchorder") \
+    local order = gethashvalues("broker:" .. brokerid .. ":order:" .. orderid) \
+    if tonumber(order.leavesqty) <= 0 then return {0, 1010} end \
+    local temp = {} \
+    temp.desc = "Order added to orderbook" \
+    if tonumber(order.side) == 1 then \
+      temp.lowerbound = 0 \
+      temp.upperbound = order.price \
+    else \
+      temp.lowerbound = "-inf" \
+      temp.upperbound = "-" .. order.price \
+    end \
+    --[[ get the matchable orders ]] \
+    local matchorders = redis.call("zrangebyscore", "orderbook:" .. order.symbolid, temp.lowerbound, temp.upperbound) \
+    for i = 1, #matchorders do \
+      local brokerorderid = split(matchorders[i], ":") \
+      local matchorder = gethashvalues("broker:" .. brokerorderid[1] .. ":order:" .. brokerorderid[2]) \
+      if not matchorder["orderid"] then \
+        return {1, 1009} \
+      end \
+     redis.log(redis.LOG_NOTICE, matchorder.orderid) \
+      if matchorder.clientid ~= order.clientid then \
+     redis.log(redis.LOG_NOTICE, "wehaveamatch") \
+        --[[ calculate trade & remaining order quantities ]] \
+        if tonumber(matchorder.leavesqty) >= tonumber(order.leavesqty) then \
+          temp.tradequantity = order.leavesqty \
+          matchorder.leavesqty = tonumber(matchorder.leavesqty) - tonumber(order.leavesqty) \
+          if tonumber(matchorder.leavesqty) == 0 then \
+            matchorder.orderstatusid = 2 \
+          else \
+            matchorder.orderstatusid = 1 \
+          end \
+          order.leavesqty = 0 \
+          order.orderstatusid = 2 \
+          temp.desc = "Order filled" \
+        else \
+          temp.tradequantity = matchorder.leavesqty \
+          order.leavesqty = tonumber(order.leavesqty) - tonumber(matchorder.leavesqty) \
+          matchorder.orderstatusid = 2 \
+          order.orderstatusid = 1 \
+          temp.desc = "Order part filled" \
+        end \
+        temp.tradeprice = matchorder.price \
+        temp.settlcurramt = tonumber(temp.tradequantity) * tonumber(matchorder.price) \
+        temp.costs = {0,0,0,0,0} \
+        temp.matchcosts = {0,0,0,0,0} \
+        temp.finance = 0 \
+        temp.margin = 0 \
+        temp.counterpartytype = 2 \
+        temp.markettype = 1 \
+        temp.currencyratetoorg = 1 \
+        temp.currencyindtoorg = 0 \
+        temp.settlcurrfxrate = 1 \
+        temp.settlcurrfxratecalc = 0 \
+        temp.lastmkt = "XLON" \
+        temp.tradesettlestatustime = "" \
+        temp.exchangeid = "L" \
+	temp.cresttransactionid = "" \
+        temp.settledquantity = 0 \
+        temp.parenttradeid = "" \
+        --[[ active order trade ]] \
+        local tradeid = newtrade(order.accountid, order.brokerid, order.clientid, order.orderid, order.symbolid, order.side, temp.tradequantity, temp.tradeprice, order.currencyid, temp.currencyratetoorg, temp.currencyindtoorg, temp.costs[1], temp.costs[2], temp.costs[3], temp.costs[4], temp.costs[5], matchorder.clientid, temp.counterpartytype, temp.markettype, "", order.futsettdate, order.timestamp, temp.lastmkt, "", order.settlcurrencyid, temp.settlcurramt, temp.settlcurrfxrate, temp.settlcurrfxratecalc, temp.margin, order.operatortype, order.operatorid, temp.finance, timestampms, "000", "", "", "", "000", order.timestamp, temp.tradesettlestatustime, temp.exchangeid, temp.cresttransactionid, temp.settledquantity, temp.parenttradeid) \
+        --[[ passive order trade ]] \
+        local matchtradeid = newtrade(matchorder.accountid, matchorder.brokerid, matchorder.clientid, matchorder.orderid, matchorder.symbolid, matchorder.side, temp.tradequantity, temp.tradeprice, matchorder.currencyid, temp.currencyratetoorg, temp.currencyindtoorg, temp.matchcosts[1], temp.matchcosts[2], temp.matchcosts[3], temp.matchcosts[4], temp.matchcosts[5], order.clientid, temp.counterpartytype, temp.markettype, "", order.futsettdate, order.timestamp, temp.lastmkt, "", matchorder.settlcurrencyid, temp.settlcurramt, temp.settlcurrfxrate, temp.settlcurrfxratecalc, temp.margin, order.operatortype, order.operatorid, temp.finance, timestampms, "000", "", "", "", "000", order.timestamp, temp.tradesettlestatustime, temp.exchangeid, temp.cresttransactionid, temp.settledquantity, temp.parenttradeid) \
+        --[[ update passive order ]] \
+        redis.call("hmset", "broker:" .. brokerid .. ":order:" .. matchorder.orderid, "leavesqty", matchorder.leavesqty, "orderstatusid", matchorder.orderstatusid) \
+        if matchorder.orderstatusid == 2 then \
+          removefromorderbook(matchorder) \
+        else \
+          publishorderbook(matchorder.symbolid, matchorder.side) \
+        end \
+      end \
+      --[[ if we have no more quantity to fill, we are done ]] \
+      if tonumber(order.leavesty) == 0 then \
+        break \
+      end \
+    end \
+    --[[ update active order ]] \
+    redis.call("hmset", "broker:" .. brokerid .. ":order:" .. order.orderid, "leavesqty", order.leavesqty, "orderstatusid", order.orderstatusid) \
+    if tonumber(order.leavesqty) ~= 0 then \
+      addtoorderbook(order) \
+      publishorderbook(order.symbolid, order.side) \
+      publishorderbooktop(order.symbolid, order.side) \
+    end \
+    return {0, temp.desc} \
+  end \
+  ';
+
+ /*
   * newordersingle()
   * validates and stores an order
   * params: accountid, brokerid, clientid, symbolid, side, quantity, price, ordertypeid, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforceid, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid, cashorderqty, settlmnttypid, timestampms
   * returns: {fail 1=fail, errorcode, orderid} or {success 0=ok, orderid} \
   */
-  newordersingle = neworder + getcosts + getsettlcurramt + validorder + commonbo.creditcheck + publishorder + matchordersingle + '\
+  newordersingle = neworder + getcosts + getsettlcurramt + validorder + commonbo.creditcheck + publishorder + matchorder + '\
   local newordersingle = function(accountid, brokerid, clientid, symbolid, side, quantity, price, ordertypeid, markettype, futsettdate, quoteid, currencyid, currencyratetoorg, currencyindtoorg, timestamp, margin, timeinforceid, expiredate, expiretime, settlcurrencyid, settlcurrfxrate, settlcurrfxratecalc, externalorderid, execid, operatortype, operatorid, hedgeorderid, cashorderqty, settlmnttypid, timestampms, matchorderid) \
     redis.log(redis.LOG_NOTICE, "newordersingle") \
     local temp = {} \
@@ -2159,7 +2270,7 @@ function registerScripts() {
     end \
     --[[ we are handling channel 17 internally ]] \
     if tonumber(pubsub[2]) == 17 then \
-      local retval = matchordersingle(brokerid, orderid, timestampms, order.costs) \
+      local retval = matchorder(brokerid, orderid, timestampms) \
       if retval[1] ~= 0 then \
         publishorder(brokerid, orderid, "") \
         return {retval[1], retval[2], orderid} \
@@ -2168,6 +2279,10 @@ function registerScripts() {
     return {0, orderid, pubsub[2]} \
   end \
   ';
+
+/*
+ * other instrument types
+ */
 /*    if temp.symbol["instrumenttypeid"] == "CFD" or temp.symbol["instrumenttypeid"] == "SPB" or temp.symbol["instrumenttypeid"] == "CCFD" then \
       --[[ ignore limit orders for derivatives as they will be handled manually, at least for the time being ]] \
       if tonumber(ordertypeid) ~= 2 then \
